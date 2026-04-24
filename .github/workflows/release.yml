@@ -10,16 +10,7 @@ permissions:
 
 jobs:
   publish-tauri:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-13
-            target: x86_64-apple-darwin
-          - platform: macos-14
-            target: aarch64-apple-darwin
-
-    runs-on: ${{ matrix.platform }}
+    runs-on: macos-14
 
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +24,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: aarch64-apple-darwin
 
       - name: Install frontend dependencies
         run: npm ci
@@ -46,19 +37,27 @@ jobs:
 
           const pkgPath = 'package.json';
           const tauriPath = 'src-tauri/tauri.conf.json';
+          const cargoPath = 'src-tauri/Cargo.toml';
 
           const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
           const tauri = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));
+          const cargo = fs.readFileSync(cargoPath, 'utf8');
 
-          const [major = '0', minor = '0'] = String(pkg.version || '0.0.0').split('.');
+          const [major = '0', minor = '0'] = String(pkg.version || tauri.version || '0.0.0').split('.');
           const runNumber = process.env.GITHUB_RUN_NUMBER || '0';
           const version = `${major}.${minor}.${runNumber}`;
 
           pkg.version = version;
           tauri.version = version;
 
+          const nextCargo = cargo.replace(
+            /^version = ".*?"$/m,
+            `version = "${version}"`
+          );
+
           fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
           fs.writeFileSync(tauriPath, `${JSON.stringify(tauri, null, 2)}\n`);
+          fs.writeFileSync(cargoPath, nextCargo);
 
           process.stdout.write(version);
           NODE
@@ -76,8 +75,10 @@ jobs:
           tagName: app-v__VERSION__
           releaseName: Step 2 Command Center v__VERSION__
           releaseBody: |
-            Automated desktop release for commit ${{ github.sha }}.
-            Installers and updater metadata are attached below.
+            Automated Apple Silicon macOS desktop release for commit ${{ github.sha }}.
+            Signed updater artifacts and latest.json are attached below.
           releaseDraft: false
           prerelease: false
-          args: --target ${{ matrix.target }}
+          args: --target aarch64-apple-darwin
+          uploadUpdaterJson: true
+          uploadUpdaterSignatures: true
