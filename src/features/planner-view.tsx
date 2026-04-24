@@ -3,24 +3,24 @@ import { useDeferredValue, useId, useRef, useState, useTransition } from "react"
 import { getStudyBlockMinutes, getWeekDates } from "../lib/analytics";
 import {
   addDays,
+  addMonths,
   compareStudyBlocks,
   formatDateTimeLabel,
   formatLongDate,
   formatMinutes,
+  formatMonthLabel,
   formatShortDate,
-  getDayName,
   getTodayKey,
+  getMonthGridDates,
+  getDayName,
   startOfWeek,
 } from "../lib/datetime";
 import { parseStudyWorkbook } from "../lib/excel";
-import {
-  STUDY_TASK_CATEGORY_VALUES,
-  getEmptyStudyBlockDraft,
-  validateStudyBlockInput,
-} from "../lib/storage";
+import { STUDY_TASK_CATEGORY_VALUES } from "../lib/storage";
 import { useAppStore } from "../state/app-store";
-import { CategoryBadge, EmptyState, Panel } from "../components/ui";
+import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { ModalShell } from "../components/modal-shell";
+import { CategoryBadge, EmptyState, Panel } from "../components/ui";
 import {
   fieldClassName,
   iconButtonClassName,
@@ -29,18 +29,6 @@ import {
 } from "../lib/ui";
 import type { ImportMode, StudyBlock, StudyBlockInput, WorkbookImportPreview } from "../types/models";
 
-type StudyTaskEditorDraft = {
-  id?: string;
-  date: string;
-  category: StudyBlock["category"];
-  task: string;
-  completed: boolean;
-  order: number;
-  durationHoursText: string;
-  durationMinutesText: string;
-  reminderAtText: string;
-};
-
 function matchesSearch(task: StudyBlock, query: string) {
   if (!query) {
     return true;
@@ -48,285 +36,6 @@ function matchesSearch(task: StudyBlock, query: string) {
 
   const haystack = [task.date, task.day, task.category, task.task, task.notes].join(" ").toLowerCase();
   return haystack.includes(query.toLowerCase());
-}
-
-function createInitialDraft(task?: StudyBlock, seedDate?: string) {
-  if (!task) {
-    const draft = getEmptyStudyBlockDraft();
-    if (seedDate) {
-      draft.date = seedDate;
-      draft.day = getDayName(seedDate);
-    }
-    return {
-      ...draft,
-      completed: draft.completed ?? false,
-      order: draft.order ?? 0,
-      durationHoursText: draft.durationHours ? String(draft.durationHours) : "",
-      durationMinutesText: draft.durationMinutes ? String(draft.durationMinutes) : "",
-      reminderAtText: draft.reminderAt ?? "",
-    } satisfies StudyTaskEditorDraft;
-  }
-
-  return {
-    id: task.id,
-    date: task.date,
-    category: task.category,
-    task: task.task,
-    completed: task.completed ?? false,
-    order: task.order ?? 0,
-    durationHoursText: task.durationHours ? String(task.durationHours) : "",
-    durationMinutesText: task.durationMinutes ? String(task.durationMinutes) : "",
-    reminderAtText: task.reminderAt ?? "",
-  } satisfies StudyTaskEditorDraft;
-}
-
-function StudyTaskEditorSheet({
-  task,
-  seedDate,
-  onClose,
-  onSave,
-}: {
-  task?: StudyBlock;
-  seedDate?: string;
-  onClose: () => void;
-  onSave: (draft: StudyBlockInput & { id?: string }) => void;
-}) {
-  const [draft, setDraft] = useState(createInitialDraft(task, seedDate));
-  const [errors, setErrors] = useState<Partial<Record<"date" | "task" | "duration" | "category" | "reminder", string>>>(
-    {},
-  );
-  const id = useId();
-  const dateRef = useRef<HTMLInputElement>(null);
-  const titleId = `${id}-title`;
-  const descriptionId = `${id}-description`;
-  const dateId = `${id}-date`;
-  const dateErrorId = `${id}-date-error`;
-  const taskId = `${id}-task`;
-  const taskErrorId = `${id}-task-error`;
-  const categoryId = `${id}-category`;
-  const categoryErrorId = `${id}-category-error`;
-  const hoursId = `${id}-hours`;
-  const minutesId = `${id}-minutes`;
-  const durationErrorId = `${id}-duration-error`;
-  const reminderId = `${id}-reminder`;
-  const reminderErrorId = `${id}-reminder-error`;
-
-  return (
-    <ModalShell
-      onClose={onClose}
-      position="side"
-      titleId={titleId}
-      descriptionId={descriptionId}
-      initialFocusRef={dateRef}
-      contentClassName="max-w-[500px]"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{task ? "Edit task" : "New task"}</p>
-          <h3 id={titleId} className="mt-2 text-2xl font-semibold text-white">
-            {task ? task.task : "Create daily task"}
-          </h3>
-          <p id={descriptionId} className="mt-2 text-sm text-slate-400">
-            Keep the day calm: set the date, define the task, choose a category, and add optional duration or reminder.
-          </p>
-        </div>
-        <button type="button" onClick={onClose} className={secondaryButtonClassName} aria-label="Close task editor">
-          Close
-        </button>
-      </div>
-
-      <form
-        noValidate
-        className="mt-8 space-y-5"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const reminderAt = draft.reminderAtText.trim();
-          const nextDraft = {
-            id: draft.id,
-            date: draft.date,
-            day: getDayName(draft.date),
-            durationHours: draft.durationHoursText.trim() ? Number(draft.durationHoursText) : 0,
-            durationMinutes: draft.durationMinutesText.trim() ? Number(draft.durationMinutesText) : 0,
-            category: draft.category,
-            task: draft.task,
-            completed: draft.completed ?? false,
-            order: draft.order ?? 0,
-            reminderAt,
-            reminderSentAt: reminderAt && reminderAt === task?.reminderAt ? task?.reminderSentAt ?? "" : "",
-          } satisfies StudyBlockInput & { id?: string };
-          const nextErrors = validateStudyBlockInput(nextDraft);
-
-          if (Object.keys(nextErrors).length) {
-            setErrors(nextErrors);
-            return;
-          }
-
-          onSave(nextDraft);
-        }}
-      >
-        <div>
-          <label htmlFor={dateId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
-            Date
-          </label>
-          <input
-            ref={dateRef}
-            id={dateId}
-            type="date"
-            value={draft.date}
-            onChange={(event) => {
-              setDraft((current) => ({ ...current, date: event.target.value }));
-              setErrors((current) => ({ ...current, date: undefined }));
-            }}
-            aria-describedby={errors.date ? dateErrorId : undefined}
-            aria-invalid={Boolean(errors.date)}
-            className={`${fieldClassName} mt-2`}
-          />
-          {errors.date ? (
-            <p id={dateErrorId} className="mt-2 text-sm text-rose-300">
-              {errors.date}
-            </p>
-          ) : null}
-        </div>
-
-        <div>
-          <label htmlFor={taskId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
-            Task
-          </label>
-          <input
-            id={taskId}
-            value={draft.task}
-            onChange={(event) => {
-              setDraft((current) => ({ ...current, task: event.target.value }));
-              setErrors((current) => ({ ...current, task: undefined }));
-            }}
-            aria-describedby={errors.task ? taskErrorId : undefined}
-            aria-invalid={Boolean(errors.task)}
-            className={`${fieldClassName} mt-2`}
-            placeholder="Review cardio murmurs"
-          />
-          {errors.task ? (
-            <p id={taskErrorId} className="mt-2 text-sm text-rose-300">
-              {errors.task}
-            </p>
-          ) : null}
-        </div>
-
-        <div>
-          <label htmlFor={categoryId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
-            Category
-          </label>
-          <select
-            id={categoryId}
-            value={draft.category}
-            onChange={(event) => {
-              setDraft((current) => ({
-                ...current,
-                category: event.target.value as StudyBlockInput["category"],
-              }));
-              setErrors((current) => ({ ...current, category: undefined }));
-            }}
-            aria-describedby={errors.category ? categoryErrorId : undefined}
-            aria-invalid={Boolean(errors.category)}
-            className={`${fieldClassName} mt-2`}
-          >
-            {STUDY_TASK_CATEGORY_VALUES.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
-          {errors.category ? (
-            <p id={categoryErrorId} className="mt-2 text-sm text-rose-300">
-              {errors.category}
-            </p>
-          ) : null}
-        </div>
-
-        <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Optional duration</p>
-          <div className="mt-2 grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor={hoursId} className="sr-only">
-                Duration hours
-              </label>
-              <input
-                id={hoursId}
-                type="number"
-                min="0"
-                inputMode="numeric"
-                value={draft.durationHoursText}
-                onChange={(event) => {
-                  setDraft((current) => ({ ...current, durationHoursText: event.target.value }));
-                  setErrors((current) => ({ ...current, duration: undefined }));
-                }}
-                className={fieldClassName}
-                placeholder="Hours"
-              />
-            </div>
-            <div>
-              <label htmlFor={minutesId} className="sr-only">
-                Duration minutes
-              </label>
-              <input
-                id={minutesId}
-                type="number"
-                min="0"
-                inputMode="numeric"
-                value={draft.durationMinutesText}
-                onChange={(event) => {
-                  setDraft((current) => ({ ...current, durationMinutesText: event.target.value }));
-                  setErrors((current) => ({ ...current, duration: undefined }));
-                }}
-                className={fieldClassName}
-                placeholder="Minutes"
-              />
-            </div>
-          </div>
-          <p className="mt-2 text-xs text-slate-500">Blank duration fields save as 0.</p>
-          {errors.duration ? (
-            <p id={durationErrorId} className="mt-2 text-sm text-rose-300">
-              {errors.duration}
-            </p>
-          ) : null}
-        </div>
-
-        <div>
-          <label htmlFor={reminderId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
-            Reminder
-          </label>
-          <input
-            id={reminderId}
-            type="datetime-local"
-            value={draft.reminderAtText}
-            onChange={(event) => {
-              setDraft((current) => ({ ...current, reminderAtText: event.target.value }));
-              setErrors((current) => ({ ...current, reminder: undefined }));
-            }}
-            aria-describedby={errors.reminder ? reminderErrorId : undefined}
-            aria-invalid={Boolean(errors.reminder)}
-            className={`${fieldClassName} mt-2`}
-          />
-          <p className="mt-2 text-xs text-slate-500">
-            Optional. Alerts on this Mac when notifications are enabled.
-          </p>
-          {errors.reminder ? (
-            <p id={reminderErrorId} className="mt-2 text-sm text-rose-300">
-              {errors.reminder}
-            </p>
-          ) : null}
-        </div>
-
-        <div className="flex items-center justify-end gap-3 pt-4">
-          <button type="button" className={secondaryButtonClassName} onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className={primaryButtonClassName}>
-            Save task
-          </button>
-        </div>
-      </form>
-    </ModalShell>
-  );
 }
 
 function ImportDialog({
@@ -494,7 +203,15 @@ function ImportDialog({
 }
 
 export function PlannerView() {
-  const { state, importStudyBlocks, setPlannerFocusDate, trashStudyBlock, updatePlannerFilters, upsertStudyBlock } = useAppStore();
+  const {
+    state,
+    importStudyBlocks,
+    setPlannerFocusDate,
+    setPlannerMode,
+    trashStudyBlock,
+    updatePlannerFilters,
+    upsertStudyBlock,
+  } = useAppStore();
   const [editorTask, setEditorTask] = useState<StudyBlock | undefined>();
   const [editorSeedDate, setEditorSeedDate] = useState<string | undefined>();
   const [showEditor, setShowEditor] = useState(false);
@@ -504,11 +221,11 @@ export function PlannerView() {
   const searchId = `${id}-search`;
   const categoryFilterId = `${id}-category-filter`;
   const selectedDate = state.preferences.plannerFocusDate;
+  const plannerMode = state.preferences.plannerMode;
   const weekStart = startOfWeek(selectedDate, 1);
   const weekDates = getWeekDates(selectedDate);
-  const allSelectedDateTasks = state.studyBlocks
-    .filter((task) => task.date === selectedDate)
-    .sort(compareStudyBlocks);
+  const monthDates = getMonthGridDates(selectedDate, 1);
+  const allSelectedDateTasks = state.studyBlocks.filter((task) => task.date === selectedDate).sort(compareStudyBlocks);
   const selectedDateTasks = allSelectedDateTasks.filter((task) => {
     if (!matchesSearch(task, deferredSearch)) {
       return false;
@@ -552,20 +269,51 @@ export function PlannerView() {
     });
   }
 
+  const periodDates = plannerMode === "week" ? weekDates : monthDates;
+  const periodLabel = plannerMode === "week" ? `Week of ${formatLongDate(weekStart)}` : formatMonthLabel(selectedDate);
+  const periodPreviousLabel = plannerMode === "week" ? "Previous week" : "Previous month";
+  const periodNextLabel = plannerMode === "week" ? "Next week" : "Next month";
+  const periodPreviousDate = plannerMode === "week" ? addDays(weekStart, -7) : addMonths(selectedDate, -1);
+  const periodNextDate = plannerMode === "week" ? addDays(weekStart, 7) : addMonths(selectedDate, 1);
+
   return (
     <div className="space-y-4">
       <Panel
         title="Planner"
-        subtitle="One day at a time. Add, edit, reorder, and complete daily study tasks here."
+        subtitle="Weekly and monthly calendar for scheduled tasks."
         action={
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" className={secondaryButtonClassName} onClick={() => setShowImport(true)}>
               <Upload className="h-4 w-4" />
               Import legacy
             </button>
+            <div className="inline-flex rounded-[18px] border border-white/10 bg-slate-900/55 p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  void setPlannerMode("week");
+                }}
+                className={`rounded-[14px] px-3 py-2 text-sm font-medium transition ${
+                  plannerMode === "week" ? "bg-cyan-300/15 text-white" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Week
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void setPlannerMode("month");
+                }}
+                className={`rounded-[14px] px-3 py-2 text-sm font-medium transition ${
+                  plannerMode === "month" ? "bg-cyan-300/15 text-white" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Month
+              </button>
+            </div>
             <button type="button" className={primaryButtonClassName} onClick={() => openNewTask(selectedDate)}>
               <Plus className="h-4 w-4" />
-              New task
+              Add task
             </button>
           </div>
         }
@@ -603,18 +351,18 @@ export function PlannerView() {
         </div>
       </Panel>
 
-      <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+      <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
         <Panel
-          title="Dates"
+          title={periodLabel}
           action={
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 className={iconButtonClassName}
                 onClick={() => {
-                  void setPlannerFocusDate(addDays(weekStart, -7));
+                  void setPlannerFocusDate(periodPreviousDate);
                 }}
-                aria-label="Previous week"
+                aria-label={periodPreviousLabel}
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -622,48 +370,103 @@ export function PlannerView() {
                 type="button"
                 className={secondaryButtonClassName}
                 onClick={() => {
-                  void setPlannerFocusDate(addDays(weekStart, 7));
+                  void setPlannerFocusDate(periodNextDate);
                 }}
               >
                 <ChevronRight className="h-4 w-4" />
-                Next week
+                {periodNextLabel}
               </button>
             </div>
           }
         >
-          <div className="space-y-2">
-            {weekDates.map((date) => {
-              const dayTasks = state.studyBlocks.filter((task) => task.date === date);
-              const dayCompleted = dayTasks.filter((task) => task.completed).length;
-              const isSelected = date === selectedDate;
+          {plannerMode === "week" ? (
+            <div className="space-y-2">
+              {periodDates.map((date) => {
+                const dayTasks = state.studyBlocks.filter((task) => task.date === date);
+                const dayCompleted = dayTasks.filter((task) => task.completed).length;
+                const isSelected = date === selectedDate;
 
-              return (
-                <button
-                  key={date}
-                  type="button"
-                  onClick={() => {
-                    void setPlannerFocusDate(date);
-                  }}
-                  className={`w-full rounded-[20px] border px-4 py-4 text-left transition ${
-                    isSelected
-                      ? "border-cyan-300/30 bg-cyan-300/10"
-                      : "border-white/10 bg-slate-900/55 hover:border-white/15"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{getDayName(date)}</p>
-                      <p className="mt-1 text-lg font-semibold text-white">{formatShortDate(date)}</p>
+                return (
+                  <button
+                    key={date}
+                    type="button"
+                    onClick={() => {
+                      void setPlannerFocusDate(date);
+                    }}
+                    className={`w-full rounded-[20px] border px-4 py-4 text-left transition ${
+                      isSelected
+                        ? "border-cyan-300/30 bg-cyan-300/10"
+                        : "border-white/10 bg-slate-900/55 hover:border-white/15"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{getDayName(date)}</p>
+                        <p className="mt-1 text-lg font-semibold text-white">{formatShortDate(date)}</p>
+                      </div>
+                      <div className="text-right text-xs text-slate-400">
+                        <div>{dayTasks.length} tasks</div>
+                        <div>
+                          {dayCompleted}/{dayTasks.length || 0} done
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-right text-xs text-slate-400">
-                      <div>{dayTasks.length} tasks</div>
-                      <div>{dayCompleted}/{dayTasks.length || 0} done</div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div>
+              <div className="mb-3 grid grid-cols-7 gap-2 text-center text-xs uppercase tracking-[0.16em] text-slate-500">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+                  <span key={day}>{day}</span>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-2">
+                {periodDates.map((date) => {
+                  const dayTasks = state.studyBlocks.filter((task) => task.date === date);
+                  const dayCompleted = dayTasks.filter((task) => task.completed).length;
+                  const isSelected = date === selectedDate;
+                  const isCurrentMonth = date.slice(0, 7) === selectedDate.slice(0, 7);
+
+                  return (
+                    <button
+                      key={date}
+                      type="button"
+                      onClick={() => {
+                        void setPlannerFocusDate(date);
+                      }}
+                      className={`min-h-[96px] rounded-[20px] border px-3 py-3 text-left transition ${
+                        isSelected
+                          ? "border-cyan-300/30 bg-cyan-300/10"
+                          : "border-white/10 bg-slate-900/55 hover:border-white/15"
+                      } ${isCurrentMonth ? "" : "opacity-50"}`}
+                    >
+                      <div className="flex h-full flex-col justify-between gap-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-white">{Number(date.slice(8))}</p>
+                            <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                              {getDayName(date).slice(0, 3)}
+                            </p>
+                          </div>
+                          <div className="text-right text-[10px] text-slate-400">
+                            <div>{dayTasks.length}</div>
+                            <div>{dayCompleted} done</div>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {dayTasks.slice(0, 3).map((task) => (
+                            <span key={task.id} className="h-1.5 flex-1 rounded-full bg-cyan-300/60" />
+                          ))}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <button
             type="button"
@@ -724,7 +527,11 @@ export function PlannerView() {
                           ) : null}
                         </div>
 
-                        <h4 className={`mt-3 text-lg font-semibold text-white ${task.completed ? "line-through decoration-white/45" : ""}`}>
+                        <h4
+                          className={`mt-3 text-lg font-semibold text-white ${
+                            task.completed ? "line-through decoration-white/45" : ""
+                          }`}
+                        >
                           {task.task}
                         </h4>
                       </div>

@@ -389,8 +389,8 @@ pub enum SortDirection {
 pub enum PlannerMode {
     #[serde(rename = "week")]
     Week,
-    #[serde(rename = "database")]
-    Database,
+    #[serde(rename = "month")]
+    Month,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -3061,7 +3061,7 @@ fn parse_sort_direction(value: &str) -> rusqlite::Result<SortDirection> {
 fn parse_planner_mode(value: &str) -> rusqlite::Result<PlannerMode> {
     match value {
         "week" => Ok(PlannerMode::Week),
-        "database" => Ok(PlannerMode::Database),
+        "month" | "database" => Ok(PlannerMode::Month),
         _ => Err(enum_error("PlannerMode", value)),
     }
 }
@@ -3165,7 +3165,7 @@ fn serialize_sort_direction(value: SortDirection) -> &'static str {
 fn serialize_planner_mode(value: PlannerMode) -> &'static str {
     match value {
         PlannerMode::Week => "week",
-        PlannerMode::Database => "database",
+        PlannerMode::Month => "month",
     }
 }
 

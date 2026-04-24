@@ -615,13 +615,15 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
   const persistedActiveSection = shouldResetToToday
     ? DEFAULT_PREFERENCES.activeSection
     : value?.activeSection ?? DEFAULT_PREFERENCES.activeSection;
-  const activeSection = persistedActiveSection === "planner" ? "dashboard" : persistedActiveSection;
   const plannerFocusDate = shouldResetToToday
     ? todayKey
     : sanitizeText(value?.plannerFocusDate) || DEFAULT_PREFERENCES.plannerFocusDate;
+  const plannerMode = value?.plannerMode === "month" || value?.plannerMode === "week"
+    ? value.plannerMode
+    : DEFAULT_PREFERENCES.plannerMode;
 
   return {
-    activeSection,
+    activeSection: persistedActiveSection,
     lastActiveDate: todayKey,
     themeId: THEME_VALUES.includes(value?.themeId as ThemeId)
       ? (value?.themeId as ThemeId)
@@ -639,7 +641,7 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
         : DEFAULT_PREFERENCES.plannerSort.field,
       direction: value?.plannerSort?.direction ?? DEFAULT_PREFERENCES.plannerSort.direction,
     },
-    plannerMode: value?.plannerMode ?? DEFAULT_PREFERENCES.plannerMode,
+    plannerMode,
     plannerFocusDate,
   } satisfies Preferences;
 }

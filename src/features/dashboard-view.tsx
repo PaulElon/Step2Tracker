@@ -1,13 +1,16 @@
 import { Activity, Clock3, Flame, ListTodo } from "lucide-react";
+import { useState } from "react";
 import { getGoalAlerts, getPracticeMetrics, getStudyBlockMinutes, getTodayBlocks } from "../lib/analytics";
 import { formatHoursValue, formatLongDate, formatMinutes, getTodayKey } from "../lib/datetime";
 import { secondaryButtonClassName } from "../lib/ui";
 import { useAppStore } from "../state/app-store";
 import { StudyTaskCard } from "../components/study-task-card";
+import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { EmptyState, MetricCard, Panel } from "../components/ui";
 
 export function DashboardView() {
   const { state, upsertStudyBlock, setActiveSection } = useAppStore();
+  const [showTaskEditor, setShowTaskEditor] = useState(false);
   const todayKey = getTodayKey();
   const todayTasks = getTodayBlocks(state.studyBlocks, todayKey);
   const plannedMinutes = todayTasks.reduce((total, task) => total + getStudyBlockMinutes(task), 0);
@@ -60,7 +63,15 @@ export function DashboardView() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-        <Panel title="Today" subtitle={todayTasks.length ? formatLongDate(todayKey) : undefined}>
+        <Panel
+          title="Today"
+          subtitle={todayTasks.length ? formatLongDate(todayKey) : undefined}
+          action={
+            <button type="button" className={secondaryButtonClassName} onClick={() => setShowTaskEditor(true)}>
+              Add task
+            </button>
+          }
+        >
           {todayTasks.length ? (
             <div className="space-y-3">
               {todayTasks.map((task) => (
@@ -87,6 +98,11 @@ export function DashboardView() {
             <EmptyState
               title="No tasks today"
               description="Today is clear."
+              action={
+                <button type="button" className={secondaryButtonClassName} onClick={() => setShowTaskEditor(true)}>
+                  Add task
+                </button>
+              }
             />
           )}
         </Panel>
@@ -147,6 +163,31 @@ export function DashboardView() {
           </Panel>
         </div>
       </div>
+
+      {showTaskEditor ? (
+        <StudyTaskEditorSheet
+          key={`today-${todayKey}`}
+          seedDate={todayKey}
+          onClose={() => setShowTaskEditor(false)}
+          onSave={(draft) => {
+            void (async () => {
+              const maxOrderForDate = Math.max(
+                -1,
+                ...state.studyBlocks
+                  .filter((task) => task.date === draft.date && task.id !== draft.id)
+                  .map((task) => task.order),
+              );
+              const saved = await upsertStudyBlock({
+                ...draft,
+                order: maxOrderForDate + 1,
+              });
+              if (saved) {
+                setShowTaskEditor(false);
+              }
+            })();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

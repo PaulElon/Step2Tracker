@@ -59,12 +59,36 @@ export function addDays(dateKey: string, amount: number) {
   return formatDateKey(date);
 }
 
+export function addMonths(dateKey: string, amount: number) {
+  const date = parseDateKey(dateKey);
+  const originalDay = date.getDate();
+  date.setDate(1);
+  date.setMonth(date.getMonth() + amount);
+  const maxDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  date.setDate(Math.min(originalDay, maxDay));
+  return formatDateKey(date);
+}
+
+export function startOfMonth(dateKey: string) {
+  const date = parseDateKey(dateKey);
+  date.setDate(1);
+  return formatDateKey(date);
+}
+
 export function startOfWeek(dateKey: string, weekStartsOn = 1) {
   const date = parseDateKey(dateKey);
   const day = date.getDay();
   const diff = (day - weekStartsOn + 7) % 7;
   date.setDate(date.getDate() - diff);
   return formatDateKey(date);
+}
+
+export function getMonthGridDates(referenceDate: string, weekStartsOn = 1) {
+  const monthStart = parseDateKey(startOfMonth(referenceDate));
+  const weekOffset = (monthStart.getDay() - weekStartsOn + 7) % 7;
+  monthStart.setDate(monthStart.getDate() - weekOffset);
+
+  return Array.from({ length: 42 }, (_, index) => addDays(formatDateKey(monthStart), index));
 }
 
 export function daysBetween(startDate: string, endDate: string) {

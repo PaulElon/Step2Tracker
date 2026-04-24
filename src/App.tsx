@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  CalendarDays,
   ClipboardCheck,
   Database,
   Flame,
@@ -17,6 +18,7 @@ import { ModalShell } from "./components/modal-shell";
 import { MobileNav, NavigationButton } from "./components/ui";
 import { AnalyticsView } from "./features/analytics-view";
 import { DashboardView } from "./features/dashboard-view";
+import { PlannerView } from "./features/planner-view";
 import { PracticeTestsView } from "./features/practice-tests-view";
 import { SettingsView } from "./features/settings-view";
 import { WeakTopicsView } from "./features/weak-topics-view";
@@ -47,6 +49,11 @@ const navigationItems = [
     icon: House,
   },
   {
+    id: "planner" as const,
+    label: "Planner",
+    icon: CalendarDays,
+  },
+  {
     id: "weakTopics" as const,
     label: "Weak Topics",
     icon: Flame,
@@ -74,8 +81,8 @@ const sectionCopy: Record<SectionId, { title: string; subtitle?: string }> = {
     subtitle: "Execution view for the current day.",
   },
   planner: {
-    title: "Today",
-    subtitle: "Execution view for the current day.",
+    title: "Planner",
+    subtitle: "Weekly and monthly calendar for scheduled tasks.",
   },
   weakTopics: {
     title: "Weak Topics",
@@ -528,6 +535,9 @@ export default function App() {
   switch (activeSection) {
     case "dashboard":
       sectionContent = <DashboardView />;
+      break;
+    case "planner":
+      sectionContent = <PlannerView />;
       break;
     case "weakTopics":
       sectionContent = <WeakTopicsView />;
