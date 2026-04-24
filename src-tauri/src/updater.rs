@@ -2,7 +2,7 @@ use tauri::AppHandle;
 #[cfg(not(debug_assertions))]
 use std::str::FromStr;
 
-const DEFAULT_UPDATER_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJCRTBFQTFDRDJDQ0U1NkMKUldSczVjelNIT3JnS3drYUlxc2RLdTloUGcxdndSdHpidkM4UlZROEJ4OXBkTDI2N3JzZUNvRHU=";
+const DEFAULT_UPDATER_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFCREM0MDU1RDBDNEVGQwpSV1Q4VGd4ZEJjUzlDbHErREoxaUc5a1NBZ0hWOXNKVlhJNkw4Nnpmei82YytCZEJlY2JMbGpwQgo=";
 #[cfg(not(debug_assertions))]
 const DEFAULT_UPDATER_ENDPOINT: &str =
     "https://github.com/PaulElon/Step2Tracker/releases/latest/download/latest.json";
