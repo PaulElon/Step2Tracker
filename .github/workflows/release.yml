@@ -41,8 +41,30 @@ jobs:
       - name: Stamp CI release version
         shell: bash
         run: |
-          VERSION="$(node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); const tauri=JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json','utf8')); const [major='0', minor='0']=String(pkg.version || '0.0.0').split('.'); const version=\`${major}.${minor}.${process.env.GITHUB_RUN_NUMBER}\`; pkg.version=version; tauri.version=version; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2)+'\n'); fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(tauri, null, 2)+'\n'); process.stdout.write(version);")"
+          VERSION="$(node <<'NODE'
+          const fs = require('fs');
+
+          const pkgPath = 'package.json';
+          const tauriPath = 'src-tauri/tauri.conf.json';
+
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          const tauri = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));
+
+          const [major = '0', minor = '0'] = String(pkg.version || '0.0.0').split('.');
+          const runNumber = process.env.GITHUB_RUN_NUMBER || '0';
+          const version = `${major}.${minor}.${runNumber}`;
+
+          pkg.version = version;
+          tauri.version = version;
+
+          fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+          fs.writeFileSync(tauriPath, `${JSON.stringify(tauri, null, 2)}\n`);
+
+          process.stdout.write(version);
+          NODE
+          )"
           echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Stamped release version: $VERSION"
 
       - name: Build and publish Tauri release
         uses: tauri-apps/tauri-action@v0
