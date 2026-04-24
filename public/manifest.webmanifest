@@ -1,0 +1,17 @@
+{
+  "name": "Step 2 Command Center",
+  "short_name": "Step2 Command",
+  "description": "Local-first Step 2 planning, remediation, and analytics workspace.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07101a",
+  "theme_color": "#07101a",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

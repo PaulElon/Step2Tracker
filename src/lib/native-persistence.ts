@@ -1,0 +1,89 @@
+import { core } from "@tauri-apps/api";
+import type {
+  AppState,
+  BackupArtifactPreview,
+  ImportMode,
+  PersistenceSnapshot,
+  Preferences,
+  PracticeTestInput,
+  StudyBlockInput,
+  TrashEntityType,
+  WeakTopicInput,
+} from "../types/models";
+
+function command<T>(name: string, args?: Record<string, unknown>) {
+  return core.invoke<T>(name, args);
+}
+
+export function loadNativeSnapshot() {
+  return command<PersistenceSnapshot>("load_state");
+}
+
+export function saveNativePreferences(preferences: Preferences) {
+  return command<PersistenceSnapshot>("save_preferences", { preferences });
+}
+
+export function upsertNativeStudyBlock(block: StudyBlockInput) {
+  return command<PersistenceSnapshot>("upsert_study_block", { block });
+}
+
+export function duplicateNativeStudyBlock(id: string, targetDate?: string) {
+  return command<PersistenceSnapshot>("duplicate_study_block", {
+    id,
+    targetDate,
+  });
+}
+
+export function trashNativeStudyBlock(id: string) {
+  return command<PersistenceSnapshot>("trash_study_block", { id });
+}
+
+export function importNativeStudyBlocks(blocks: StudyBlockInput[], mode: ImportMode) {
+  return command<PersistenceSnapshot>("import_study_blocks", { blocks, mode });
+}
+
+export function upsertNativePracticeTest(test: PracticeTestInput) {
+  return command<PersistenceSnapshot>("upsert_practice_test", { test });
+}
+
+export function trashNativePracticeTest(id: string) {
+  return command<PersistenceSnapshot>("trash_practice_test", { id });
+}
+
+export function upsertNativeWeakTopic(entry: WeakTopicInput) {
+  return command<PersistenceSnapshot>("upsert_weak_topic", { entry });
+}
+
+export function trashNativeWeakTopic(id: string) {
+  return command<PersistenceSnapshot>("trash_weak_topic", { id });
+}
+
+export function restoreNativeTrashItem(entityType: TrashEntityType, id: string) {
+  return command<PersistenceSnapshot>("restore_trashed_item", {
+    entityType,
+    id,
+  });
+}
+
+export function exportNativeBackupArtifact() {
+  return command<string>("export_backup_artifact");
+}
+
+export function previewNativeBackupArtifact(raw: string) {
+  return command<BackupArtifactPreview>("preview_backup_artifact", { raw });
+}
+
+export function restoreNativeBackupArtifact(raw: string) {
+  return command<PersistenceSnapshot>("restore_from_backup_artifact", { raw });
+}
+
+export function restoreNativeSnapshot(backupId: string) {
+  return command<PersistenceSnapshot>("restore_from_snapshot", { backupId });
+}
+
+export function migrateLegacyBrowserState(legacySourceJson: string, state: AppState) {
+  return command<PersistenceSnapshot>("migrate_legacy_browser_state", {
+    legacySourceJson,
+    state,
+  });
+}

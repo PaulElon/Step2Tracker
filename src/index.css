@@ -1,0 +1,451 @@
+@import "@fontsource/plus-jakarta-sans/400.css";
+@import "@fontsource/plus-jakarta-sans/500.css";
+@import "@fontsource/plus-jakarta-sans/600.css";
+@import "@fontsource/plus-jakarta-sans/700.css";
+@import "@fontsource/space-grotesk/500.css";
+@import "@fontsource/space-grotesk/700.css";
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+  --app-bg-1: #030712;
+  --app-bg-2: #07101a;
+  --app-bg-3: #091523;
+  --app-glow-1: rgba(84, 180, 255, 0.18);
+  --app-glow-2: rgba(24, 214, 176, 0.12);
+  --panel-bg: rgba(2, 8, 18, 0.58);
+  --panel-border: rgba(255, 255, 255, 0.1);
+  --panel-shadow: rgba(2, 8, 18, 0.62);
+  --panel-support-bg: rgba(12, 19, 33, 0.7);
+  --panel-support-border: rgba(255, 255, 255, 0.07);
+  --panel-support-shadow: rgba(2, 8, 18, 0.4);
+  --surface-muted: rgba(15, 23, 42, 0.55);
+  --field-bg: rgba(15, 23, 42, 0.7);
+  --field-focus: rgba(96, 243, 223, 0.22);
+  --field-border-strong: rgba(123, 184, 255, 0.42);
+  --focus-ring-inner: rgba(96, 243, 223, 0.22);
+  --focus-ring-outer: rgba(123, 184, 255, 0.55);
+  --primary-start: rgba(96, 243, 223, 0.18);
+  --primary-end: rgba(122, 184, 255, 0.18);
+  --primary-border: rgba(96, 243, 223, 0.32);
+  --selection: rgba(96, 243, 223, 0.24);
+  --lane-review-start: rgba(215, 164, 255, 0.22);
+  --lane-review-end: rgba(255, 182, 213, 0.12);
+  --lane-review-border: rgba(215, 164, 255, 0.22);
+  --lane-content-start: rgba(96, 243, 223, 0.2);
+  --lane-content-end: rgba(122, 184, 255, 0.12);
+  --lane-content-border: rgba(96, 243, 223, 0.2);
+  --lane-assessment-start: rgba(255, 195, 122, 0.22);
+  --lane-assessment-end: rgba(255, 143, 158, 0.14);
+  --lane-assessment-border: rgba(255, 195, 122, 0.22);
+  --lane-recovery-start: rgba(148, 168, 190, 0.18);
+  --lane-recovery-end: rgba(195, 209, 223, 0.08);
+  --lane-recovery-border: rgba(148, 168, 190, 0.22);
+  --lane-admin-start: rgba(127, 242, 180, 0.18);
+  --lane-admin-end: rgba(96, 243, 223, 0.12);
+  --lane-admin-border: rgba(127, 242, 180, 0.2);
+}
+
+:root[data-theme="ember"] {
+  --app-bg-1: #12090a;
+  --app-bg-2: #1b1113;
+  --app-bg-3: #251817;
+  --app-glow-1: rgba(255, 180, 84, 0.14);
+  --app-glow-2: rgba(255, 126, 107, 0.12);
+  --panel-bg: rgba(20, 11, 12, 0.62);
+  --panel-border: rgba(255, 238, 214, 0.08);
+  --panel-shadow: rgba(12, 6, 6, 0.58);
+  --panel-support-bg: rgba(34, 19, 18, 0.72);
+  --panel-support-border: rgba(255, 238, 214, 0.08);
+  --panel-support-shadow: rgba(12, 6, 6, 0.34);
+  --surface-muted: rgba(45, 28, 26, 0.52);
+  --field-bg: rgba(39, 23, 22, 0.78);
+  --field-focus: rgba(255, 180, 84, 0.18);
+  --field-border-strong: rgba(255, 126, 107, 0.4);
+  --focus-ring-inner: rgba(255, 180, 84, 0.18);
+  --focus-ring-outer: rgba(255, 126, 107, 0.5);
+  --primary-start: rgba(255, 212, 128, 0.18);
+  --primary-end: rgba(255, 126, 107, 0.18);
+  --primary-border: rgba(255, 180, 84, 0.28);
+  --selection: rgba(255, 180, 84, 0.22);
+  --lane-review-start: rgba(247, 198, 161, 0.22);
+  --lane-review-end: rgba(255, 154, 118, 0.12);
+  --lane-review-border: rgba(247, 198, 161, 0.22);
+  --lane-content-start: rgba(255, 212, 128, 0.2);
+  --lane-content-end: rgba(255, 180, 84, 0.12);
+  --lane-content-border: rgba(255, 180, 84, 0.2);
+  --lane-assessment-start: rgba(255, 126, 107, 0.22);
+  --lane-assessment-end: rgba(255, 179, 162, 0.14);
+  --lane-assessment-border: rgba(255, 126, 107, 0.22);
+  --lane-recovery-start: rgba(159, 139, 125, 0.18);
+  --lane-recovery-end: rgba(212, 192, 178, 0.08);
+  --lane-recovery-border: rgba(159, 139, 125, 0.22);
+  --lane-admin-start: rgba(155, 228, 162, 0.18);
+  --lane-admin-end: rgba(106, 208, 181, 0.12);
+  --lane-admin-border: rgba(155, 228, 162, 0.2);
+}
+
+:root[data-theme="tide"] {
+  --app-bg-1: #04101a;
+  --app-bg-2: #071a24;
+  --app-bg-3: #0b2432;
+  --app-glow-1: rgba(106, 216, 255, 0.18);
+  --app-glow-2: rgba(98, 241, 196, 0.12);
+  --panel-bg: rgba(6, 18, 31, 0.6);
+  --panel-border: rgba(222, 236, 248, 0.08);
+  --panel-shadow: rgba(4, 12, 21, 0.6);
+  --panel-support-bg: rgba(10, 26, 40, 0.72);
+  --panel-support-border: rgba(222, 236, 248, 0.08);
+  --panel-support-shadow: rgba(4, 12, 21, 0.36);
+  --surface-muted: rgba(15, 34, 48, 0.54);
+  --field-bg: rgba(9, 27, 40, 0.76);
+  --field-focus: rgba(106, 216, 255, 0.18);
+  --field-border-strong: rgba(98, 241, 196, 0.42);
+  --focus-ring-inner: rgba(106, 216, 255, 0.18);
+  --focus-ring-outer: rgba(98, 241, 196, 0.5);
+  --primary-start: rgba(106, 216, 255, 0.18);
+  --primary-end: rgba(98, 241, 196, 0.18);
+  --primary-border: rgba(106, 216, 255, 0.28);
+  --selection: rgba(106, 216, 255, 0.22);
+  --lane-review-start: rgba(158, 176, 255, 0.22);
+  --lane-review-end: rgba(226, 176, 255, 0.12);
+  --lane-review-border: rgba(158, 176, 255, 0.22);
+  --lane-content-start: rgba(106, 216, 255, 0.2);
+  --lane-content-end: rgba(98, 241, 196, 0.12);
+  --lane-content-border: rgba(106, 216, 255, 0.2);
+  --lane-assessment-start: rgba(255, 208, 138, 0.22);
+  --lane-assessment-end: rgba(255, 151, 183, 0.14);
+  --lane-assessment-border: rgba(255, 208, 138, 0.22);
+  --lane-recovery-start: rgba(126, 147, 170, 0.18);
+  --lane-recovery-end: rgba(190, 208, 227, 0.08);
+  --lane-recovery-border: rgba(126, 147, 170, 0.22);
+  --lane-admin-start: rgba(126, 240, 181, 0.18);
+  --lane-admin-end: rgba(106, 216, 255, 0.12);
+  --lane-admin-border: rgba(126, 240, 181, 0.2);
+}
+
+:root[data-theme="bubblegum"] {
+  --app-bg-1: #1a0713;
+  --app-bg-2: #210a18;
+  --app-bg-3: #311124;
+  --app-glow-1: rgba(255, 105, 199, 0.18);
+  --app-glow-2: rgba(255, 154, 213, 0.14);
+  --panel-bg: rgba(28, 10, 20, 0.62);
+  --panel-border: rgba(255, 241, 246, 0.1);
+  --panel-shadow: rgba(18, 4, 13, 0.62);
+  --panel-support-bg: rgba(44, 15, 28, 0.72);
+  --panel-support-border: rgba(255, 241, 246, 0.08);
+  --panel-support-shadow: rgba(18, 4, 13, 0.36);
+  --surface-muted: rgba(55, 20, 39, 0.56);
+  --field-bg: rgba(43, 16, 30, 0.78);
+  --field-focus: rgba(255, 105, 199, 0.18);
+  --field-border-strong: rgba(255, 154, 213, 0.42);
+  --focus-ring-inner: rgba(255, 105, 199, 0.2);
+  --focus-ring-outer: rgba(255, 154, 213, 0.55);
+  --primary-start: rgba(255, 105, 199, 0.18);
+  --primary-end: rgba(255, 184, 107, 0.18);
+  --primary-border: rgba(255, 105, 199, 0.3);
+  --selection: rgba(255, 105, 199, 0.24);
+  --lane-review-start: rgba(255, 154, 213, 0.22);
+  --lane-review-end: rgba(255, 192, 234, 0.12);
+  --lane-review-border: rgba(255, 154, 213, 0.22);
+  --lane-content-start: rgba(255, 105, 199, 0.2);
+  --lane-content-end: rgba(255, 154, 213, 0.12);
+  --lane-content-border: rgba(255, 105, 199, 0.2);
+  --lane-assessment-start: rgba(255, 184, 107, 0.22);
+  --lane-assessment-end: rgba(255, 138, 176, 0.14);
+  --lane-assessment-border: rgba(255, 184, 107, 0.22);
+  --lane-recovery-start: rgba(199, 138, 166, 0.18);
+  --lane-recovery-end: rgba(242, 191, 216, 0.08);
+  --lane-recovery-border: rgba(199, 138, 166, 0.22);
+  --lane-admin-start: rgba(142, 240, 203, 0.18);
+  --lane-admin-end: rgba(124, 231, 255, 0.12);
+  --lane-admin-border: rgba(142, 240, 203, 0.2);
+}
+
+:root[data-theme="signal"] {
+  --app-bg-1: #02110f;
+  --app-bg-2: #071915;
+  --app-bg-3: #0c2320;
+  --app-glow-1: rgba(77, 246, 212, 0.18);
+  --app-glow-2: rgba(140, 251, 110, 0.12);
+  --panel-bg: rgba(5, 20, 18, 0.62);
+  --panel-border: rgba(230, 255, 249, 0.1);
+  --panel-shadow: rgba(1, 9, 8, 0.62);
+  --panel-support-bg: rgba(10, 28, 25, 0.74);
+  --panel-support-border: rgba(230, 255, 249, 0.08);
+  --panel-support-shadow: rgba(1, 9, 8, 0.36);
+  --surface-muted: rgba(14, 37, 34, 0.56);
+  --field-bg: rgba(8, 30, 27, 0.78);
+  --field-focus: rgba(77, 246, 212, 0.18);
+  --field-border-strong: rgba(140, 251, 110, 0.4);
+  --focus-ring-inner: rgba(77, 246, 212, 0.2);
+  --focus-ring-outer: rgba(140, 251, 110, 0.52);
+  --primary-start: rgba(77, 246, 212, 0.18);
+  --primary-end: rgba(140, 251, 110, 0.18);
+  --primary-border: rgba(77, 246, 212, 0.3);
+  --selection: rgba(77, 246, 212, 0.24);
+  --lane-review-start: rgba(110, 168, 255, 0.22);
+  --lane-review-end: rgba(176, 140, 255, 0.12);
+  --lane-review-border: rgba(110, 168, 255, 0.22);
+  --lane-content-start: rgba(77, 246, 212, 0.2);
+  --lane-content-end: rgba(140, 251, 110, 0.12);
+  --lane-content-border: rgba(77, 246, 212, 0.2);
+  --lane-assessment-start: rgba(255, 224, 122, 0.22);
+  --lane-assessment-end: rgba(255, 125, 159, 0.14);
+  --lane-assessment-border: rgba(255, 224, 122, 0.22);
+  --lane-recovery-start: rgba(136, 185, 176, 0.18);
+  --lane-recovery-end: rgba(196, 236, 228, 0.08);
+  --lane-recovery-border: rgba(136, 185, 176, 0.22);
+  --lane-admin-start: rgba(140, 251, 110, 0.18);
+  --lane-admin-end: rgba(77, 246, 212, 0.12);
+  --lane-admin-border: rgba(140, 251, 110, 0.2);
+}
+
+:root[data-theme="prism"] {
+  --app-bg-1: #0b0717;
+  --app-bg-2: #120c22;
+  --app-bg-3: #1c1433;
+  --app-glow-1: rgba(143, 123, 255, 0.18);
+  --app-glow-2: rgba(88, 215, 255, 0.14);
+  --panel-bg: rgba(17, 11, 33, 0.62);
+  --panel-border: rgba(241, 239, 255, 0.1);
+  --panel-shadow: rgba(8, 4, 17, 0.62);
+  --panel-support-bg: rgba(24, 16, 47, 0.74);
+  --panel-support-border: rgba(241, 239, 255, 0.08);
+  --panel-support-shadow: rgba(8, 4, 17, 0.36);
+  --surface-muted: rgba(31, 22, 58, 0.56);
+  --field-bg: rgba(27, 18, 51, 0.78);
+  --field-focus: rgba(143, 123, 255, 0.18);
+  --field-border-strong: rgba(88, 215, 255, 0.4);
+  --focus-ring-inner: rgba(143, 123, 255, 0.2);
+  --focus-ring-outer: rgba(88, 215, 255, 0.52);
+  --primary-start: rgba(143, 123, 255, 0.18);
+  --primary-end: rgba(88, 215, 255, 0.18);
+  --primary-border: rgba(143, 123, 255, 0.3);
+  --selection: rgba(143, 123, 255, 0.24);
+  --lane-review-start: rgba(255, 125, 242, 0.22);
+  --lane-review-end: rgba(194, 124, 255, 0.12);
+  --lane-review-border: rgba(255, 125, 242, 0.22);
+  --lane-content-start: rgba(88, 215, 255, 0.2);
+  --lane-content-end: rgba(143, 123, 255, 0.12);
+  --lane-content-border: rgba(88, 215, 255, 0.2);
+  --lane-assessment-start: rgba(255, 188, 111, 0.22);
+  --lane-assessment-end: rgba(255, 134, 165, 0.14);
+  --lane-assessment-border: rgba(255, 188, 111, 0.22);
+  --lane-recovery-start: rgba(159, 149, 201, 0.18);
+  --lane-recovery-end: rgba(213, 207, 247, 0.08);
+  --lane-recovery-border: rgba(159, 149, 201, 0.22);
+  --lane-admin-start: rgba(116, 240, 195, 0.18);
+  --lane-admin-end: rgba(88, 215, 255, 0.12);
+  --lane-admin-border: rgba(116, 240, 195, 0.2);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, var(--app-glow-1), transparent 26%),
+    radial-gradient(circle at bottom right, var(--app-glow-2), transparent 22%),
+    linear-gradient(180deg, var(--app-bg-1) 0%, var(--app-bg-2) 52%, var(--app-bg-3) 100%);
+  color: #eff6ff;
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background 240ms ease;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(circle at center, black 32%, transparent 84%);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+::selection {
+  background: var(--selection);
+  color: white;
+}
+
+button {
+  cursor: pointer;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+:where(button, a, input, select, textarea, [role="button"], [role="tab"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1px var(--focus-ring-outer),
+    0 0 0 4px var(--focus-ring-inner);
+}
+
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.03em;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply rounded-[26px] p-6 backdrop-blur-xl;
+    border: 1px solid var(--panel-border);
+    background: var(--panel-bg);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      0 28px 90px var(--panel-shadow);
+  }
+
+  .panel-subtle {
+    @apply rounded-[22px] border p-5 backdrop-blur-md;
+    border-color: var(--panel-support-border);
+    background: var(--panel-support-bg);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.035),
+      0 18px 48px var(--panel-support-shadow);
+  }
+
+  .field {
+    @apply w-full rounded-[18px] px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-400;
+    border: 1px solid var(--panel-border);
+    background: var(--field-bg);
+  }
+
+  .field:focus-visible {
+    border-color: var(--field-border-strong);
+    background: rgba(0, 0, 0, 0.12);
+    box-shadow: 0 0 0 2px var(--field-focus);
+  }
+
+  .primary-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-[18px] px-4 py-3 text-sm font-semibold text-white transition;
+    border: 1px solid var(--primary-border);
+    background: linear-gradient(90deg, var(--primary-start), var(--primary-end));
+  }
+
+  .secondary-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-[18px] px-4 py-3 text-sm font-medium text-slate-200 transition hover:text-white;
+    border: 1px solid var(--panel-border);
+    background: var(--field-bg);
+  }
+
+  .muted-surface {
+    @apply rounded-[20px];
+    border: 1px solid var(--panel-border);
+    background: var(--surface-muted);
+  }
+
+  .content-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: 320px;
+  }
+
+  .launch-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-[18px] px-4 py-3 text-sm font-semibold text-white transition;
+    border: 1px solid var(--primary-border);
+    background: linear-gradient(90deg, var(--primary-start), var(--primary-end));
+  }
+
+  .theme-option {
+    @apply rounded-[18px] border px-3 py-3 text-left transition;
+    border-color: var(--panel-border);
+    background: var(--surface-muted);
+  }
+
+  .task-card {
+    @apply rounded-[24px] border p-5 transition duration-200;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015));
+    border-color: var(--panel-border);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .task-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .task-card--compact {
+    @apply rounded-[20px] p-4;
+  }
+
+  .task-card--completed {
+    opacity: 0.48;
+    filter: saturate(0.82);
+  }
+
+  .task-card--review {
+    border-color: var(--lane-review-border);
+    background: linear-gradient(135deg, var(--lane-review-start), var(--lane-review-end));
+  }
+
+  .task-card--content {
+    border-color: var(--lane-content-border);
+    background: linear-gradient(135deg, var(--lane-content-start), var(--lane-content-end));
+  }
+
+  .task-card--assessment {
+    border-color: var(--lane-assessment-border);
+    background: linear-gradient(135deg, var(--lane-assessment-start), var(--lane-assessment-end));
+  }
+
+  .task-card--recovery {
+    border-color: var(--lane-recovery-border);
+    background: linear-gradient(135deg, var(--lane-recovery-start), var(--lane-recovery-end));
+  }
+
+  .task-card--admin {
+    border-color: var(--lane-admin-border);
+    background: linear-gradient(135deg, var(--lane-admin-start), var(--lane-admin-end));
+  }
+
+  .lane-pill {
+    @apply inline-flex items-center rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-100;
+  }
+}
+
+@layer utilities {
+  .scrollbar-subtle::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .scrollbar-subtle::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+  }
+
+  .scrollbar-subtle::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}

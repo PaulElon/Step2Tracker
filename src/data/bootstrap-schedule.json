@@ -1,0 +1,4432 @@
+[
+  {
+    "date": "2026-04-22",
+    "day": "Wednesday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "UWorld",
+    "task": "UWorld / practice blocks",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-22",
+    "day": "Wednesday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review NBME or practice questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-22",
+    "day": "Wednesday",
+    "startTime": "13:00",
+    "endTime": "13:30",
+    "category": "Meal",
+    "task": "Lunch",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-22",
+    "day": "Wednesday",
+    "startTime": "13:30",
+    "endTime": "16:00",
+    "category": "UWorld",
+    "task": "UWorld 40 questions (two blocks)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-22",
+    "day": "Wednesday",
+    "startTime": "16:00",
+    "endTime": "17:00",
+    "category": "Review",
+    "task": "Psych shelf review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-22",
+    "day": "Wednesday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Ethics/QI",
+    "task": "Ethics/QI/Biostatistics (AMBOSS or UWorld Step 3)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-22",
+    "day": "Wednesday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-22",
+    "day": "Wednesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and reflection",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-23",
+    "day": "Thursday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-23",
+    "day": "Thursday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; 200-300 Anki reviews; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-23",
+    "day": "Thursday",
+    "startTime": "13:00",
+    "endTime": "15:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions (weak topics)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-23",
+    "day": "Thursday",
+    "startTime": "15:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-23",
+    "day": "Thursday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Review",
+    "task": "Psych shelf review (First Aid & TrueLearn)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-23",
+    "day": "Thursday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-23",
+    "day": "Thursday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-24",
+    "day": "Friday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-24",
+    "day": "Friday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; 200-300 Anki reviews; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-24",
+    "day": "Friday",
+    "startTime": "13:00",
+    "endTime": "15:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions (weak topics)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-24",
+    "day": "Friday",
+    "startTime": "15:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-24",
+    "day": "Friday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Review",
+    "task": "Psych shelf review (First Aid & TrueLearn)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-24",
+    "day": "Friday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-24",
+    "day": "Friday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-25",
+    "day": "Saturday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "NBME",
+    "task": "NBME 10 practice exam",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-25",
+    "day": "Saturday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review NBME or practice questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-25",
+    "day": "Saturday",
+    "startTime": "13:00",
+    "endTime": "13:30",
+    "category": "Meal",
+    "task": "Lunch",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-25",
+    "day": "Saturday",
+    "startTime": "13:30",
+    "endTime": "16:00",
+    "category": "UWorld",
+    "task": "UWorld 40 questions (two blocks)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-25",
+    "day": "Saturday",
+    "startTime": "16:00",
+    "endTime": "17:00",
+    "category": "Review",
+    "task": "Psych shelf review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-25",
+    "day": "Saturday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Ethics/QI",
+    "task": "Ethics/QI/Biostatistics (AMBOSS or UWorld Step 3)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-25",
+    "day": "Saturday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-25",
+    "day": "Saturday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and reflection",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-26",
+    "day": "Sunday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "UWorld",
+    "task": "UWorld / practice blocks",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-26",
+    "day": "Sunday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review NBME or practice questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-26",
+    "day": "Sunday",
+    "startTime": "13:00",
+    "endTime": "13:30",
+    "category": "Meal",
+    "task": "Lunch",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-26",
+    "day": "Sunday",
+    "startTime": "13:30",
+    "endTime": "16:00",
+    "category": "UWorld",
+    "task": "UWorld 40 questions (two blocks)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-26",
+    "day": "Sunday",
+    "startTime": "16:00",
+    "endTime": "17:00",
+    "category": "Review",
+    "task": "Psych shelf review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-26",
+    "day": "Sunday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Ethics/QI",
+    "task": "Ethics/QI/Biostatistics (AMBOSS or UWorld Step 3)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-26",
+    "day": "Sunday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-26",
+    "day": "Sunday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and reflection",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-27",
+    "day": "Monday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-27",
+    "day": "Monday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; 200-300 Anki reviews; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-27",
+    "day": "Monday",
+    "startTime": "13:00",
+    "endTime": "15:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions (weak topics)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-27",
+    "day": "Monday",
+    "startTime": "15:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-27",
+    "day": "Monday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Review",
+    "task": "Psych shelf review (First Aid & TrueLearn)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-27",
+    "day": "Monday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-27",
+    "day": "Monday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-28",
+    "day": "Tuesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-28",
+    "day": "Tuesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; 200-300 Anki reviews; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-28",
+    "day": "Tuesday",
+    "startTime": "13:00",
+    "endTime": "15:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions (weak topics)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-28",
+    "day": "Tuesday",
+    "startTime": "15:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-28",
+    "day": "Tuesday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Review",
+    "task": "Psych shelf review (First Aid & TrueLearn)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-28",
+    "day": "Tuesday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-28",
+    "day": "Tuesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-29",
+    "day": "Wednesday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "UWorld",
+    "task": "UWorld / practice blocks",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-29",
+    "day": "Wednesday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review NBME or practice questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-29",
+    "day": "Wednesday",
+    "startTime": "13:00",
+    "endTime": "13:30",
+    "category": "Meal",
+    "task": "Lunch",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-29",
+    "day": "Wednesday",
+    "startTime": "13:30",
+    "endTime": "16:00",
+    "category": "UWorld",
+    "task": "UWorld 40 questions (two blocks)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-29",
+    "day": "Wednesday",
+    "startTime": "16:00",
+    "endTime": "17:00",
+    "category": "Review",
+    "task": "Psych shelf review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-29",
+    "day": "Wednesday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Ethics/QI",
+    "task": "Ethics/QI/Biostatistics (AMBOSS or UWorld Step 3)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-29",
+    "day": "Wednesday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-29",
+    "day": "Wednesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and reflection",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-30",
+    "day": "Thursday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-30",
+    "day": "Thursday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; 200-300 Anki reviews; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-30",
+    "day": "Thursday",
+    "startTime": "13:00",
+    "endTime": "15:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions (weak topics)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-30",
+    "day": "Thursday",
+    "startTime": "15:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-30",
+    "day": "Thursday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Review",
+    "task": "Psych shelf review (First Aid & TrueLearn)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-30",
+    "day": "Thursday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-04-30",
+    "day": "Thursday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-01",
+    "day": "Friday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-01",
+    "day": "Friday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; 200-300 Anki reviews; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-01",
+    "day": "Friday",
+    "startTime": "13:00",
+    "endTime": "15:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions (weak topics)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-01",
+    "day": "Friday",
+    "startTime": "15:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-01",
+    "day": "Friday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Review",
+    "task": "Psych shelf review (First Aid & TrueLearn)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-01",
+    "day": "Friday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-01",
+    "day": "Friday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-02",
+    "day": "Saturday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "UWorld",
+    "task": "UWorld / practice blocks",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-02",
+    "day": "Saturday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review NBME or practice questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-02",
+    "day": "Saturday",
+    "startTime": "13:00",
+    "endTime": "13:30",
+    "category": "Meal",
+    "task": "Lunch",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-02",
+    "day": "Saturday",
+    "startTime": "13:30",
+    "endTime": "16:00",
+    "category": "UWorld",
+    "task": "UWorld 40 questions (two blocks)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-02",
+    "day": "Saturday",
+    "startTime": "16:00",
+    "endTime": "17:00",
+    "category": "Review",
+    "task": "Psych shelf review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-02",
+    "day": "Saturday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Ethics/QI",
+    "task": "Ethics/QI/Biostatistics (AMBOSS or UWorld Step 3)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-02",
+    "day": "Saturday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-02",
+    "day": "Saturday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and reflection",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-03",
+    "day": "Sunday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "UWorld",
+    "task": "UWorld / practice blocks",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-03",
+    "day": "Sunday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review NBME or practice questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-03",
+    "day": "Sunday",
+    "startTime": "13:00",
+    "endTime": "13:30",
+    "category": "Meal",
+    "task": "Lunch",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-03",
+    "day": "Sunday",
+    "startTime": "13:30",
+    "endTime": "16:00",
+    "category": "UWorld",
+    "task": "UWorld 40 questions (two blocks)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-03",
+    "day": "Sunday",
+    "startTime": "16:00",
+    "endTime": "17:00",
+    "category": "Review",
+    "task": "Psych shelf review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-03",
+    "day": "Sunday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Ethics/QI",
+    "task": "Ethics/QI/Biostatistics (AMBOSS or UWorld Step 3)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-03",
+    "day": "Sunday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-03",
+    "day": "Sunday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and reflection",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-04",
+    "day": "Monday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-04",
+    "day": "Monday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; 200-300 Anki reviews; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-04",
+    "day": "Monday",
+    "startTime": "13:00",
+    "endTime": "15:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions (weak topics)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-04",
+    "day": "Monday",
+    "startTime": "15:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-04",
+    "day": "Monday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Review",
+    "task": "Psych shelf review (First Aid & TrueLearn)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-04",
+    "day": "Monday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-04",
+    "day": "Monday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-05",
+    "day": "Tuesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-05",
+    "day": "Tuesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; 200-300 Anki reviews; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-05",
+    "day": "Tuesday",
+    "startTime": "13:00",
+    "endTime": "15:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions (weak topics)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-05",
+    "day": "Tuesday",
+    "startTime": "15:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-05",
+    "day": "Tuesday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Review",
+    "task": "Psych shelf review (First Aid & TrueLearn)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-05",
+    "day": "Tuesday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-05",
+    "day": "Tuesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-06",
+    "day": "Wednesday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "UWorld",
+    "task": "UWorld / practice blocks",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-06",
+    "day": "Wednesday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review NBME or practice questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-06",
+    "day": "Wednesday",
+    "startTime": "13:00",
+    "endTime": "13:30",
+    "category": "Meal",
+    "task": "Lunch",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-06",
+    "day": "Wednesday",
+    "startTime": "13:30",
+    "endTime": "16:00",
+    "category": "UWorld",
+    "task": "UWorld 40 questions (two blocks)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-06",
+    "day": "Wednesday",
+    "startTime": "16:00",
+    "endTime": "17:00",
+    "category": "Review",
+    "task": "Psych shelf review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-06",
+    "day": "Wednesday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Ethics/QI",
+    "task": "Ethics/QI/Biostatistics (AMBOSS or UWorld Step 3)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-06",
+    "day": "Wednesday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-06",
+    "day": "Wednesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and reflection",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-07",
+    "day": "Thursday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-07",
+    "day": "Thursday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; 200-300 Anki reviews; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-07",
+    "day": "Thursday",
+    "startTime": "13:00",
+    "endTime": "15:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions (weak topics)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-07",
+    "day": "Thursday",
+    "startTime": "15:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-07",
+    "day": "Thursday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Review",
+    "task": "Psych shelf review (First Aid & TrueLearn)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-07",
+    "day": "Thursday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-07",
+    "day": "Thursday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-08",
+    "day": "Friday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-08",
+    "day": "Friday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; 200-300 Anki reviews; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-08",
+    "day": "Friday",
+    "startTime": "13:00",
+    "endTime": "15:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions (weak topics)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-08",
+    "day": "Friday",
+    "startTime": "15:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-08",
+    "day": "Friday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Review",
+    "task": "Psych shelf review (First Aid & TrueLearn)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-08",
+    "day": "Friday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-08",
+    "day": "Friday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-09",
+    "day": "Saturday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "UWorld",
+    "task": "UWorld / practice blocks",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-09",
+    "day": "Saturday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review NBME or practice questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-09",
+    "day": "Saturday",
+    "startTime": "13:00",
+    "endTime": "13:30",
+    "category": "Meal",
+    "task": "Lunch",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-09",
+    "day": "Saturday",
+    "startTime": "13:30",
+    "endTime": "16:00",
+    "category": "UWorld",
+    "task": "UWorld 40 questions (two blocks)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-09",
+    "day": "Saturday",
+    "startTime": "16:00",
+    "endTime": "17:00",
+    "category": "Review",
+    "task": "Psych shelf review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-09",
+    "day": "Saturday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Ethics/QI",
+    "task": "Ethics/QI/Biostatistics (AMBOSS or UWorld Step 3)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-09",
+    "day": "Saturday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-09",
+    "day": "Saturday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and reflection",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-10",
+    "day": "Sunday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "NBME",
+    "task": "NBME 11 practice exam",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-10",
+    "day": "Sunday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review NBME or practice questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-10",
+    "day": "Sunday",
+    "startTime": "13:00",
+    "endTime": "13:30",
+    "category": "Meal",
+    "task": "Lunch",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-10",
+    "day": "Sunday",
+    "startTime": "13:30",
+    "endTime": "16:00",
+    "category": "UWorld",
+    "task": "UWorld 40 questions (two blocks)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-10",
+    "day": "Sunday",
+    "startTime": "16:00",
+    "endTime": "17:00",
+    "category": "Review",
+    "task": "Psych shelf review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-10",
+    "day": "Sunday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Ethics/QI",
+    "task": "Ethics/QI/Biostatistics (AMBOSS or UWorld Step 3)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-10",
+    "day": "Sunday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-10",
+    "day": "Sunday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and reflection",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-11",
+    "day": "Monday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-11",
+    "day": "Monday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; 200-300 Anki reviews; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-11",
+    "day": "Monday",
+    "startTime": "13:00",
+    "endTime": "15:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions (weak topics)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-11",
+    "day": "Monday",
+    "startTime": "15:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-11",
+    "day": "Monday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Review",
+    "task": "Psych shelf review (First Aid & TrueLearn)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-11",
+    "day": "Monday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-11",
+    "day": "Monday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-12",
+    "day": "Tuesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-12",
+    "day": "Tuesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; 200-300 Anki reviews; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-12",
+    "day": "Tuesday",
+    "startTime": "13:00",
+    "endTime": "15:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions (weak topics)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-12",
+    "day": "Tuesday",
+    "startTime": "15:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-12",
+    "day": "Tuesday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Review",
+    "task": "Psych shelf review (First Aid & TrueLearn)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-12",
+    "day": "Tuesday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-12",
+    "day": "Tuesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-13",
+    "day": "Wednesday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "UWorld",
+    "task": "UWorld / practice blocks",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-13",
+    "day": "Wednesday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review NBME or practice questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-13",
+    "day": "Wednesday",
+    "startTime": "13:00",
+    "endTime": "13:30",
+    "category": "Meal",
+    "task": "Lunch",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-13",
+    "day": "Wednesday",
+    "startTime": "13:30",
+    "endTime": "16:00",
+    "category": "UWorld",
+    "task": "UWorld 40 questions (two blocks)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-13",
+    "day": "Wednesday",
+    "startTime": "16:00",
+    "endTime": "17:00",
+    "category": "Review",
+    "task": "Psych shelf review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-13",
+    "day": "Wednesday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Ethics/QI",
+    "task": "Ethics/QI/Biostatistics (AMBOSS or UWorld Step 3)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-13",
+    "day": "Wednesday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-13",
+    "day": "Wednesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and reflection",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-14",
+    "day": "Thursday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-14",
+    "day": "Thursday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; 200-300 Anki reviews; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-14",
+    "day": "Thursday",
+    "startTime": "13:00",
+    "endTime": "15:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions (weak topics)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-14",
+    "day": "Thursday",
+    "startTime": "15:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-14",
+    "day": "Thursday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Review",
+    "task": "Psych shelf review (First Aid & TrueLearn)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-14",
+    "day": "Thursday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-14",
+    "day": "Thursday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-15",
+    "day": "Friday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-15",
+    "day": "Friday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; 200-300 Anki reviews; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-15",
+    "day": "Friday",
+    "startTime": "13:00",
+    "endTime": "15:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions (weak topics)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-15",
+    "day": "Friday",
+    "startTime": "15:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld 20 timed questions",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-15",
+    "day": "Friday",
+    "startTime": "17:00",
+    "endTime": "18:00",
+    "category": "Review",
+    "task": "Psych shelf review (First Aid & TrueLearn)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-15",
+    "day": "Friday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-15",
+    "day": "Friday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-16",
+    "day": "Saturday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-16",
+    "day": "Saturday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-16",
+    "day": "Saturday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld first pass: 60-80 questions/day; review explanations; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-16",
+    "day": "Saturday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-16",
+    "day": "Saturday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-17",
+    "day": "Sunday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-17",
+    "day": "Sunday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-17",
+    "day": "Sunday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld first pass: 60-80 questions/day; review explanations; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-17",
+    "day": "Sunday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-17",
+    "day": "Sunday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-18",
+    "day": "Monday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-18",
+    "day": "Monday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-18",
+    "day": "Monday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld first pass: 60-80 questions/day; review explanations; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-18",
+    "day": "Monday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-18",
+    "day": "Monday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-19",
+    "day": "Tuesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-19",
+    "day": "Tuesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-19",
+    "day": "Tuesday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld first pass: 60-80 questions/day; review explanations; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-19",
+    "day": "Tuesday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-19",
+    "day": "Tuesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-20",
+    "day": "Wednesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-20",
+    "day": "Wednesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-20",
+    "day": "Wednesday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld first pass: 60-80 questions/day; review explanations; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-20",
+    "day": "Wednesday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-20",
+    "day": "Wednesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-21",
+    "day": "Thursday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-21",
+    "day": "Thursday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-21",
+    "day": "Thursday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld first pass: 60-80 questions/day; review explanations; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-21",
+    "day": "Thursday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-21",
+    "day": "Thursday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-22",
+    "day": "Friday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-22",
+    "day": "Friday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-22",
+    "day": "Friday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld first pass: 60-80 questions/day; review explanations; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-22",
+    "day": "Friday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-22",
+    "day": "Friday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-23",
+    "day": "Saturday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-23",
+    "day": "Saturday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-23",
+    "day": "Saturday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrect questions; start AMBOSS ethics/QI & high-yield concepts",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-23",
+    "day": "Saturday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-23",
+    "day": "Saturday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-24",
+    "day": "Sunday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-24",
+    "day": "Sunday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-24",
+    "day": "Sunday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrect questions; start AMBOSS ethics/QI & high-yield concepts",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-24",
+    "day": "Sunday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-24",
+    "day": "Sunday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-25",
+    "day": "Monday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-25",
+    "day": "Monday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-25",
+    "day": "Monday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrect questions; start AMBOSS ethics/QI & high-yield concepts",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-25",
+    "day": "Monday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-25",
+    "day": "Monday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-26",
+    "day": "Tuesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-26",
+    "day": "Tuesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-26",
+    "day": "Tuesday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrect questions; start AMBOSS ethics/QI & high-yield concepts",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-26",
+    "day": "Tuesday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-26",
+    "day": "Tuesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-27",
+    "day": "Wednesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-27",
+    "day": "Wednesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-27",
+    "day": "Wednesday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrect questions; start AMBOSS ethics/QI & high-yield concepts",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-27",
+    "day": "Wednesday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-27",
+    "day": "Wednesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-28",
+    "day": "Thursday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-28",
+    "day": "Thursday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-28",
+    "day": "Thursday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrect questions; start AMBOSS ethics/QI & high-yield concepts",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-28",
+    "day": "Thursday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-28",
+    "day": "Thursday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-29",
+    "day": "Friday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-29",
+    "day": "Friday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-29",
+    "day": "Friday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrect questions; start AMBOSS ethics/QI & high-yield concepts",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-29",
+    "day": "Friday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-29",
+    "day": "Friday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-30",
+    "day": "Saturday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-30",
+    "day": "Saturday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-30",
+    "day": "Saturday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms (Medicine, Surgery, OB/GYN, Peds, Psychiatry)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-30",
+    "day": "Saturday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-30",
+    "day": "Saturday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-31",
+    "day": "Sunday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-31",
+    "day": "Sunday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-31",
+    "day": "Sunday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "NBME",
+    "task": "NBME 13 exam (timed)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-31",
+    "day": "Sunday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review NBME 13",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-31",
+    "day": "Sunday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects & CMS forms",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-31",
+    "day": "Sunday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-05-31",
+    "day": "Sunday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-01",
+    "day": "Monday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-01",
+    "day": "Monday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-01",
+    "day": "Monday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms (Medicine, Surgery, OB/GYN, Peds, Psychiatry)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-01",
+    "day": "Monday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-01",
+    "day": "Monday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-02",
+    "day": "Tuesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-02",
+    "day": "Tuesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-02",
+    "day": "Tuesday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms (Medicine, Surgery, OB/GYN, Peds, Psychiatry)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-02",
+    "day": "Tuesday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-02",
+    "day": "Tuesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-03",
+    "day": "Wednesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-03",
+    "day": "Wednesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-03",
+    "day": "Wednesday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms (Medicine, Surgery, OB/GYN, Peds, Psychiatry)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-03",
+    "day": "Wednesday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-03",
+    "day": "Wednesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-04",
+    "day": "Thursday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-04",
+    "day": "Thursday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-04",
+    "day": "Thursday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms (Medicine, Surgery, OB/GYN, Peds, Psychiatry)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-04",
+    "day": "Thursday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-04",
+    "day": "Thursday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-05",
+    "day": "Friday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-05",
+    "day": "Friday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-05",
+    "day": "Friday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms (Medicine, Surgery, OB/GYN, Peds, Psychiatry)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-05",
+    "day": "Friday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-05",
+    "day": "Friday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-06",
+    "day": "Saturday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-06",
+    "day": "Saturday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-06",
+    "day": "Saturday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-06",
+    "day": "Saturday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-06",
+    "day": "Saturday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-07",
+    "day": "Sunday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-07",
+    "day": "Sunday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-07",
+    "day": "Sunday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-07",
+    "day": "Sunday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-07",
+    "day": "Sunday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-08",
+    "day": "Monday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-08",
+    "day": "Monday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-08",
+    "day": "Monday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "NBME",
+    "task": "NBME 14 exam",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-08",
+    "day": "Monday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review NBME 14",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-08",
+    "day": "Monday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects & CMS forms",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-08",
+    "day": "Monday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-08",
+    "day": "Monday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-09",
+    "day": "Tuesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-09",
+    "day": "Tuesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-09",
+    "day": "Tuesday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-09",
+    "day": "Tuesday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-09",
+    "day": "Tuesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-10",
+    "day": "Wednesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-10",
+    "day": "Wednesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-10",
+    "day": "Wednesday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-10",
+    "day": "Wednesday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-10",
+    "day": "Wednesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-11",
+    "day": "Thursday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-11",
+    "day": "Thursday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-11",
+    "day": "Thursday",
+    "startTime": "08:00",
+    "endTime": "18:00",
+    "category": "Simulation",
+    "task": "320-question simulation (NBME & UWorld blocks)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-11",
+    "day": "Thursday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-11",
+    "day": "Thursday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Review",
+    "task": "Review simulation",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-12",
+    "day": "Friday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-12",
+    "day": "Friday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-12",
+    "day": "Friday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms; targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-12",
+    "day": "Friday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-12",
+    "day": "Friday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-13",
+    "day": "Saturday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-13",
+    "day": "Saturday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-13",
+    "day": "Saturday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "Study",
+    "task": "Targeted review; CMS forms; UWorld incorrects; Ethics/QI",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-13",
+    "day": "Saturday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-13",
+    "day": "Saturday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-14",
+    "day": "Sunday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-14",
+    "day": "Sunday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-14",
+    "day": "Sunday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "Study",
+    "task": "Targeted review; CMS forms; UWorld incorrects; Ethics/QI",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-14",
+    "day": "Sunday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-14",
+    "day": "Sunday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-15",
+    "day": "Monday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-15",
+    "day": "Monday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-15",
+    "day": "Monday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "NBME",
+    "task": "NBME 15 exam",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-15",
+    "day": "Monday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review NBME 15",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-15",
+    "day": "Monday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "Study",
+    "task": "Targeted review; CMS forms",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-15",
+    "day": "Monday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-15",
+    "day": "Monday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-16",
+    "day": "Tuesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-16",
+    "day": "Tuesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-16",
+    "day": "Tuesday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "Study",
+    "task": "Targeted review; CMS forms; UWorld incorrects; Ethics/QI",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-16",
+    "day": "Tuesday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-16",
+    "day": "Tuesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-17",
+    "day": "Wednesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-17",
+    "day": "Wednesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-17",
+    "day": "Wednesday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "Study",
+    "task": "Targeted review; CMS forms; UWorld incorrects; Ethics/QI",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-17",
+    "day": "Wednesday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-17",
+    "day": "Wednesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-18",
+    "day": "Thursday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-18",
+    "day": "Thursday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-18",
+    "day": "Thursday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "Study",
+    "task": "Targeted review; CMS forms; UWorld incorrects; Ethics/QI",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-18",
+    "day": "Thursday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-18",
+    "day": "Thursday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-19",
+    "day": "Friday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-19",
+    "day": "Friday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-19",
+    "day": "Friday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "Study",
+    "task": "Targeted review; CMS forms; UWorld incorrects; Ethics/QI",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-19",
+    "day": "Friday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-19",
+    "day": "Friday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-20",
+    "day": "Saturday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-20",
+    "day": "Saturday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-20",
+    "day": "Saturday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms; targeted review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-20",
+    "day": "Saturday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-20",
+    "day": "Saturday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-21",
+    "day": "Sunday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-21",
+    "day": "Sunday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-21",
+    "day": "Sunday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "NBME",
+    "task": "NBME 16 exam",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-21",
+    "day": "Sunday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review NBME 16",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-21",
+    "day": "Sunday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "Simulation",
+    "task": "Simulation & targeted review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-21",
+    "day": "Sunday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-21",
+    "day": "Sunday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-22",
+    "day": "Monday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-22",
+    "day": "Monday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-22",
+    "day": "Monday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms; targeted review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-22",
+    "day": "Monday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-22",
+    "day": "Monday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-23",
+    "day": "Tuesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-23",
+    "day": "Tuesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-23",
+    "day": "Tuesday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms; targeted review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-23",
+    "day": "Tuesday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-23",
+    "day": "Tuesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-24",
+    "day": "Wednesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-24",
+    "day": "Wednesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-24",
+    "day": "Wednesday",
+    "startTime": "08:00",
+    "endTime": "18:00",
+    "category": "Simulation",
+    "task": "Full simulation (NBME16 + Free120)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-24",
+    "day": "Wednesday",
+    "startTime": "18:00",
+    "endTime": "19:00",
+    "category": "Meal",
+    "task": "Dinner break",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-24",
+    "day": "Wednesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Review",
+    "task": "Review simulation",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-25",
+    "day": "Thursday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-25",
+    "day": "Thursday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-25",
+    "day": "Thursday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms; targeted review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-25",
+    "day": "Thursday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-25",
+    "day": "Thursday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-26",
+    "day": "Friday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-26",
+    "day": "Friday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-26",
+    "day": "Friday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "UWorld",
+    "task": "UWorld incorrects; CMS forms; targeted review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-26",
+    "day": "Friday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-26",
+    "day": "Friday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-27",
+    "day": "Saturday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-27",
+    "day": "Saturday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-27",
+    "day": "Saturday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "Final Review",
+    "task": "Final review; revisit NBME mistakes; review algorithms; Ethics/QI; Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-27",
+    "day": "Saturday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-27",
+    "day": "Saturday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-28",
+    "day": "Sunday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-28",
+    "day": "Sunday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-28",
+    "day": "Sunday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "Final Review",
+    "task": "Final review; revisit NBME mistakes; review algorithms; Ethics/QI; Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-28",
+    "day": "Sunday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-28",
+    "day": "Sunday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-29",
+    "day": "Monday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-29",
+    "day": "Monday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-29",
+    "day": "Monday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "NBME",
+    "task": "NBME Free 120",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-29",
+    "day": "Monday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review Free 120",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-29",
+    "day": "Monday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "Final Review",
+    "task": "Final review; algorithms; Ethics/QI; Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-29",
+    "day": "Monday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-29",
+    "day": "Monday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-30",
+    "day": "Tuesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-30",
+    "day": "Tuesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-30",
+    "day": "Tuesday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "Final Review",
+    "task": "Final review; revisit NBME mistakes; review algorithms; Ethics/QI; Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-30",
+    "day": "Tuesday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-06-30",
+    "day": "Tuesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-01",
+    "day": "Wednesday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-01",
+    "day": "Wednesday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Study",
+    "task": "Study: Anki reviews and targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-01",
+    "day": "Wednesday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "Final Review",
+    "task": "Final review; revisit NBME mistakes; review algorithms; Ethics/QI; Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-01",
+    "day": "Wednesday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-01",
+    "day": "Wednesday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-02",
+    "day": "Thursday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-02",
+    "day": "Thursday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-02",
+    "day": "Thursday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "Final Review",
+    "task": "Final review; revisit NBME mistakes; review algorithms; Ethics/QI; Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-02",
+    "day": "Thursday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-02",
+    "day": "Thursday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-03",
+    "day": "Friday",
+    "startTime": "06:30",
+    "endTime": "07:45",
+    "category": "Gym",
+    "task": "Gym and Divine Intervention podcasts (during exercise)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-03",
+    "day": "Friday",
+    "startTime": "08:00",
+    "endTime": "13:00",
+    "category": "Work/Study",
+    "task": "Work; Anki reviews and targeted reading (half pace)",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-03",
+    "day": "Friday",
+    "startTime": "13:00",
+    "endTime": "17:00",
+    "category": "Final Review",
+    "task": "Final review; revisit NBME mistakes; review algorithms; Ethics/QI; Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-03",
+    "day": "Friday",
+    "startTime": "17:00",
+    "endTime": "19:00",
+    "category": "Anki/Review",
+    "task": "Anki reviews & targeted reading",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-03",
+    "day": "Friday",
+    "startTime": "19:00",
+    "endTime": "21:00",
+    "category": "Anki/Review",
+    "task": "Additional study/Anki",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-04",
+    "day": "Saturday",
+    "startTime": "08:00",
+    "endTime": "12:00",
+    "category": "Final Review",
+    "task": "Light study: review screening schedules, vaccine charts, formulas; brief ethics/QI review",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-04",
+    "day": "Saturday",
+    "startTime": "12:00",
+    "endTime": "21:00",
+    "category": "Rest",
+    "task": "Rest and light activities",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-05",
+    "day": "Sunday",
+    "startTime": "08:00",
+    "endTime": "10:00",
+    "category": "Practice Exam",
+    "task": "40-question mixed block",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-05",
+    "day": "Sunday",
+    "startTime": "10:00",
+    "endTime": "13:00",
+    "category": "Review",
+    "task": "Review 40-question block and rest",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-05",
+    "day": "Sunday",
+    "startTime": "13:00",
+    "endTime": "21:00",
+    "category": "Rest",
+    "task": "Light review and rest",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-06",
+    "day": "Monday",
+    "startTime": "08:00",
+    "endTime": "12:00",
+    "category": "Final Review",
+    "task": "Morning review; last-minute reinforcement",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-06",
+    "day": "Monday",
+    "startTime": "12:00",
+    "endTime": "21:00",
+    "category": "Rest",
+    "task": "No new material; finalise logistics; mindfulness and relaxation",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-07",
+    "day": "Tuesday",
+    "startTime": "08:00",
+    "endTime": "21:00",
+    "category": "Rest",
+    "task": "Rest day: light exercise, good nutrition; early bedtime",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-08",
+    "day": "Wednesday",
+    "startTime": "08:00",
+    "endTime": "21:00",
+    "category": "Rest",
+    "task": "Prepare materials; confirm exam details; rest; mental preparation",
+    "status": "Not Started",
+    "notes": ""
+  },
+  {
+    "date": "2026-07-09",
+    "day": "Thursday",
+    "startTime": "07:30",
+    "endTime": "17:00",
+    "category": "Exam",
+    "task": "Step 2 exam day; follow break strategy, strategic caffeine, trust first instinct",
+    "status": "Not Started",
+    "notes": ""
+  }
+]
