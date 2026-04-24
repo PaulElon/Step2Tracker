@@ -1,0 +1,61 @@
+name: Release Desktop App
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  publish-tauri:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-13
+            target: x86_64-apple-darwin
+          - platform: macos-14
+            target: aarch64-apple-darwin
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Stamp CI release version
+        shell: bash
+        run: |
+          VERSION="$(node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); const tauri=JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json','utf8')); const [major='0', minor='0']=String(pkg.version || '0.0.0').split('.'); const version=\`${major}.${minor}.${process.env.GITHUB_RUN_NUMBER}\`; pkg.version=version; tauri.version=version; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2)+'\n'); fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(tauri, null, 2)+'\n'); process.stdout.write(version);")"
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Build and publish Tauri release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: app-v__VERSION__
+          releaseName: Step 2 Command Center v__VERSION__
+          releaseBody: |
+            Automated desktop release for commit ${{ github.sha }}.
+            Installers and updater metadata are attached below.
+          releaseDraft: false
+          prerelease: false
+          args: --target ${{ matrix.target }}

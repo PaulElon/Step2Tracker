@@ -79,7 +79,11 @@ If alerts do not appear:
 
 Release builds can check for signed updates on launch.
 
-Set one of these environment variables to your hosted update manifest:
+Installed builds now default to the GitHub Releases feed for this repository:
+
+- `https://github.com/PaulElon/Step2Tracker/releases/latest/download/latest.json`
+
+You can still override that at runtime with either of these environment variables:
 
 - `STEP2_UPDATER_ENDPOINT`
 - `STEP2_UPDATER_ENDPOINTS`
@@ -91,6 +95,21 @@ TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/step2-command-center.key)" npm run tau
 ```
 
 The matching public key is embedded in `src-tauri/tauri.conf.json`.
+
+### Automatic Releases From `main`
+
+The repository includes [`.github/workflows/release.yml`](/.github/workflows/release.yml), which publishes signed macOS release artifacts on every push to `main` and uploads the `latest.json` updater manifest that Tauri expects.
+
+Required GitHub repository secrets:
+
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` if your updater key is encrypted
+
+Important constraints:
+
+- Auto-update only works for installed release builds, not `npm run tauri:dev`.
+- Tauri only installs an update when the published version is newer than the installed version.
+- The workflow solves that by stamping a unique CI version per `main` push before building the release artifacts.
 
 ## Verification
 

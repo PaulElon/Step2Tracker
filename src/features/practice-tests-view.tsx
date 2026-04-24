@@ -1,5 +1,6 @@
-import { Plus, Trash2 } from "lucide-react";
-import { useId, useMemo, useRef, useState } from "react";
+import { Plus, Settings2, Trash2 } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import type { PlotRelayoutEvent } from "plotly.js";
 import { LazyPlot } from "../components/lazy-plot";
 import { getPracticeMetrics, getPracticeTrend, getTopicFrequency } from "../lib/analytics";
 import { formatHoursValue, formatShortDate } from "../lib/datetime";
@@ -14,10 +15,77 @@ import { EmptyState, MetricCard, Panel } from "../components/ui";
 import {
   fieldClassName,
   iconButtonClassName,
+  cn,
   primaryButtonClassName,
   secondaryButtonClassName,
 } from "../lib/ui";
 import type { PracticeTest, PracticeTestInput } from "../types/models";
+
+interface TrendRegression {
+  slope: number;
+  intercept: number;
+  rSquared: number;
+  points: number[];
+}
+
+function getTrendRegression(scores: number[]) {
+  if (scores.length < 2) {
+    return null;
+  }
+
+  const xs = scores.map((_, index) => index);
+  const xMean = xs.reduce((total, value) => total + value, 0) / xs.length;
+  const yMean = scores.reduce((total, value) => total + value, 0) / scores.length;
+
+  let numerator = 0;
+  let denominator = 0;
+  for (let index = 0; index < scores.length; index += 1) {
+    const centeredX = xs[index] - xMean;
+    numerator += centeredX * (scores[index] - yMean);
+    denominator += centeredX * centeredX;
+  }
+
+  if (denominator === 0) {
+    return null;
+  }
+
+  const slope = numerator / denominator;
+  const intercept = yMean - slope * xMean;
+  const points = xs.map((value) => intercept + slope * value);
+
+  const totalSumSquares = scores.reduce((total, value) => total + (value - yMean) ** 2, 0);
+  const residualSumSquares = scores.reduce((total, value, index) => total + (value - points[index]) ** 2, 0);
+  const rSquared = totalSumSquares === 0 ? 1 : Math.max(0, 1 - residualSumSquares / totalSumSquares);
+
+  return {
+    slope,
+    intercept,
+    rSquared,
+    points,
+  } satisfies TrendRegression;
+}
+
+function readAxisRanges(eventData: PlotRelayoutEvent): { xRange?: [string, string]; yRange?: [number, number] } {
+  const nextRanges: { xRange?: [string, string]; yRange?: [number, number] } = {};
+
+  const xStart = eventData["xaxis.range[0]"];
+  const xEnd = eventData["xaxis.range[1]"];
+  if (typeof xStart === "string" && typeof xEnd === "string") {
+    nextRanges.xRange = [xStart, xEnd];
+  } else if (eventData["xaxis.autorange"]) {
+    nextRanges.xRange = undefined;
+  }
+
+  const yStart = eventData["yaxis.range[0]"];
+  const yEnd = eventData["yaxis.range[1]"];
+  if (typeof yStart === "number" && typeof yEnd === "number") {
+    nextRanges.yRange = [yStart, yEnd];
+  } else if (eventData["yaxis.autorange"]) {
+    nextRanges.yRange = undefined;
+  }
+
+  return nextRanges;
+}
 
 function createInitialDraft(test?: PracticeTest) {
   if (!test) {
@@ -340,14 +408,41 @@ export function PracticeTestsView() {
   const { state, trashPracticeTest, upsertPracticeTest } = useAppStore();
   const [editorTest, setEditorTest] = useState<PracticeTest | undefined>();
   const [showEditor, setShowEditor] = useState(false);
+  const [showChartSettings, setShowChartSettings] = useState(false);
+  const [showConnectionLine, setShowConnectionLine] = useState(true);
+  const [showBestFitLine, setShowBestFitLine] = useState(false);
+  const [showBestFitRSquared, setShowBestFitRSquared] = useState(false);
+  const [chartRanges, setChartRanges] = useState<{ xRange?: [string, string]; yRange?: [number, number] }>({});
+  const settingsRef = useRef<HTMLDivElement>(null);
   const metrics = getPracticeMetrics(state.practiceTests);
   const scoreTrend = useMemo(() => getPracticeTrend(state.practiceTests), [state.practiceTests]);
+  const trendRegression = useMemo(
+    () => getTrendRegression(scoreTrend.map((point) => point.score)),
+    [scoreTrend],
+  );
   const weakPatterns = useMemo(() => getTopicFrequency(state.practiceTests, "weak"), [state.practiceTests]);
   const strongPatterns = useMemo(() => getTopicFrequency(state.practiceTests, "strong"), [state.practiceTests]);
   const orderedTests = useMemo(
     () => [...state.practiceTests].sort((left, right) => right.date.localeCompare(left.date)),
     [state.practiceTests],
   );
+
+  useEffect(() => {
+    if (!showChartSettings) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (settingsRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setShowChartSettings(false);
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, [showChartSettings]);
 
   return (
     <div className="space-y-4">
@@ -376,7 +471,66 @@ export function PracticeTestsView() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
         <Panel
-          title="Score trend"
+          title={
+            <div ref={settingsRef} className="relative flex items-center gap-2">
+              <span>Score trend</span>
+              <button
+                type="button"
+                className={cn(iconButtonClassName, "h-9 w-9")}
+                aria-label="Open score trend chart settings"
+                aria-haspopup="dialog"
+                aria-expanded={showChartSettings}
+                onClick={() => setShowChartSettings((current) => !current)}
+              >
+                <Settings2 className="h-4 w-4" />
+              </button>
+              {showChartSettings ? (
+                <div className="absolute left-0 top-full z-20 mt-3 w-[248px] rounded-[20px] border border-white/10 bg-[#081220]/95 p-4 shadow-[0_18px_48px_rgba(2,8,23,0.5)] backdrop-blur-xl">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Chart settings</p>
+                  <div className="mt-4 space-y-3">
+                    <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-slate-200">
+                      <span>Connect dots</span>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-cyan-300"
+                        checked={showConnectionLine}
+                        onChange={(event) => setShowConnectionLine(event.target.checked)}
+                      />
+                    </label>
+                    <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-slate-200">
+                      <span>Line of best fit</span>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-cyan-300"
+                        checked={showBestFitLine}
+                        onChange={(event) => {
+                          const checked = event.target.checked;
+                          setShowBestFitLine(checked);
+                          if (!checked) {
+                            setShowBestFitRSquared(false);
+                          }
+                        }}
+                        disabled={!trendRegression}
+                      />
+                    </label>
+                    <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-slate-200">
+                      <span>Show R²</span>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-cyan-300"
+                        checked={showBestFitRSquared}
+                        onChange={(event) => setShowBestFitRSquared(event.target.checked)}
+                        disabled={!showBestFitLine || !trendRegression}
+                      />
+                    </label>
+                  </div>
+                  {!trendRegression ? (
+                    <p className="mt-3 text-xs text-slate-500">Log at least two tests to enable regression.</p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          }
           action={
             <button
               type="button"
@@ -392,16 +546,21 @@ export function PracticeTestsView() {
           }
         >
           {scoreTrend.length ? (
-            <div>
+            <div className="relative">
+              {showBestFitLine && showBestFitRSquared && trendRegression ? (
+                <div className="pointer-events-none absolute right-4 top-4 z-10 rounded-full border border-cyan-300/20 bg-slate-950/80 px-3 py-1 text-xs font-medium tracking-[0.04em] text-cyan-100">
+                  R² {trendRegression.rSquared.toFixed(3)}
+                </div>
+              ) : null}
               <LazyPlot
                 className="h-[280px]"
                 data={[
                   {
-                    x: scoreTrend.map((point) => formatShortDate(point.date)),
+                    x: scoreTrend.map((point) => point.date),
                     y: scoreTrend.map((point) => point.score),
                     customdata: scoreTrend.map((point) => point.label),
-                    type: "scatter",
-                    mode: "lines+markers",
+                    type: "scatter" as const,
+                    mode: showConnectionLine ? ("lines+markers" as const) : ("markers" as const),
                     line: {
                       color: "#67e8f9",
                       width: 3,
@@ -416,6 +575,23 @@ export function PracticeTestsView() {
                     },
                     hovertemplate: "%{customdata}<br>%{y:.1f}%<extra></extra>",
                   },
+                  ...(showBestFitLine && trendRegression
+                    ? [
+                        {
+                          x: scoreTrend.map((point) => point.date),
+                          y: trendRegression.points,
+                          type: "scatter" as const,
+                          mode: "lines" as const,
+                          line: {
+                            color: "#f59e0b",
+                            width: 2,
+                            dash: "dash" as const,
+                          },
+                          hovertemplate:
+                            "Best fit<br>%{x|%b %-d}<br>%{y:.1f}%<extra></extra>",
+                        },
+                      ]
+                    : []),
                 ]}
                 layout={{
                   autosize: true,
@@ -423,18 +599,34 @@ export function PracticeTestsView() {
                   plot_bgcolor: "transparent",
                   margin: { l: 44, r: 16, t: 12, b: 44 },
                   showlegend: false,
+                  dragmode: "zoom",
                   xaxis: {
+                    type: "date",
+                    range: chartRanges.xRange,
                     tickfont: { color: "#94a3b8", size: 11 },
                     gridcolor: "rgba(148, 163, 184, 0.08)",
                     automargin: true,
+                    fixedrange: false,
+                    tickformat: "%b %-d",
                   },
                   yaxis: {
-                    range: [0, 100],
+                    range: chartRanges.yRange ?? [0, 100],
                     ticksuffix: "%",
                     tickfont: { color: "#94a3b8", size: 11 },
                     gridcolor: "rgba(148, 163, 184, 0.08)",
                     zeroline: false,
+                    fixedrange: false,
                   },
+                }}
+                config={{
+                  scrollZoom: true,
+                  doubleClick: "reset",
+                }}
+                onRelayout={(eventData) => {
+                  setChartRanges((current) => ({
+                    ...current,
+                    ...readAxisRanges(eventData),
+                  }));
                 }}
               />
             </div>

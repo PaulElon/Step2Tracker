@@ -31,8 +31,8 @@ export function Panel({
   className,
   children,
 }: {
-  title?: string;
-  subtitle?: string;
+  title?: ReactNode;
+  subtitle?: ReactNode;
   action?: ReactNode;
   className?: string;
   children: ReactNode;

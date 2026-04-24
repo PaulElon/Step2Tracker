@@ -1,6 +1,11 @@
 use tauri::AppHandle;
+#[cfg(not(debug_assertions))]
+use std::str::FromStr;
 
 const DEFAULT_UPDATER_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJCRTBFQTFDRDJDQ0U1NkMKUldSczVjelNIT3JnS3drYUlxc2RLdTloUGcxdndSdHpidkM4UlZROEJ4OXBkTDI2N3JzZUNvRHU=";
+#[cfg(not(debug_assertions))]
+const DEFAULT_UPDATER_ENDPOINT: &str =
+    "https://github.com/PaulElon/Step2Tracker/releases/latest/download/latest.json";
 
 #[cfg(not(debug_assertions))]
 use std::env;
@@ -41,11 +46,20 @@ fn configured_endpoints() -> Vec<Url> {
         .or_else(|| env::var(UPDATER_ENDPOINT_ENV).ok())
         .unwrap_or_default();
 
-    raw.split(['\n', ',', ';'])
+    let parsed = raw
+        .split(['\n', ',', ';'])
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .filter_map(|value| Url::parse(value).ok())
-        .collect()
+        .collect::<Vec<_>>();
+
+    if parsed.is_empty() {
+        Url::from_str(DEFAULT_UPDATER_ENDPOINT)
+            .map(|url| vec![url])
+            .unwrap_or_default()
+    } else {
+        parsed
+    }
 }
 
 #[cfg(debug_assertions)]
