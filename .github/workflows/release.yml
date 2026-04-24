@@ -80,5 +80,4 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: --target aarch64-apple-darwin
-          uploadUpdaterJson: true
-          uploadUpdaterSignatures: true
+          includeUpdaterJson: true
