@@ -1,7 +1,7 @@
 import { Edit3, Plus, Trash2 } from "lucide-react";
 import { useId, useMemo, useRef, useState } from "react";
-import { getWeakTopicPlannerInsights } from "../lib/analytics";
-import { formatLongDate, formatShortDate } from "../lib/datetime";
+import { getWeakTopicPlannerInsights, type WeakTopicPlannerInsight } from "../lib/analytics";
+import { formatShortDate, formatLongDate } from "../lib/datetime";
 import {
   WEAK_TOPIC_PRIORITY_VALUES,
   WEAK_TOPIC_STATUS_VALUES,
@@ -16,7 +16,20 @@ import {
 import { useAppStore } from "../state/app-store";
 import { ModalShell } from "../components/modal-shell";
 import { EmptyState, MetricCard, Panel } from "../components/ui";
-import type { WeakTopicEntry, WeakTopicInput, WeakTopicStatus } from "../types/models";
+import type { WeakTopicEntry, WeakTopicInput } from "../types/models";
+
+const DISPLAY_STATUSES = ["Active", "Improving", "Resolved"] as const;
+type DisplayStatus = typeof DISPLAY_STATUSES[number];
+
+const priorityDotClass: Record<string, string> = {
+  High: "bg-rose-400",
+  Medium: "bg-amber-400",
+  Low: "bg-slate-400",
+};
+
+function toTitleCase(str: string): string {
+  return str.replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+}
 
 function createInitialDraft(entry?: WeakTopicEntry): WeakTopicInput & { id?: string } {
   if (!entry) {
@@ -47,13 +60,17 @@ function WeakTopicEditorSheet({
   entry,
   onClose,
   onSave,
+  existingTopics,
 }: {
   entry?: WeakTopicEntry;
   onClose: () => void;
   onSave: (draft: WeakTopicInput & { id?: string }) => void;
+  existingTopics: string[];
 }) {
   const [draft, setDraft] = useState(createInitialDraft(entry));
   const [errors, setErrors] = useState<Partial<Record<"topic", string>>>({});
+  const [topicInput, setTopicInput] = useState(draft.topic);
+  const [showDropdown, setShowDropdown] = useState(false);
   const id = useId();
   const topicRef = useRef<HTMLInputElement>(null);
   const titleId = `${id}-title`;
@@ -65,6 +82,14 @@ function WeakTopicEditorSheet({
   const lastSeenId = `${id}-last-seen`;
   const sourceId = `${id}-source`;
   const notesId = `${id}-notes`;
+
+  const filteredSuggestions = useMemo(
+    () =>
+      existingTopics
+        .filter((t) => t.toLowerCase().includes(topicInput.toLowerCase()) && topicInput.length > 0)
+        .slice(0, 7),
+    [existingTopics, topicInput],
+  );
 
   return (
     <ModalShell
@@ -97,31 +122,69 @@ function WeakTopicEditorSheet({
         className="mt-8 space-y-5"
         onSubmit={(event) => {
           event.preventDefault();
-          const nextErrors = validateWeakTopicInput(draft);
+          const normalizedTopic = toTitleCase(topicInput.trim());
+          const nextErrors = validateWeakTopicInput({ ...draft, topic: normalizedTopic });
+
+          if (!entry) {
+            const isDuplicate = existingTopics.some(
+              (t) => t.toLowerCase() === normalizedTopic.toLowerCase(),
+            );
+            if (isDuplicate) {
+              nextErrors.topic = "This topic already exists.";
+            }
+          }
 
           if (Object.keys(nextErrors).length) {
             setErrors(nextErrors);
             return;
           }
 
-          onSave(draft);
+          onSave({ ...draft, topic: normalizedTopic });
         }}
       >
         <div>
           <label htmlFor={topicId} className="text-xs uppercase tracking-[0.18em] text-slate-500">Topic</label>
-          <input
-            ref={topicRef}
-            id={topicId}
-            value={draft.topic}
-            onChange={(event) => {
-              setDraft((current) => ({ ...current, topic: event.target.value }));
-              setErrors((current) => ({ ...current, topic: undefined }));
-            }}
-            aria-describedby={errors.topic ? topicErrorId : undefined}
-            aria-invalid={Boolean(errors.topic)}
-            className={`${fieldClassName} mt-2`}
-            placeholder="Cardio murmurs, postpartum hemorrhage, ethics..."
-          />
+          <div className="relative mt-2">
+            <input
+              ref={topicRef}
+              id={topicId}
+              value={topicInput}
+              onChange={(event) => {
+                const val = event.target.value;
+                setTopicInput(val);
+                setDraft((current) => ({ ...current, topic: val }));
+                setErrors((current) => ({ ...current, topic: undefined }));
+                setShowDropdown(true);
+              }}
+              onFocus={() => setShowDropdown(true)}
+              onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+              onKeyDown={(e) => { if (e.key === "Escape") setShowDropdown(false); }}
+              aria-describedby={errors.topic ? topicErrorId : undefined}
+              aria-invalid={Boolean(errors.topic)}
+              className={fieldClassName}
+              placeholder="Cardio murmurs, postpartum hemorrhage, ethics..."
+              autoComplete="off"
+            />
+            {showDropdown && filteredSuggestions.length > 0 && (
+              <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[220px] overflow-y-auto rounded-[14px] border border-white/10 bg-slate-900 py-1 shadow-xl">
+                {filteredSuggestions.map((suggestion) => (
+                  <button
+                    type="button"
+                    key={suggestion}
+                    className="w-full px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-white/5 hover:text-white"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setTopicInput(suggestion);
+                      setDraft((current) => ({ ...current, topic: suggestion }));
+                      setShowDropdown(false);
+                    }}
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {errors.topic ? <p id={topicErrorId} className="mt-2 text-sm text-rose-300">{errors.topic}</p> : null}
         </div>
 
@@ -220,6 +283,15 @@ export function WeakTopicsView() {
   const [editorEntry, setEditorEntry] = useState<WeakTopicEntry | undefined>();
   const [showEditor, setShowEditor] = useState(false);
 
+  const dragRef = useRef<{ id: string; fromStatus: DisplayStatus } | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<DisplayStatus | null>(null);
+  const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
+  const [columnOrder, setColumnOrder] = useState<Record<DisplayStatus, string[]>>({
+    Active: [],
+    Improving: [],
+    Resolved: [],
+  });
+
   const insights = useMemo(
     () =>
       getWeakTopicPlannerInsights(state.weakTopicEntries, state.practiceTests, state.studyBlocks).sort(
@@ -231,18 +303,121 @@ export function WeakTopicsView() {
     [state.practiceTests, state.studyBlocks, state.weakTopicEntries],
   );
 
-  const groupedByStatus = WEAK_TOPIC_STATUS_VALUES.reduce<Record<WeakTopicStatus, typeof insights>>(
-    (groups, status) => {
-      groups[status] = insights.filter((entry) => entry.status === status);
-      return groups;
-    },
-    {
-      Active: [],
-      Watching: [],
-      Improving: [],
-      Resolved: [],
-    },
+  const existingTopics = useMemo(
+    () => state.weakTopicEntries.map((e) => e.topic),
+    [state.weakTopicEntries],
   );
+
+  function getColumnEntries(status: DisplayStatus): WeakTopicPlannerInsight[] {
+    const statusInsights = status === "Active"
+      ? insights.filter((e) => e.status === "Active" || e.status === "Watching")
+      : insights.filter((e) => e.status === status);
+
+    const order = columnOrder[status];
+    if (!order.length) return statusInsights;
+
+    const byId = new Map(statusInsights.map((e) => [e.id, e]));
+    const ordered = order.flatMap((id) => {
+      const entry = byId.get(id);
+      return entry ? [entry] : [];
+    });
+    const orderedIds = new Set(order);
+    const remaining = statusInsights.filter((e) => !orderedIds.has(e.id));
+    return [...ordered, ...remaining];
+  }
+
+  function handleCardDragStart(id: string, fromStatus: DisplayStatus, e: React.DragEvent) {
+    dragRef.current = { id, fromStatus };
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", id);
+  }
+
+  function handleDragEnd() {
+    dragRef.current = null;
+    setDragOverColumn(null);
+    setDragOverCardId(null);
+  }
+
+  function handleColumnDragOver(status: DisplayStatus, e: React.DragEvent) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverColumn(status);
+  }
+
+  function handleCardDragOver(cardId: string, status: DisplayStatus, e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverColumn(status);
+    setDragOverCardId(cardId);
+  }
+
+  function handleColumnDrop(targetStatus: DisplayStatus, e: React.DragEvent) {
+    e.preventDefault();
+    const drag = dragRef.current;
+    if (!drag) return;
+
+    if (drag.fromStatus === targetStatus) {
+      if (!dragOverCardId) {
+        const ids = getColumnEntries(targetStatus).map((entry) => entry.id).filter((id) => id !== drag.id);
+        ids.push(drag.id);
+        setColumnOrder((prev) => ({ ...prev, [targetStatus]: ids }));
+      }
+    } else {
+      const storeEntry = state.weakTopicEntries.find((entry) => entry.id === drag.id);
+      if (storeEntry) {
+        void upsertWeakTopic({ ...storeEntry, status: targetStatus });
+      }
+      const fromIds = getColumnEntries(drag.fromStatus).map((entry) => entry.id).filter((id) => id !== drag.id);
+      const toIds = getColumnEntries(targetStatus).map((entry) => entry.id);
+      if (!dragOverCardId) toIds.push(drag.id);
+      setColumnOrder((prev) => ({
+        ...prev,
+        [drag.fromStatus]: fromIds,
+        [targetStatus]: toIds,
+      }));
+    }
+
+    setDragOverColumn(null);
+    setDragOverCardId(null);
+    dragRef.current = null;
+  }
+
+  function handleCardDrop(targetCardId: string, targetStatus: DisplayStatus, e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const drag = dragRef.current;
+    if (!drag || drag.id === targetCardId) return;
+
+    if (drag.fromStatus === targetStatus) {
+      const ids = getColumnEntries(targetStatus).map((entry) => entry.id);
+      const fromIdx = ids.indexOf(drag.id);
+      if (fromIdx !== -1) ids.splice(fromIdx, 1);
+      const toIdx = ids.indexOf(targetCardId);
+      if (toIdx !== -1) ids.splice(toIdx, 0, drag.id);
+      else ids.push(drag.id);
+      setColumnOrder((prev) => ({ ...prev, [targetStatus]: ids }));
+    } else {
+      const storeEntry = state.weakTopicEntries.find((entry) => entry.id === drag.id);
+      if (storeEntry) {
+        void upsertWeakTopic({ ...storeEntry, status: targetStatus });
+      }
+      const fromIds = getColumnEntries(drag.fromStatus).map((entry) => entry.id).filter((id) => id !== drag.id);
+      const toIds = getColumnEntries(targetStatus).map((entry) => entry.id);
+      const toIdx = toIds.indexOf(targetCardId);
+      if (toIdx !== -1) toIds.splice(toIdx, 0, drag.id);
+      else toIds.push(drag.id);
+      setColumnOrder((prev) => ({
+        ...prev,
+        [drag.fromStatus]: fromIds,
+        [targetStatus]: toIds,
+      }));
+    }
+
+    setDragOverColumn(null);
+    setDragOverCardId(null);
+    dragRef.current = null;
+  }
 
   const uncoveredCount = insights.filter((entry) => entry.linkedBlockCount === 0 && entry.status !== "Resolved").length;
   const recurringCount = insights.filter((entry) => entry.occurrenceCount > 1).length;
@@ -322,26 +497,58 @@ export function WeakTopicsView() {
         )}
       </Panel>
 
-      <div className="grid gap-4 2xl:grid-cols-4 xl:grid-cols-2">
-        {WEAK_TOPIC_STATUS_VALUES.map((status) => (
-          <Panel
-            key={status}
-            title={status}
-            subtitle={`${groupedByStatus[status].length} topics`}
-            className="min-h-[320px]"
-          >
-            {groupedByStatus[status].length ? (
-              <div className="space-y-3">
-                {groupedByStatus[status].map((entry) => (
-                  <div key={entry.id} className="task-card task-card--review task-card--compact">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-white">{entry.topic}</p>
-                        <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400">
-                          {entry.priority} priority · {entry.occurrenceCount} occurrences
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
+      <div className="grid gap-4 md:grid-cols-3">
+        {DISPLAY_STATUSES.map((status) => {
+          const entries = getColumnEntries(status);
+          const isOver = dragOverColumn === status;
+
+          return (
+            <div
+              key={status}
+              className={`glass-panel min-w-0 transition ${isOver ? "ring-1 ring-cyan-300/40" : ""}`}
+              onDragOver={(e) => handleColumnDragOver(status, e)}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setDragOverColumn(null);
+                  setDragOverCardId(null);
+                }
+              }}
+              onDrop={(e) => handleColumnDrop(status, e)}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">{status}</h3>
+                <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs text-slate-400">
+                  {entries.length}
+                </span>
+              </div>
+
+              <div className="max-h-[332px] space-y-2 overflow-y-auto pr-0.5">
+                {entries.map((entry) => {
+                  const isDraggingThis = dragRef.current?.id === entry.id;
+                  const isDropTarget = dragOverCardId === entry.id;
+
+                  return (
+                    <div
+                      key={entry.id}
+                      draggable
+                      onDragStart={(e) => handleCardDragStart(entry.id, status, e)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={(e) => handleCardDragOver(entry.id, status, e)}
+                      onDrop={(e) => handleCardDrop(entry.id, status, e)}
+                      className={[
+                        "cursor-grab rounded-[14px] border border-white/10 bg-slate-900/55 px-3 py-2.5 transition select-none",
+                        isDraggingThis ? "opacity-40" : "",
+                        isDropTarget ? "ring-1 ring-cyan-300/50" : "",
+                      ].join(" ")}
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${priorityDotClass[entry.priority] ?? "bg-slate-400"}`} />
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">
+                          {entry.topic}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-slate-500">
+                          {formatShortDate(entry.lastSeenAt)}
+                        </span>
                         <button
                           type="button"
                           className={iconButtonClassName}
@@ -352,46 +559,42 @@ export function WeakTopicsView() {
                           }}
                           aria-label={`Edit ${entry.topic}`}
                         >
-                          <Edit3 className="h-4 w-4" />
+                          <Edit3 className="h-3.5 w-3.5" />
                         </button>
                         <button
                           type="button"
                           className={iconButtonClassName}
-                          onClick={() => {
-                            if (window.confirm(`Move "${entry.topic}" to weak-topic trash?`)) {
-                              void trashWeakTopic(entry.id);
-                            }
-                          }}
+                          onClick={() => void trashWeakTopic(entry.id)}
                           aria-label={`Delete ${entry.topic}`}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
+                      {entry.sourceLabel && (
+                        <p className="mt-1 truncate pl-4 text-xs text-slate-500">
+                          {entry.sourceLabel}
+                        </p>
+                      )}
                     </div>
-                    <p className="mt-3 text-sm leading-6 text-slate-300">
-                      {entry.linkedBlockCount
-                        ? `${entry.linkedBlockCount} linked future blocks${entry.nextTouchDate ? ` · next ${formatShortDate(entry.nextTouchDate)}` : ""}`
-                        : "No linked future blocks yet"}
-                    </p>
-                    <p className="mt-2 text-xs text-slate-400">
-                      {entry.notes || `Latest source: ${entry.sourceLabel}`}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-            ) : (
-              <div className="flex h-full min-h-[180px] items-center justify-center rounded-[20px] border border-dashed border-white/10 bg-white/[0.02] px-4 text-center text-sm text-slate-400">
-                No topics in {status.toLowerCase()} yet.
-              </div>
-            )}
-          </Panel>
-        ))}
+
+              {entries.length === 0 && (
+                <div className="flex min-h-[100px] items-center justify-center rounded-[14px] border border-dashed border-white/10 bg-white/[0.02] px-4 text-center text-sm text-slate-400">
+                  No {status.toLowerCase()} topics
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {showEditor ? (
         <WeakTopicEditorSheet
           entry={editorEntry}
           onClose={() => setShowEditor(false)}
+          existingTopics={existingTopics.filter((t) => t !== editorEntry?.topic)}
           onSave={(draft) => {
             void (async () => {
               const saved = await upsertWeakTopic(draft);

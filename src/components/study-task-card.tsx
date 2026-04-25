@@ -29,8 +29,8 @@ export function StudyTaskCard({
         compact ? "p-4" : "p-5"
       } ${block.completed ? "opacity-60" : ""}`}
     >
-      <div className="flex items-start gap-4">
-        <label className="mt-1 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center">
+      <div className="flex items-center gap-4">
+        <label className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center">
           <input
             type="checkbox"
             checked={block.completed}
@@ -49,32 +49,29 @@ export function StudyTaskCard({
               </span>
             ) : null}
           </div>
-
-          <h4 className={`mt-3 text-lg font-semibold text-white ${block.completed ? "line-through decoration-white/45" : ""}`}>
+          <h4
+            className={`mt-1.5 text-base font-semibold text-white ${block.completed ? "line-through decoration-white/45" : ""}`}
+          >
             {block.task}
           </h4>
-
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-300">
-            <span className="inline-flex items-center gap-2">
-              <Clock3 className="h-4 w-4 text-slate-500" />
-              {durationLabel}
-            </span>
-            {block.reminderAt ? (
-              <span className="inline-flex items-center gap-2">
-                <Bell className="h-4 w-4 text-cyan-300" />
-                {formatDateTimeLabel(block.reminderAt)}
-              </span>
-            ) : null}
-          </div>
-
           {showNotes && block.notes ? (
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">{block.notes}</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">{block.notes}</p>
           ) : null}
+        </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <TaskLaunchButton taskTitle={block.task} />
-            {actionSlot ? <div className="flex flex-wrap items-center gap-2">{actionSlot}</div> : null}
-          </div>
+        <div className="flex shrink-0 items-center gap-3 text-slate-300">
+          <span className="inline-flex items-center gap-1.5 text-xs">
+            <Clock3 className="h-3.5 w-3.5 text-slate-500" />
+            {durationLabel}
+          </span>
+          {block.reminderAt ? (
+            <span className="inline-flex items-center gap-1.5 text-xs">
+              <Bell className="h-3.5 w-3.5 text-cyan-300" />
+              {formatDateTimeLabel(block.reminderAt)}
+            </span>
+          ) : null}
+          <TaskLaunchButton taskTitle={block.task} />
+          {actionSlot ? actionSlot : null}
         </div>
       </div>
     </article>

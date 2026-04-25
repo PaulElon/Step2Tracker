@@ -170,6 +170,30 @@ export const themes: Record<ThemeId, ThemeDefinition> = {
       admin: ["#74f0c3", "#58d7ff"],
     },
   },
+  maggiepink: {
+    id: "maggiepink",
+    label: "Maggie Pink",
+    description: "Bright rose light-mode palette with deep charcoal text and high contrast.",
+    chart: {
+      text: "#1a0a10",
+      muted: "#8b4d6a",
+      grid: "rgba(26,10,16,0.08)",
+      outline: "rgba(26,10,16,0.15)",
+      primary: "#c20065",
+      secondary: "#ff5fa3",
+      tertiary: "#8b1a5c",
+      warm: "#d4600a",
+      success: "#0a7a45",
+      danger: "#b00000",
+    },
+    lanes: {
+      review: ["rgba(194,0,101,0.22)", "rgba(255,95,163,0.14)"],
+      content: ["rgba(255,130,170,0.22)", "rgba(255,180,200,0.14)"],
+      assessment: ["rgba(212,96,10,0.22)", "rgba(255,150,90,0.14)"],
+      recovery: ["rgba(180,120,150,0.18)", "rgba(230,195,210,0.10)"],
+      admin: ["rgba(10,122,69,0.18)", "rgba(120,200,160,0.10)"],
+    },
+  },
 };
 
 export const themeList = Object.values(themes);

@@ -85,7 +85,7 @@ export function AnalyticsView() {
         </Panel>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <div className="grid gap-4 xl:grid-cols-2">
         <Panel title="Consistency">
           <ConsistencyHeatmap activityByDate={activityByDate} />
         </Panel>
@@ -123,7 +123,7 @@ export function AnalyticsView() {
         </Panel>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+      <div className="grid gap-4 xl:grid-cols-2">
         <Panel title="Coverage gaps">
           {remediationLinks.length ? (
             <div className="space-y-4">

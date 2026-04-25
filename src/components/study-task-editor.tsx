@@ -1,8 +1,9 @@
 import { useId, useRef, useState } from "react";
 import { ModalShell } from "./modal-shell";
 import { fieldClassName, primaryButtonClassName, secondaryButtonClassName } from "../lib/ui";
-import { STUDY_TASK_CATEGORY_VALUES, getEmptyStudyBlockDraft, validateStudyBlockInput } from "../lib/storage";
+import { getEmptyStudyBlockDraft, validateStudyBlockInput } from "../lib/storage";
 import { getDayName } from "../lib/datetime";
+import { useAppStore } from "../state/app-store";
 import type { StudyBlock, StudyBlockInput } from "../types/models";
 
 type StudyTaskEditorDraft = {
@@ -59,6 +60,8 @@ export function StudyTaskEditorSheet({
   onClose: () => void;
   onSave: (draft: StudyBlockInput & { id?: string }) => void;
 }) {
+  const { state } = useAppStore();
+  const categories = state.preferences.customCategories;
   const [draft, setDraft] = useState(createInitialDraft(task, seedDate));
   const [errors, setErrors] = useState<Partial<Record<"date" | "task" | "duration" | "category" | "reminder", string>>>(
     {},
@@ -197,7 +200,7 @@ export function StudyTaskEditorSheet({
             aria-invalid={Boolean(errors.category)}
             className={`${fieldClassName} mt-2`}
           >
-            {STUDY_TASK_CATEGORY_VALUES.map((category) => (
+            {categories.map((category) => (
               <option key={category} value={category}>
                 {category}
               </option>

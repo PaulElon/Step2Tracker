@@ -524,6 +524,35 @@ export function PracticeTestsView() {
                       />
                     </label>
                   </div>
+                  <div className="mt-3 space-y-2">
+                    <button
+                      type="button"
+                      className="w-full rounded-xl bg-white/5 px-3 py-2 text-left text-sm text-slate-200 hover:bg-white/10 disabled:opacity-40"
+                      disabled={!scoreTrend.length}
+                      onClick={() => {
+                        const scores = scoreTrend.map((p) => p.score);
+                        const minScore = Math.min(...scores);
+                        const maxScore = Math.max(...scores);
+                        setChartRanges((current) => ({
+                          ...current,
+                          yRange: [Math.max(0, Math.floor(minScore) - 5), Math.min(100, Math.ceil(maxScore) + 5)],
+                        }));
+                        setShowChartSettings(false);
+                      }}
+                    >
+                      Auto-fit Y-axis
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full rounded-xl bg-white/5 px-3 py-2 text-left text-sm text-slate-200 hover:bg-white/10"
+                      onClick={() => {
+                        setChartRanges((current) => ({ ...current, yRange: [0, 100] }));
+                        setShowChartSettings(false);
+                      }}
+                    >
+                      Reset to 0–100%
+                    </button>
+                  </div>
                   {!trendRegression ? (
                     <p className="mt-3 text-xs text-slate-500">Log at least two tests to enable regression.</p>
                   ) : null}
@@ -578,8 +607,11 @@ export function PracticeTestsView() {
                   ...(showBestFitLine && trendRegression
                     ? [
                         {
-                          x: scoreTrend.map((point) => point.date),
-                          y: trendRegression.points,
+                          x: [scoreTrend[0].date, scoreTrend[scoreTrend.length - 1].date],
+                          y: [
+                            trendRegression.intercept,
+                            trendRegression.intercept + trendRegression.slope * (scoreTrend.length - 1),
+                          ],
                           type: "scatter" as const,
                           mode: "lines" as const,
                           line: {
@@ -599,14 +631,14 @@ export function PracticeTestsView() {
                   plot_bgcolor: "transparent",
                   margin: { l: 44, r: 16, t: 12, b: 44 },
                   showlegend: false,
-                  dragmode: "zoom",
+                  dragmode: false,
                   xaxis: {
                     type: "date",
                     range: chartRanges.xRange,
                     tickfont: { color: "#94a3b8", size: 11 },
                     gridcolor: "rgba(148, 163, 184, 0.08)",
                     automargin: true,
-                    fixedrange: false,
+                    fixedrange: true,
                     tickformat: "%b %-d",
                   },
                   yaxis: {
@@ -619,8 +651,8 @@ export function PracticeTestsView() {
                   },
                 }}
                 config={{
-                  scrollZoom: true,
-                  doubleClick: "reset",
+                  scrollZoom: false,
+                  doubleClick: false,
                 }}
                 onRelayout={(eventData) => {
                   setChartRanges((current) => ({
@@ -677,7 +709,7 @@ export function PracticeTestsView() {
 
       <Panel title="History">
           {orderedTests.length ? (
-            <div className="max-h-[calc(100vh-22rem)] overflow-auto scrollbar-subtle rounded-[24px] border border-white/10 bg-slate-950/35">
+            <div className="max-h-[340px] overflow-y-auto scrollbar-subtle rounded-[24px] border border-white/10 bg-slate-950/35">
               <table className="w-full min-w-[960px] text-left">
                 <thead className="sticky top-0 border-b border-white/10 bg-[#081220]/95 text-xs uppercase tracking-[0.18em] text-slate-400">
                   <tr>

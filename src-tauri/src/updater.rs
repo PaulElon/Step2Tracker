@@ -95,12 +95,7 @@ pub fn spawn_update_check(app: AppHandle) {
 
         match updater.check().await {
             Ok(Some(update)) => {
-                if let Err(error) = update.download_and_install(|_, _| {}, || {}).await {
-                    eprintln!("Updater install failed: {error}");
-                    return;
-                }
-
-                app.restart();
+                app.emit("update-available", update.version.to_string()).ok();
             }
             Ok(None) => {}
             Err(error) => {
@@ -108,4 +103,40 @@ pub fn spawn_update_check(app: AppHandle) {
             }
         }
     });
+}
+
+#[cfg(not(debug_assertions))]
+#[tauri::command]
+pub async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
+    let endpoints = configured_endpoints();
+    if endpoints.is_empty() {
+        return Ok(());
+    }
+    let pubkey = updater_pubkey();
+    let updater = app
+        .updater_builder()
+        .pubkey(pubkey)
+        .endpoints(endpoints)
+        .map_err(|e| e.to_string())?
+        .timeout(Duration::from_secs(120))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    match updater.check().await.map_err(|e| e.to_string())? {
+        Some(update) => {
+            update
+                .download_and_install(|_, _| {}, || {})
+                .await
+                .map_err(|e| e.to_string())?;
+            app.restart();
+        }
+        None => {}
+    }
+    Ok(())
+}
+
+#[cfg(debug_assertions)]
+#[tauri::command]
+pub async fn install_update(_app: tauri::AppHandle) -> Result<(), String> {
+    Ok(())
 }

@@ -16,7 +16,6 @@ import {
   startOfWeek,
 } from "../lib/datetime";
 import { parseStudyWorkbook } from "../lib/excel";
-import { STUDY_TASK_CATEGORY_VALUES } from "../lib/storage";
 import { useAppStore } from "../state/app-store";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { ModalShell } from "../components/modal-shell";
@@ -202,6 +201,20 @@ function ImportDialog({
   );
 }
 
+const categoryDotPalette = [
+  "bg-cyan-400",
+  "bg-blue-400",
+  "bg-violet-400",
+  "bg-pink-400",
+  "bg-amber-400",
+  "bg-emerald-400",
+];
+
+function getCategoryDotColor(category: string): string {
+  const hash = [...category].reduce((total, char) => total + char.charCodeAt(0), 0);
+  return categoryDotPalette[hash % categoryDotPalette.length];
+}
+
 export function PlannerView() {
   const {
     state,
@@ -342,7 +355,7 @@ export function PlannerView() {
             className={fieldClassName}
           >
             <option value="All">All categories</option>
-            {STUDY_TASK_CATEGORY_VALUES.map((category) => (
+            {state.preferences.customCategories.map((category) => (
               <option key={category} value={category}>
                 {category}
               </option>
@@ -368,13 +381,13 @@ export function PlannerView() {
               </button>
               <button
                 type="button"
-                className={secondaryButtonClassName}
+                className={iconButtonClassName}
                 onClick={() => {
                   void setPlannerFocusDate(periodNextDate);
                 }}
+                aria-label={periodNextLabel}
               >
                 <ChevronRight className="h-4 w-4" />
-                {periodNextLabel}
               </button>
             </div>
           }
@@ -417,49 +430,52 @@ export function PlannerView() {
             </div>
           ) : (
             <div>
-              <div className="mb-3 grid grid-cols-7 gap-2 text-center text-xs uppercase tracking-[0.16em] text-slate-500">
+              <div className="mb-1 grid grid-cols-7 text-center">
                 {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-                  <span key={day}>{day}</span>
+                  <div key={day} className="py-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">
+                    {day}
+                  </div>
                 ))}
               </div>
-              <div className="grid grid-cols-7 gap-2">
+              <div className="grid grid-cols-7 gap-px overflow-hidden rounded-[12px]">
                 {periodDates.map((date) => {
                   const dayTasks = state.studyBlocks.filter((task) => task.date === date);
-                  const dayCompleted = dayTasks.filter((task) => task.completed).length;
+                  const isToday = date === getTodayKey();
                   const isSelected = date === selectedDate;
                   const isCurrentMonth = date.slice(0, 7) === selectedDate.slice(0, 7);
+                  const visibleTasks = dayTasks.slice(0, 3);
+                  const hiddenCount = dayTasks.length - visibleTasks.length;
 
                   return (
                     <button
                       key={date}
                       type="button"
-                      onClick={() => {
-                        void setPlannerFocusDate(date);
-                      }}
-                      className={`min-h-[96px] rounded-[20px] border px-3 py-3 text-left transition ${
+                      onClick={() => void setPlannerFocusDate(date)}
+                      className={[
+                        "flex min-h-[72px] flex-col p-1.5 text-left transition",
                         isSelected
-                          ? "border-cyan-300/30 bg-cyan-300/10"
-                          : "border-white/10 bg-slate-900/55 hover:border-white/15"
-                      } ${isCurrentMonth ? "" : "opacity-50"}`}
+                          ? "bg-cyan-300/15 ring-1 ring-inset ring-cyan-300/30"
+                          : isToday
+                          ? "bg-white/[0.07] ring-1 ring-inset ring-cyan-300/20"
+                          : "bg-slate-900/55 hover:bg-white/5",
+                        !isCurrentMonth ? "opacity-40" : "",
+                      ].join(" ")}
                     >
-                      <div className="flex h-full flex-col justify-between gap-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-semibold text-white">{Number(date.slice(8))}</p>
-                            <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                              {getDayName(date).slice(0, 3)}
-                            </p>
+                      <div className="mb-1 text-[11px] font-medium leading-none text-slate-400">
+                        {Number(date.slice(8))}
+                      </div>
+                      <div className="flex-1 space-y-0.5 overflow-hidden">
+                        {visibleTasks.map((task) => (
+                          <div key={task.id} className="flex min-w-0 items-center gap-1">
+                            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${getCategoryDotColor(task.category)}`} />
+                            <span className="truncate text-[9px] leading-tight text-slate-300">
+                              {task.task}
+                            </span>
                           </div>
-                          <div className="text-right text-[10px] text-slate-400">
-                            <div>{dayTasks.length}</div>
-                            <div>{dayCompleted} done</div>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {dayTasks.slice(0, 3).map((task) => (
-                            <span key={task.id} className="h-1.5 flex-1 rounded-full bg-cyan-300/60" />
-                          ))}
-                        </div>
+                        ))}
+                        {hiddenCount > 0 && (
+                          <div className="text-[9px] leading-tight text-slate-500">+{hiddenCount}</div>
+                        )}
                       </div>
                     </button>
                   );
@@ -578,11 +594,9 @@ export function PlannerView() {
                             type="button"
                             className={iconButtonClassName}
                             onClick={() => {
-                              if (window.confirm(`Move "${task.task}" to planner trash?`)) {
-                                void trashStudyBlock(task.id);
-                              }
+                              void trashStudyBlock(task.id);
                             }}
-                            aria-label={`Delete task ${task.task}`}
+                            aria-label={`Delete ${task.task}`}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
