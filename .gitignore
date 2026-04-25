@@ -26,3 +26,4 @@ src-tauri/*.sqlite3
 *.njsproj
 *.sln
 *.sw?
+.claude/
