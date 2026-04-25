@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 const APP_ID: &str = "step2-command-center";
 const APP_STATE_VERSION: u32 = 6;
-const DB_SCHEMA_VERSION: i32 = 5;
+const DB_SCHEMA_VERSION: i32 = 6;
 const LIVE_DB_FILE: &str = "command-center.sqlite3";
 const MAX_BACKUPS: usize = 20;
 const SAFE_CHECKPOINT_INTERVAL_HOURS: i64 = 6;
@@ -167,6 +167,10 @@ pub struct AppState {
     pub preferences: Preferences,
 }
 
+fn default_error_log_priority() -> String {
+    "medium".to_string()
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorLogEntry {
@@ -178,6 +182,10 @@ pub struct ErrorLogEntry {
     pub error_type: String,
     pub missed_pattern: String,
     pub fix: String,
+    #[serde(default = "default_error_log_priority")]
+    pub priority: String,
+    #[serde(default)]
+    pub entry_date: String,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -193,6 +201,10 @@ pub struct ErrorLogInput {
     pub error_type: String,
     pub missed_pattern: String,
     pub fix: String,
+    #[serde(default = "default_error_log_priority")]
+    pub priority: String,
+    #[serde(default)]
+    pub entry_date: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -336,10 +348,28 @@ pub struct Preferences {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
+pub enum ResourceLinkKind {
+    #[default]
+    Website,
+    App,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct ResourceLink {
     pub id: String,
     pub label: String,
     pub url: String,
+    #[serde(default)]
+    pub kind: ResourceLinkKind,
+}
+
+fn default_exam_time() -> String {
+    "23:59".to_string()
+}
+
+fn default_display_mode() -> String {
+    "days".to_string()
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -348,6 +378,10 @@ pub struct ExamTimer {
     pub id: String,
     pub label: String,
     pub exam_date: String,
+    #[serde(default = "default_exam_time")]
+    pub exam_time: String,
+    #[serde(default = "default_display_mode")]
+    pub display_mode: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1108,6 +1142,9 @@ impl StorageService {
         if current_version < 5 {
             self.ensure_error_log_table(&transaction)?;
         }
+        if current_version < 6 {
+            self.ensure_error_log_priority_columns(&transaction)?;
+        }
         transaction.pragma_update(None, "user_version", DB_SCHEMA_VERSION)?;
         self.set_metadata_tx(&transaction, "app_version", &self.app_version)?;
         self.log_event(
@@ -1219,6 +1256,8 @@ impl StorageService {
               error_type TEXT NOT NULL,
               missed_pattern TEXT NOT NULL,
               fix TEXT NOT NULL,
+              priority TEXT NOT NULL DEFAULT 'medium',
+              entry_date TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL,
               deleted_at TEXT,
@@ -1312,6 +1351,8 @@ impl StorageService {
               error_type TEXT NOT NULL,
               missed_pattern TEXT NOT NULL,
               fix TEXT NOT NULL,
+              priority TEXT NOT NULL DEFAULT 'medium',
+              entry_date TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL,
               deleted_at TEXT,
@@ -1319,6 +1360,23 @@ impl StorageService {
             );
             ",
         )?;
+        Ok(())
+    }
+
+    fn ensure_error_log_priority_columns(&self, transaction: &Transaction<'_>) -> StorageResult<()> {
+        let columns = self.table_columns(transaction, "error_log_entries")?;
+        if !columns.contains(&"priority".to_string()) {
+            transaction.execute(
+                "ALTER TABLE error_log_entries ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium'",
+                [],
+            )?;
+        }
+        if !columns.contains(&"entry_date".to_string()) {
+            transaction.execute(
+                "ALTER TABLE error_log_entries ADD COLUMN entry_date TEXT NOT NULL DEFAULT ''",
+                [],
+            )?;
+        }
         Ok(())
     }
 
@@ -1659,7 +1717,7 @@ impl StorageService {
     fn read_error_log_entries(&self, connection: &Connection) -> StorageResult<Vec<ErrorLogEntry>> {
         let mut statement = connection.prepare(
             "
-            SELECT id, source, exam_block, system, topic, error_type, missed_pattern, fix, created_at, updated_at
+            SELECT id, source, exam_block, system, topic, error_type, missed_pattern, fix, priority, entry_date, created_at, updated_at
             FROM error_log_entries
             WHERE deleted_at IS NULL
             ORDER BY created_at DESC
@@ -1675,8 +1733,10 @@ impl StorageService {
                 error_type: row.get(5)?,
                 missed_pattern: row.get(6)?,
                 fix: row.get(7)?,
-                created_at: row.get(8)?,
-                updated_at: row.get(9)?,
+                priority: row.get::<_, Option<String>>(8)?.unwrap_or_else(|| "medium".to_string()),
+                entry_date: row.get::<_, Option<String>>(9)?.unwrap_or_default(),
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
             })
         })?;
         rows.collect::<Result<Vec<_>, _>>().map_err(StorageError::from)
@@ -2228,9 +2288,9 @@ impl StorageService {
             "
             INSERT INTO error_log_entries (
               id, source, exam_block, system, topic, error_type, missed_pattern, fix,
-              created_at, updated_at, deleted_at, delete_reason
+              priority, entry_date, created_at, updated_at, deleted_at, delete_reason
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL, NULL)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, NULL, NULL)
             ON CONFLICT(id) DO UPDATE SET
               source = excluded.source,
               exam_block = excluded.exam_block,
@@ -2239,6 +2299,8 @@ impl StorageService {
               error_type = excluded.error_type,
               missed_pattern = excluded.missed_pattern,
               fix = excluded.fix,
+              priority = excluded.priority,
+              entry_date = excluded.entry_date,
               created_at = excluded.created_at,
               updated_at = excluded.updated_at,
               deleted_at = NULL,
@@ -2253,6 +2315,8 @@ impl StorageService {
                 entry.error_type,
                 entry.missed_pattern,
                 entry.fix,
+                entry.priority,
+                entry.entry_date,
                 entry.created_at,
                 entry.updated_at,
             ],
@@ -2283,6 +2347,12 @@ impl StorageService {
         };
 
         let timestamp = now_iso();
+        let created_at = existing_created_at.unwrap_or_else(|| timestamp.clone());
+        let entry_date = if input.entry_date.is_empty() {
+            created_at.get(..10).unwrap_or("").to_string()
+        } else {
+            input.entry_date
+        };
         let entry = ErrorLogEntry {
             id: input.id.unwrap_or_else(new_id),
             source: input.source.trim().to_string(),
@@ -2292,7 +2362,9 @@ impl StorageService {
             error_type: input.error_type.trim().to_string(),
             missed_pattern: input.missed_pattern.trim().to_string(),
             fix: input.fix.trim().to_string(),
-            created_at: existing_created_at.unwrap_or_else(|| timestamp.clone()),
+            priority: if input.priority.is_empty() { "medium".to_string() } else { input.priority },
+            entry_date,
+            created_at,
             updated_at: timestamp,
         };
 
