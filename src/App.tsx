@@ -1,11 +1,11 @@
 import {
   AlertCircle,
-  BarChart3,
   CalendarDays,
   ClipboardCheck,
   Database,
   Flame,
   House,
+  Plus,
   RotateCcw,
   Settings2,
   ShieldPlus,
@@ -18,7 +18,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ModalShell } from "./components/modal-shell";
 import { MobileNav, NavigationButton } from "./components/ui";
-import { AnalyticsView } from "./features/analytics-view";
 import { DashboardView } from "./features/dashboard-view";
 import { ErrorLogView } from "./features/error-log-view";
 import { PlannerView } from "./features/planner-view";
@@ -26,7 +25,7 @@ import { PracticeTestsView } from "./features/practice-tests-view";
 import { SettingsView } from "./features/settings-view";
 import { WeakTopicsView } from "./features/weak-topics-view";
 import { getDateRange, sumStudyMinutes } from "./lib/analytics";
-import { daysBetween, formatHoursValue, formatLongDate, formatShortDate } from "./lib/datetime";
+import { daysBetween, formatHoursValue, formatLongDate } from "./lib/datetime";
 import {
   formatReminderBody,
   getDueStudyBlockReminders,
@@ -40,6 +39,8 @@ import { useAppStore } from "./state/app-store";
 import type {
   BackupArtifactPreview,
   BackupMetadata,
+  ExamDisplayMode,
+  ExamTimer,
   PersistenceSummary,
   SectionId,
   TrashItem,
@@ -67,13 +68,8 @@ const navigationItems = [
     icon: ClipboardCheck,
   },
   {
-    id: "analytics" as const,
-    label: "Analytics",
-    icon: BarChart3,
-  },
-  {
     id: "errorLog" as const,
-    label: "Error Log",
+    label: "Exam Mistakes Log",
     icon: AlertCircle,
   },
   {
@@ -88,8 +84,7 @@ const sectionCopy: Record<SectionId, { title: string }> = {
   planner: { title: "Planner" },
   weakTopics: { title: "Weak Topics" },
   tests: { title: "Practice Tests" },
-  analytics: { title: "Analytics" },
-  errorLog: { title: "Error Log" },
+  errorLog: { title: "Exam Mistakes Log" },
   settings: { title: "Settings" },
 };
 
@@ -286,6 +281,190 @@ function StorageSafetyDialog({
   );
 }
 
+function computeCountdown(timer: ExamTimer): string {
+  const examTime = timer.examTime ?? "23:59";
+  const target = new Date(`${timer.examDate}T${examTime}`);
+  const diffMs = target.getTime() - Date.now();
+  if (diffMs <= 0) return "";
+  const totalMinutes = Math.floor(diffMs / 60_000);
+  const minutes = totalMinutes % 60;
+  const totalHours = Math.floor(totalMinutes / 60);
+  const hours = totalHours % 24;
+  const totalDays = Math.floor(totalHours / 24);
+  const mode = timer.displayMode ?? "days";
+  if (mode === "days") {
+    return `${totalDays}d ${hours}h ${minutes}m`;
+  }
+  if (mode === "weeks+days") {
+    const weeks = Math.floor(totalDays / 7);
+    const days = totalDays % 7;
+    return `${weeks}w ${days}d ${hours}h ${minutes}m`;
+  }
+  const months = Math.floor(totalDays / 30);
+  const remDays = totalDays - months * 30;
+  const weeks = Math.floor(remDays / 7);
+  const days = remDays % 7;
+  return `${months}mo ${weeks}w ${days}d ${hours}h ${minutes}m`;
+}
+
+function SidebarCountdown() {
+  const { state, setExamTimers } = useAppStore();
+  const [showModal, setShowModal] = useState(false);
+  const [name, setName] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("23:59");
+  const [mode, setMode] = useState<ExamDisplayMode>("days");
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const now = Date.now();
+  const allTimers = state.preferences.examTimers;
+  const activeTimers = allTimers
+    .filter((t) => {
+      const examTime = t.examTime ?? "23:59";
+      return new Date(`${t.examDate}T${examTime}`).getTime() > now;
+    })
+    .slice(0, 5);
+
+  function handleAdd() {
+    if (!name.trim() || !date) return;
+    const newTimer: ExamTimer = {
+      id: crypto.randomUUID(),
+      label: name.trim(),
+      examDate: date,
+      examTime: time,
+      displayMode: mode,
+    };
+    void setExamTimers([...allTimers, newTimer]);
+    setName("");
+    setDate("");
+    setTime("23:59");
+    setMode("days");
+    setShowModal(false);
+  }
+
+  function handleDelete(id: string) {
+    void setExamTimers(allTimers.filter((t) => t.id !== id));
+  }
+
+  return (
+    <>
+      <div className="panel-subtle p-3">
+        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Countdown</p>
+        {activeTimers.length === 0 ? (
+          <button
+            type="button"
+            onClick={() => setShowModal(true)}
+            className="mt-2 flex w-full items-center gap-2 rounded-[14px] border border-dashed border-white/10 p-3 text-sm text-slate-500 transition-colors hover:border-white/20 hover:text-slate-400"
+          >
+            <Plus className="h-4 w-4" />
+            Add Countdown
+          </button>
+        ) : (
+          <div className="mt-2 space-y-2">
+            {activeTimers.map((t) => (
+              <div key={t.id} className="rounded-[14px] border border-white/10 bg-slate-950/45 p-3">
+                <div className="flex items-center justify-between gap-1">
+                  <p className="truncate text-xs text-slate-400">{t.label}</p>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(t.id)}
+                    className="shrink-0 text-slate-600 transition-colors hover:text-rose-400"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+                <p className="mt-1 font-bold tabular-nums text-white" style={{ fontSize: "0.95rem" }}>
+                  {computeCountdown(t)}
+                </p>
+              </div>
+            ))}
+            {allTimers.length < 5 ? (
+              <button
+                type="button"
+                onClick={() => setShowModal(true)}
+                className="flex w-full items-center gap-2 rounded-[14px] border border-dashed border-white/10 p-2 text-xs text-slate-500 transition-colors hover:text-slate-400"
+              >
+                <Plus className="h-3 w-3" />
+                Add
+              </button>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      {showModal ? (
+        <ModalShell onClose={() => setShowModal(false)} position="center" titleId="add-countdown-title">
+          <h3 id="add-countdown-title" className="text-xl font-semibold text-white">
+            Add Countdown
+          </h3>
+          <div className="mt-4 space-y-3">
+            <input
+              type="text"
+              placeholder="Name"
+              autoFocus
+              className="field w-full bg-slate-950"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAdd();
+                if (e.key === "Escape") setShowModal(false);
+              }}
+            />
+            <input
+              type="date"
+              className="field w-full bg-slate-950"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+            <input
+              type="time"
+              className="field w-full bg-slate-950"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+            />
+            <div className="flex gap-4">
+              {(["days", "weeks+days", "months+weeks+days"] as const).map((m) => (
+                <label key={m} className="flex cursor-pointer items-center gap-1.5 text-sm text-slate-300">
+                  <input
+                    type="radio"
+                    name="display-mode"
+                    checked={mode === m}
+                    onChange={() => setMode(m)}
+                    className="accent-cyan-400"
+                  />
+                  {m === "days" ? "d" : m === "weeks+days" ? "w+d" : "mo+w+d"}
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                className={primaryButtonClassName}
+                onClick={handleAdd}
+                disabled={!name.trim() || !date}
+              >
+                Add
+              </button>
+              <button
+                type="button"
+                className={secondaryButtonClassName}
+                onClick={() => setShowModal(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      ) : null}
+    </>
+  );
+}
+
 export default function App() {
   const {
     state,
@@ -325,15 +504,11 @@ export default function App() {
       : persistenceStatus === "error"
         ? persistenceError ?? "Local persistence issue detected."
         : lastSavedAt
-          ? `Last saved ${new Date(lastSavedAt).toLocaleString([], {
+          ? new Date(lastSavedAt).toLocaleString([], {
               dateStyle: "medium",
               timeStyle: "short",
-            })}`
+            })
           : "Local store ready.";
-  const dateRangeLabel =
-    dateRange.startDate && dateRange.endDate
-      ? `${formatShortDate(dateRange.startDate)} - ${formatShortDate(dateRange.endDate)}`
-      : "No plan yet";
   const dateRangeMeta =
     dateRange.startDate && dateRange.endDate
       ? `${daysBetween(dateRange.startDate, dateRange.endDate) + 1} days`
@@ -571,9 +746,6 @@ export default function App() {
     case "tests":
       sectionContent = <PracticeTestsView />;
       break;
-    case "analytics":
-      sectionContent = <AnalyticsView />;
-      break;
     case "errorLog":
       sectionContent = <ErrorLogView />;
       break;
@@ -677,7 +849,7 @@ export default function App() {
               </div>
             </div>
 
-            <nav className="flex-1 space-y-2 overflow-y-auto pr-1 scrollbar-subtle">
+            <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 scrollbar-subtle">
               {navigationItems.map((item) => (
                 <NavigationButton
                   key={item.id}
@@ -692,6 +864,8 @@ export default function App() {
                 />
               ))}
             </nav>
+
+            <SidebarCountdown />
 
             <div className="panel-subtle p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Schedule</p>
@@ -711,11 +885,7 @@ export default function App() {
                 </h2>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3 2xl:min-w-[720px]">
-                <div className="muted-surface px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Range</p>
-                  <p className="mt-2 text-sm font-semibold text-white">{dateRangeLabel}</p>
-                </div>
+              <div className="grid gap-3 sm:grid-cols-2 2xl:min-w-[480px]">
                 <div className="muted-surface px-4 py-3">
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Planned</p>
                   <p className="mt-2 text-sm font-semibold text-white">{formatHoursValue(totalMinutes)}</p>

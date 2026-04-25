@@ -1,6 +1,6 @@
 export type StudyStatus = "Not Started" | "In Progress" | "Completed" | "Skipped";
 export type StudyStatusFilter = StudyStatus | "All";
-export type SectionId = "dashboard" | "planner" | "weakTopics" | "tests" | "analytics" | "settings" | "errorLog";
+export type SectionId = "dashboard" | "planner" | "weakTopics" | "tests" | "settings" | "errorLog";
 export type PlannerSortField = "date" | "order" | "category" | "task";
 export type SortDirection = "asc" | "desc";
 export type ImportMode = "merge" | "replace";
@@ -12,7 +12,10 @@ export type ThemeId =
   | "bubblegum"
   | "signal"
   | "prism"
-  | "maggiepink";
+  | "maggiepink"
+  | "light"
+  | "paulblue"
+  | "teslared";
 export type WeakTopicPriority = "High" | "Medium" | "Low";
 export type WeakTopicStatus = "Active" | "Improving" | "Resolved";
 export type WeakTopicEntryType = "manual" | "practice-test";
@@ -129,12 +132,17 @@ export interface ResourceLink {
   id: string;
   label: string;
   url: string;
+  kind: "website" | "app";
 }
+
+export type ExamDisplayMode = "days" | "weeks+days" | "months+weeks+days";
 
 export interface ExamTimer {
   id: string;
   label: string;
   examDate: string;
+  examTime?: string;
+  displayMode?: ExamDisplayMode;
 }
 
 export interface Preferences {
@@ -155,6 +163,7 @@ export interface Preferences {
 export type ErrorLogSource = "UWorld" | "TrueLearn" | "NBME" | "CMS Form" | "AMBOSS" | "COMSAE" | "Other";
 export type ErrorLogSystem = "IM/FM" | "Surgery" | "OB/GYN" | "Pediatrics" | "Psychiatry" | "Ethics/Biostats" | "OMT" | "Other";
 export type ErrorLogErrorType = "Knowledge Gap" | "Misread Question" | "Wrong Algorithm" | "Trap Answer";
+export type ErrorLogPriority = "high" | "medium" | "low";
 
 export interface ErrorLogEntry {
   id: string;
@@ -163,8 +172,12 @@ export interface ErrorLogEntry {
   system: ErrorLogSystem;
   topic: string;
   errorType: ErrorLogErrorType;
+  // May contain inline HTML: <b>, <i>, <u>, <br> only (sanitized on save)
   missedPattern: string;
+  // May contain inline HTML: <b>, <i>, <u>, <br> only (sanitized on save)
   fix: string;
+  priority: ErrorLogPriority;
+  entryDate: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -178,6 +191,8 @@ export interface ErrorLogInput {
   errorType: ErrorLogErrorType;
   missedPattern: string;
   fix: string;
+  priority: ErrorLogPriority;
+  entryDate: string;
 }
 
 export interface AppState {

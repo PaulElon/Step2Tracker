@@ -1,4 +1,4 @@
-import { Activity, Clock3, Flame, ListTodo, Plus, Trash2 } from "lucide-react";
+import { Activity, Clock3, Flame, ListTodo } from "lucide-react";
 import { useState } from "react";
 import {
   getGoalAlerts,
@@ -8,50 +8,18 @@ import {
   getTodayBlocks,
 } from "../lib/analytics";
 import { formatLongDate, formatMinutes, getTodayKey } from "../lib/datetime";
-import { primaryButtonClassName, secondaryButtonClassName } from "../lib/ui";
+import { secondaryButtonClassName } from "../lib/ui";
 import { useAppStore } from "../state/app-store";
-import type { ExamTimer } from "../types/models";
 import { StudyTaskCard } from "../components/study-task-card";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { EmptyState, MetricCard, Panel } from "../components/ui";
 
-type ExamDisplayMode = "days" | "weeks+days" | "months+weeks+days";
-
-function getCountdown(examDate: string, mode: ExamDisplayMode): string {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(examDate + "T00:00:00");
-  const diffMs = target.getTime() - today.getTime();
-  if (diffMs <= 0) return "";
-  const totalDays = Math.ceil(diffMs / 86_400_000);
-  if (mode === "days") return `${totalDays}d`;
-  if (mode === "weeks+days") {
-    const weeks = Math.floor(totalDays / 7);
-    const days = totalDays % 7;
-    return `${weeks}w ${days}d`;
-  }
-  const months = Math.floor(totalDays / 30);
-  const rem = totalDays - months * 30;
-  const weeks = Math.floor(rem / 7);
-  const days = rem % 7;
-  return `${months}mo ${weeks}w ${days}d`;
-}
-
-function isExamPassed(examDate: string): boolean {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return new Date(examDate + "T00:00:00") < today;
-}
 
 export function DashboardView() {
-  const { state, upsertStudyBlock, setDailyGoalMinutes, setExamTimers } = useAppStore();
+  const { state, upsertStudyBlock, setDailyGoalMinutes } = useAppStore();
   const [showTaskEditor, setShowTaskEditor] = useState(false);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInputValue, setGoalInputValue] = useState("");
-  const [timerDisplayModes, setTimerDisplayModes] = useState<Record<string, ExamDisplayMode>>({});
-  const [showAddTimer, setShowAddTimer] = useState(false);
-  const [newTimerLabel, setNewTimerLabel] = useState("");
-  const [newTimerDate, setNewTimerDate] = useState("");
 
   const todayKey = getTodayKey();
   const todayTasks = getTodayBlocks(state.studyBlocks, todayKey);
@@ -68,32 +36,6 @@ export function DashboardView() {
   const practiceMetrics = getPracticeMetrics(state.practiceTests);
   const remediationLinks = getRemediationLinks(state.practiceTests, state.studyBlocks);
   const uncoveredTopicNames = [...new Set(remediationLinks.flatMap((l) => l.uncoveredTopics))];
-  const examTimers = state.preferences.examTimers;
-
-  function getTimerMode(id: string): ExamDisplayMode {
-    return timerDisplayModes[id] ?? "days";
-  }
-
-  function setTimerMode(id: string, mode: ExamDisplayMode) {
-    setTimerDisplayModes((prev) => ({ ...prev, [id]: mode }));
-  }
-
-  function handleAddTimer() {
-    if (!newTimerLabel.trim() || !newTimerDate) return;
-    const newTimer: ExamTimer = {
-      id: crypto.randomUUID(),
-      label: newTimerLabel.trim(),
-      examDate: newTimerDate,
-    };
-    void setExamTimers([...examTimers, newTimer]);
-    setNewTimerLabel("");
-    setNewTimerDate("");
-    setShowAddTimer(false);
-  }
-
-  function handleDeleteTimer(id: string) {
-    void setExamTimers(examTimers.filter((t) => t.id !== id));
-  }
 
   const goalHours = Math.round(todayGoalMinutes / 60);
 
@@ -233,115 +175,6 @@ export function DashboardView() {
                   </button>
                 )}
               </div>
-            </div>
-          </Panel>
-
-          {/* Exam timers */}
-          <Panel title="Exams">
-            <div className="space-y-3">
-              {examTimers.map((timer) => {
-                const mode = getTimerMode(timer.id);
-                const passed = isExamPassed(timer.examDate);
-                const countdown = passed ? null : getCountdown(timer.examDate, mode);
-                return (
-                  <div key={timer.id} className="panel-subtle p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="truncate text-xs text-slate-400">{timer.label}</p>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteTimer(timer.id)}
-                        className="shrink-0 text-slate-500 transition-colors hover:text-rose-400"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    {passed ? (
-                      <p className="mt-2 text-sm text-slate-500">Exam passed</p>
-                    ) : (
-                      <>
-                        <p className="mt-1 text-3xl font-bold text-white">{countdown}</p>
-                        <div className="mt-3 flex gap-1.5">
-                          {(["days", "weeks+days", "months+weeks+days"] as const).map((m) => (
-                            <button
-                              key={m}
-                              type="button"
-                              onClick={() => setTimerMode(timer.id, m)}
-                              className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${
-                                mode === m
-                                  ? "border-cyan-300/30 bg-cyan-300/20 text-cyan-200"
-                                  : "border-transparent text-slate-500 hover:text-slate-300"
-                              }`}
-                            >
-                              {m === "days" ? "d" : m === "weeks+days" ? "w+d" : "mo+w+d"}
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-
-              {examTimers.length === 0 && !showAddTimer ? (
-                <p className="text-sm text-slate-500">No exams tracked yet.</p>
-              ) : null}
-
-              {showAddTimer ? (
-                <div className="space-y-3 rounded-[18px] border border-white/10 bg-slate-950/45 p-4">
-                  <input
-                    type="text"
-                    placeholder="Exam name"
-                    autoFocus
-                    className="field bg-slate-950"
-                    value={newTimerLabel}
-                    onChange={(e) => setNewTimerLabel(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleAddTimer();
-                      if (e.key === "Escape") {
-                        setShowAddTimer(false);
-                        setNewTimerLabel("");
-                        setNewTimerDate("");
-                      }
-                    }}
-                  />
-                  <input
-                    type="date"
-                    className="field bg-slate-950"
-                    value={newTimerDate}
-                    onChange={(e) => setNewTimerDate(e.target.value)}
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className={primaryButtonClassName}
-                      onClick={handleAddTimer}
-                      disabled={!newTimerLabel.trim() || !newTimerDate}
-                    >
-                      Add
-                    </button>
-                    <button
-                      type="button"
-                      className={secondaryButtonClassName}
-                      onClick={() => {
-                        setShowAddTimer(false);
-                        setNewTimerLabel("");
-                        setNewTimerDate("");
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : examTimers.length < 5 ? (
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-[18px] border border-dashed border-white/10 p-3 text-sm text-slate-500 transition-colors hover:border-white/20 hover:text-slate-400"
-                  onClick={() => setShowAddTimer(true)}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add exam
-                </button>
-              ) : null}
             </div>
           </Panel>
 
