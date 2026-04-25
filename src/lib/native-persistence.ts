@@ -2,6 +2,7 @@ import { core } from "@tauri-apps/api";
 import type {
   AppState,
   BackupArtifactPreview,
+  ErrorLogInput,
   ImportMode,
   PersistenceSnapshot,
   Preferences,
@@ -86,4 +87,12 @@ export function migrateLegacyBrowserState(legacySourceJson: string, state: AppSt
     legacySourceJson,
     state,
   });
+}
+
+export function upsertNativeErrorLogEntry(entry: ErrorLogInput) {
+  return command<PersistenceSnapshot>("upsert_error_log_entry", { entry });
+}
+
+export function trashNativeErrorLogEntry(id: string) {
+  return command<PersistenceSnapshot>("trash_error_log_entry", { id });
 }

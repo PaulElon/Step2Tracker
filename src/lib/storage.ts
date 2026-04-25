@@ -4,6 +4,9 @@ import { compareStudyBlocks, getDayName, getTodayKey, minutesBetween, parseTimeT
 import type {
   AppState,
   BackupPayload,
+  ErrorLogSource,
+  ErrorLogSystem,
+  ErrorLogErrorType,
   PlannerFilters,
   PracticeTest,
   PracticeTestInput,
@@ -35,15 +38,26 @@ export const STATUS_VALUES: StudyStatus[] = [
   "Skipped",
 ];
 export const STUDY_TASK_CATEGORY_VALUES: StudyTaskCategory[] = ["Test", "Review", "Anki", "Notes"];
+export const DEFAULT_STUDY_CATEGORIES = ["Test", "Review", "Anki", "Notes"] as const;
 
-export const THEME_VALUES: ThemeId[] = ["aurora", "ember", "tide", "bubblegum", "signal", "prism"];
+export const THEME_VALUES: ThemeId[] = [
+  "aurora",
+  "ember",
+  "tide",
+  "bubblegum",
+  "signal",
+  "prism",
+  "maggiepink",
+];
 export const WEAK_TOPIC_PRIORITY_VALUES: WeakTopicPriority[] = ["High", "Medium", "Low"];
 export const WEAK_TOPIC_STATUS_VALUES: WeakTopicStatus[] = [
   "Active",
-  "Watching",
   "Improving",
   "Resolved",
 ];
+export const ERROR_LOG_SOURCE_VALUES: ErrorLogSource[] = ["UWorld", "TrueLearn", "NBME", "CMS Form", "AMBOSS", "COMSAE", "Other"];
+export const ERROR_LOG_SYSTEM_VALUES: ErrorLogSystem[] = ["IM/FM", "Surgery", "OB/GYN", "Pediatrics", "Psychiatry", "Ethics/Biostats", "OMT", "Other"];
+export const ERROR_LOG_ERROR_TYPE_VALUES: ErrorLogErrorType[] = ["Knowledge Gap", "Misread Question", "Wrong Algorithm", "Trap Answer"];
 
 const defaultPlannerFilters: PlannerFilters = {
   search: "",
@@ -65,6 +79,10 @@ export const DEFAULT_PREFERENCES: Preferences = {
   },
   plannerMode: "week",
   plannerFocusDate: getTodayKey(),
+  enhancedThemeIds: [],
+  customCategories: [...DEFAULT_STUDY_CATEGORIES],
+  resourceLinks: [],
+  examTimers: [],
 };
 
 function nowIso() {
@@ -105,7 +123,7 @@ function isValidTimeValue(value: string) {
 }
 
 function isStudyTaskCategory(value: string): value is StudyTaskCategory {
-  return (STUDY_TASK_CATEGORY_VALUES as string[]).includes(value);
+  return value.length > 0;
 }
 
 function normalizeTaskDuration(hours: unknown, minutes: unknown) {
@@ -163,11 +181,11 @@ export function normalizeStudyTaskCategory(
   context: Partial<Pick<StudyBlockInput & StudyBlock, "task" | "notes">> = {},
 ): StudyTaskCategory {
   const category = sanitizeText(value);
-  if (isStudyTaskCategory(category)) {
+  if (category) {
     return category;
   }
 
-  const haystack = [category, sanitizeText(context.task), sanitizeText(context.notes)].join(" ").toLowerCase();
+  const haystack = [sanitizeText(context.task), sanitizeText(context.notes)].join(" ").toLowerCase();
 
   if (/\banki\b/.test(haystack)) {
     return "Anki";
@@ -270,9 +288,8 @@ function sortWeakTopicEntries(entries: WeakTopicEntry[]) {
     const priorityOrder: Record<WeakTopicPriority, number> = { High: 0, Medium: 1, Low: 2 };
     const statusOrder: Record<WeakTopicStatus, number> = {
       Active: 0,
-      Watching: 1,
-      Improving: 2,
-      Resolved: 3,
+      Improving: 1,
+      Resolved: 2,
     };
     return (
       priorityOrder[left.priority] - priorityOrder[right.priority] ||
@@ -388,9 +405,6 @@ export function normalizeWeakTopicPriority(value: unknown): WeakTopicPriority {
 
 export function normalizeWeakTopicStatus(value: unknown): WeakTopicStatus {
   const normalized = sanitizeText(value).toLowerCase();
-  if (normalized === "watching" || normalized === "watch") {
-    return "Watching";
-  }
   if (normalized === "improving" || normalized === "improve") {
     return "Improving";
   }
@@ -495,6 +509,7 @@ function createLegacyBootstrapState() {
     studyBlocks: studyBlocks.sort(compareStudyBlocks),
     practiceTests: [],
     weakTopicEntries: [],
+    errorLogEntries: [],
     preferences: DEFAULT_PREFERENCES,
   } satisfies AppState;
 }
@@ -529,6 +544,7 @@ function stripLegacyBootstrapSchedule(state: AppState) {
   return {
     ...state,
     studyBlocks: [],
+    errorLogEntries: state.errorLogEntries ?? [],
   } satisfies AppState;
 }
 
@@ -571,6 +587,7 @@ export function createBootstrapState() {
     studyBlocks: [],
     practiceTests: [],
     weakTopicEntries: [],
+    errorLogEntries: [],
     preferences: DEFAULT_PREFERENCES,
   } satisfies AppState;
 }
@@ -622,6 +639,24 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
     ? value.plannerMode
     : DEFAULT_PREFERENCES.plannerMode;
 
+  const enhancedThemeIds = Array.isArray(value?.enhancedThemeIds)
+    ? value!.enhancedThemeIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+    : [];
+  const customCategories = Array.isArray(value?.customCategories)
+    ? value!.customCategories
+        .map((cat) => (typeof cat === "string" ? cat.trim() : ""))
+        .filter((cat) => cat.length > 0)
+    : [...DEFAULT_STUDY_CATEGORIES];
+  const resourceLinks = Array.isArray(value?.resourceLinks)
+    ? value!.resourceLinks
+        .map((link) => ({
+          id: typeof link?.id === "string" && link.id ? link.id : createId("link"),
+          label: sanitizeText(link?.label),
+          url: sanitizeText(link?.url),
+        }))
+        .filter((link) => link.url.length > 0)
+    : [];
+
   return {
     activeSection: persistedActiveSection,
     lastActiveDate: todayKey,
@@ -643,6 +678,18 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
     },
     plannerMode,
     plannerFocusDate,
+    enhancedThemeIds,
+    customCategories: customCategories.length ? customCategories : [...DEFAULT_STUDY_CATEGORIES],
+    resourceLinks,
+    examTimers: Array.isArray(value?.examTimers)
+      ? value!.examTimers
+          .map((t) => ({
+            id: typeof t?.id === "string" && t.id ? t.id : createId("exam"),
+            label: sanitizeText(t?.label),
+            examDate: sanitizeText(t?.examDate),
+          }))
+          .filter((t) => t.examDate.length > 0 && t.label.length > 0)
+      : [],
   } satisfies Preferences;
 }
 
@@ -700,6 +747,7 @@ export function normalizeAppState(raw: unknown): AppState {
     studyBlocks: normalizeStudyBlocksForState(studyBlocks).sort(compareStudyBlocks),
     practiceTests: practiceTests.sort((left, right) => left.date.localeCompare(right.date)),
     weakTopicEntries: mergeWeakTopicEntriesFromPracticeTests(practiceTests, weakTopicEntries),
+    errorLogEntries: Array.isArray(candidate.errorLogEntries) ? candidate.errorLogEntries : [],
     preferences: normalizePreferences(candidate.preferences),
   });
 }

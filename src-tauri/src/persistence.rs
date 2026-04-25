@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 const APP_ID: &str = "step2-command-center";
 const APP_STATE_VERSION: u32 = 6;
-const DB_SCHEMA_VERSION: i32 = 3;
+const DB_SCHEMA_VERSION: i32 = 5;
 const LIVE_DB_FILE: &str = "command-center.sqlite3";
 const MAX_BACKUPS: usize = 20;
 const SAFE_CHECKPOINT_INTERVAL_HOURS: i64 = 6;
@@ -162,7 +162,37 @@ pub struct AppState {
     pub study_blocks: Vec<StudyBlock>,
     pub practice_tests: Vec<PracticeTest>,
     pub weak_topic_entries: Vec<WeakTopicEntry>,
+    #[serde(default)]
+    pub error_log_entries: Vec<ErrorLogEntry>,
     pub preferences: Preferences,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ErrorLogEntry {
+    pub id: String,
+    pub source: String,
+    pub exam_block: String,
+    pub system: String,
+    pub topic: String,
+    pub error_type: String,
+    pub missed_pattern: String,
+    pub fix: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ErrorLogInput {
+    pub id: Option<String>,
+    pub source: String,
+    pub exam_block: String,
+    pub system: String,
+    pub topic: String,
+    pub error_type: String,
+    pub missed_pattern: String,
+    pub fix: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -294,6 +324,30 @@ pub struct Preferences {
     pub planner_sort: PlannerSort,
     pub planner_mode: PlannerMode,
     pub planner_focus_date: String,
+    #[serde(default)]
+    pub enhanced_theme_ids: Vec<String>,
+    #[serde(default)]
+    pub custom_categories: Vec<String>,
+    #[serde(default)]
+    pub resource_links: Vec<ResourceLink>,
+    #[serde(default)]
+    pub exam_timers: Vec<ExamTimer>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceLink {
+    pub id: String,
+    pub label: String,
+    pub url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ExamTimer {
+    pub id: String,
+    pub label: String,
+    pub exam_date: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -361,6 +415,8 @@ pub enum SectionId {
     Analytics,
     #[serde(rename = "settings")]
     Settings,
+    #[serde(rename = "errorLog")]
+    ErrorLog,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -407,6 +463,8 @@ pub enum ThemeId {
     Signal,
     #[serde(rename = "prism")]
     Prism,
+    #[serde(rename = "maggiepink")]
+    MaggiePink,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -938,6 +996,7 @@ impl StorageService {
         transaction.execute("DELETE FROM study_blocks", [])?;
         transaction.execute("DELETE FROM practice_tests", [])?;
         transaction.execute("DELETE FROM weak_topic_entries", [])?;
+        transaction.execute("DELETE FROM error_log_entries", [])?;
         Ok(())
     }
 
@@ -951,6 +1010,9 @@ impl StorageService {
         }
         for entry in &state.weak_topic_entries {
             self.persist_weak_topic(transaction, entry)?;
+        }
+        for entry in &state.error_log_entries {
+            self.persist_error_log_entry(transaction, entry)?;
         }
         self.reconcile_weak_topics(transaction)?;
         Ok(())
@@ -1040,6 +1102,12 @@ impl StorageService {
             self.backfill_study_block_task_fields(&transaction)?;
             self.clear_legacy_bootstrap_schedule_if_needed(&transaction)?;
         }
+        if current_version < 4 {
+            self.ensure_preferences_columns(&transaction)?;
+        }
+        if current_version < 5 {
+            self.ensure_error_log_table(&transaction)?;
+        }
         transaction.pragma_update(None, "user_version", DB_SCHEMA_VERSION)?;
         self.set_metadata_tx(&transaction, "app_version", &self.app_version)?;
         self.log_event(
@@ -1079,6 +1147,9 @@ impl StorageService {
               planner_sort_direction TEXT NOT NULL,
               planner_mode TEXT NOT NULL,
               planner_focus_date TEXT NOT NULL,
+              enhanced_theme_ids_json TEXT NOT NULL DEFAULT '[]',
+              custom_categories_json TEXT NOT NULL DEFAULT '[]',
+              resource_links_json TEXT NOT NULL DEFAULT '[]',
               updated_at TEXT NOT NULL
             );
 
@@ -1139,6 +1210,21 @@ impl StorageService {
               delete_reason TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS error_log_entries (
+              id TEXT PRIMARY KEY,
+              source TEXT NOT NULL,
+              exam_block TEXT NOT NULL DEFAULT '',
+              system TEXT NOT NULL,
+              topic TEXT NOT NULL,
+              error_type TEXT NOT NULL,
+              missed_pattern TEXT NOT NULL,
+              fix TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              deleted_at TEXT,
+              delete_reason TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS audit_log (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               event_type TEXT NOT NULL,
@@ -1186,6 +1272,53 @@ impl StorageService {
             transaction.execute("ALTER TABLE study_blocks ADD COLUMN reminder_sent_at TEXT", [])?;
         }
 
+        Ok(())
+    }
+
+    fn ensure_preferences_columns(&self, transaction: &Transaction<'_>) -> StorageResult<()> {
+        let columns = self.table_columns(transaction, "preferences")?;
+
+        if !columns.contains(&"enhanced_theme_ids_json".to_string()) {
+            transaction.execute(
+                "ALTER TABLE preferences ADD COLUMN enhanced_theme_ids_json TEXT NOT NULL DEFAULT '[]'",
+                [],
+            )?;
+        }
+        if !columns.contains(&"custom_categories_json".to_string()) {
+            transaction.execute(
+                "ALTER TABLE preferences ADD COLUMN custom_categories_json TEXT NOT NULL DEFAULT '[\"Test\",\"Review\",\"Anki\",\"Notes\"]'",
+                [],
+            )?;
+        }
+        if !columns.contains(&"resource_links_json".to_string()) {
+            transaction.execute(
+                "ALTER TABLE preferences ADD COLUMN resource_links_json TEXT NOT NULL DEFAULT '[]'",
+                [],
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn ensure_error_log_table(&self, transaction: &Transaction<'_>) -> StorageResult<()> {
+        transaction.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS error_log_entries (
+              id TEXT PRIMARY KEY,
+              source TEXT NOT NULL,
+              exam_block TEXT NOT NULL DEFAULT '',
+              system TEXT NOT NULL,
+              topic TEXT NOT NULL,
+              error_type TEXT NOT NULL,
+              missed_pattern TEXT NOT NULL,
+              fix TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              deleted_at TEXT,
+              delete_reason TEXT
+            );
+            ",
+        )?;
         Ok(())
     }
 
@@ -1512,13 +1645,41 @@ impl StorageService {
         let study_blocks = self.read_study_blocks(connection)?;
         let practice_tests = self.read_practice_tests(connection)?;
         let weak_topic_entries = self.reconciled_weak_topics(connection, &practice_tests)?;
+        let error_log_entries = self.read_error_log_entries(connection)?;
         Ok(AppState {
             version: APP_STATE_VERSION,
             study_blocks,
             practice_tests,
             weak_topic_entries,
+            error_log_entries,
             preferences,
         })
+    }
+
+    fn read_error_log_entries(&self, connection: &Connection) -> StorageResult<Vec<ErrorLogEntry>> {
+        let mut statement = connection.prepare(
+            "
+            SELECT id, source, exam_block, system, topic, error_type, missed_pattern, fix, created_at, updated_at
+            FROM error_log_entries
+            WHERE deleted_at IS NULL
+            ORDER BY created_at DESC
+            ",
+        )?;
+        let rows = statement.query_map([], |row| {
+            Ok(ErrorLogEntry {
+                id: row.get(0)?,
+                source: row.get(1)?,
+                exam_block: row.get(2)?,
+                system: row.get(3)?,
+                topic: row.get(4)?,
+                error_type: row.get(5)?,
+                missed_pattern: row.get(6)?,
+                fix: row.get(7)?,
+                created_at: row.get(8)?,
+                updated_at: row.get(9)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(StorageError::from)
     }
 
     fn read_preferences(&self, connection: &Connection) -> StorageResult<Preferences> {
@@ -1538,12 +1699,26 @@ impl StorageService {
                   planner_sort_field,
                   planner_sort_direction,
                   planner_mode,
-                  planner_focus_date
+                  planner_focus_date,
+                  enhanced_theme_ids_json,
+                  custom_categories_json,
+                  resource_links_json
                 FROM preferences
                 WHERE id = 1
                 ",
                 [],
                 |row| {
+                    let enhanced_theme_ids = parse_string_list(&row.get::<_, String>(13)?)?;
+                    let custom_categories = parse_string_list(&row.get::<_, String>(14)?)?;
+                    let resource_links_raw = row.get::<_, String>(15)?;
+                    let resource_links: Vec<ResourceLink> = serde_json::from_str(&resource_links_raw)
+                        .map_err(|error| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                resource_links_raw.len(),
+                                Type::Text,
+                                Box::new(error),
+                            )
+                        })?;
                     Ok(Preferences {
                         active_section: parse_section_id(&row.get::<_, String>(0)?)?,
                         last_active_date: row.get(1)?,
@@ -1562,6 +1737,10 @@ impl StorageService {
                         },
                         planner_mode: parse_planner_mode(&row.get::<_, String>(11)?)?,
                         planner_focus_date: row.get(12)?,
+                        enhanced_theme_ids,
+                        custom_categories,
+                        resource_links,
+                        exam_timers: Vec::new(),
                     })
                 },
             )
@@ -1842,6 +2021,9 @@ impl StorageService {
     }
 
     fn persist_preferences(&self, transaction: &Transaction<'_>, preferences: &Preferences) -> StorageResult<()> {
+        let enhanced_theme_ids_json = serde_json::to_string(&preferences.enhanced_theme_ids)?;
+        let custom_categories_json = serde_json::to_string(&preferences.custom_categories)?;
+        let resource_links_json = serde_json::to_string(&preferences.resource_links)?;
         transaction.execute(
             "
             INSERT INTO preferences (
@@ -1849,9 +2031,10 @@ impl StorageService {
               planner_filter_search, planner_filter_category, planner_filter_status,
               planner_filter_from_date, planner_filter_to_date,
               planner_sort_field, planner_sort_direction, planner_mode,
-              planner_focus_date, updated_at
+              planner_focus_date, enhanced_theme_ids_json, custom_categories_json,
+              resource_links_json, updated_at
             )
-            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
             ON CONFLICT(id) DO UPDATE SET
               active_section = excluded.active_section,
               last_active_date = excluded.last_active_date,
@@ -1866,6 +2049,9 @@ impl StorageService {
               planner_sort_direction = excluded.planner_sort_direction,
               planner_mode = excluded.planner_mode,
               planner_focus_date = excluded.planner_focus_date,
+              enhanced_theme_ids_json = excluded.enhanced_theme_ids_json,
+              custom_categories_json = excluded.custom_categories_json,
+              resource_links_json = excluded.resource_links_json,
               updated_at = excluded.updated_at
             ",
             params![
@@ -1882,6 +2068,9 @@ impl StorageService {
                 serialize_sort_direction(preferences.planner_sort.direction),
                 serialize_planner_mode(preferences.planner_mode),
                 preferences.planner_focus_date,
+                enhanced_theme_ids_json,
+                custom_categories_json,
+                resource_links_json,
                 now_iso(),
             ],
         )?;
@@ -2032,6 +2221,111 @@ impl StorageService {
             ],
         )?;
         Ok(())
+    }
+
+    fn persist_error_log_entry(&self, transaction: &Transaction<'_>, entry: &ErrorLogEntry) -> StorageResult<()> {
+        transaction.execute(
+            "
+            INSERT INTO error_log_entries (
+              id, source, exam_block, system, topic, error_type, missed_pattern, fix,
+              created_at, updated_at, deleted_at, delete_reason
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL, NULL)
+            ON CONFLICT(id) DO UPDATE SET
+              source = excluded.source,
+              exam_block = excluded.exam_block,
+              system = excluded.system,
+              topic = excluded.topic,
+              error_type = excluded.error_type,
+              missed_pattern = excluded.missed_pattern,
+              fix = excluded.fix,
+              created_at = excluded.created_at,
+              updated_at = excluded.updated_at,
+              deleted_at = NULL,
+              delete_reason = NULL
+            ",
+            params![
+                entry.id,
+                entry.source,
+                entry.exam_block,
+                entry.system,
+                entry.topic,
+                entry.error_type,
+                entry.missed_pattern,
+                entry.fix,
+                entry.created_at,
+                entry.updated_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn upsert_error_log_entry(&self, input: ErrorLogInput) -> StorageResult<ClientSnapshot> {
+        validate_non_empty(&input.topic, "Error log topic")?;
+        validate_non_empty(&input.source, "Error log source")?;
+        validate_non_empty(&input.system, "Error log system")?;
+        validate_non_empty(&input.error_type, "Error log error type")?;
+        validate_non_empty(&input.missed_pattern, "Error log missed pattern")?;
+        validate_non_empty(&input.fix, "Error log fix")?;
+
+        let mut connection = self.open_live_connection()?;
+        let is_update = input.id.is_some();
+        let existing_created_at = if let Some(ref id) = input.id {
+            connection
+                .query_row(
+                    "SELECT created_at FROM error_log_entries WHERE id = ?1 AND deleted_at IS NULL LIMIT 1",
+                    params![id],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()?
+        } else {
+            None
+        };
+
+        let timestamp = now_iso();
+        let entry = ErrorLogEntry {
+            id: input.id.unwrap_or_else(new_id),
+            source: input.source.trim().to_string(),
+            exam_block: input.exam_block.trim().to_string(),
+            system: input.system.trim().to_string(),
+            topic: input.topic.trim().to_string(),
+            error_type: input.error_type.trim().to_string(),
+            missed_pattern: input.missed_pattern.trim().to_string(),
+            fix: input.fix.trim().to_string(),
+            created_at: existing_created_at.unwrap_or_else(|| timestamp.clone()),
+            updated_at: timestamp,
+        };
+
+        let transaction = connection.transaction()?;
+        self.persist_error_log_entry(&transaction, &entry)?;
+        self.touch_saved(&transaction)?;
+        self.log_event(
+            &transaction,
+            if is_update { "error_log_entry_updated" } else { "error_log_entry_created" },
+            "error_log_entry",
+            Some(&entry.id),
+            None,
+        )?;
+        transaction.commit()?;
+        self.maybe_create_safe_checkpoint()?;
+        self.load_snapshot()
+    }
+
+    pub fn trash_error_log_entry(&self, id: String) -> StorageResult<ClientSnapshot> {
+        let mut connection = self.open_live_connection()?;
+        let transaction = connection.transaction()?;
+        let deleted_at = now_iso();
+        let updated = transaction.execute(
+            "UPDATE error_log_entries SET deleted_at = ?1, delete_reason = 'user-trash' WHERE id = ?2 AND deleted_at IS NULL",
+            params![deleted_at, id],
+        )?;
+        if updated == 0 {
+            return Err(StorageError::Validation("Error log entry not found.".into()));
+        }
+        self.touch_saved(&transaction)?;
+        self.log_event(&transaction, "error_log_entry_trashed", "error_log_entry", Some(&id), None)?;
+        transaction.commit()?;
+        self.load_snapshot()
     }
 
     fn reconcile_weak_topics(&self, transaction: &Transaction<'_>) -> StorageResult<()> {
@@ -2517,6 +2811,7 @@ impl StorageService {
             study_blocks: Vec::new(),
             practice_tests: Vec::new(),
             weak_topic_entries: Vec::new(),
+            error_log_entries: Vec::new(),
             preferences: default_preferences(),
         })
     }
@@ -2705,7 +3000,7 @@ fn derive_duration_from_legacy_range(
 
 fn normalize_study_task_category(category: &str, task: &str, notes: &str) -> String {
     let trimmed = category.trim();
-    if matches!(trimmed, "Test" | "Review" | "Anki" | "Notes") {
+    if !trimmed.is_empty() {
         return trimmed.to_string();
     }
 
@@ -2800,12 +3095,12 @@ fn practice_test_label(source: &str, form: &str) -> String {
 }
 
 fn validate_study_task_category(value: &str) -> StorageResult<()> {
-    if matches!(value.trim(), "Test" | "Review" | "Anki" | "Notes") {
-        Ok(())
-    } else {
+    if value.trim().is_empty() {
         Err(StorageError::Validation(
-            "Study block category must be Test, Review, Anki, or Notes.".into(),
+            "Study block category must not be empty.".into(),
         ))
+    } else {
+        Ok(())
     }
 }
 
@@ -2961,6 +3256,15 @@ fn default_preferences() -> Preferences {
         },
         planner_mode: PlannerMode::Week,
         planner_focus_date: today,
+        enhanced_theme_ids: Vec::new(),
+        custom_categories: vec![
+            "Test".into(),
+            "Review".into(),
+            "Anki".into(),
+            "Notes".into(),
+        ],
+        resource_links: Vec::new(),
+        exam_timers: Vec::new(),
     }
 }
 
@@ -3002,6 +3306,7 @@ fn parse_section_id(value: &str) -> rusqlite::Result<SectionId> {
         "tests" => Ok(SectionId::Tests),
         "analytics" => Ok(SectionId::Analytics),
         "settings" => Ok(SectionId::Settings),
+        "errorLog" => Ok(SectionId::ErrorLog),
         _ => Err(enum_error("SectionId", value)),
     }
 }
@@ -3035,6 +3340,7 @@ fn parse_theme_id(value: &str) -> rusqlite::Result<ThemeId> {
         "bubblegum" => Ok(ThemeId::Bubblegum),
         "signal" => Ok(ThemeId::Signal),
         "prism" => Ok(ThemeId::Prism),
+        "maggiepink" => Ok(ThemeId::MaggiePink),
         _ => Err(enum_error("ThemeId", value)),
     }
 }
@@ -3112,6 +3418,7 @@ fn serialize_section_id(value: SectionId) -> &'static str {
         SectionId::Tests => "tests",
         SectionId::Analytics => "analytics",
         SectionId::Settings => "settings",
+        SectionId::ErrorLog => "errorLog",
     }
 }
 
@@ -3142,6 +3449,7 @@ fn serialize_theme_id(value: ThemeId) -> &'static str {
         ThemeId::Bubblegum => "bubblegum",
         ThemeId::Signal => "signal",
         ThemeId::Prism => "prism",
+        ThemeId::MaggiePink => "maggiepink",
     }
 }
 

@@ -12,9 +12,11 @@ import {
   restoreNativeSnapshot,
   restoreNativeTrashItem,
   saveNativePreferences,
+  trashNativeErrorLogEntry,
   trashNativePracticeTest,
   trashNativeStudyBlock,
   trashNativeWeakTopic,
+  upsertNativeErrorLogEntry,
   upsertNativePracticeTest,
   upsertNativeStudyBlock,
   upsertNativeWeakTopic,
@@ -28,12 +30,14 @@ import type {
   AppState,
   BackupArtifactPreview,
   BackupMetadata,
+  ErrorLogInput,
   ImportMode,
   PersistenceSummary,
   PlannerFilters,
   PlannerMode,
   PlannerSort,
   PracticeTestInput,
+  ResourceLink,
   SectionId,
   StudyBlockInput,
   ThemeId,
@@ -59,6 +63,10 @@ interface AppStoreValue {
   setPlannerMode: (mode: PlannerMode) => Promise<boolean>;
   setPlannerFocusDate: (date: string) => Promise<boolean>;
   setDailyGoalMinutes: (dailyGoalMinutes: number) => Promise<boolean>;
+  toggleThemeEnhanced: (themeId: ThemeId) => Promise<boolean>;
+  setCustomCategories: (categories: string[]) => Promise<boolean>;
+  setResourceLinks: (links: ResourceLink[]) => Promise<boolean>;
+  setExamTimers: (timers: import("../types/models").ExamTimer[]) => Promise<boolean>;
   upsertStudyBlock: (block: StudyBlockInput & { id?: string }) => Promise<boolean>;
   duplicateStudyBlock: (id: string, targetDate?: string) => Promise<boolean>;
   trashStudyBlock: (id: string) => Promise<boolean>;
@@ -67,6 +75,8 @@ interface AppStoreValue {
   trashPracticeTest: (id: string) => Promise<boolean>;
   upsertWeakTopic: (entry: WeakTopicInput & { id?: string }) => Promise<boolean>;
   trashWeakTopic: (id: string) => Promise<boolean>;
+  upsertErrorLogEntry: (entry: ErrorLogInput & { id?: string }) => Promise<boolean>;
+  trashErrorLogEntry: (id: string) => Promise<boolean>;
   restoreTrashItem: (entityType: TrashEntityType, id: string) => Promise<boolean>;
   exportBackup: () => Promise<string>;
   previewBackupArtifact: (raw: string) => Promise<BackupArtifactPreview>;
@@ -248,6 +258,28 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         ...stateRef.current.preferences,
         dailyGoalMinutes,
       }),
+    toggleThemeEnhanced: (themeId) => {
+      const current = stateRef.current.preferences.enhancedThemeIds;
+      const next = current.includes(themeId)
+        ? current.filter((id) => id !== themeId)
+        : [...current, themeId];
+      return savePreferences({ ...stateRef.current.preferences, enhancedThemeIds: next });
+    },
+    setCustomCategories: (categories) =>
+      savePreferences({
+        ...stateRef.current.preferences,
+        customCategories: categories,
+      }),
+    setResourceLinks: (links) =>
+      savePreferences({
+        ...stateRef.current.preferences,
+        resourceLinks: links,
+      }),
+    setExamTimers: (timers) =>
+      savePreferences({
+        ...stateRef.current.preferences,
+        examTimers: timers,
+      }),
     upsertStudyBlock: (block) => enqueueSnapshotOperation(() => upsertNativeStudyBlock(block)),
     duplicateStudyBlock: (id, targetDate) =>
       enqueueSnapshotOperation(() => duplicateNativeStudyBlock(id, targetDate)),
@@ -258,6 +290,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     trashPracticeTest: (id) => enqueueSnapshotOperation(() => trashNativePracticeTest(id)),
     upsertWeakTopic: (entry) => enqueueSnapshotOperation(() => upsertNativeWeakTopic(entry)),
     trashWeakTopic: (id) => enqueueSnapshotOperation(() => trashNativeWeakTopic(id)),
+    upsertErrorLogEntry: (entry) => enqueueSnapshotOperation(() => upsertNativeErrorLogEntry(entry)),
+    trashErrorLogEntry: (id) => enqueueSnapshotOperation(() => trashNativeErrorLogEntry(id)),
     restoreTrashItem: (entityType, id) =>
       enqueueSnapshotOperation(() => restoreNativeTrashItem(entityType, id)),
     exportBackup: () => exportNativeBackupArtifact(),

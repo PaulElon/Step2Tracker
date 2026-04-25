@@ -1,15 +1,22 @@
 export type StudyStatus = "Not Started" | "In Progress" | "Completed" | "Skipped";
 export type StudyStatusFilter = StudyStatus | "All";
-export type SectionId = "dashboard" | "planner" | "weakTopics" | "tests" | "analytics" | "settings";
+export type SectionId = "dashboard" | "planner" | "weakTopics" | "tests" | "analytics" | "settings" | "errorLog";
 export type PlannerSortField = "date" | "order" | "category" | "task";
 export type SortDirection = "asc" | "desc";
 export type ImportMode = "merge" | "replace";
 export type PlannerMode = "week" | "month";
-export type ThemeId = "aurora" | "ember" | "tide" | "bubblegum" | "signal" | "prism";
+export type ThemeId =
+  | "aurora"
+  | "ember"
+  | "tide"
+  | "bubblegum"
+  | "signal"
+  | "prism"
+  | "maggiepink";
 export type WeakTopicPriority = "High" | "Medium" | "Low";
-export type WeakTopicStatus = "Active" | "Watching" | "Improving" | "Resolved";
+export type WeakTopicStatus = "Active" | "Improving" | "Resolved";
 export type WeakTopicEntryType = "manual" | "practice-test";
-export type StudyTaskCategory = "Test" | "Review" | "Anki" | "Notes";
+export type StudyTaskCategory = string;
 
 export interface StudyBlock {
   id: string;
@@ -118,6 +125,18 @@ export interface PlannerSort {
   direction: SortDirection;
 }
 
+export interface ResourceLink {
+  id: string;
+  label: string;
+  url: string;
+}
+
+export interface ExamTimer {
+  id: string;
+  label: string;
+  examDate: string;
+}
+
 export interface Preferences {
   activeSection: SectionId;
   lastActiveDate: string;
@@ -127,6 +146,38 @@ export interface Preferences {
   plannerSort: PlannerSort;
   plannerMode: PlannerMode;
   plannerFocusDate: string;
+  enhancedThemeIds: string[];
+  customCategories: string[];
+  resourceLinks: ResourceLink[];
+  examTimers: ExamTimer[];
+}
+
+export type ErrorLogSource = "UWorld" | "TrueLearn" | "NBME" | "CMS Form" | "AMBOSS" | "COMSAE" | "Other";
+export type ErrorLogSystem = "IM/FM" | "Surgery" | "OB/GYN" | "Pediatrics" | "Psychiatry" | "Ethics/Biostats" | "OMT" | "Other";
+export type ErrorLogErrorType = "Knowledge Gap" | "Misread Question" | "Wrong Algorithm" | "Trap Answer";
+
+export interface ErrorLogEntry {
+  id: string;
+  source: ErrorLogSource;
+  examBlock: string;
+  system: ErrorLogSystem;
+  topic: string;
+  errorType: ErrorLogErrorType;
+  missedPattern: string;
+  fix: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ErrorLogInput {
+  id?: string;
+  source: ErrorLogSource;
+  examBlock: string;
+  system: ErrorLogSystem;
+  topic: string;
+  errorType: ErrorLogErrorType;
+  missedPattern: string;
+  fix: string;
 }
 
 export interface AppState {
@@ -134,6 +185,7 @@ export interface AppState {
   studyBlocks: StudyBlock[];
   practiceTests: PracticeTest[];
   weakTopicEntries: WeakTopicEntry[];
+  errorLogEntries: ErrorLogEntry[];
   preferences: Preferences;
 }
 

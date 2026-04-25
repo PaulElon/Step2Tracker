@@ -1,4 +1,5 @@
 import {
+  AlertCircle,
   BarChart3,
   CalendarDays,
   ClipboardCheck,
@@ -14,10 +15,12 @@ import {
 import { startTransition, useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { ModalShell } from "./components/modal-shell";
 import { MobileNav, NavigationButton } from "./components/ui";
 import { AnalyticsView } from "./features/analytics-view";
 import { DashboardView } from "./features/dashboard-view";
+import { ErrorLogView } from "./features/error-log-view";
 import { PlannerView } from "./features/planner-view";
 import { PracticeTestsView } from "./features/practice-tests-view";
 import { SettingsView } from "./features/settings-view";
@@ -69,37 +72,25 @@ const navigationItems = [
     icon: BarChart3,
   },
   {
+    id: "errorLog" as const,
+    label: "Error Log",
+    icon: AlertCircle,
+  },
+  {
     id: "settings" as const,
     label: "Settings",
     icon: Settings2,
   },
 ];
 
-const sectionCopy: Record<SectionId, { title: string; subtitle?: string }> = {
-  dashboard: {
-    title: "Today",
-    subtitle: "Execution view for the current day.",
-  },
-  planner: {
-    title: "Planner",
-    subtitle: "Weekly and monthly calendar for scheduled tasks.",
-  },
-  weakTopics: {
-    title: "Weak Topics",
-    subtitle: "Track topic risk and coverage.",
-  },
-  tests: {
-    title: "Practice Tests",
-    subtitle: "Scores, patterns, and follow-up.",
-  },
-  analytics: {
-    title: "Analytics",
-    subtitle: "Review trends, coverage, and study load.",
-  },
-  settings: {
-    title: "Settings",
-    subtitle: "Appearance, backups, and app defaults.",
-  },
+const sectionCopy: Record<SectionId, { title: string }> = {
+  dashboard: { title: "Today" },
+  planner: { title: "Planner" },
+  weakTopics: { title: "Weak Topics" },
+  tests: { title: "Practice Tests" },
+  analytics: { title: "Analytics" },
+  errorLog: { title: "Error Log" },
+  settings: { title: "Settings" },
 };
 
 function formatCountsLine(counts: BackupMetadata["counts"]) {
@@ -307,6 +298,9 @@ export default function App() {
     setActiveSection,
     setDailyGoalMinutes,
     setThemeId,
+    toggleThemeEnhanced,
+    setCustomCategories,
+    setResourceLinks,
     exportBackup,
     previewBackupArtifact,
     restoreBackupArtifact,
@@ -319,6 +313,7 @@ export default function App() {
   const [pendingArtifactRaw, setPendingArtifactRaw] = useState<string | null>(null);
   const [pendingArtifactPreview, setPendingArtifactPreview] = useState<BackupArtifactPreview | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("unsupported");
+  const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
   const reminderDispatchRef = useRef(new Set<string>());
   const activeSection = state.preferences.activeSection;
   const sectionMeta = sectionCopy[activeSection];
@@ -346,7 +341,16 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = state.preferences.themeId;
-  }, [state.preferences.themeId]);
+    document.documentElement.classList.toggle(
+      "theme-light",
+      state.preferences.themeId === "maggiepink",
+    );
+    document.documentElement.dataset.themeEnhanced = state.preferences.enhancedThemeIds.includes(
+      state.preferences.themeId,
+    )
+      ? "true"
+      : "";
+  }, [state.preferences.themeId, state.preferences.enhancedThemeIds]);
 
   useEffect(() => {
     let cancelled = false;
@@ -439,6 +443,28 @@ export default function App() {
       window.clearInterval(interval);
     };
   }, [notificationPermission, persistenceStatus, state.studyBlocks, upsertStudyBlock]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen<string>("update-available", (event) => {
+      setUpdateAvailable(event.payload);
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
+  async function handleInstallUpdate() {
+    await invoke("install_update");
+  }
+
+  async function handleSendTestAlert() {
+    void sendNativeReminder("Step 2 Command Center", "Alerts are working.");
+  }
 
   async function handleEnableNotifications() {
     const permission = await requestNotificationPermission();
@@ -548,6 +574,9 @@ export default function App() {
     case "analytics":
       sectionContent = <AnalyticsView />;
       break;
+    case "errorLog":
+      sectionContent = <ErrorLogView />;
+      break;
     case "settings":
       sectionContent = (
         <SettingsView
@@ -556,9 +585,17 @@ export default function App() {
           notificationPermission={notificationPermission}
           persistenceCopy={persistenceCopy}
           persistenceSummary={persistenceSummary}
+          enhancedThemeIds={state.preferences.enhancedThemeIds}
+          customCategories={state.preferences.customCategories}
+          resourceLinks={state.preferences.resourceLinks}
           onThemeChange={(themeId) => {
             startTransition(() => {
               void setThemeId(themeId);
+            });
+          }}
+          onToggleThemeEnhanced={(themeId) => {
+            startTransition(() => {
+              void toggleThemeEnhanced(themeId);
             });
           }}
           onDailyGoalMinutesChange={(hours) => {
@@ -569,11 +606,24 @@ export default function App() {
           onEnableNotifications={() => {
             void handleEnableNotifications();
           }}
+          onSendTestAlert={() => {
+            void handleSendTestAlert();
+          }}
           onExportBackup={() => {
             void handleExportBackup();
           }}
           onImportBackup={() => restoreInputRef.current?.click()}
           onOpenRecoveryCenter={() => setShowRecoveryCenter(true)}
+          onSetCustomCategories={(categories) => {
+            startTransition(() => {
+              void setCustomCategories(categories);
+            });
+          }}
+          onSetResourceLinks={(links) => {
+            startTransition(() => {
+              void setResourceLinks(links);
+            });
+          }}
         />
       );
       break;
@@ -582,7 +632,24 @@ export default function App() {
   }
 
   return (
-    <div className="relative h-screen overflow-hidden">
+    <>
+      {updateAvailable ? (
+        <div className="fixed inset-x-0 top-0 z-[9999] flex items-center justify-between gap-4 bg-cyan-500 px-6 py-3">
+          <span className="text-sm font-semibold text-white">
+            Version {updateAvailable} is available
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              void handleInstallUpdate();
+            }}
+            className={primaryButtonClassName}
+          >
+            Update
+          </button>
+        </div>
+      ) : null}
+    <div className={`relative h-screen overflow-hidden${updateAvailable ? " pt-12" : ""}`}>
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(89,240,222,0.12),transparent_28%),radial-gradient(circle_at_top_right,rgba(104,200,255,0.10),transparent_26%),radial-gradient(circle_at_bottom_left,rgba(92,116,255,0.08),transparent_24%)]" />
 
       <input
@@ -642,7 +709,6 @@ export default function App() {
                 <h2 className="mt-1 text-3xl font-semibold tracking-[-0.05em] text-white md:text-4xl">
                   {sectionMeta.title}
                 </h2>
-                {sectionMeta.subtitle ? <p className="mt-1 text-sm text-slate-400">{sectionMeta.subtitle}</p> : null}
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3 2xl:min-w-[720px]">
@@ -698,5 +764,6 @@ export default function App() {
         />
       ) : null}
     </div>
+    </>
   );
 }

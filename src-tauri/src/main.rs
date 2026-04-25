@@ -6,7 +6,7 @@ mod updater;
 use std::process::Command;
 
 use persistence::{
-    AppState, BackupArtifactPreview, ClientSnapshot, ImportMode, PracticeTestInput, Preferences,
+    AppState, BackupArtifactPreview, ClientSnapshot, ErrorLogInput, ImportMode, PracticeTestInput, Preferences,
     StorageService, StudyBlockInput, TrashEntityType, WeakTopicInput,
 };
 use tauri::Manager;
@@ -123,6 +123,16 @@ fn migrate_legacy_browser_state(
 }
 
 #[tauri::command]
+fn upsert_error_log_entry(app: tauri::AppHandle, entry: ErrorLogInput) -> Result<ClientSnapshot, String> {
+    with_storage(&app, |service| service.upsert_error_log_entry(entry))
+}
+
+#[tauri::command]
+fn trash_error_log_entry(app: tauri::AppHandle, id: String) -> Result<ClientSnapshot, String> {
+    with_storage(&app, |service| service.trash_error_log_entry(id))
+}
+
+#[tauri::command]
 fn open_notification_settings() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
@@ -169,7 +179,10 @@ fn main() {
             restore_from_backup_artifact,
             restore_from_snapshot,
             migrate_legacy_browser_state,
-            open_notification_settings
+            upsert_error_log_entry,
+            trash_error_log_entry,
+            open_notification_settings,
+            updater::install_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running Step 2 Command Center");
