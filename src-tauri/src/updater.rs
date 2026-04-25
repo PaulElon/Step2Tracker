@@ -1,5 +1,7 @@
 use tauri::AppHandle;
 #[cfg(not(debug_assertions))]
+use tauri::Emitter;
+#[cfg(not(debug_assertions))]
 use std::str::FromStr;
 
 const DEFAULT_UPDATER_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFCREM0MDU1RDBDNEVGQwpSV1Q4VGd4ZEJjUzlDbHErREoxaUc5a1NBZ0hWOXNKVlhJNkw4Nnpmei82YytCZEJlY2JMbGpwQgo=";
