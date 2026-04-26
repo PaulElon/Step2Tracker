@@ -339,7 +339,7 @@ export function PlannerView() {
         </div>
       </Panel>
 
-      <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[340px_minmax(0,1fr)] xl:items-stretch">
+      <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-2 xl:items-stretch">
         <Panel
           className="flex flex-col xl:h-full"
           title={periodLabel}

@@ -1,10 +1,9 @@
-import { ChevronLeft, ChevronRight, Edit3, Plus } from "lucide-react";
+import { Check, Edit3, History, Plus, Undo2, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { getWeakTopicPlannerInsights, type WeakTopicPlannerInsight } from "../lib/analytics";
 import { formatShortDate, getTodayKey } from "../lib/datetime";
 import {
   WEAK_TOPIC_PRIORITY_VALUES,
-  WEAK_TOPIC_STATUS_VALUES,
   validateWeakTopicInput,
 } from "../lib/storage";
 import {
@@ -18,9 +17,6 @@ import { ModalShell } from "../components/modal-shell";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { EmptyState, MetricCard, Panel } from "../components/ui";
 import type { StudyBlockInput, WeakTopicEntry, WeakTopicInput } from "../types/models";
-
-const DISPLAY_STATUSES = ["Active", "Improving", "Resolved"] as const;
-type DisplayStatus = typeof DISPLAY_STATUSES[number];
 
 const priorityDotClass: Record<string, string> = {
   High: "bg-rose-400",
@@ -69,48 +65,6 @@ function createInitialDraft(entry?: WeakTopicEntry): WeakTopicInput & { id?: str
   };
 }
 
-function entryDisplayStatus(status: string): DisplayStatus {
-  if (status === "Improving") return "Improving";
-  if (status === "Resolved") return "Resolved";
-  return "Active";
-}
-
-function StatusArrows({
-  status,
-  onChangeStatus,
-}: {
-  status: string;
-  onChangeStatus: (newStatus: DisplayStatus) => void;
-}) {
-  const display = entryDisplayStatus(status);
-  return (
-    <div className="flex shrink-0 items-center gap-0.5">
-      {display !== "Active" && (
-        <button
-          type="button"
-          onClick={() => onChangeStatus(display === "Resolved" ? "Improving" : "Active")}
-          className={`${iconButtonClassName} !p-1`}
-          title={display === "Resolved" ? "Move to Improving" : "Move to Active"}
-          aria-label={display === "Resolved" ? "Move to Improving" : "Move to Active"}
-        >
-          <ChevronLeft className="h-3 w-3" />
-        </button>
-      )}
-      {display !== "Resolved" && (
-        <button
-          type="button"
-          onClick={() => onChangeStatus(display === "Active" ? "Improving" : "Resolved")}
-          className={`${iconButtonClassName} !p-1`}
-          title={display === "Active" ? "Move to Improving" : "Move to Resolved"}
-          aria-label={display === "Active" ? "Move to Improving" : "Move to Resolved"}
-        >
-          <ChevronRight className="h-3 w-3" />
-        </button>
-      )}
-    </div>
-  );
-}
-
 function WeakTopicEditorSheet({
   entry,
   onClose,
@@ -136,7 +90,6 @@ function WeakTopicEditorSheet({
   const topicId = `${id}-topic`;
   const topicErrorId = `${id}-topic-error`;
   const priorityId = `${id}-priority`;
-  const statusId = `${id}-status`;
   const lastSeenId = `${id}-last-seen`;
   const sourceId = `${id}-source`;
   const notesId = `${id}-notes`;
@@ -237,47 +190,25 @@ function WeakTopicEditorSheet({
           {errors.topic ? <p id={topicErrorId} className="mt-2 text-sm text-rose-300">{errors.topic}</p> : null}
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor={priorityId} className="text-xs uppercase tracking-[0.18em] text-slate-500">Priority</label>
-            <select
-              id={priorityId}
-              value={draft.priority}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  priority: event.target.value as WeakTopicInput["priority"],
-                }))
-              }
-              className={`${fieldClassName} mt-2`}
-            >
-              {WEAK_TOPIC_PRIORITY_VALUES.map((priority) => (
-                <option key={priority} value={priority}>
-                  {priority}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor={statusId} className="text-xs uppercase tracking-[0.18em] text-slate-500">Status</label>
-            <select
-              id={statusId}
-              value={draft.status}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  status: event.target.value as WeakTopicInput["status"],
-                }))
-              }
-              className={`${fieldClassName} mt-2`}
-            >
-              {WEAK_TOPIC_STATUS_VALUES.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <label htmlFor={priorityId} className="text-xs uppercase tracking-[0.18em] text-slate-500">Priority</label>
+          <select
+            id={priorityId}
+            value={draft.priority}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                priority: event.target.value as WeakTopicInput["priority"],
+              }))
+            }
+            className={`${fieldClassName} mt-2`}
+          >
+            {WEAK_TOPIC_PRIORITY_VALUES.map((priority) => (
+              <option key={priority} value={priority}>
+                {priority}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -360,10 +291,155 @@ function WeakTopicEditorSheet({
   );
 }
 
+type HistorySortMode = "recent" | "source" | "priority" | "flagged";
+
+function HistoryModal({
+  insights,
+  onClose,
+  onUndo,
+}: {
+  insights: WeakTopicPlannerInsight[];
+  onClose: () => void;
+  onUndo: (entry: WeakTopicPlannerInsight) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [sortMode, setSortMode] = useState<HistorySortMode>("recent");
+  const id = useId();
+  const titleId = `${id}-history-title`;
+
+  const priorityOrder: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const result = q
+      ? insights.filter(
+          (e) =>
+            e.topic.toLowerCase().includes(q) ||
+            e.sourceLabel.toLowerCase().includes(q),
+        )
+      : [...insights];
+
+    switch (sortMode) {
+      case "recent":
+        result.sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt));
+        break;
+      case "source":
+        result.sort((a, b) => a.sourceLabel.localeCompare(b.sourceLabel) || b.lastSeenAt.localeCompare(a.lastSeenAt));
+        break;
+      case "priority":
+        result.sort(
+          (a, b) =>
+            (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3) ||
+            b.lastSeenAt.localeCompare(a.lastSeenAt),
+        );
+        break;
+      case "flagged":
+        result.sort((a, b) => b.occurrenceCount - a.occurrenceCount || b.lastSeenAt.localeCompare(a.lastSeenAt));
+        break;
+    }
+
+    return result;
+  }, [insights, search, sortMode]);
+
+  return (
+    <ModalShell
+      onClose={onClose}
+      position="center"
+      titleId={titleId}
+      contentClassName="max-w-[640px] w-full"
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <History className="h-5 w-5 text-slate-400" />
+          <h3 id={titleId} className="text-xl font-semibold text-white">History</h3>
+          <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs text-slate-400">
+            {insights.length}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className={`${iconButtonClassName} !p-1.5`}
+          aria-label="Close history"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="mt-4 flex gap-2">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by topic or source…"
+          className={`${fieldClassName} flex-1`}
+        />
+        <select
+          value={sortMode}
+          onChange={(e) => setSortMode(e.target.value as HistorySortMode)}
+          className={`${fieldClassName} w-40 shrink-0`}
+        >
+          <option value="recent">Recent</option>
+          <option value="source">Source</option>
+          <option value="priority">Priority</option>
+          <option value="flagged">Times flagged</option>
+        </select>
+      </div>
+
+      <div className="mt-4 max-h-[480px] space-y-2 overflow-y-auto pr-0.5">
+        {filtered.length === 0 && (
+          <div className="flex min-h-[120px] items-center justify-center text-sm text-slate-500">
+            {search ? "No matching history entries." : "No topics in history yet."}
+          </div>
+        )}
+        {filtered.map((entry) => (
+          <div
+            key={entry.id}
+            className="rounded-[14px] border border-white/10 bg-slate-900/55 px-3 py-2.5"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${priorityDotClass[entry.priority] ?? "bg-slate-400"}`} />
+                  <p className="truncate text-sm font-semibold text-white">{entry.topic}</p>
+                  <span className="shrink-0 rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-400">
+                    {entry.priority}
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-4 text-xs text-slate-400">
+                  {entry.lastSeenAt && (
+                    <span>Last seen: {formatShortDate(entry.lastSeenAt)}</span>
+                  )}
+                  {entry.sourceLabel && <span>{entry.sourceLabel}</span>}
+                  <span>{entry.occurrenceCount > 0 ? `${entry.occurrenceCount}× flagged weak` : "Manual entry"}</span>
+                  {entry.linkedBlockCount > 0 && (
+                    <span>Scheduled review: {entry.linkedBlockCount}</span>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onUndo(entry)}
+                className={`${iconButtonClassName} shrink-0 gap-1 !px-2 !py-1 text-xs`}
+                aria-label={`Restore ${entry.topic}`}
+                title="Restore to active"
+              >
+                <Undo2 className="h-3 w-3" />
+                Undo
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </ModalShell>
+  );
+}
+
 export function WeakTopicsView() {
   const { state, trashWeakTopic, upsertWeakTopic, upsertStudyBlock } = useAppStore();
   const [editorEntry, setEditorEntry] = useState<WeakTopicEntry | undefined>();
   const [showEditor, setShowEditor] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [taskSeed, setTaskSeed] = useState<{ taskName: string; category: string; entryTopic: string } | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
@@ -386,26 +462,34 @@ export function WeakTopicsView() {
     [state.practiceTests, state.studyBlocks, state.weakTopicEntries],
   );
 
+  const activeInsights = useMemo(
+    () => insights.filter((e) => e.status !== "Resolved"),
+    [insights],
+  );
+
+  const historyInsights = useMemo(
+    () => insights.filter((e) => e.status === "Resolved"),
+    [insights],
+  );
+
   const existingTopics = useMemo(
     () => state.weakTopicEntries.map((e) => e.topic),
     [state.weakTopicEntries],
   );
 
-  function getColumnEntries(status: DisplayStatus): WeakTopicPlannerInsight[] {
-    return status === "Active"
-      ? insights.filter((e) => e.status === "Active" || (e.status as string) === "Watching")
-      : insights.filter((e) => e.status === status);
-  }
-
-  function handleStatusChange(entry: WeakTopicPlannerInsight, newStatus: DisplayStatus) {
+  function handleSendToHistory(entry: WeakTopicPlannerInsight) {
     const storeEntry = state.weakTopicEntries.find((e) => e.id === entry.id);
-    if (storeEntry) void upsertWeakTopic({ ...storeEntry, status: newStatus });
+    if (storeEntry) void upsertWeakTopic({ ...storeEntry, status: "Resolved" });
   }
 
-  // Metric card derived values
-  const unscheduledCount = insights.filter((e) => e.linkedBlockCount === 0 && e.status !== "Resolved").length;
+  function handleUndoHistory(entry: WeakTopicPlannerInsight) {
+    const storeEntry = state.weakTopicEntries.find((e) => e.id === entry.id);
+    if (storeEntry) void upsertWeakTopic({ ...storeEntry, status: "Active" });
+  }
 
-  const recurringInsight = insights
+  const unscheduledCount = activeInsights.filter((e) => e.linkedBlockCount === 0).length;
+
+  const recurringInsight = activeInsights
     .filter((e) => e.occurrenceCount > 1)
     .sort((a, b) => b.occurrenceCount - a.occurrenceCount)[0];
 
@@ -418,8 +502,9 @@ export function WeakTopicsView() {
     : "Latest Weak Topic";
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="flex h-full flex-col gap-4">
+      {/* Metric cards */}
+      <div className="grid shrink-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Logged topics"
           value={`${state.weakTopicEntries.length}`}
@@ -439,13 +524,28 @@ export function WeakTopicsView() {
         />
       </div>
 
+      {/* Priority panel — fills remaining height */}
       <Panel
         title="Priority"
+        className="flex min-h-0 flex-1 flex-col"
         action={
           <div className="flex items-center gap-3">
             <span className="text-xs text-slate-400">
               Unscheduled: {unscheduledCount}
             </span>
+            <button
+              type="button"
+              className={secondaryButtonClassName}
+              onClick={() => setShowHistory(true)}
+            >
+              <History className="h-4 w-4" />
+              History
+              {historyInsights.length > 0 && (
+                <span className="ml-1 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] tabular-nums">
+                  {historyInsights.length}
+                </span>
+              )}
+            </button>
             <button
               type="button"
               className={primaryButtonClassName}
@@ -460,12 +560,15 @@ export function WeakTopicsView() {
           </div>
         }
       >
-        {insights.length ? (
-          <div className="grid grid-cols-3 gap-3">
+        {activeInsights.length > 0 ? (
+          <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
             {WEAK_TOPIC_PRIORITY_VALUES.map((priority) => {
-              const priorityInsights = insights.filter((e) => e.priority === priority);
+              const priorityInsights = activeInsights.filter((e) => e.priority === priority);
               return (
-                <div key={priority} className={`flex h-[260px] flex-col rounded-[16px] border ${prioritySectionStyle[priority]}`}>
+                <div
+                  key={priority}
+                  className={`flex min-h-0 flex-col rounded-[16px] border ${prioritySectionStyle[priority]}`}
+                >
                   <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-2">
                     <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${priorityHeadingStyle[priority]}`}>
                       {priority} Priority
@@ -474,7 +577,7 @@ export function WeakTopicsView() {
                       {priorityInsights.length}
                     </span>
                   </div>
-                  <div className="flex-1 space-y-1.5 overflow-y-auto p-2">
+                  <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2">
                     {priorityInsights.map((entry) => (
                       <div
                         key={entry.id}
@@ -496,6 +599,15 @@ export function WeakTopicsView() {
                               title="Add to tasks"
                             >
                               <Plus className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              className={iconButtonClassName}
+                              onClick={() => handleSendToHistory(entry)}
+                              aria-label={`Mark ${entry.topic} as done`}
+                              title="Mark as done (move to History)"
+                            >
+                              <Check className="h-3.5 w-3.5" />
                             </button>
                             <button
                               type="button"
@@ -528,85 +640,14 @@ export function WeakTopicsView() {
           </div>
         ) : (
           <EmptyState
-            title="No weak topics yet"
-            description="Topics from tests and manual entries will appear here."
+            title="No active weak topics"
+            description="Topics from tests and manual entries will appear here. Topics marked done move to History."
             compact
           />
         )}
       </Panel>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {DISPLAY_STATUSES.map((status) => {
-          const entries = getColumnEntries(status);
-
-          return (
-            <div
-              key={status}
-              className="glass-panel min-w-0"
-            >
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">{status}</h3>
-                <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs text-slate-400">
-                  {entries.length}
-                </span>
-              </div>
-
-              <div className="max-h-[332px] space-y-2 overflow-y-auto pr-0.5">
-                {entries.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="rounded-[14px] border border-white/10 bg-slate-900/55 px-3 py-2.5 transition select-none"
-                  >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${priorityDotClass[entry.priority] ?? "bg-slate-400"}`} />
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">
-                        {entry.topic}
-                      </span>
-                      <StatusArrows
-                        status={entry.status}
-                        onChangeStatus={(newStatus) => handleStatusChange(entry, newStatus)}
-                      />
-                      <button
-                        type="button"
-                        className={iconButtonClassName}
-                        onClick={() => setTaskSeed({ taskName: entry.topic, category: "Review", entryTopic: entry.topic })}
-                        aria-label={`Add task for ${entry.topic}`}
-                        title="Add task"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        className={iconButtonClassName}
-                        onClick={() => {
-                          const storeEntry = state.weakTopicEntries.find((e) => e.id === entry.id);
-                          setEditorEntry(storeEntry);
-                          setShowEditor(true);
-                        }}
-                        aria-label={`Edit ${entry.topic}`}
-                      >
-                        <Edit3 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    {entry.sourceLabel && (
-                      <p className="mt-1 truncate pl-4 text-xs text-slate-500">
-                        {entry.sourceLabel}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {entries.length === 0 && (
-                <div className="flex min-h-[100px] items-center justify-center rounded-[14px] border border-dashed border-white/10 bg-white/[0.02] px-4 text-center text-sm text-slate-400">
-                  No {status.toLowerCase()} topics
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
+      {/* Task seeder sheet */}
       {taskSeed ? (
         <StudyTaskEditorSheet
           seedDate={today}
@@ -635,12 +676,14 @@ export function WeakTopicsView() {
         />
       ) : null}
 
+      {/* Success toast */}
       {successToast && (
         <div className="fixed bottom-6 right-6 z-50 rounded-[14px] border border-white/10 bg-slate-800 px-4 py-3 text-sm text-white shadow-xl">
           {successToast}
         </div>
       )}
 
+      {/* Editor sheet */}
       {showEditor ? (
         <WeakTopicEditorSheet
           entry={editorEntry}
@@ -666,6 +709,17 @@ export function WeakTopicsView() {
                 setShowEditor(false);
               }
             })();
+          }}
+        />
+      ) : null}
+
+      {/* History modal */}
+      {showHistory ? (
+        <HistoryModal
+          insights={historyInsights}
+          onClose={() => setShowHistory(false)}
+          onUndo={(entry) => {
+            handleUndoHistory(entry);
           }}
         />
       ) : null}
