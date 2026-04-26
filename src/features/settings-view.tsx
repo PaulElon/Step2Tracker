@@ -219,8 +219,19 @@ function ResourcesPanel({
     onSetResourceLinks(resourceLinks.filter((link) => link.id !== id));
   }
 
-  function handleOpen(url: string) {
-    window.open(url, "_blank");
+  async function handleOpen(url: string) {
+    try {
+      const isPath = url.startsWith("/") || url.startsWith("file://");
+      if (isPath) {
+        const { openPath } = await import("@tauri-apps/plugin-opener");
+        await openPath(url.replace(/^file:\/\//, ""));
+      } else {
+        const { openUrl } = await import("@tauri-apps/plugin-opener");
+        await openUrl(url);
+      }
+    } catch {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
   }
 
   const canAdd = newName.trim().length > 0 && pendingUrl.trim().length > 0;

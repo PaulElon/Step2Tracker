@@ -346,6 +346,7 @@ export function ErrorLogView() {
   const [showModal, setShowModal] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [addedWeakTopicIds, setAddedWeakTopicIds] = useState<Set<string>>(new Set());
   const deferredSearch = useDeferredValue(search);
   const topicRef = useRef<HTMLInputElement>(null);
 
@@ -414,6 +415,7 @@ export function ErrorLogView() {
     };
 
     await upsertWeakTopic(input);
+    setAddedWeakTopicIds((prev) => new Set([...prev, entry.id]));
     setToast(`Added "${entry.topic}" as a weak topic.`);
   }
 
@@ -561,6 +563,7 @@ export function ErrorLogView() {
                   entry={entry}
                   isEditing={editingEntry?.id === entry.id}
                   confirmDeleteId={confirmDeleteId}
+                  weakTopicAdded={addedWeakTopicIds.has(entry.id)}
                   onEdit={() => {
                     setEditingEntry(entry);
                     setConfirmDeleteId(null);
@@ -599,6 +602,7 @@ function EntryCard({
   entry,
   isEditing,
   confirmDeleteId,
+  weakTopicAdded,
   onEdit,
   onDeleteRequest,
   onDeleteConfirm,
@@ -608,6 +612,7 @@ function EntryCard({
   entry: ErrorLogEntry;
   isEditing: boolean;
   confirmDeleteId: string | null;
+  weakTopicAdded: boolean;
   onEdit: () => void;
   onDeleteRequest: () => void;
   onDeleteConfirm: () => void;
@@ -660,11 +665,16 @@ function EntryCard({
             <>
               <button
                 type="button"
-                onClick={onAddWeakTopic}
-                className="rounded-lg px-2 py-1 text-[10px] font-medium text-slate-400 hover:bg-white/5 hover:text-cyan-300 transition-colors"
-                title="Add as weak topic"
+                onClick={weakTopicAdded ? undefined : onAddWeakTopic}
+                disabled={weakTopicAdded}
+                className={`rounded-lg px-2 py-1 text-[10px] font-medium transition-colors ${
+                  weakTopicAdded
+                    ? "text-emerald-400 cursor-default"
+                    : "text-slate-400 hover:bg-white/5 hover:text-cyan-300"
+                }`}
+                title={weakTopicAdded ? "Already added as weak topic" : "Add as weak topic"}
               >
-                + Weak Topic
+                {weakTopicAdded ? "✓ Added" : "+ Weak Topic"}
               </button>
               <button
                 type="button"

@@ -143,6 +143,7 @@ export interface ExamTimer {
   examDate: string;
   examTime?: string;
   displayMode?: ExamDisplayMode;
+  showHrMin?: boolean;
 }
 
 export interface ScoreTrendOptions {

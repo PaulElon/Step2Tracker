@@ -48,34 +48,21 @@ export function getTaskLaunchTarget(taskTitle: string) {
 }
 
 export async function openLaunchTarget(target: LaunchTarget) {
-  const maybeTauri = window as Window & {
-    __TAURI__?: {
-      opener?: {
-        openPath?: (path: string) => Promise<void>;
-        openUrl?: (url: string) => Promise<void>;
-      };
-    };
-  };
-
   try {
-    if (target.mode === "path" && maybeTauri.__TAURI__?.opener?.openPath) {
-      await maybeTauri.__TAURI__.opener.openPath(target.href);
-      return;
+    if (target.mode === "path") {
+      const { openPath } = await import("@tauri-apps/plugin-opener");
+      await openPath(target.href);
+    } else {
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      await openUrl(target.href);
     }
-
-    if (target.mode === "url" && maybeTauri.__TAURI__?.opener?.openUrl) {
-      await maybeTauri.__TAURI__.opener.openUrl(target.href);
-      return;
-    }
+    return;
   } catch {
-    // Fall back to browser-safe behavior below.
+    // Not in Tauri context, fall back to browser.
   }
 
   if (target.mode === "path") {
-    const opened = window.open(`file://${target.href}`, "_blank", "noopener,noreferrer");
-    if (!opened) {
-      window.alert("Local-app launching is prepared for the desktop shell; web browsers may block direct app opens.");
-    }
+    window.alert("App launching requires the desktop application. Install the app to open local apps directly.");
     return;
   }
 

@@ -292,19 +292,20 @@ function computeCountdown(timer: ExamTimer): string {
   const hours = totalHours % 24;
   const totalDays = Math.floor(totalHours / 24);
   const mode = timer.displayMode ?? "days";
+  const hrMin = timer.showHrMin ? ` ${hours}h ${minutes}m` : "";
   if (mode === "days") {
-    return `${totalDays}d ${hours}h ${minutes}m`;
+    return `${totalDays}d${hrMin}`;
   }
   if (mode === "weeks+days") {
     const weeks = Math.floor(totalDays / 7);
     const days = totalDays % 7;
-    return `${weeks}w ${days}d ${hours}h ${minutes}m`;
+    return `${weeks}w ${days}d${hrMin}`;
   }
   const months = Math.floor(totalDays / 30);
   const remDays = totalDays - months * 30;
   const weeks = Math.floor(remDays / 7);
   const days = remDays % 7;
-  return `${months}mo ${weeks}w ${days}d ${hours}h ${minutes}m`;
+  return `${months}mo ${weeks}w ${days}d${hrMin}`;
 }
 
 function SidebarCountdown() {
@@ -314,6 +315,7 @@ function SidebarCountdown() {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("23:59");
   const [mode, setMode] = useState<ExamDisplayMode>("days");
+  const [showHrMin, setShowHrMin] = useState(false);
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -338,12 +340,14 @@ function SidebarCountdown() {
       examDate: date,
       examTime: time,
       displayMode: mode,
+      showHrMin,
     };
     void setExamTimers([...allTimers, newTimer]);
     setName("");
     setDate("");
     setTime("23:59");
     setMode("days");
+    setShowHrMin(false);
     setShowModal(false);
   }
 
@@ -427,19 +431,30 @@ function SidebarCountdown() {
               value={time}
               onChange={(e) => setTime(e.target.value)}
             />
-            <div className="flex gap-4">
-              {(["days", "weeks+days", "months+weeks+days"] as const).map((m) => (
-                <label key={m} className="flex cursor-pointer items-center gap-1.5 text-sm text-slate-300">
-                  <input
-                    type="radio"
-                    name="display-mode"
-                    checked={mode === m}
-                    onChange={() => setMode(m)}
-                    className="accent-cyan-400"
-                  />
-                  {m === "days" ? "d" : m === "weeks+days" ? "w+d" : "mo+w+d"}
-                </label>
-              ))}
+            <div className="space-y-2">
+              <div className="flex gap-4">
+                {(["days", "weeks+days", "months+weeks+days"] as const).map((m) => (
+                  <label key={m} className="flex cursor-pointer items-center gap-1.5 text-sm text-slate-300">
+                    <input
+                      type="radio"
+                      name="display-mode"
+                      checked={mode === m}
+                      onChange={() => setMode(m)}
+                      className="accent-cyan-400"
+                    />
+                    {m === "days" ? "d" : m === "weeks+days" ? "w+d" : "mo+w+d"}
+                  </label>
+                ))}
+              </div>
+              <label className="flex cursor-pointer items-center gap-1.5 text-sm text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={showHrMin}
+                  onChange={(e) => setShowHrMin(e.target.checked)}
+                  className="accent-cyan-400"
+                />
+                display hr + min
+              </label>
             </div>
             <div className="flex gap-2 pt-2">
               <button
