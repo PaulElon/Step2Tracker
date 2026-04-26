@@ -410,7 +410,7 @@ export function PracticeTestsView() {
   const [showEditor, setShowEditor] = useState(false);
   const [showChartSettings, setShowChartSettings] = useState(false);
   const [showConnectionLine, setShowConnectionLine] = useState(true);
-  const [showBestFitLine, setShowBestFitLine] = useState(false);
+  const [showBestFitLine, setShowBestFitLine] = useState(true);
   const [showBestFitRSquared, setShowBestFitRSquared] = useState(false);
   const [chartRanges, setChartRanges] = useState<{ xRange?: [string, string]; yRange?: [number, number] }>({});
   const settingsRef = useRef<HTMLDivElement>(null);

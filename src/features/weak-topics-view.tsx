@@ -1,7 +1,7 @@
 import { Edit3, Plus, Trash2 } from "lucide-react";
 import { useId, useMemo, useRef, useState } from "react";
 import { getWeakTopicPlannerInsights, type WeakTopicPlannerInsight } from "../lib/analytics";
-import { formatShortDate, formatLongDate } from "../lib/datetime";
+import { formatShortDate, formatLongDate, getTodayKey } from "../lib/datetime";
 import {
   WEAK_TOPIC_PRIORITY_VALUES,
   WEAK_TOPIC_STATUS_VALUES,
@@ -15,8 +15,9 @@ import {
 } from "../lib/ui";
 import { useAppStore } from "../state/app-store";
 import { ModalShell } from "../components/modal-shell";
+import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { EmptyState, MetricCard, Panel } from "../components/ui";
-import type { WeakTopicEntry, WeakTopicInput } from "../types/models";
+import type { StudyBlockInput, WeakTopicEntry, WeakTopicInput } from "../types/models";
 
 const DISPLAY_STATUSES = ["Active", "Improving", "Resolved"] as const;
 type DisplayStatus = typeof DISPLAY_STATUSES[number];
@@ -279,9 +280,11 @@ function WeakTopicEditorSheet({
 }
 
 export function WeakTopicsView() {
-  const { state, trashWeakTopic, upsertWeakTopic } = useAppStore();
+  const { state, trashWeakTopic, upsertWeakTopic, upsertStudyBlock } = useAppStore();
   const [editorEntry, setEditorEntry] = useState<WeakTopicEntry | undefined>();
   const [showEditor, setShowEditor] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [taskSeed, setTaskSeed] = useState<{ taskName: string; category: string } | null>(null);
 
   const dragRef = useRef<{ id: string; fromStatus: DisplayStatus } | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<DisplayStatus | null>(null);
@@ -352,9 +355,19 @@ export function WeakTopicsView() {
     setDragOverCardId(cardId);
   }
 
+  function resolveDrag(e: React.DragEvent) {
+    if (dragRef.current) return dragRef.current;
+    const id = e.dataTransfer.getData("text/plain");
+    if (!id) return null;
+    const entry = state.weakTopicEntries.find((candidate) => candidate.id === id);
+    if (!entry) return null;
+    const fromStatus: DisplayStatus = entry.status === "Improving" || entry.status === "Resolved" ? entry.status : "Active";
+    return { id, fromStatus };
+  }
+
   function handleColumnDrop(targetStatus: DisplayStatus, e: React.DragEvent) {
     e.preventDefault();
-    const drag = dragRef.current;
+    const drag = resolveDrag(e);
     if (!drag) return;
 
     if (drag.fromStatus === targetStatus) {
@@ -386,7 +399,7 @@ export function WeakTopicsView() {
   function handleCardDrop(targetCardId: string, targetStatus: DisplayStatus, e: React.DragEvent) {
     e.preventDefault();
     e.stopPropagation();
-    const drag = dragRef.current;
+    const drag = resolveDrag(e);
     if (!drag || drag.id === targetCardId) return;
 
     if (drag.fromStatus === targetStatus) {
@@ -549,26 +562,59 @@ export function WeakTopicsView() {
                         <span className="shrink-0 text-[11px] text-slate-500">
                           {formatShortDate(entry.lastSeenAt)}
                         </span>
-                        <button
-                          type="button"
-                          className={iconButtonClassName}
-                          onClick={() => {
-                            const storeEntry = state.weakTopicEntries.find((candidate) => candidate.id === entry.id);
-                            setEditorEntry(storeEntry);
-                            setShowEditor(true);
-                          }}
-                          aria-label={`Edit ${entry.topic}`}
-                        >
-                          <Edit3 className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          className={iconButtonClassName}
-                          onClick={() => void trashWeakTopic(entry.id)}
-                          aria-label={`Delete ${entry.topic}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        {confirmDeleteId === entry.id ? (
+                          <div className="flex shrink-0 items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void trashWeakTopic(entry.id);
+                                setConfirmDeleteId(null);
+                              }}
+                              className="text-xs font-medium text-rose-400 hover:text-rose-300"
+                            >
+                              Confirm delete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="text-xs text-slate-500 hover:text-slate-300"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className={iconButtonClassName}
+                              onClick={() => setTaskSeed({ taskName: entry.topic, category: "Review" })}
+                              aria-label={`Add task for ${entry.topic}`}
+                              title="Add task"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              className={iconButtonClassName}
+                              onClick={() => {
+                                const storeEntry = state.weakTopicEntries.find((candidate) => candidate.id === entry.id);
+                                setEditorEntry(storeEntry);
+                                setShowEditor(true);
+                              }}
+                              aria-label={`Edit ${entry.topic}`}
+                            >
+                              <Edit3 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              className={iconButtonClassName}
+                              onClick={() => setConfirmDeleteId(entry.id)}
+                              aria-label={`Delete ${entry.topic}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
                       </div>
                       {entry.sourceLabel && (
                         <p className="mt-1 truncate pl-4 text-xs text-slate-500">
@@ -589,6 +635,32 @@ export function WeakTopicsView() {
           );
         })}
       </div>
+
+      {taskSeed ? (
+        <StudyTaskEditorSheet
+          seedDate={getTodayKey()}
+          seedTaskName={taskSeed.taskName}
+          seedCategory={taskSeed.category}
+          onClose={() => setTaskSeed(null)}
+          onSave={(draft) => {
+            void (async () => {
+              const maxOrderForDate = Math.max(
+                -1,
+                ...state.studyBlocks
+                  .filter((task) => task.date === draft.date)
+                  .map((task) => task.order),
+              );
+              const saved = await upsertStudyBlock({
+                ...draft,
+                order: maxOrderForDate + 1,
+              } satisfies StudyBlockInput & { id?: string });
+              if (saved) {
+                setTaskSeed(null);
+              }
+            })();
+          }}
+        />
+      ) : null}
 
       {showEditor ? (
         <WeakTopicEditorSheet

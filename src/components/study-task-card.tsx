@@ -70,7 +70,7 @@ export function StudyTaskCard({
               {formatDateTimeLabel(block.reminderAt)}
             </span>
           ) : null}
-          <TaskLaunchButton taskTitle={block.task} />
+          <TaskLaunchButton taskTitle={block.task} taskCategory={block.category} />
           {actionSlot ? actionSlot : null}
         </div>
       </div>

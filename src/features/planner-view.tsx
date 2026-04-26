@@ -1,5 +1,5 @@
-import { ArrowDown, ArrowUp, Bell, ChevronLeft, ChevronRight, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
-import { useDeferredValue, useId, useRef, useState, useTransition } from "react";
+import { AlertTriangle, ArrowDown, ArrowUp, Bell, ChevronLeft, ChevronRight, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import { useDeferredValue, useEffect, useId, useRef, useState, useTransition } from "react";
 import { getStudyBlockMinutes, getWeekDates } from "../lib/analytics";
 import {
   addDays,
@@ -229,6 +229,10 @@ export function PlannerView() {
   const [editorSeedDate, setEditorSeedDate] = useState<string | undefined>();
   const [showEditor, setShowEditor] = useState(false);
   const [showImport, setShowImport] = useState(false);
+
+  useEffect(() => {
+    void setPlannerFocusDate(getTodayKey());
+  }, []);
   const id = useId();
   const deferredSearch = useDeferredValue(state.preferences.plannerFilters.search);
   const searchId = `${id}-search`;
@@ -445,6 +449,10 @@ export function PlannerView() {
                   const isCurrentMonth = date.slice(0, 7) === selectedDate.slice(0, 7);
                   const visibleTasks = dayTasks.slice(0, 3);
                   const hiddenCount = dayTasks.length - visibleTasks.length;
+                  const todayKey = getTodayKey();
+                  const isPast = date < todayKey;
+                  const overdueCount = isPast ? dayTasks.filter((task) => !task.completed).length : 0;
+                  const isOverdue = overdueCount > 0;
 
                   return (
                     <button
@@ -457,12 +465,22 @@ export function PlannerView() {
                           ? "bg-cyan-300/15 ring-1 ring-inset ring-cyan-300/30"
                           : isToday
                           ? "bg-white/[0.07] ring-1 ring-inset ring-cyan-300/20"
+                          : isOverdue
+                          ? "bg-rose-500/15 hover:bg-rose-500/20"
                           : "bg-slate-900/55 hover:bg-white/5",
                         !isCurrentMonth ? "opacity-40" : "",
                       ].join(" ")}
                     >
-                      <div className="mb-1 text-[11px] font-medium leading-none text-slate-400">
-                        {Number(date.slice(8))}
+                      <div className="mb-1 flex items-start justify-between gap-0.5">
+                        <span className="text-[11px] font-medium leading-none text-slate-400">
+                          {Number(date.slice(8))}
+                        </span>
+                        {isOverdue ? (
+                          <span className="flex items-center gap-0.5 text-[9px] leading-none text-rose-400">
+                            <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                            {overdueCount}
+                          </span>
+                        ) : null}
                       </div>
                       <div className="flex-1 space-y-0.5 overflow-hidden">
                         {visibleTasks.map((task) => (

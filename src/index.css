@@ -394,6 +394,124 @@
   --selection: rgba(143, 123, 255, 0.38);
 }
 
+:root[data-theme="light"] {
+  color-scheme: light;
+  --app-bg-1: #f8fafc;
+  --app-bg-2: #f1f5f9;
+  --app-bg-3: #e2e8f0;
+  --app-glow-1: rgba(59, 130, 246, 0.10);
+  --app-glow-2: rgba(99, 102, 241, 0.07);
+  --panel-bg: rgba(255, 255, 255, 0.88);
+  --panel-border: rgba(0, 0, 0, 0.08);
+  --panel-shadow: rgba(0, 0, 0, 0.05);
+  --panel-support-bg: rgba(248, 250, 252, 0.92);
+  --panel-support-border: rgba(0, 0, 0, 0.06);
+  --panel-support-shadow: rgba(0, 0, 0, 0.03);
+  --surface-muted: rgba(241, 245, 249, 0.85);
+  --field-bg: rgba(255, 255, 255, 0.95);
+  --field-focus: rgba(59, 130, 246, 0.15);
+  --field-border-strong: rgba(59, 130, 246, 0.45);
+  --focus-ring-inner: rgba(59, 130, 246, 0.15);
+  --focus-ring-outer: rgba(59, 130, 246, 0.45);
+  --primary-start: rgba(59, 130, 246, 0.15);
+  --primary-end: rgba(99, 102, 241, 0.15);
+  --primary-border: rgba(59, 130, 246, 0.35);
+  --selection: rgba(59, 130, 246, 0.22);
+  --lane-review-start: rgba(99, 102, 241, 0.14);
+  --lane-review-end: rgba(139, 92, 246, 0.08);
+  --lane-review-border: rgba(99, 102, 241, 0.22);
+  --lane-content-start: rgba(59, 130, 246, 0.14);
+  --lane-content-end: rgba(6, 182, 212, 0.08);
+  --lane-content-border: rgba(59, 130, 246, 0.22);
+  --lane-assessment-start: rgba(245, 158, 11, 0.14);
+  --lane-assessment-end: rgba(239, 68, 68, 0.08);
+  --lane-assessment-border: rgba(245, 158, 11, 0.22);
+  --lane-recovery-start: rgba(148, 163, 184, 0.14);
+  --lane-recovery-end: rgba(203, 213, 225, 0.08);
+  --lane-recovery-border: rgba(148, 163, 184, 0.18);
+  --lane-admin-start: rgba(16, 185, 129, 0.14);
+  --lane-admin-end: rgba(59, 130, 246, 0.08);
+  --lane-admin-border: rgba(16, 185, 129, 0.22);
+}
+
+:root[data-theme="paulblue"] {
+  --app-bg-1: #04111e;
+  --app-bg-2: #071e30;
+  --app-bg-3: #0b2845;
+  --app-glow-1: rgba(56, 189, 248, 0.18);
+  --app-glow-2: rgba(103, 232, 249, 0.12);
+  --panel-bg: rgba(7, 25, 45, 0.65);
+  --panel-border: rgba(224, 242, 254, 0.10);
+  --panel-shadow: rgba(4, 14, 28, 0.65);
+  --panel-support-bg: rgba(10, 35, 60, 0.75);
+  --panel-support-border: rgba(224, 242, 254, 0.08);
+  --panel-support-shadow: rgba(4, 14, 28, 0.38);
+  --surface-muted: rgba(12, 40, 68, 0.56);
+  --field-bg: rgba(8, 28, 50, 0.78);
+  --field-focus: rgba(56, 189, 248, 0.20);
+  --field-border-strong: rgba(103, 232, 249, 0.42);
+  --focus-ring-inner: rgba(56, 189, 248, 0.20);
+  --focus-ring-outer: rgba(103, 232, 249, 0.52);
+  --primary-start: rgba(56, 189, 248, 0.20);
+  --primary-end: rgba(103, 232, 249, 0.20);
+  --primary-border: rgba(56, 189, 248, 0.35);
+  --selection: rgba(56, 189, 248, 0.25);
+  --lane-review-start: rgba(167, 139, 250, 0.22);
+  --lane-review-end: rgba(196, 181, 253, 0.12);
+  --lane-review-border: rgba(167, 139, 250, 0.22);
+  --lane-content-start: rgba(56, 189, 248, 0.20);
+  --lane-content-end: rgba(103, 232, 249, 0.12);
+  --lane-content-border: rgba(56, 189, 248, 0.22);
+  --lane-assessment-start: rgba(251, 191, 36, 0.22);
+  --lane-assessment-end: rgba(248, 113, 113, 0.14);
+  --lane-assessment-border: rgba(251, 191, 36, 0.22);
+  --lane-recovery-start: rgba(126, 184, 216, 0.18);
+  --lane-recovery-end: rgba(191, 219, 254, 0.10);
+  --lane-recovery-border: rgba(126, 184, 216, 0.22);
+  --lane-admin-start: rgba(52, 211, 153, 0.18);
+  --lane-admin-end: rgba(56, 189, 248, 0.12);
+  --lane-admin-border: rgba(52, 211, 153, 0.22);
+}
+
+:root[data-theme="teslared"] {
+  --app-bg-1: #080808;
+  --app-bg-2: #0f0f0f;
+  --app-bg-3: #161616;
+  --app-glow-1: rgba(227, 25, 55, 0.20);
+  --app-glow-2: rgba(255, 77, 100, 0.12);
+  --panel-bg: rgba(14, 14, 14, 0.72);
+  --panel-border: rgba(245, 245, 245, 0.10);
+  --panel-shadow: rgba(0, 0, 0, 0.70);
+  --panel-support-bg: rgba(22, 22, 22, 0.75);
+  --panel-support-border: rgba(245, 245, 245, 0.07);
+  --panel-support-shadow: rgba(0, 0, 0, 0.45);
+  --surface-muted: rgba(28, 28, 28, 0.60);
+  --field-bg: rgba(20, 20, 20, 0.85);
+  --field-focus: rgba(227, 25, 55, 0.20);
+  --field-border-strong: rgba(227, 25, 55, 0.55);
+  --focus-ring-inner: rgba(227, 25, 55, 0.20);
+  --focus-ring-outer: rgba(227, 25, 55, 0.50);
+  --primary-start: rgba(227, 25, 55, 0.22);
+  --primary-end: rgba(255, 77, 100, 0.18);
+  --primary-border: rgba(227, 25, 55, 0.50);
+  --selection: rgba(227, 25, 55, 0.28);
+  --lane-review-start: rgba(227, 25, 55, 0.25);
+  --lane-review-end: rgba(255, 77, 100, 0.15);
+  --lane-review-border: rgba(227, 25, 55, 0.28);
+  --lane-content-start: rgba(227, 25, 55, 0.20);
+  --lane-content-end: rgba(255, 143, 160, 0.12);
+  --lane-content-border: rgba(227, 25, 55, 0.22);
+  --lane-assessment-start: rgba(255, 149, 0, 0.22);
+  --lane-assessment-end: rgba(255, 200, 100, 0.12);
+  --lane-assessment-border: rgba(255, 149, 0, 0.22);
+  --lane-recovery-start: rgba(160, 160, 160, 0.16);
+  --lane-recovery-end: rgba(245, 245, 245, 0.08);
+  --lane-recovery-border: rgba(160, 160, 160, 0.20);
+  --lane-admin-start: rgba(74, 222, 128, 0.16);
+  --lane-admin-end: rgba(52, 211, 153, 0.10);
+  --lane-admin-border: rgba(74, 222, 128, 0.20);
+}
+
 :root[data-theme="maggiepink"][data-theme-enhanced="true"] {
   --app-bg-1: #fde2ec;
   --app-bg-2: #fbd0e0;
@@ -602,6 +720,12 @@ button {
   .lane-pill {
     @apply inline-flex items-center rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-100;
   }
+}
+
+/* Fix theme-option label readability on light-background themes */
+:root[data-theme="maggiepink"] .theme-option p,
+:root[data-theme="light"] .theme-option p {
+  color: #1e293b;
 }
 
 @layer utilities {

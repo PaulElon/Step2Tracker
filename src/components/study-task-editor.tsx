@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ModalShell } from "./modal-shell";
 import { fieldClassName, primaryButtonClassName, secondaryButtonClassName } from "../lib/ui";
 import { getEmptyStudyBlockDraft, validateStudyBlockInput } from "../lib/storage";
@@ -18,12 +18,23 @@ type StudyTaskEditorDraft = {
   reminderAtText: string;
 };
 
-function createInitialDraft(task?: StudyBlock, seedDate?: string) {
+function createInitialDraft(
+  task?: StudyBlock,
+  seedDate?: string,
+  seedTaskName?: string,
+  seedCategory?: StudyBlock["category"],
+) {
   if (!task) {
     const draft = getEmptyStudyBlockDraft();
     if (seedDate) {
       draft.date = seedDate;
       draft.day = getDayName(seedDate);
+    }
+    if (seedTaskName !== undefined) {
+      draft.task = seedTaskName;
+    }
+    if (seedCategory !== undefined) {
+      draft.category = seedCategory;
     }
 
     return {
@@ -52,22 +63,28 @@ function createInitialDraft(task?: StudyBlock, seedDate?: string) {
 export function StudyTaskEditorSheet({
   task,
   seedDate,
+  seedTaskName,
+  seedCategory,
   onClose,
   onSave,
 }: {
   task?: StudyBlock;
   seedDate?: string;
+  seedTaskName?: string;
+  seedCategory?: StudyBlock["category"];
   onClose: () => void;
   onSave: (draft: StudyBlockInput & { id?: string }) => void;
 }) {
   const { state } = useAppStore();
   const categories = state.preferences.customCategories;
-  const [draft, setDraft] = useState(createInitialDraft(task, seedDate));
+  const [draft, setDraft] = useState(createInitialDraft(task, seedDate, seedTaskName, seedCategory));
   const [errors, setErrors] = useState<Partial<Record<"date" | "task" | "duration" | "category" | "reminder", string>>>(
     {},
   );
   const id = useId();
   const dateRef = useRef<HTMLInputElement>(null);
+  const taskRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { taskRef.current?.focus(); }, []);
   const titleId = `${id}-title`;
   const descriptionId = `${id}-description`;
   const dateId = `${id}-date`;
@@ -88,7 +105,7 @@ export function StudyTaskEditorSheet({
       position="side"
       titleId={titleId}
       descriptionId={descriptionId}
-      initialFocusRef={dateRef}
+      initialFocusRef={taskRef}
       contentClassName="max-w-[500px]"
     >
       <div className="flex items-start justify-between gap-4">
@@ -164,6 +181,7 @@ export function StudyTaskEditorSheet({
             Task
           </label>
           <input
+            ref={taskRef}
             id={taskId}
             value={draft.task}
             onChange={(event) => {
@@ -275,7 +293,7 @@ export function StudyTaskEditorSheet({
             }}
             aria-describedby={errors.reminder ? reminderErrorId : undefined}
             aria-invalid={Boolean(errors.reminder)}
-            className={`${fieldClassName} mt-2`}
+            className={`${fieldClassName} mt-2 ${!draft.reminderAtText ? "italic opacity-30" : ""}`}
           />
           <p className="mt-2 text-xs text-slate-500">Optional. Alerts on this Mac when notifications are enabled.</p>
           {errors.reminder ? (

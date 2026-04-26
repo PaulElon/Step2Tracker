@@ -653,6 +653,7 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
           id: typeof link?.id === "string" && link.id ? link.id : createId("link"),
           label: sanitizeText(link?.label),
           url: sanitizeText(link?.url),
+          kind: link?.kind === "app" ? ("app" as const) : ("website" as const),
         }))
         .filter((link) => link.url.length > 0)
     : [];

@@ -1,26 +1,56 @@
 import { AppWindowMac, ArrowUpRight } from "lucide-react";
-import { getTaskLaunchTarget, openLaunchTarget } from "../lib/study-workflow";
+import { useAppStore } from "../state/app-store";
+import { openLaunchTarget } from "../lib/study-workflow";
+import type { ResourceLink } from "../types/models";
 
-export function TaskLaunchButton({ taskTitle }: { taskTitle: string }) {
-  const target = getTaskLaunchTarget(taskTitle);
+function findMatchingResource(
+  taskName: string,
+  category: string,
+  resourceLinks: ResourceLink[],
+): ResourceLink | null {
+  const haystack = `${taskName} ${category}`.toLowerCase();
+  let best: ResourceLink | null = null;
+  for (const link of resourceLinks) {
+    if (haystack.includes(link.label.toLowerCase())) {
+      if (!best || link.label.length > best.label.length) {
+        best = link;
+      }
+    }
+  }
+  return best;
+}
 
-  if (!target) {
+export function TaskLaunchButton({
+  taskTitle,
+  taskCategory,
+}: {
+  taskTitle: string;
+  taskCategory: string;
+}) {
+  const { state } = useAppStore();
+  const resource = findMatchingResource(taskTitle, taskCategory, state.preferences.resourceLinks);
+
+  if (!resource) {
     return null;
   }
 
-  const Icon = target.mode === "path" ? AppWindowMac : ArrowUpRight;
+  const Icon = resource.kind === "app" ? AppWindowMac : ArrowUpRight;
 
   return (
     <button
       type="button"
       className="launch-button"
-      aria-label={`${target.label} for ${taskTitle}`}
+      aria-label={`Open ${resource.label} for ${taskTitle}`}
       onClick={() => {
-        void openLaunchTarget(target);
+        void openLaunchTarget({
+          label: `Open ${resource.label}`,
+          href: resource.url,
+          mode: resource.kind === "app" ? "path" : "url",
+        });
       }}
     >
       <Icon className="h-4 w-4" />
-      {target.label}
+      Open {resource.label}
     </button>
   );
 }
