@@ -186,5 +186,5 @@ fn main() {
             updater::install_update
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Step 2 Command Center");
+        .expect("error while running TimeFolio Study Tracker");
 }

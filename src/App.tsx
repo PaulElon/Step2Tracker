@@ -650,7 +650,7 @@ export default function App() {
   }
 
   async function handleSendTestAlert() {
-    void sendNativeReminder("Step 2 Command Center", "Alerts are working.");
+    void sendNativeReminder("TimeFolio Study Tracker", "Alerts are working.");
   }
 
   async function handleEnableNotifications() {
@@ -666,7 +666,7 @@ export default function App() {
       try {
         await invoke("open_notification_settings");
       } catch {
-        window.alert("Open System Settings > Notifications and allow alerts for Step 2 Command Center.");
+        window.alert("Open System Settings > Notifications and allow alerts for TimeFolio Study Tracker.");
       }
       return;
     }
@@ -855,8 +855,8 @@ export default function App() {
                   <ShieldPlus className="h-6 w-6 text-cyan-100" />
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Step 2</p>
-                  <h1 className="mt-1 text-2xl font-semibold text-white">Command Center</h1>
+                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400">TimeFolio</p>
+                  <h1 className="mt-1 text-2xl font-semibold text-white">Study Tracker</h1>
                 </div>
               </div>
             </div>
@@ -891,7 +891,7 @@ export default function App() {
           <header className="glass-panel p-4 md:p-5">
             <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Step 2</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-400">TimeFolio</p>
                 <h2 className="mt-1 text-3xl font-semibold tracking-[-0.05em] text-white md:text-4xl">
                   {sectionMeta.title}
                 </h2>

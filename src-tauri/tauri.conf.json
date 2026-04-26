@@ -1,5 +1,5 @@
 {
-  "productName": "Step 2 Command Center",
+  "productName": "TimeFolio Study Tracker",
   "version": "0.0.0",
   "identifier": "com.paul.step2ckcommandcenter",
   "build": {
@@ -12,7 +12,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Step 2 Command Center",
+        "title": "TimeFolio Study Tracker",
         "width": 1440,
         "height": 960,
         "minWidth": 1100,
