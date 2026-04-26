@@ -67,6 +67,8 @@ interface AppStoreValue {
   setCustomCategories: (categories: string[]) => Promise<boolean>;
   setResourceLinks: (links: ResourceLink[]) => Promise<boolean>;
   setExamTimers: (timers: import("../types/models").ExamTimer[]) => Promise<boolean>;
+  setNotesHtml: (html: string) => Promise<boolean>;
+  setScoreTrendOptions: (options: import("../types/models").ScoreTrendOptions) => Promise<boolean>;
   upsertStudyBlock: (block: StudyBlockInput & { id?: string }) => Promise<boolean>;
   duplicateStudyBlock: (id: string, targetDate?: string) => Promise<boolean>;
   trashStudyBlock: (id: string) => Promise<boolean>;
@@ -279,6 +281,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       savePreferences({
         ...stateRef.current.preferences,
         examTimers: timers,
+      }),
+    setNotesHtml: (notesHtml) =>
+      savePreferences({
+        ...stateRef.current.preferences,
+        notesHtml,
+      }),
+    setScoreTrendOptions: (scoreTrendOptions) =>
+      savePreferences({
+        ...stateRef.current.preferences,
+        scoreTrendOptions,
       }),
     upsertStudyBlock: (block) => enqueueSnapshotOperation(() => upsertNativeStudyBlock(block)),
     duplicateStudyBlock: (id, targetDate) =>

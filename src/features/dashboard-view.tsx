@@ -13,10 +13,11 @@ import { useAppStore } from "../state/app-store";
 import { StudyTaskCard } from "../components/study-task-card";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { EmptyState, MetricCard, Panel } from "../components/ui";
+import { RichTextEditor } from "../components/rich-text-editor";
 
 
 export function DashboardView() {
-  const { state, upsertStudyBlock, setDailyGoalMinutes } = useAppStore();
+  const { state, upsertStudyBlock, setDailyGoalMinutes, setNotesHtml } = useAppStore();
   const [showTaskEditor, setShowTaskEditor] = useState(false);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInputValue, setGoalInputValue] = useState("");
@@ -229,6 +230,19 @@ export function DashboardView() {
             ) : (
               <EmptyState title="Quiet board" description="No plan changes flagged right now." compact />
             )}
+          </Panel>
+
+          {/* Notes — free text rich editor (Cmd+B/I/U, * → bullet, - → dash, 1. → numbered) */}
+          <Panel title="Notes">
+            <RichTextEditor
+              value={state.preferences.notesHtml}
+              onChange={(html) => {
+                void setNotesHtml(html);
+              }}
+              placeholder="Type freely. Cmd+B/I/U for bold/italic/underline. * → bullet, - → dashed, 1. → numbered."
+              minLines={6}
+              scrollable
+            />
           </Panel>
         </div>
       </div>

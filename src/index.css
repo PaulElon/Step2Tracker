@@ -396,42 +396,43 @@
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --app-bg-1: #f8fafc;
-  --app-bg-2: #f1f5f9;
-  --app-bg-3: #e2e8f0;
-  --app-glow-1: rgba(59, 130, 246, 0.10);
-  --app-glow-2: rgba(99, 102, 241, 0.07);
-  --panel-bg: rgba(255, 255, 255, 0.88);
-  --panel-border: rgba(0, 0, 0, 0.08);
-  --panel-shadow: rgba(0, 0, 0, 0.05);
-  --panel-support-bg: rgba(248, 250, 252, 0.92);
-  --panel-support-border: rgba(0, 0, 0, 0.06);
-  --panel-support-shadow: rgba(0, 0, 0, 0.03);
-  --surface-muted: rgba(241, 245, 249, 0.85);
-  --field-bg: rgba(255, 255, 255, 0.95);
-  --field-focus: rgba(59, 130, 246, 0.15);
-  --field-border-strong: rgba(59, 130, 246, 0.45);
-  --focus-ring-inner: rgba(59, 130, 246, 0.15);
-  --focus-ring-outer: rgba(59, 130, 246, 0.45);
-  --primary-start: rgba(59, 130, 246, 0.15);
-  --primary-end: rgba(99, 102, 241, 0.15);
-  --primary-border: rgba(59, 130, 246, 0.35);
-  --selection: rgba(59, 130, 246, 0.22);
-  --lane-review-start: rgba(99, 102, 241, 0.14);
-  --lane-review-end: rgba(139, 92, 246, 0.08);
-  --lane-review-border: rgba(99, 102, 241, 0.22);
-  --lane-content-start: rgba(59, 130, 246, 0.14);
-  --lane-content-end: rgba(6, 182, 212, 0.08);
-  --lane-content-border: rgba(59, 130, 246, 0.22);
-  --lane-assessment-start: rgba(245, 158, 11, 0.14);
-  --lane-assessment-end: rgba(239, 68, 68, 0.08);
-  --lane-assessment-border: rgba(245, 158, 11, 0.22);
-  --lane-recovery-start: rgba(148, 163, 184, 0.14);
-  --lane-recovery-end: rgba(203, 213, 225, 0.08);
-  --lane-recovery-border: rgba(148, 163, 184, 0.18);
-  --lane-admin-start: rgba(16, 185, 129, 0.14);
-  --lane-admin-end: rgba(59, 130, 246, 0.08);
-  --lane-admin-border: rgba(16, 185, 129, 0.22);
+  /* macOS Big Sur / Monterey "Light" palette */
+  --app-bg-1: #ffffff;
+  --app-bg-2: #f5f5f7;
+  --app-bg-3: #ececef;
+  --app-glow-1: rgba(0, 122, 255, 0.06);
+  --app-glow-2: rgba(88, 86, 214, 0.05);
+  --panel-bg: rgba(255, 255, 255, 0.94);
+  --panel-border: rgba(60, 60, 67, 0.18);
+  --panel-shadow: rgba(60, 60, 67, 0.08);
+  --panel-support-bg: rgba(245, 245, 247, 0.94);
+  --panel-support-border: rgba(60, 60, 67, 0.14);
+  --panel-support-shadow: rgba(60, 60, 67, 0.04);
+  --surface-muted: rgba(242, 242, 247, 0.92);
+  --field-bg: rgba(255, 255, 255, 0.98);
+  --field-focus: rgba(0, 122, 255, 0.18);
+  --field-border-strong: rgba(0, 122, 255, 0.55);
+  --focus-ring-inner: rgba(0, 122, 255, 0.18);
+  --focus-ring-outer: rgba(0, 122, 255, 0.45);
+  --primary-start: rgba(0, 122, 255, 0.16);
+  --primary-end: rgba(88, 86, 214, 0.16);
+  --primary-border: rgba(0, 122, 255, 0.45);
+  --selection: rgba(0, 122, 255, 0.25);
+  --lane-review-start: rgba(88, 86, 214, 0.14);
+  --lane-review-end: rgba(175, 82, 222, 0.08);
+  --lane-review-border: rgba(88, 86, 214, 0.30);
+  --lane-content-start: rgba(0, 122, 255, 0.14);
+  --lane-content-end: rgba(50, 173, 230, 0.08);
+  --lane-content-border: rgba(0, 122, 255, 0.30);
+  --lane-assessment-start: rgba(255, 149, 0, 0.16);
+  --lane-assessment-end: rgba(255, 59, 48, 0.10);
+  --lane-assessment-border: rgba(255, 149, 0, 0.32);
+  --lane-recovery-start: rgba(142, 142, 147, 0.14);
+  --lane-recovery-end: rgba(199, 199, 204, 0.08);
+  --lane-recovery-border: rgba(142, 142, 147, 0.28);
+  --lane-admin-start: rgba(52, 199, 89, 0.14);
+  --lane-admin-end: rgba(0, 122, 255, 0.08);
+  --lane-admin-border: rgba(52, 199, 89, 0.30);
 }
 
 :root[data-theme="paulblue"] {
@@ -474,9 +475,10 @@
 }
 
 :root[data-theme="teslared"] {
-  --app-bg-1: #080808;
-  --app-bg-2: #0f0f0f;
-  --app-bg-3: #161616;
+  /* Tesla brand: matte black with deep red accents */
+  --app-bg-1: #000000;
+  --app-bg-2: #0a0a0a;
+  --app-bg-3: #141414;
   --app-glow-1: rgba(227, 25, 55, 0.20);
   --app-glow-2: rgba(255, 77, 100, 0.12);
   --panel-bg: rgba(14, 14, 14, 0.72);
@@ -726,6 +728,128 @@ button {
 :root[data-theme="maggiepink"] .theme-option p,
 :root[data-theme="light"] .theme-option p {
   color: #1e293b;
+}
+
+/* ----------------------------------------------------------------- */
+/* Light-background theme overrides                                   */
+/* All Tailwind text-slate-* / text-white classes are designed for    */
+/* dark backgrounds. Override globally so text is always readable.    */
+/* ----------------------------------------------------------------- */
+
+:root[data-theme="light"] body,
+:root[data-theme="maggiepink"] body {
+  color: #1c1c1e;
+}
+
+:root[data-theme="light"] {
+  --rich-text: #1c1c1e;
+  --rich-text-muted: #4a4a4f;
+}
+
+:root[data-theme="maggiepink"] {
+  --rich-text: #2a0916;
+  --rich-text-muted: #5b2a3e;
+}
+
+/* Force readable text on light themes by overriding common slate/white classes */
+:root[data-theme="light"] .text-white,
+:root[data-theme="light"] .text-slate-100,
+:root[data-theme="light"] .text-slate-200,
+:root[data-theme="light"] .text-slate-300,
+:root[data-theme="maggiepink"] .text-white,
+:root[data-theme="maggiepink"] .text-slate-100,
+:root[data-theme="maggiepink"] .text-slate-200,
+:root[data-theme="maggiepink"] .text-slate-300 {
+  color: var(--rich-text) !important;
+}
+
+:root[data-theme="light"] .text-slate-400,
+:root[data-theme="light"] .text-slate-500,
+:root[data-theme="light"] .text-slate-600,
+:root[data-theme="maggiepink"] .text-slate-400,
+:root[data-theme="maggiepink"] .text-slate-500,
+:root[data-theme="maggiepink"] .text-slate-600 {
+  color: var(--rich-text-muted) !important;
+}
+
+:root[data-theme="light"] .placeholder\:text-slate-400::placeholder,
+:root[data-theme="light"] .placeholder\:text-slate-500::placeholder,
+:root[data-theme="maggiepink"] .placeholder\:text-slate-400::placeholder,
+:root[data-theme="maggiepink"] .placeholder\:text-slate-500::placeholder {
+  color: rgba(28, 28, 30, 0.45) !important;
+}
+
+/* Field text on light themes */
+:root[data-theme="light"] .field,
+:root[data-theme="maggiepink"] .field {
+  color: var(--rich-text);
+}
+
+/* Primary button text on light themes (gradient bg + white text was unreadable) */
+:root[data-theme="light"] .primary-button,
+:root[data-theme="maggiepink"] .primary-button,
+:root[data-theme="light"] .launch-button,
+:root[data-theme="maggiepink"] .launch-button {
+  color: var(--rich-text);
+}
+
+:root[data-theme="light"] .secondary-button,
+:root[data-theme="maggiepink"] .secondary-button {
+  color: var(--rich-text);
+}
+
+/* Selection contrast on light themes */
+:root[data-theme="light"] ::selection,
+:root[data-theme="maggiepink"] ::selection {
+  color: #ffffff;
+}
+
+/* Ensure native form controls / select option text is readable on light themes */
+:root[data-theme="light"] select,
+:root[data-theme="light"] option,
+:root[data-theme="maggiepink"] select,
+:root[data-theme="maggiepink"] option {
+  color: var(--rich-text);
+}
+
+/* Rich text editor list styling */
+.rich-text-editor ul {
+  list-style-type: disc;
+  padding-left: 1.5em;
+  margin: 0.25em 0;
+}
+.rich-text-editor ol {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+  margin: 0.25em 0;
+}
+.rich-text-editor ul[data-list="dashed"] {
+  list-style: none;
+  padding-left: 1.25em;
+}
+.rich-text-editor ul[data-list="dashed"] > li::before {
+  content: "—  ";
+  margin-left: -1.25em;
+}
+
+/* Same styling for read-only render of the rich text */
+.rich-text-render ul {
+  list-style-type: disc;
+  padding-left: 1.5em;
+  margin: 0.25em 0;
+}
+.rich-text-render ol {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+  margin: 0.25em 0;
+}
+.rich-text-render ul[data-list="dashed"] {
+  list-style: none;
+  padding-left: 1.25em;
+}
+.rich-text-render ul[data-list="dashed"] > li::before {
+  content: "—  ";
+  margin-left: -1.25em;
 }
 
 @layer utilities {

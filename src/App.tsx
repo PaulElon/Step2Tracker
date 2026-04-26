@@ -69,7 +69,7 @@ const navigationItems = [
   },
   {
     id: "errorLog" as const,
-    label: "Exam Mistakes Log",
+    label: "Exam Error Log",
     icon: AlertCircle,
   },
   {
@@ -84,7 +84,7 @@ const sectionCopy: Record<SectionId, { title: string }> = {
   planner: { title: "Planner" },
   weakTopics: { title: "Weak Topics" },
   tests: { title: "Practice Tests" },
-  errorLog: { title: "Exam Mistakes Log" },
+  errorLog: { title: "Exam Error Log" },
   settings: { title: "Settings" },
 };
 

@@ -344,6 +344,32 @@ pub struct Preferences {
     pub resource_links: Vec<ResourceLink>,
     #[serde(default)]
     pub exam_timers: Vec<ExamTimer>,
+    #[serde(default)]
+    pub notes_html: String,
+    #[serde(default = "default_score_trend_options")]
+    pub score_trend_options: ScoreTrendOptions,
+}
+
+fn default_score_trend_options() -> ScoreTrendOptions {
+    ScoreTrendOptions {
+        show_connection_line: false,
+        show_best_fit_line: true,
+        show_best_fit_r_squared: false,
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
+pub struct ScoreTrendOptions {
+    pub show_connection_line: bool,
+    pub show_best_fit_line: bool,
+    pub show_best_fit_r_squared: bool,
+}
+
+impl Default for ScoreTrendOptions {
+    fn default() -> Self {
+        default_score_trend_options()
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -499,6 +525,12 @@ pub enum ThemeId {
     Prism,
     #[serde(rename = "maggiepink")]
     MaggiePink,
+    #[serde(rename = "light")]
+    Light,
+    #[serde(rename = "paulblue")]
+    PaulBlue,
+    #[serde(rename = "teslared")]
+    TeslaRed,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -1187,6 +1219,9 @@ impl StorageService {
               enhanced_theme_ids_json TEXT NOT NULL DEFAULT '[]',
               custom_categories_json TEXT NOT NULL DEFAULT '[]',
               resource_links_json TEXT NOT NULL DEFAULT '[]',
+              exam_timers_json TEXT NOT NULL DEFAULT '[]',
+              notes_html TEXT NOT NULL DEFAULT '',
+              score_trend_options_json TEXT NOT NULL DEFAULT '{\"showConnectionLine\":false,\"showBestFitLine\":true,\"showBestFitRSquared\":false}',
               updated_at TEXT NOT NULL
             );
 
@@ -1332,6 +1367,24 @@ impl StorageService {
         if !columns.contains(&"resource_links_json".to_string()) {
             transaction.execute(
                 "ALTER TABLE preferences ADD COLUMN resource_links_json TEXT NOT NULL DEFAULT '[]'",
+                [],
+            )?;
+        }
+        if !columns.contains(&"exam_timers_json".to_string()) {
+            transaction.execute(
+                "ALTER TABLE preferences ADD COLUMN exam_timers_json TEXT NOT NULL DEFAULT '[]'",
+                [],
+            )?;
+        }
+        if !columns.contains(&"notes_html".to_string()) {
+            transaction.execute(
+                "ALTER TABLE preferences ADD COLUMN notes_html TEXT NOT NULL DEFAULT ''",
+                [],
+            )?;
+        }
+        if !columns.contains(&"score_trend_options_json".to_string()) {
+            transaction.execute(
+                "ALTER TABLE preferences ADD COLUMN score_trend_options_json TEXT NOT NULL DEFAULT '{\"showConnectionLine\":false,\"showBestFitLine\":true,\"showBestFitRSquared\":false}'",
                 [],
             )?;
         }
@@ -1762,7 +1815,10 @@ impl StorageService {
                   planner_focus_date,
                   enhanced_theme_ids_json,
                   custom_categories_json,
-                  resource_links_json
+                  resource_links_json,
+                  exam_timers_json,
+                  notes_html,
+                  score_trend_options_json
                 FROM preferences
                 WHERE id = 1
                 ",
@@ -1779,6 +1835,19 @@ impl StorageService {
                                 Box::new(error),
                             )
                         })?;
+                    let exam_timers_raw = row.get::<_, String>(16)?;
+                    let exam_timers: Vec<ExamTimer> = serde_json::from_str(&exam_timers_raw)
+                        .map_err(|error| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                exam_timers_raw.len(),
+                                Type::Text,
+                                Box::new(error),
+                            )
+                        })?;
+                    let notes_html: String = row.get(17)?;
+                    let score_trend_raw = row.get::<_, String>(18)?;
+                    let score_trend_options: ScoreTrendOptions = serde_json::from_str(&score_trend_raw)
+                        .unwrap_or_else(|_| default_score_trend_options());
                     Ok(Preferences {
                         active_section: parse_section_id(&row.get::<_, String>(0)?)?,
                         last_active_date: row.get(1)?,
@@ -1800,7 +1869,9 @@ impl StorageService {
                         enhanced_theme_ids,
                         custom_categories,
                         resource_links,
-                        exam_timers: Vec::new(),
+                        exam_timers,
+                        notes_html,
+                        score_trend_options,
                     })
                 },
             )
@@ -2084,6 +2155,8 @@ impl StorageService {
         let enhanced_theme_ids_json = serde_json::to_string(&preferences.enhanced_theme_ids)?;
         let custom_categories_json = serde_json::to_string(&preferences.custom_categories)?;
         let resource_links_json = serde_json::to_string(&preferences.resource_links)?;
+        let exam_timers_json = serde_json::to_string(&preferences.exam_timers)?;
+        let score_trend_options_json = serde_json::to_string(&preferences.score_trend_options)?;
         transaction.execute(
             "
             INSERT INTO preferences (
@@ -2092,9 +2165,9 @@ impl StorageService {
               planner_filter_from_date, planner_filter_to_date,
               planner_sort_field, planner_sort_direction, planner_mode,
               planner_focus_date, enhanced_theme_ids_json, custom_categories_json,
-              resource_links_json, updated_at
+              resource_links_json, exam_timers_json, notes_html, score_trend_options_json, updated_at
             )
-            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
             ON CONFLICT(id) DO UPDATE SET
               active_section = excluded.active_section,
               last_active_date = excluded.last_active_date,
@@ -2112,6 +2185,9 @@ impl StorageService {
               enhanced_theme_ids_json = excluded.enhanced_theme_ids_json,
               custom_categories_json = excluded.custom_categories_json,
               resource_links_json = excluded.resource_links_json,
+              exam_timers_json = excluded.exam_timers_json,
+              notes_html = excluded.notes_html,
+              score_trend_options_json = excluded.score_trend_options_json,
               updated_at = excluded.updated_at
             ",
             params![
@@ -2131,6 +2207,9 @@ impl StorageService {
                 enhanced_theme_ids_json,
                 custom_categories_json,
                 resource_links_json,
+                exam_timers_json,
+                preferences.notes_html,
+                score_trend_options_json,
                 now_iso(),
             ],
         )?;
@@ -3337,6 +3416,8 @@ fn default_preferences() -> Preferences {
         ],
         resource_links: Vec::new(),
         exam_timers: Vec::new(),
+        notes_html: String::new(),
+        score_trend_options: default_score_trend_options(),
     }
 }
 
@@ -3413,6 +3494,9 @@ fn parse_theme_id(value: &str) -> rusqlite::Result<ThemeId> {
         "signal" => Ok(ThemeId::Signal),
         "prism" => Ok(ThemeId::Prism),
         "maggiepink" => Ok(ThemeId::MaggiePink),
+        "light" => Ok(ThemeId::Light),
+        "paulblue" => Ok(ThemeId::PaulBlue),
+        "teslared" => Ok(ThemeId::TeslaRed),
         _ => Err(enum_error("ThemeId", value)),
     }
 }
@@ -3522,6 +3606,9 @@ fn serialize_theme_id(value: ThemeId) -> &'static str {
         ThemeId::Signal => "signal",
         ThemeId::Prism => "prism",
         ThemeId::MaggiePink => "maggiepink",
+        ThemeId::Light => "light",
+        ThemeId::PaulBlue => "paulblue",
+        ThemeId::TeslaRed => "teslared",
     }
 }
 

@@ -145,6 +145,12 @@ export interface ExamTimer {
   displayMode?: ExamDisplayMode;
 }
 
+export interface ScoreTrendOptions {
+  showConnectionLine: boolean;
+  showBestFitLine: boolean;
+  showBestFitRSquared: boolean;
+}
+
 export interface Preferences {
   activeSection: SectionId;
   lastActiveDate: string;
@@ -158,6 +164,8 @@ export interface Preferences {
   customCategories: string[];
   resourceLinks: ResourceLink[];
   examTimers: ExamTimer[];
+  notesHtml: string;
+  scoreTrendOptions: ScoreTrendOptions;
 }
 
 export type ErrorLogSource = "UWorld" | "TrueLearn" | "NBME" | "CMS Form" | "AMBOSS" | "COMSAE" | "Other";

@@ -405,13 +405,14 @@ function PracticeTestEditorSheet({
 }
 
 export function PracticeTestsView() {
-  const { state, trashPracticeTest, upsertPracticeTest } = useAppStore();
+  const { state, trashPracticeTest, upsertPracticeTest, setScoreTrendOptions } = useAppStore();
+  const chartOptions = state.preferences.scoreTrendOptions;
+  const showConnectionLine = chartOptions.showConnectionLine;
+  const showBestFitLine = chartOptions.showBestFitLine;
+  const showBestFitRSquared = chartOptions.showBestFitRSquared;
   const [editorTest, setEditorTest] = useState<PracticeTest | undefined>();
   const [showEditor, setShowEditor] = useState(false);
   const [showChartSettings, setShowChartSettings] = useState(false);
-  const [showConnectionLine, setShowConnectionLine] = useState(true);
-  const [showBestFitLine, setShowBestFitLine] = useState(true);
-  const [showBestFitRSquared, setShowBestFitRSquared] = useState(false);
   const [chartRanges, setChartRanges] = useState<{ xRange?: [string, string]; yRange?: [number, number] }>({});
   const settingsRef = useRef<HTMLDivElement>(null);
   const metrics = getPracticeMetrics(state.practiceTests);
@@ -494,7 +495,12 @@ export function PracticeTestsView() {
                         type="checkbox"
                         className="h-4 w-4 accent-cyan-300"
                         checked={showConnectionLine}
-                        onChange={(event) => setShowConnectionLine(event.target.checked)}
+                        onChange={(event) => {
+                          void setScoreTrendOptions({
+                            ...chartOptions,
+                            showConnectionLine: event.target.checked,
+                          });
+                        }}
                       />
                     </label>
                     <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-slate-200">
@@ -505,10 +511,11 @@ export function PracticeTestsView() {
                         checked={showBestFitLine}
                         onChange={(event) => {
                           const checked = event.target.checked;
-                          setShowBestFitLine(checked);
-                          if (!checked) {
-                            setShowBestFitRSquared(false);
-                          }
+                          void setScoreTrendOptions({
+                            ...chartOptions,
+                            showBestFitLine: checked,
+                            showBestFitRSquared: checked ? chartOptions.showBestFitRSquared : false,
+                          });
                         }}
                         disabled={!trendRegression}
                       />
@@ -519,7 +526,12 @@ export function PracticeTestsView() {
                         type="checkbox"
                         className="h-4 w-4 accent-cyan-300"
                         checked={showBestFitRSquared}
-                        onChange={(event) => setShowBestFitRSquared(event.target.checked)}
+                        onChange={(event) => {
+                          void setScoreTrendOptions({
+                            ...chartOptions,
+                            showBestFitRSquared: event.target.checked,
+                          });
+                        }}
                         disabled={!showBestFitLine || !trendRegression}
                       />
                     </label>

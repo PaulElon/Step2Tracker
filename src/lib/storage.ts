@@ -48,6 +48,9 @@ export const THEME_VALUES: ThemeId[] = [
   "signal",
   "prism",
   "maggiepink",
+  "light",
+  "paulblue",
+  "teslared",
 ];
 export const WEAK_TOPIC_PRIORITY_VALUES: WeakTopicPriority[] = ["High", "Medium", "Low"];
 export const WEAK_TOPIC_STATUS_VALUES: WeakTopicStatus[] = [
@@ -83,6 +86,12 @@ export const DEFAULT_PREFERENCES: Preferences = {
   customCategories: [...DEFAULT_STUDY_CATEGORIES],
   resourceLinks: [],
   examTimers: [],
+  notesHtml: "",
+  scoreTrendOptions: {
+    showConnectionLine: false,
+    showBestFitLine: true,
+    showBestFitRSquared: false,
+  },
 };
 
 function nowIso() {
@@ -688,9 +697,22 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
             id: typeof t?.id === "string" && t.id ? t.id : createId("exam"),
             label: sanitizeText(t?.label),
             examDate: sanitizeText(t?.examDate),
+            examTime: sanitizeText((t as { examTime?: unknown })?.examTime) || "23:59",
+            displayMode:
+              ((t as { displayMode?: unknown })?.displayMode === "weeks+days" ||
+              (t as { displayMode?: unknown })?.displayMode === "months+weeks+days")
+                ? ((t as { displayMode: "weeks+days" | "months+weeks+days" }).displayMode)
+                : ("days" as const),
           }))
           .filter((t) => t.examDate.length > 0 && t.label.length > 0)
       : [],
+    notesHtml: typeof value?.notesHtml === "string" ? value.notesHtml : "",
+    scoreTrendOptions: {
+      showConnectionLine: !!value?.scoreTrendOptions?.showConnectionLine,
+      showBestFitLine:
+        value?.scoreTrendOptions?.showBestFitLine === false ? false : true,
+      showBestFitRSquared: !!value?.scoreTrendOptions?.showBestFitRSquared,
+    },
   } satisfies Preferences;
 }
 
