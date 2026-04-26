@@ -25,7 +25,7 @@ import { PracticeTestsView } from "./features/practice-tests-view";
 import { SettingsView } from "./features/settings-view";
 import { WeakTopicsView } from "./features/weak-topics-view";
 import { getDateRange, sumStudyMinutes } from "./lib/analytics";
-import { daysBetween, formatHoursValue, formatLongDate } from "./lib/datetime";
+import { daysBetween, formatHoursValue, formatLongDate, formatSavedAt } from "./lib/datetime";
 import {
   formatReminderBody,
   getDueStudyBlockReminders,
@@ -519,10 +519,7 @@ export default function App() {
       : persistenceStatus === "error"
         ? persistenceError ?? "Local persistence issue detected."
         : lastSavedAt
-          ? new Date(lastSavedAt).toLocaleString([], {
-              dateStyle: "medium",
-              timeStyle: "short",
-            })
+          ? formatSavedAt(lastSavedAt)
           : "Local store ready.";
   const dateRangeMeta =
     dateRange.startDate && dateRange.endDate

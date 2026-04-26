@@ -122,7 +122,7 @@ export function DashboardView() {
           )}
         </Panel>
 
-        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto scrollbar-subtle">
+        <div className="flex min-h-0 flex-col gap-4">
           {/* Progress */}
           <Panel title="Progress">
             <div className="panel-subtle p-4">
@@ -233,15 +233,14 @@ export function DashboardView() {
           </Panel>
 
           {/* Notes — free text rich editor (Cmd+B/I/U, * → bullet, - → dash, 1. → numbered) */}
-          <Panel title="Notes">
+          <Panel title="Notes" className="flex flex-col flex-1 min-h-0">
             <RichTextEditor
               value={state.preferences.notesHtml}
               onChange={(html) => {
                 void setNotesHtml(html);
               }}
               placeholder="Type freely. Cmd+B/I/U for bold/italic/underline. * → bullet, - → dashed, 1. → numbered."
-              minLines={6}
-              scrollable
+              className="flex-1 min-h-0 overflow-y-auto scrollbar-subtle"
             />
           </Panel>
         </div>

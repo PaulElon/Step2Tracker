@@ -585,17 +585,17 @@ export function SettingsView({
         <ResourcesPanel resourceLinks={resourceLinks} onSetResourceLinks={onSetResourceLinks} />
       </div>
 
-      <Panel
-        title="Reminders"
-        action={
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/55 px-3 py-2 text-sm text-slate-300">
-            <Bell className="h-4 w-4 text-cyan-200" />
-            Alerts
-          </div>
-        }
-      >
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="max-w-2xl">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2.6fr)]">
+        <Panel
+          title="Reminders"
+          action={
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/55 px-3 py-2 text-sm text-slate-300">
+              <Bell className="h-4 w-4 text-cyan-200" />
+              Alerts
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-4">
             <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
               Status:{" "}
               {notificationPermission === "granted"
@@ -606,64 +606,64 @@ export function SettingsView({
                     ? "unsupported"
                   : "not enabled"}
             </p>
-          </div>
-          <button type="button" className={secondaryButtonClassName} onClick={handleReminderClick}>
-            {reminderButtonLabel}
-          </button>
-        </div>
-      </Panel>
-
-      <Panel
-        title="Storage"
-        action={
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/55 px-3 py-2 text-sm text-slate-300">
-            <Database className="h-4 w-4 text-cyan-200" />
-            Local
-          </div>
-        }
-      >
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <div className="panel-subtle">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Paths</p>
-            <p className="mt-3 text-sm text-slate-200">
-              Live data: {formatStoragePath(persistenceSummary?.storagePath)}
-            </p>
-            <p className="mt-2 text-sm text-slate-200">
-              Snapshots: {formatStoragePath(persistenceSummary?.backupDirectory)}
-            </p>
-            <p className="mt-4 text-sm text-slate-300">{persistenceCopy}</p>
-            {persistenceSummary?.recoveryMessage ? (
-              <div className="mt-4 rounded-[18px] border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-slate-200">
-                {persistenceSummary.recoveryMessage}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <button type="button" className="panel-subtle text-left transition hover:border-white/15" onClick={onImportBackup}>
-              <Upload className="h-5 w-5 text-cyan-200" />
-              <p className="mt-4 text-sm font-semibold text-white">Import backup</p>
-              <p className="mt-2 text-sm text-slate-400">Preview before restore.</p>
-            </button>
-
-            <button type="button" className="panel-subtle text-left transition hover:border-white/15" onClick={onExportBackup}>
-              <Download className="h-5 w-5 text-cyan-200" />
-              <p className="mt-4 text-sm font-semibold text-white">Export backup</p>
-              <p className="mt-2 text-sm text-slate-400">Create a portable snapshot.</p>
-            </button>
-
-            <button
-              type="button"
-              className="panel-subtle text-left transition hover:border-white/15"
-              onClick={onOpenRecoveryCenter}
-            >
-              <RotateCcw className="h-5 w-5 text-cyan-200" />
-              <p className="mt-4 text-sm font-semibold text-white">Recovery center</p>
-              <p className="mt-2 text-sm text-slate-400">Restore snapshots or trash.</p>
+            <button type="button" className={secondaryButtonClassName} onClick={handleReminderClick}>
+              {reminderButtonLabel}
             </button>
           </div>
-        </div>
-      </Panel>
+        </Panel>
+
+        <Panel
+          title="Storage"
+          action={
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/55 px-3 py-2 text-sm text-slate-300">
+              <Database className="h-4 w-4 text-cyan-200" />
+              Local
+            </div>
+          }
+        >
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <div className="panel-subtle">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Paths</p>
+              <p className="mt-3 text-sm text-slate-200">
+                Live data: {formatStoragePath(persistenceSummary?.storagePath)}
+              </p>
+              <p className="mt-2 text-sm text-slate-200">
+                Snapshots: {formatStoragePath(persistenceSummary?.backupDirectory)}
+              </p>
+              <p className="mt-4 text-sm text-slate-300">{persistenceCopy}</p>
+              {persistenceSummary?.recoveryMessage ? (
+                <div className="mt-4 rounded-[18px] border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-slate-200">
+                  {persistenceSummary.recoveryMessage}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <button type="button" className="panel-subtle text-left transition hover:border-white/15" onClick={onImportBackup}>
+                <Upload className="h-5 w-5 text-cyan-200" />
+                <p className="mt-4 text-sm font-semibold text-white">Import backup</p>
+                <p className="mt-2 text-sm text-slate-400">Preview before restore.</p>
+              </button>
+
+              <button type="button" className="panel-subtle text-left transition hover:border-white/15" onClick={onExportBackup}>
+                <Download className="h-5 w-5 text-cyan-200" />
+                <p className="mt-4 text-sm font-semibold text-white">Export backup</p>
+                <p className="mt-2 text-sm text-slate-400">Create a portable snapshot.</p>
+              </button>
+
+              <button
+                type="button"
+                className="panel-subtle text-left transition hover:border-white/15"
+                onClick={onOpenRecoveryCenter}
+              >
+                <RotateCcw className="h-5 w-5 text-cyan-200" />
+                <p className="mt-4 text-sm font-semibold text-white">Recovery center</p>
+                <p className="mt-2 text-sm text-slate-400">Restore snapshots or trash.</p>
+              </button>
+            </div>
+          </div>
+        </Panel>
+      </div>
 
     </div>
   );

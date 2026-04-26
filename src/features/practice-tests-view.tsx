@@ -1,4 +1,4 @@
-import { Plus, Settings2, Trash2 } from "lucide-react";
+import { Plus, Settings2 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { PlotRelayoutEvent } from "plotly.js";
 import { LazyPlot } from "../components/lazy-plot";
@@ -126,10 +126,12 @@ function PracticeTestEditorSheet({
   test,
   onClose,
   onSave,
+  onDelete,
 }: {
   test?: PracticeTest;
   onClose: () => void;
   onSave: (draft: PracticeTestInput & { id?: string }) => void;
+  onDelete?: () => void;
 }) {
   const [draft, setDraft] = useState(createInitialDraft(test));
   const [errors, setErrors] = useState<
@@ -392,6 +394,19 @@ function PracticeTestEditorSheet({
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-4">
+          {onDelete ? (
+            <button
+              type="button"
+              className="mr-auto rounded-[14px] border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-300 transition hover:bg-rose-500/20"
+              onClick={() => {
+                if (window.confirm(`Delete ${test ? getPracticeTestLabel(test) : "this test"}? This cannot be undone.`)) {
+                  onDelete();
+                }
+              }}
+            >
+              Delete test
+            </button>
+          ) : null}
           <button type="button" className={secondaryButtonClassName} onClick={onClose}>
             Cancel
           </button>
@@ -753,31 +768,17 @@ export function PracticeTestsView() {
                         <p className="max-w-[280px] whitespace-pre-wrap">{test.actionPlan || "—"}</p>
                       </td>
                       <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            className={secondaryButtonClassName}
-                            aria-label={`Edit practice test ${getPracticeTestLabel(test)}`}
-                            onClick={() => {
-                              setEditorTest(test);
-                              setShowEditor(true);
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className={iconButtonClassName}
-                            onClick={() => {
-                              if (window.confirm(`Move ${getPracticeTestLabel(test)} to trash?`)) {
-                                void trashPracticeTest(test.id);
-                              }
-                            }}
-                            aria-label={`Delete practice test ${getPracticeTestLabel(test)}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          className={secondaryButtonClassName}
+                          aria-label={`Edit practice test ${getPracticeTestLabel(test)}`}
+                          onClick={() => {
+                            setEditorTest(test);
+                            setShowEditor(true);
+                          }}
+                        >
+                          Edit
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -802,6 +803,14 @@ export function PracticeTestsView() {
               }
             })();
           }}
+          onDelete={
+            editorTest
+              ? () => {
+                  void trashPracticeTest(editorTest.id);
+                  setShowEditor(false);
+                }
+              : undefined
+          }
         />
       ) : null}
     </div>

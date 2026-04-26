@@ -176,6 +176,16 @@ export function formatDateTimeLabel(value: string) {
   });
 }
 
+export function formatSavedAt(isoString: string): string {
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return "";
+  const timeStr = date.toLocaleTimeString([], { timeStyle: "short" });
+  if (formatDateKey(date) === getTodayKey()) {
+    return `Today at ${timeStr}`;
+  }
+  return `${longDateFormatter.format(date)} at ${timeStr}`;
+}
+
 export function compareStudyBlocks(left: StudyBlock, right: StudyBlock) {
   if (left.date !== right.date) {
     return left.date.localeCompare(right.date);

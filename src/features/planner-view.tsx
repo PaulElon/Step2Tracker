@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowDown, ArrowUp, Bell, ChevronLeft, ChevronRight, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Bell, ChevronLeft, ChevronRight, Pencil, Plus, Search, Upload } from "lucide-react";
 import { useDeferredValue, useEffect, useId, useRef, useState, useTransition } from "react";
 import { getStudyBlockMinutes, getWeekDates } from "../lib/analytics";
 import {
@@ -299,40 +299,10 @@ export function PlannerView() {
         title="Planner"
         subtitle="Weekly and monthly calendar for scheduled tasks."
         action={
-          <div className="flex flex-wrap items-center gap-3">
-            <button type="button" className={secondaryButtonClassName} onClick={() => setShowImport(true)}>
-              <Upload className="h-4 w-4" />
-              Import legacy
-            </button>
-            <div className="inline-flex rounded-[18px] border border-white/10 bg-slate-900/55 p-1">
-              <button
-                type="button"
-                onClick={() => {
-                  void setPlannerMode("week");
-                }}
-                className={`rounded-[14px] px-3 py-2 text-sm font-medium transition ${
-                  plannerMode === "week" ? "bg-cyan-300/15 text-white" : "text-slate-400 hover:text-white"
-                }`}
-              >
-                Week
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void setPlannerMode("month");
-                }}
-                className={`rounded-[14px] px-3 py-2 text-sm font-medium transition ${
-                  plannerMode === "month" ? "bg-cyan-300/15 text-white" : "text-slate-400 hover:text-white"
-                }`}
-              >
-                Month
-              </button>
-            </div>
-            <button type="button" className={primaryButtonClassName} onClick={() => openNewTask(selectedDate)}>
-              <Plus className="h-4 w-4" />
-              Add task
-            </button>
-          </div>
+          <button type="button" className={secondaryButtonClassName} onClick={() => setShowImport(true)}>
+            <Upload className="h-4 w-4" />
+            Import legacy
+          </button>
         }
       >
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
@@ -373,12 +343,30 @@ export function PlannerView() {
           title={periodLabel}
           action={
             <div className="flex items-center gap-2">
+              <div className="inline-flex rounded-[18px] border border-white/10 bg-slate-900/55 p-1">
+                <button
+                  type="button"
+                  onClick={() => { void setPlannerMode("week"); }}
+                  className={`rounded-[14px] px-3 py-1.5 text-xs font-medium transition ${
+                    plannerMode === "week" ? "bg-cyan-300/15 text-white" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Week
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { void setPlannerMode("month"); }}
+                  className={`rounded-[14px] px-3 py-1.5 text-xs font-medium transition ${
+                    plannerMode === "month" ? "bg-cyan-300/15 text-white" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Month
+                </button>
+              </div>
               <button
                 type="button"
                 className={iconButtonClassName}
-                onClick={() => {
-                  void setPlannerFocusDate(periodPreviousDate);
-                }}
+                onClick={() => { void setPlannerFocusDate(periodPreviousDate); }}
                 aria-label={periodPreviousLabel}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -386,9 +374,7 @@ export function PlannerView() {
               <button
                 type="button"
                 className={iconButtonClassName}
-                onClick={() => {
-                  void setPlannerFocusDate(periodNextDate);
-                }}
+                onClick={() => { void setPlannerFocusDate(periodNextDate); }}
                 aria-label={periodNextLabel}
               >
                 <ChevronRight className="h-4 w-4" />
@@ -595,30 +581,18 @@ export function PlannerView() {
                             <ArrowDown className="h-4 w-4" />
                           </button>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            className={secondaryButtonClassName}
-                            onClick={() => {
-                              setEditorTask(task);
-                              setEditorSeedDate(undefined);
-                              setShowEditor(true);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className={iconButtonClassName}
-                            onClick={() => {
-                              void trashStudyBlock(task.id);
-                            }}
-                            aria-label={`Delete ${task.task}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          className={iconButtonClassName}
+                          aria-label={`Edit ${task.task}`}
+                          onClick={() => {
+                            setEditorTask(task);
+                            setEditorSeedDate(undefined);
+                            setShowEditor(true);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
                   </article>
@@ -650,6 +624,10 @@ export function PlannerView() {
           task={editorTask}
           seedDate={editorSeedDate}
           onClose={() => setShowEditor(false)}
+          onDelete={editorTask ? () => {
+            void trashStudyBlock(editorTask.id);
+            setShowEditor(false);
+          } : undefined}
           onSave={(draft) => {
             void (async () => {
               const maxOrderForDate = Math.max(

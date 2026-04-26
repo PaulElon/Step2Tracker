@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { ModalShell } from "./modal-shell";
 import { fieldClassName, primaryButtonClassName, secondaryButtonClassName } from "../lib/ui";
 import { getEmptyStudyBlockDraft, validateStudyBlockInput } from "../lib/storage";
@@ -66,6 +67,7 @@ export function StudyTaskEditorSheet({
   seedTaskName,
   seedCategory,
   onClose,
+  onDelete,
   onSave,
 }: {
   task?: StudyBlock;
@@ -73,6 +75,7 @@ export function StudyTaskEditorSheet({
   seedTaskName?: string;
   seedCategory?: StudyBlock["category"];
   onClose: () => void;
+  onDelete?: () => void;
   onSave: (draft: StudyBlockInput & { id?: string }) => void;
 }) {
   const { state } = useAppStore();
@@ -81,6 +84,7 @@ export function StudyTaskEditorSheet({
   const [errors, setErrors] = useState<Partial<Record<"date" | "task" | "duration" | "category" | "reminder", string>>>(
     {},
   );
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const id = useId();
   const dateRef = useRef<HTMLInputElement>(null);
   const taskRef = useRef<HTMLInputElement>(null);
@@ -303,13 +307,47 @@ export function StudyTaskEditorSheet({
           ) : null}
         </div>
 
-        <div className="flex items-center justify-end gap-3 pt-4">
-          <button type="button" className={secondaryButtonClassName} onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className={primaryButtonClassName}>
-            Save task
-          </button>
+        <div className="flex items-center justify-between gap-3 pt-4">
+          {onDelete ? (
+            confirmingDelete ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-rose-300">Delete this task?</span>
+                <button
+                  type="button"
+                  className="rounded-[14px] border border-rose-300/30 bg-rose-300/15 px-3 py-2 text-sm font-medium text-rose-200 transition hover:bg-rose-300/25"
+                  onClick={onDelete}
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  className={secondaryButtonClassName}
+                  onClick={() => setConfirmingDelete(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className={secondaryButtonClassName}
+                aria-label="Delete task"
+                onClick={() => setConfirmingDelete(true)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-3">
+            <button type="button" className={secondaryButtonClassName} onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className={primaryButtonClassName}>
+              Save task
+            </button>
+          </div>
         </div>
       </form>
     </ModalShell>
