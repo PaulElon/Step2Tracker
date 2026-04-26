@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Edit3, Plus } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { getWeakTopicPlannerInsights, type WeakTopicPlannerInsight } from "../lib/analytics";
 import { formatShortDate, getTodayKey } from "../lib/datetime";
 import {
@@ -130,7 +130,7 @@ function WeakTopicEditorSheet({
   const [showDropdown, setShowDropdown] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const id = useId();
-  const topicRef = { current: null as HTMLInputElement | null };
+  const topicRef = useRef<HTMLInputElement>(null);
   const titleId = `${id}-title`;
   const descriptionId = `${id}-description`;
   const topicId = `${id}-topic`;
@@ -182,15 +182,6 @@ function WeakTopicEditorSheet({
           event.preventDefault();
           const normalizedTopic = toTitleCase(topicInput.trim());
           const nextErrors = validateWeakTopicInput({ ...draft, topic: normalizedTopic });
-
-          if (!entry) {
-            const isDuplicate = existingTopics.some(
-              (t) => t.toLowerCase() === normalizedTopic.toLowerCase(),
-            );
-            if (isDuplicate) {
-              nextErrors.topic = "This topic already exists.";
-            }
-          }
 
           if (Object.keys(nextErrors).length) {
             setErrors(nextErrors);
@@ -373,7 +364,14 @@ export function WeakTopicsView() {
   const { state, trashWeakTopic, upsertWeakTopic, upsertStudyBlock } = useAppStore();
   const [editorEntry, setEditorEntry] = useState<WeakTopicEntry | undefined>();
   const [showEditor, setShowEditor] = useState(false);
-  const [taskSeed, setTaskSeed] = useState<{ taskName: string; category: string } | null>(null);
+  const [taskSeed, setTaskSeed] = useState<{ taskName: string; category: string; entryTopic: string } | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!successToast) return;
+    const timer = setTimeout(() => setSuccessToast(null), 3000);
+    return () => clearTimeout(timer);
+  }, [successToast]);
 
   const today = getTodayKey();
 
@@ -428,8 +426,8 @@ export function WeakTopicsView() {
         />
         <MetricCard
           label="Recurring Weakest Topic"
-          value={recurringInsight ? `${recurringInsight.occurrenceCount}×` : "—"}
-          meta={recurringInsight ? recurringInsight.topic : "No repeating topics yet"}
+          value={recurringInsight ? recurringInsight.topic : "—"}
+          meta={recurringInsight ? `${recurringInsight.occurrenceCount}x flagged weak` : "No repeating topics yet"}
         />
         <MetricCard
           label="Unscheduled Topics"
@@ -463,37 +461,37 @@ export function WeakTopicsView() {
         }
       >
         {insights.length ? (
-          <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">
             {WEAK_TOPIC_PRIORITY_VALUES.map((priority) => {
               const priorityInsights = insights.filter((e) => e.priority === priority);
-              if (!priorityInsights.length) return null;
               return (
-                <div key={priority}>
-                  <p className={`mb-2 text-xs font-semibold uppercase tracking-[0.18em] ${priorityHeadingStyle[priority]}`}>
-                    {priority} Priority
-                  </p>
-                  <div className="grid gap-3 md:grid-cols-3">
+                <div key={priority} className={`flex h-[260px] flex-col rounded-[16px] border ${prioritySectionStyle[priority]}`}>
+                  <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-2">
+                    <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${priorityHeadingStyle[priority]}`}>
+                      {priority} Priority
+                    </p>
+                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs text-slate-400">
+                      {priorityInsights.length}
+                    </span>
+                  </div>
+                  <div className="flex-1 space-y-1.5 overflow-y-auto p-2">
                     {priorityInsights.map((entry) => (
                       <div
                         key={entry.id}
-                        className={`rounded-[16px] border p-4 ${prioritySectionStyle[priority]}`}
+                        className="rounded-[12px] border border-white/10 bg-slate-900/50 px-2.5 py-2"
                       >
-                        <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-base font-semibold text-white">{entry.topic}</p>
+                            <p className="truncate text-sm font-semibold leading-tight text-white">{entry.topic}</p>
                             <p className="mt-0.5 text-xs text-slate-400">
                               {entry.occurrenceCount > 0 ? `${entry.occurrenceCount}× flagged weak` : "Manual entry"}
                             </p>
                           </div>
-                          <div className="flex shrink-0 items-center gap-1">
-                            <StatusArrows
-                              status={entry.status}
-                              onChangeStatus={(newStatus) => handleStatusChange(entry, newStatus)}
-                            />
+                          <div className="flex shrink-0 items-center gap-0.5">
                             <button
                               type="button"
                               className={iconButtonClassName}
-                              onClick={() => setTaskSeed({ taskName: entry.topic, category: "Review" })}
+                              onClick={() => setTaskSeed({ taskName: entry.topic, category: "Review", entryTopic: entry.topic })}
                               aria-label={`Add task for ${entry.topic}`}
                               title="Add to tasks"
                             >
@@ -513,11 +511,16 @@ export function WeakTopicsView() {
                             </button>
                           </div>
                         </div>
-                        <p className="mt-2 text-sm leading-6 text-slate-200">
+                        <p className="mt-1 text-xs text-slate-300">
                           Scheduled review: {entry.linkedBlockCount}
                         </p>
                       </div>
                     ))}
+                    {priorityInsights.length === 0 && (
+                      <div className="flex h-full items-center justify-center text-xs text-slate-500">
+                        No {priority.toLowerCase()} priority topics
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -566,7 +569,7 @@ export function WeakTopicsView() {
                       <button
                         type="button"
                         className={iconButtonClassName}
-                        onClick={() => setTaskSeed({ taskName: entry.topic, category: "Review" })}
+                        onClick={() => setTaskSeed({ taskName: entry.topic, category: "Review", entryTopic: entry.topic })}
                         aria-label={`Add task for ${entry.topic}`}
                         title="Add task"
                       >
@@ -611,6 +614,7 @@ export function WeakTopicsView() {
           seedCategory={taskSeed.category}
           onClose={() => setTaskSeed(null)}
           onSave={(draft) => {
+            const topicName = taskSeed?.entryTopic ?? taskSeed?.taskName ?? "";
             void (async () => {
               const maxOrderForDate = Math.max(
                 -1,
@@ -624,11 +628,18 @@ export function WeakTopicsView() {
               } satisfies StudyBlockInput & { id?: string });
               if (saved) {
                 setTaskSeed(null);
+                setSuccessToast(`${topicName} was successfully added as a Task`);
               }
             })();
           }}
         />
       ) : null}
+
+      {successToast && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-[14px] border border-white/10 bg-slate-800 px-4 py-3 text-sm text-white shadow-xl">
+          {successToast}
+        </div>
+      )}
 
       {showEditor ? (
         <WeakTopicEditorSheet
@@ -641,7 +652,16 @@ export function WeakTopicsView() {
           }}
           onSave={(draft) => {
             void (async () => {
-              const saved = await upsertWeakTopic(draft);
+              let saveDraft = draft;
+              if (!draft.id) {
+                const existingEntry = state.weakTopicEntries.find(
+                  (e) => e.topic.toLowerCase() === draft.topic.toLowerCase(),
+                );
+                if (existingEntry) {
+                  saveDraft = { ...draft, id: existingEntry.id };
+                }
+              }
+              const saved = await upsertWeakTopic(saveDraft);
               if (saved) {
                 setShowEditor(false);
               }

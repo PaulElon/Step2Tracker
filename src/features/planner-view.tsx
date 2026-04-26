@@ -294,8 +294,9 @@ export function PlannerView() {
   const periodNextDate = plannerMode === "week" ? addDays(weekStart, 7) : addMonths(selectedDate, 1);
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full flex-col gap-4">
       <Panel
+        className="shrink-0"
         title="Planner"
         subtitle="Weekly and monthly calendar for scheduled tasks."
         action={
@@ -338,8 +339,9 @@ export function PlannerView() {
         </div>
       </Panel>
 
-      <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[340px_minmax(0,1fr)] xl:items-stretch">
         <Panel
+          className="flex flex-col xl:h-full"
           title={periodLabel}
           action={
             <div className="flex items-center gap-2">
@@ -382,6 +384,8 @@ export function PlannerView() {
             </div>
           }
         >
+          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle">
           {plannerMode === "week" ? (
             <div className="space-y-2">
               {periodDates.map((date) => {
@@ -488,9 +492,12 @@ export function PlannerView() {
             </div>
           )}
 
+          </div>
+          </div>
+
           <button
             type="button"
-            className={`${secondaryButtonClassName} mt-4 w-full justify-center`}
+            className={`${secondaryButtonClassName} mt-4 w-full justify-center shrink-0`}
             onClick={() => {
               void setPlannerFocusDate(getTodayKey());
             }}
@@ -500,6 +507,7 @@ export function PlannerView() {
         </Panel>
 
         <Panel
+          className="flex flex-col xl:h-full"
           title={formatLongDate(selectedDate)}
           subtitle={`${allSelectedDateTasks.length} tasks · ${completedCount} done · ${formatMinutes(plannedMinutes)}`}
           action={
@@ -509,6 +517,7 @@ export function PlannerView() {
             </button>
           }
         >
+          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle">
           {selectedDateTasks.length ? (
             <div className="space-y-3">
               {selectedDateTasks.map((task) => {
@@ -615,6 +624,7 @@ export function PlannerView() {
               }
             />
           )}
+          </div>
         </Panel>
       </div>
 
