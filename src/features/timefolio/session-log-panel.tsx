@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTimeFolioStore } from "../../state/tf-store";
 import { formatLongDate } from "../../lib/datetime";
 import { fieldClassName, primaryButtonClassName, secondaryButtonClassName } from "../../lib/ui";
@@ -42,6 +42,184 @@ function sessionToForm(s: TfSessionLog): FormState {
     notes: s.notes,
     isDistraction: s.isDistraction,
   };
+}
+
+function formatElapsed(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+function localDateStr(isoStr: string): string {
+  const d = new Date(isoStr);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+type TimerStatus = "idle" | "running" | "paused";
+
+interface ManualTimerProps {
+  onSave: (session: TfSessionLog) => Promise<void>;
+  onDismiss: () => void;
+}
+
+function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
+  const [status, setStatus] = useState<TimerStatus>("idle");
+  const [method, setMethod] = useState("");
+  const [notes, setNotes] = useState("");
+  const [isDistraction, setIsDistraction] = useState(false);
+  const [displayMs, setDisplayMs] = useState(0);
+
+  const startISORef = useRef<string>("");
+  const lastResumeRef = useRef<number>(0);
+  const accumulatedRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (status !== "running") return;
+    const id = setInterval(() => {
+      setDisplayMs(accumulatedRef.current + (Date.now() - lastResumeRef.current));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [status]);
+
+  function reset() {
+    setStatus("idle");
+    setMethod("");
+    setNotes("");
+    setIsDistraction(false);
+    setDisplayMs(0);
+    accumulatedRef.current = 0;
+  }
+
+  function handleStart() {
+    if (!method.trim()) return;
+    const now = Date.now();
+    startISORef.current = new Date(now).toISOString();
+    lastResumeRef.current = now;
+    accumulatedRef.current = 0;
+    setDisplayMs(0);
+    setStatus("running");
+  }
+
+  function handlePause() {
+    accumulatedRef.current += Date.now() - lastResumeRef.current;
+    setDisplayMs(accumulatedRef.current);
+    setStatus("paused");
+  }
+
+  function handleResume() {
+    lastResumeRef.current = Date.now();
+    setStatus("running");
+  }
+
+  async function handleStopAndSave() {
+    const endMs = Date.now();
+    const totalMs =
+      accumulatedRef.current + (status === "running" ? endMs - lastResumeRef.current : 0);
+    const hours = Math.round((totalMs / 3600000) * 100) / 100;
+    const session: TfSessionLog = {
+      id: `tf-session-${endMs}`,
+      date: localDateStr(startISORef.current),
+      method: method.trim(),
+      methodKey: toMethodKey(method),
+      hours,
+      startISO: startISORef.current,
+      endISO: new Date(endMs).toISOString(),
+      notes: notes.trim(),
+      isDistraction,
+      isLive: false,
+    };
+    await onSave(session);
+    reset();
+    onDismiss();
+  }
+
+  return (
+    <div className="rounded-lg border border-indigo-700 bg-slate-800/80 p-4 flex flex-col gap-3">
+      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+        Manual timer
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-slate-400">Method *</label>
+        <input
+          className={fieldClassName}
+          type="text"
+          value={method}
+          onChange={(e) => setMethod(e.target.value)}
+          placeholder="e.g. Active Recall"
+          disabled={status !== "idle"}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-slate-400">Notes</label>
+        <input
+          className={fieldClassName}
+          type="text"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Optional notes…"
+        />
+      </div>
+
+      <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-300">
+        <input
+          type="checkbox"
+          checked={isDistraction}
+          onChange={(e) => setIsDistraction(e.target.checked)}
+          className="accent-red-400"
+        />
+        Mark as distraction
+      </label>
+
+      {status !== "idle" && (
+        <div className="text-2xl font-mono text-center py-1 text-slate-100">
+          {formatElapsed(displayMs)}
+          {status === "paused" && (
+            <span className="text-xs text-slate-400 ml-3">paused</span>
+          )}
+        </div>
+      )}
+
+      <div className="flex gap-2 flex-wrap pt-1">
+        {status === "idle" && (
+          <button
+            type="button"
+            className={primaryButtonClassName}
+            onClick={handleStart}
+            disabled={!method.trim()}
+          >
+            Start
+          </button>
+        )}
+        {status === "running" && (
+          <button type="button" className={secondaryButtonClassName} onClick={handlePause}>
+            Pause
+          </button>
+        )}
+        {status === "paused" && (
+          <button type="button" className={primaryButtonClassName} onClick={handleResume}>
+            Resume
+          </button>
+        )}
+        {status !== "idle" && (
+          <button type="button" className={primaryButtonClassName} onClick={handleStopAndSave}>
+            Stop &amp; Save
+          </button>
+        )}
+        <button
+          type="button"
+          className={secondaryButtonClassName}
+          onClick={() => { reset(); onDismiss(); }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
 }
 
 interface SessionFormProps {
@@ -148,6 +326,7 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
 export function SessionLogPanel() {
   const { state, isLoading, error, upsertSessionLog, deleteSessionLog } = useTimeFolioStore();
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showTimer, setShowTimer] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   if (isLoading) {
@@ -179,12 +358,22 @@ export function SessionLogPanel() {
 
   return (
     <div className="p-4 flex flex-col gap-3">
-      {!showAddForm && (
-        <div className="flex justify-end">
+      {!showAddForm && !showTimer && (
+        <div className="flex justify-end gap-2">
+          <button className={secondaryButtonClassName} onClick={() => setShowTimer(true)}>
+            Start timer
+          </button>
           <button className={primaryButtonClassName} onClick={() => setShowAddForm(true)}>
             + Add session
           </button>
         </div>
+      )}
+
+      {showTimer && (
+        <ManualTimer
+          onSave={async (session) => { await upsertSessionLog(session); }}
+          onDismiss={() => setShowTimer(false)}
+        />
       )}
 
       {showAddForm && (
