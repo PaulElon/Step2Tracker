@@ -286,3 +286,58 @@ export interface PersistenceSnapshot {
   backups: BackupMetadata[];
   trash: TrashItem[];
 }
+
+export interface TfSessionLog {
+  id: string;
+  date: string;
+  method: string;
+  methodKey: string;
+  hours: number;
+  startISO: string;
+  endISO: string;
+  notes: string;
+  isDistraction: boolean;
+  isLive: boolean;
+}
+
+export interface TfSummaryPayload {
+  id: string;
+  kind: "daily" | "weekly" | "monthly";
+  label: string;
+  generatedAtISO: string;
+  voice: string;
+  text: string;
+  caption: string;
+  metrics: {
+    streak: number;
+    studyHours: number;
+    focusRate: number;
+    topMethod: string;
+  };
+}
+
+export interface TfTrackerPrefs {
+  customAutoApps: string[];
+  customAutoWebsites: string[];
+  customDistractionApps: string[];
+  customDistractionWebsites: string[];
+}
+
+export interface TfAccountState {
+  userId: string | null;
+  email: string | null;
+  username: string | null;
+  emailVerified: boolean;
+  syncId: string | null;
+  planTier: "free" | "pro";
+  themeUnlocks: string[];
+  billingCustomerId: string | null;
+}
+
+export interface TfAppState {
+  tfVersion: number;
+  sessionLogs: TfSessionLog[];
+  summaries: TfSummaryPayload[];
+  trackerPrefs: TfTrackerPrefs;
+  account: TfAccountState | null;
+}
