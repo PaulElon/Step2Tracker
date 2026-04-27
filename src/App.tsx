@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  Briefcase,
   CalendarDays,
   ClipboardCheck,
   Database,
@@ -19,6 +20,7 @@ import { listen } from "@tauri-apps/api/event";
 import { ModalShell } from "./components/modal-shell";
 import { MobileNav, NavigationButton } from "./components/ui";
 import { DashboardView } from "./features/dashboard-view";
+import { TimeFolioView } from "./features/timefolio-view";
 import { ErrorLogView } from "./features/error-log-view";
 import { PlannerView } from "./features/planner-view";
 import { PracticeTestsView } from "./features/practice-tests-view";
@@ -34,6 +36,7 @@ import {
   sendNativeReminder,
   sendReminderNotification,
 } from "./lib/reminders";
+import { FF } from "./lib/feature-flags";
 import { primaryButtonClassName, secondaryButtonClassName } from "./lib/ui";
 import { useAppStore } from "./state/app-store";
 import type {
@@ -77,6 +80,9 @@ const navigationItems = [
     label: "Settings",
     icon: Settings2,
   },
+  ...(FF.timefolio
+    ? [{ id: "timefolio" as const, label: "TimeFolio", icon: Briefcase }]
+    : []),
 ];
 
 const sectionCopy: Record<SectionId, { title: string }> = {
@@ -813,7 +819,7 @@ export default function App() {
       );
       break;
     case "timefolio":
-      sectionContent = <div className="p-8 text-slate-400">TimeFolio — coming soon</div>;
+      sectionContent = <TimeFolioView />;
       break;
     default:
       sectionContent = null;
