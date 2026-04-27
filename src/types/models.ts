@@ -100,6 +100,8 @@ export interface WeakTopicEntry {
   notes: string;
   lastSeenAt: string;
   sourceLabel: string;
+  /** Number of times the user has manually re-flagged this same topic after the initial add. */
+  manualOccurrenceCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -113,6 +115,8 @@ export interface WeakTopicInput {
   notes: string;
   lastSeenAt: string;
   sourceLabel: string;
+  /** Carries the incremented count from the UI so storage can persist it. */
+  manualOccurrenceCount?: number;
 }
 
 export interface PlannerFilters {

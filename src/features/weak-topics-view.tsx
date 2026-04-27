@@ -701,7 +701,13 @@ export function WeakTopicsView() {
                   (e) => e.topic.toLowerCase() === draft.topic.toLowerCase(),
                 );
                 if (existingEntry) {
-                  saveDraft = { ...draft, id: existingEntry.id };
+                  // Duplicate manual add: reuse the existing entry's ID and increment
+                  // manualOccurrenceCount so [n]x flagged weak reflects repeated manual flags.
+                  saveDraft = {
+                    ...draft,
+                    id: existingEntry.id,
+                    manualOccurrenceCount: (existingEntry.manualOccurrenceCount ?? 0) + 1,
+                  };
                 }
               }
               const saved = await upsertWeakTopic(saveDraft);

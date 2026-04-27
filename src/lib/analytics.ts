@@ -318,7 +318,7 @@ export function getRemediationLinks(tests: PracticeTest[], blocks: StudyBlock[])
     .sort((left, right) => right.date.localeCompare(left.date))
     .map((test) => {
       const weakTopics = [...new Set(test.weakTopics.map((topic) => topic.trim()).filter(Boolean))];
-      const futureBlocks = blocks.filter((block) => block.date > test.date && !block.completed);
+      const futureBlocks = blocks.filter((block) => block.date >= test.date && !block.completed);
       const linkedBlocks = futureBlocks.filter((block) =>
         weakTopics.some((topic) => blockMatchesTopic(block, topic)),
       );
@@ -554,22 +554,24 @@ export function getWeakTopicPlannerInsights(
     notes: string;
     lastSeenAt: string;
     sourceLabel: string;
+    manualOccurrenceCount?: number;
   }>,
   tests: PracticeTest[],
   blocks: StudyBlock[],
 ) {
   return entries.map((entry) => {
-    const occurrenceCount = tests.reduce(
+    const practiceTestOccurrenceCount = tests.reduce(
       (total, test) =>
         total +
         test.weakTopics.filter((topic) => normalizeTopic(topic) === normalizeTopic(entry.topic)).length,
       0,
     );
+    const occurrenceCount = practiceTestOccurrenceCount + (entry.manualOccurrenceCount ?? 0);
     const linkedBlocks = blocks
       .filter(
         (block) =>
           !block.completed &&
-          block.date > entry.lastSeenAt &&
+          block.date >= entry.lastSeenAt &&
           blockMatchesTopic(block, entry.topic),
       )
       .sort(compareStudyBlocks);

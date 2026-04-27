@@ -442,6 +442,7 @@ export function normalizeWeakTopicEntry(
     notes: sanitizeText(input.notes),
     lastSeenAt: sanitizeText(input.lastSeenAt) || getTodayKey(),
     sourceLabel: sanitizeText(input.sourceLabel) || fallbackSourceLabel,
+    manualOccurrenceCount: Math.max(0, Math.trunc(sanitizeNumber(input.manualOccurrenceCount, 0))),
     createdAt: sanitizeText(input.createdAt) || timestamp,
     updatedAt: timestamp,
   } satisfies WeakTopicEntry;
