@@ -1,6 +1,6 @@
 export type StudyStatus = "Not Started" | "In Progress" | "Completed" | "Skipped";
 export type StudyStatusFilter = StudyStatus | "All";
-export type SectionId = "dashboard" | "planner" | "weakTopics" | "tests" | "settings" | "errorLog";
+export type SectionId = "dashboard" | "planner" | "weakTopics" | "tests" | "settings" | "errorLog" | "timefolio";
 export type PlannerSortField = "date" | "order" | "category" | "task";
 export type SortDirection = "asc" | "desc";
 export type ImportMode = "merge" | "replace";

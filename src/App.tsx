@@ -86,6 +86,7 @@ const sectionCopy: Record<SectionId, { title: string }> = {
   tests: { title: "Practice Tests" },
   errorLog: { title: "Exam Error Log" },
   settings: { title: "Settings" },
+  timefolio: { title: "TimeFolio" },
 };
 
 function formatCountsLine(counts: BackupMetadata["counts"]) {
@@ -810,6 +811,9 @@ export default function App() {
           }}
         />
       );
+      break;
+    case "timefolio":
+      sectionContent = <div className="p-8 text-slate-400">TimeFolio — coming soon</div>;
       break;
     default:
       sectionContent = null;
