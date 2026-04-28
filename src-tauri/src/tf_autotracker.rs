@@ -9,6 +9,7 @@ use serde_json::Value;
 const AUTOTRACKER_HOST: &str = "127.0.0.1";
 const AUTOTRACKER_PORT: u16 = 46461;
 const AUTOTRACKER_PATH: &str = "/v1/bootstrap";
+const AUTOTRACKER_ORIGIN: &str = "https://app.timefol.io";
 const AUTOTRACKER_TIMEOUT_MS: u64 = 800;
 
 #[derive(Debug, Clone, Serialize)]
@@ -155,7 +156,7 @@ fn probe_bootstrap_payload() -> Result<Value, String> {
         .map_err(|error| format!("Unable to set Auto-Tracker write timeout: {error}"))?;
 
     let request = format!(
-        "GET {AUTOTRACKER_PATH} HTTP/1.1\r\nHost: {AUTOTRACKER_HOST}:{AUTOTRACKER_PORT}\r\nConnection: close\r\nAccept: application/json\r\n\r\n"
+        "GET {AUTOTRACKER_PATH} HTTP/1.1\r\nHost: {AUTOTRACKER_HOST}:{AUTOTRACKER_PORT}\r\nOrigin: {AUTOTRACKER_ORIGIN}\r\nConnection: close\r\nAccept: application/json\r\n\r\n"
     );
     stream
         .write_all(request.as_bytes())
