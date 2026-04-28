@@ -45,6 +45,15 @@ function cloneTrackerPrefs(prefs: TfTrackerPrefs): TfTrackerPrefs {
   };
 }
 
+function getEmptyTrackerPrefs(): TfTrackerPrefs {
+  return {
+    customAutoApps: [],
+    customAutoWebsites: [],
+    customDistractionApps: [],
+    customDistractionWebsites: [],
+  };
+}
+
 function sanitizeItems(items: string[]): string[] {
   return items.map((item) => item.trim()).filter((item) => item.length > 0);
 }
@@ -286,6 +295,7 @@ export function TrackerSettingsPanel() {
   const [savingKey, setSavingKey] = useState<TrackerListKey | null>(null);
   const [dataMessage, setDataMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [isDataBusy, setIsDataBusy] = useState(false);
+  const [isConfirmingReset, setIsConfirmingReset] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const pendingDataActionRef = useRef<{ kind: "import" | "reset"; previousState: TfAppState } | null>(null);
 
@@ -398,27 +408,38 @@ export function TrackerSettingsPanel() {
     }
   }
 
-  async function handleResetData() {
-    const confirmed = window.confirm(
-      "Reset all TimeFolio tracker data on this device? This clears only the TimeFolio store.",
-    );
-    if (!confirmed) {
+  function handleResetData() {
+    setDataMessage(null);
+    setIsConfirmingReset(true);
+  }
+
+  function handleCancelResetData() {
+    if (isDataBusy) {
       return;
     }
 
+    setIsConfirmingReset(false);
+  }
+
+  async function handleConfirmResetData() {
     setDataMessage(null);
     setIsDataBusy(true);
     pendingDataActionRef.current = { kind: "reset", previousState: state };
 
     try {
       await reset();
+      setDraftPrefs(getEmptyTrackerPrefs());
+      setDataMessage({ tone: "success", text: "TimeFolio data reset." });
+      pendingDataActionRef.current = null;
     } catch (err) {
       pendingDataActionRef.current = null;
-      setIsDataBusy(false);
       setDataMessage({
         tone: "error",
         text: err instanceof Error && err.message ? err.message : "Unable to reset TimeFolio data.",
       });
+    } finally {
+      setIsDataBusy(false);
+      setIsConfirmingReset(false);
     }
   }
 
@@ -527,6 +548,29 @@ export function TrackerSettingsPanel() {
             >
               Reset TimeFolio Data
             </button>
+            {isConfirmingReset ? (
+              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-100">
+                <p className="font-medium">This clears only TimeFolio data. Study Tracker data is untouched.</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleConfirmResetData}
+                    disabled={isDataBusy}
+                    className="rounded-lg border border-rose-400/40 bg-rose-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Confirm reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelResetData}
+                    disabled={isDataBusy}
+                    className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>

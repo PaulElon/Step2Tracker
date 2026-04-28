@@ -213,12 +213,23 @@ export async function saveTfState(state: TfAppState): Promise<TfAppState> {
 }
 
 export async function resetTfState(): Promise<TfAppState> {
+  const empty = getEmptyTfAppState();
+
   if (isNativeTauriRuntime()) {
     try {
       const nativeState = await resetNativeTfState();
-      return normalizeTfAppState(nativeState);
+      const normalized = normalizeTfAppState(nativeState);
+      saveTfStateToLocalStorage(normalized);
+      return normalized;
     } catch {
-      return resetTfStateToLocalStorage();
+      try {
+        const savedEmpty = await saveNativeTfState(empty);
+        const normalized = normalizeTfAppState(savedEmpty);
+        saveTfStateToLocalStorage(normalized);
+        return normalized;
+      } catch {
+        return resetTfStateToLocalStorage();
+      }
     }
   }
 
