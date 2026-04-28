@@ -5,14 +5,6 @@ import { themeList } from "../lib/themes";
 import { fieldClassName, secondaryButtonClassName } from "../lib/ui";
 import type { BackupArtifactPreview, PersistenceSummary, ResourceLink, ThemeId } from "../types/models";
 
-function formatStoragePath(path?: string | null) {
-  if (!path) {
-    return "the app data folder";
-  }
-
-  return path.replace(/^\/Users\/[^/]+/, "~");
-}
-
 function generateId(prefix: string) {
   return globalThis.crypto?.randomUUID?.() ?? `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -457,7 +449,7 @@ export function SettingsView({
   dailyGoalMinutes,
   notificationPermission,
   persistenceCopy,
-  persistenceSummary,
+  persistenceSummary: _persistenceSummary,
   enhancedThemeIds,
   customCategories,
   resourceLinks,
@@ -747,23 +739,7 @@ export function SettingsView({
             </div>
           }
         >
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-            <div className="panel-subtle">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Paths</p>
-              <p className="mt-3 text-sm text-slate-200">
-                Live data: {formatStoragePath(persistenceSummary?.storagePath)}
-              </p>
-              <p className="mt-2 text-sm text-slate-200">
-                Snapshots: {formatStoragePath(persistenceSummary?.backupDirectory)}
-              </p>
-              <p className="mt-4 text-sm text-slate-300">{persistenceCopy}</p>
-              {persistenceSummary?.recoveryMessage ? (
-                <div className="mt-4 rounded-[18px] border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-slate-200">
-                  {persistenceSummary.recoveryMessage}
-                </div>
-              ) : null}
-            </div>
-
+          <div className="grid gap-4">
             <div className="flex flex-col gap-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <StorageStatCard
@@ -883,9 +859,7 @@ export function SettingsView({
                 </div>
               </div>
 
-              <p className="text-xs text-slate-500">
-                Study Tracker storage here is separate from TimeFolio storage in Tracker Settings.
-              </p>
+              <p className="text-xs text-slate-500">{persistenceCopy}</p>
             </div>
           </div>
         </Panel>
