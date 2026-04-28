@@ -5,6 +5,11 @@ import type {
   TfTrackerPrefs,
   TfAccountState,
 } from "../types/models";
+import {
+  loadNativeTfState,
+  saveNativeTfState,
+  resetNativeTfState,
+} from "./native-persistence";
 
 export const TF_STATE_VERSION = 1;
 export const TF_STORAGE_KEY = "timefolio-tracker:state";
@@ -153,7 +158,12 @@ export function normalizeTfAppState(input: unknown): TfAppState {
 // Browser / localStorage persistence
 // ---------------------------------------------------------------------------
 
-export async function loadTfState(): Promise<TfAppState> {
+function isNativeTauriRuntime(): boolean {
+  if (typeof window === "undefined") return false;
+  return typeof (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== "undefined";
+}
+
+function loadTfStateFromLocalStorage(): TfAppState {
   try {
     const raw = window.localStorage.getItem(TF_STORAGE_KEY);
     if (!raw) return getEmptyTfAppState();
@@ -164,16 +174,55 @@ export async function loadTfState(): Promise<TfAppState> {
   }
 }
 
-export async function saveTfState(state: TfAppState): Promise<TfAppState> {
+function saveTfStateToLocalStorage(state: TfAppState): TfAppState {
   const normalized = normalizeTfAppState(state);
   window.localStorage.setItem(TF_STORAGE_KEY, JSON.stringify(normalized));
   return normalized;
 }
 
-export async function resetTfState(): Promise<TfAppState> {
+function resetTfStateToLocalStorage(): TfAppState {
   const empty = getEmptyTfAppState();
   window.localStorage.setItem(TF_STORAGE_KEY, JSON.stringify(empty));
   return empty;
+}
+
+export async function loadTfState(): Promise<TfAppState> {
+  if (isNativeTauriRuntime()) {
+    try {
+      const nativeState = await loadNativeTfState();
+      return normalizeTfAppState(nativeState);
+    } catch {
+      return loadTfStateFromLocalStorage();
+    }
+  }
+
+  return loadTfStateFromLocalStorage();
+}
+
+export async function saveTfState(state: TfAppState): Promise<TfAppState> {
+  if (isNativeTauriRuntime()) {
+    try {
+      const nativeState = await saveNativeTfState(state);
+      return normalizeTfAppState(nativeState);
+    } catch {
+      return saveTfStateToLocalStorage(state);
+    }
+  }
+
+  return saveTfStateToLocalStorage(state);
+}
+
+export async function resetTfState(): Promise<TfAppState> {
+  if (isNativeTauriRuntime()) {
+    try {
+      const nativeState = await resetNativeTfState();
+      return normalizeTfAppState(nativeState);
+    } catch {
+      return resetTfStateToLocalStorage();
+    }
+  }
+
+  return resetTfStateToLocalStorage();
 }
 
 // ---------------------------------------------------------------------------

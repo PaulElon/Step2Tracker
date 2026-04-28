@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod persistence;
+mod tf_persistence;
 mod updater;
 
 use std::process::Command;
@@ -182,6 +183,9 @@ fn main() {
             migrate_legacy_browser_state,
             upsert_error_log_entry,
             trash_error_log_entry,
+            tf_persistence::tf_load_state,
+            tf_persistence::tf_save_state,
+            tf_persistence::tf_reset_state,
             open_notification_settings,
             updater::install_update
         ])
