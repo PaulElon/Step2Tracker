@@ -17,6 +17,28 @@ function command<T>(name: string, args?: Record<string, unknown>) {
   return core.invoke<T>(name, args);
 }
 
+export type NativeAutoTrackerBootstrapProbe = {
+  detected: boolean;
+  installed: boolean;
+  paired: boolean;
+  platform: string | null;
+  streamPort: number | null;
+  basePath: string | null;
+  appVersion: string | null;
+  deviceId: string | null;
+  pendingUserCode: string | null;
+  pendingVerificationUrl: string | null;
+  pendingTransferDeviceId: string | null;
+  pendingReplaceDeviceId: string | null;
+  lastPairingError: string | null;
+  accessibility: string | null;
+  browserAutomation: string | null;
+  closedSpanCount: number;
+  hasOpenSpan: boolean;
+  lastCheckedISO: string;
+  error: string | null;
+};
+
 export function loadNativeSnapshot() {
   return command<PersistenceSnapshot>("load_state");
 }
@@ -108,4 +130,8 @@ export function saveNativeTfState(state: TfAppState): Promise<TfAppState> {
 
 export function resetNativeTfState(): Promise<TfAppState> {
   return command<TfAppState>("tf_reset_state");
+}
+
+export function probeNativeAutoTrackerBootstrap(): Promise<NativeAutoTrackerBootstrapProbe> {
+  return command<NativeAutoTrackerBootstrapProbe>("tf_autotracker_probe_bootstrap");
 }

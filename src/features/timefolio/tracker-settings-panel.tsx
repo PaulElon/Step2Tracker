@@ -1,4 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import {
+  probeNativeAutoTrackerBootstrap,
+  type NativeAutoTrackerBootstrapProbe,
+} from "../../lib/native-persistence";
 import { useTimeFolioStore } from "../../state/tf-store";
 import type { TfAppState, TfTrackerPrefs } from "../../types/models";
 
@@ -99,6 +103,30 @@ function formatBackupDate(date = new Date()): string {
 
 function getBackupFileName(date = new Date()): string {
   return `timefolio-tracker-backup-${formatBackupDate(date)}.json`;
+}
+
+function formatStatusValue(value: string | number | boolean | null | undefined): string {
+  if (value === null || value === undefined || value === "") {
+    return "Unknown";
+  }
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+  return String(value);
+}
+
+function formatLastChecked(value: string | null | undefined): string {
+  if (!value) {
+    return "Not checked yet";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsed);
 }
 
 function DataStatCard({
@@ -296,12 +324,18 @@ export function TrackerSettingsPanel() {
   const [dataMessage, setDataMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [isDataBusy, setIsDataBusy] = useState(false);
   const [isConfirmingReset, setIsConfirmingReset] = useState(false);
+  const [autoTrackerStatus, setAutoTrackerStatus] = useState<NativeAutoTrackerBootstrapProbe | null>(null);
+  const [isAutoTrackerRefreshing, setIsAutoTrackerRefreshing] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const pendingDataActionRef = useRef<{ kind: "import" | "reset"; previousState: TfAppState } | null>(null);
 
   useEffect(() => {
     setDraftPrefs(cloneTrackerPrefs(state.trackerPrefs));
   }, [state.trackerPrefs]);
+
+  useEffect(() => {
+    void handleRefreshAutoTrackerStatus();
+  }, []);
 
   useLayoutEffect(() => {
     const pending = pendingDataActionRef.current;
@@ -443,6 +477,38 @@ export function TrackerSettingsPanel() {
     }
   }
 
+  async function handleRefreshAutoTrackerStatus() {
+    setIsAutoTrackerRefreshing(true);
+    try {
+      const status = await probeNativeAutoTrackerBootstrap();
+      setAutoTrackerStatus(status);
+    } catch (err) {
+      setAutoTrackerStatus({
+        detected: false,
+        installed: false,
+        paired: false,
+        platform: null,
+        streamPort: null,
+        basePath: null,
+        appVersion: null,
+        deviceId: null,
+        pendingUserCode: null,
+        pendingVerificationUrl: null,
+        pendingTransferDeviceId: null,
+        pendingReplaceDeviceId: null,
+        lastPairingError: null,
+        accessibility: null,
+        browserAutomation: null,
+        closedSpanCount: 0,
+        hasOpenSpan: false,
+        lastCheckedISO: new Date().toISOString(),
+        error: err instanceof Error && err.message ? err.message : "Unable to probe Auto-Tracker status.",
+      });
+    } finally {
+      setIsAutoTrackerRefreshing(false);
+    }
+  }
+
   const accountSummary = getAccountSummary(state.account);
   const trackerRuleCount = countTrackerRules(state.trackerPrefs);
   const sessionCount = state.sessionLogs.length;
@@ -572,6 +638,116 @@ export function TrackerSettingsPanel() {
               </div>
             ) : null}
           </div>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-5 rounded-2xl border border-slate-700 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-col gap-2">
+            <div className="inline-flex w-fit rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-teal-300">
+              Read-only
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-slate-100">Auto-Tracker Status</h3>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
+                Live bootstrap probe of the local TimeFolio Auto-Tracker service. This card does not write any data.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleRefreshAutoTrackerStatus}
+            disabled={isAutoTrackerRefreshing}
+            className="rounded-lg border border-teal-500/30 bg-teal-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isAutoTrackerRefreshing ? "Refreshing…" : "Refresh status"}
+          </button>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <DataStatCard
+            label="Tracker service"
+            value={autoTrackerStatus?.detected ? "Detected" : "Offline"}
+            detail={autoTrackerStatus?.error ? autoTrackerStatus.error : "Bootstrap endpoint probe result."}
+          />
+          <DataStatCard
+            label="Installed"
+            value={formatStatusValue(autoTrackerStatus?.installed)}
+            detail="Auto-Tracker installation state."
+          />
+          <DataStatCard label="Paired" value={formatStatusValue(autoTrackerStatus?.paired)} detail="Device pairing state." />
+          <DataStatCard
+            label="Platform"
+            value={formatStatusValue(autoTrackerStatus?.platform)}
+            detail={`Stream port: ${formatStatusValue(autoTrackerStatus?.streamPort)}`}
+          />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <DataStatCard
+            label="Version"
+            value={formatStatusValue(autoTrackerStatus?.appVersion)}
+            detail={`Device ID: ${formatStatusValue(autoTrackerStatus?.deviceId)}`}
+          />
+          <DataStatCard
+            label="Accessibility"
+            value={formatStatusValue(autoTrackerStatus?.accessibility)}
+            detail={`Browser automation: ${formatStatusValue(autoTrackerStatus?.browserAutomation)}`}
+          />
+          <DataStatCard
+            label="Span state"
+            value={`${autoTrackerStatus?.closedSpanCount ?? 0} closed`}
+            detail={`Open span: ${formatStatusValue(autoTrackerStatus?.hasOpenSpan)}`}
+          />
+        </div>
+
+        {autoTrackerStatus?.pendingUserCode ||
+        autoTrackerStatus?.pendingVerificationUrl ||
+        autoTrackerStatus?.pendingTransferDeviceId ||
+        autoTrackerStatus?.pendingReplaceDeviceId ||
+        autoTrackerStatus?.lastPairingError ? (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {autoTrackerStatus?.pendingUserCode ? (
+              <DataStatCard
+                label="Pending user code"
+                value={autoTrackerStatus.pendingUserCode}
+                detail="Complete pairing with this user code."
+              />
+            ) : null}
+            {autoTrackerStatus?.pendingVerificationUrl ? (
+              <DataStatCard
+                label="Verification URL"
+                value={autoTrackerStatus.pendingVerificationUrl}
+                detail="Pending browser verification URL."
+              />
+            ) : null}
+            {autoTrackerStatus?.pendingTransferDeviceId ? (
+              <DataStatCard
+                label="Transfer device"
+                value={autoTrackerStatus.pendingTransferDeviceId}
+                detail="Pending transfer target device ID."
+              />
+            ) : null}
+            {autoTrackerStatus?.pendingReplaceDeviceId ? (
+              <DataStatCard
+                label="Replace device"
+                value={autoTrackerStatus.pendingReplaceDeviceId}
+                detail="Pending replacement device ID."
+              />
+            ) : null}
+            {autoTrackerStatus?.lastPairingError ? (
+              <DataStatCard
+                label="Last pairing error"
+                value={autoTrackerStatus.lastPairingError}
+                detail="Most recent pairing error from bootstrap."
+              />
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-xs text-slate-400">
+          Last checked: {formatLastChecked(autoTrackerStatus?.lastCheckedISO)}
+          {autoTrackerStatus?.basePath ? ` · Base path: ${autoTrackerStatus.basePath}` : ""}
         </div>
       </section>
 
