@@ -2,6 +2,14 @@
 
 _Generated 2026-04-26. Source of truth: live import/script chains, not docs._
 
+> **Integration architecture note (2026-04-26):** the merge into the current React/Tauri app
+> uses a **single quarantined top-level tab `TimeFolio`** behind one feature flag
+> (`VITE_FF_TIMEFOLIO`). All TimeFolio surfaces listed below are integrated as **internal
+> subtabs of that page**, not as new sidebar tabs. The existing 6 study tabs
+> (Today / Planner / Weak Topics / Practice Tests / Exam Error Log / Settings) stay
+> bit-for-bit unchanged for the entire merge. Final placement decisions are deferred to a
+> later promotion phase. See `timefolio-integration-plan.md` for execution detail.
+
 ---
 
 ## 1. Current App Architecture — TimeFolio Study Tracker

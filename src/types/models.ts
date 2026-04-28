@@ -1,6 +1,6 @@
 export type StudyStatus = "Not Started" | "In Progress" | "Completed" | "Skipped";
 export type StudyStatusFilter = StudyStatus | "All";
-export type SectionId = "dashboard" | "planner" | "weakTopics" | "tests" | "settings" | "errorLog";
+export type SectionId = "dashboard" | "planner" | "weakTopics" | "tests" | "settings" | "errorLog" | "timefolio";
 export type PlannerSortField = "date" | "order" | "category" | "task";
 export type SortDirection = "asc" | "desc";
 export type ImportMode = "merge" | "replace";
@@ -285,4 +285,59 @@ export interface PersistenceSnapshot {
   persistence: PersistenceSummary;
   backups: BackupMetadata[];
   trash: TrashItem[];
+}
+
+export interface TfSessionLog {
+  id: string;
+  date: string;
+  method: string;
+  methodKey: string;
+  hours: number;
+  startISO: string;
+  endISO: string;
+  notes: string;
+  isDistraction: boolean;
+  isLive: boolean;
+}
+
+export interface TfSummaryPayload {
+  id: string;
+  kind: "daily" | "weekly" | "monthly";
+  label: string;
+  generatedAtISO: string;
+  voice: string;
+  text: string;
+  caption: string;
+  metrics: {
+    streak: number;
+    studyHours: number;
+    focusRate: number;
+    topMethod: string;
+  };
+}
+
+export interface TfTrackerPrefs {
+  customAutoApps: string[];
+  customAutoWebsites: string[];
+  customDistractionApps: string[];
+  customDistractionWebsites: string[];
+}
+
+export interface TfAccountState {
+  userId: string | null;
+  email: string | null;
+  username: string | null;
+  emailVerified: boolean;
+  syncId: string | null;
+  planTier: "free" | "pro";
+  themeUnlocks: string[];
+  billingCustomerId: string | null;
+}
+
+export interface TfAppState {
+  tfVersion: number;
+  sessionLogs: TfSessionLog[];
+  summaries: TfSummaryPayload[];
+  trackerPrefs: TfTrackerPrefs;
+  account: TfAccountState | null;
 }

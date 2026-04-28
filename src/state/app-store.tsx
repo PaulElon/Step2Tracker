@@ -82,8 +82,8 @@ interface AppStoreValue {
   restoreTrashItem: (entityType: TrashEntityType, id: string) => Promise<boolean>;
   exportBackup: () => Promise<string>;
   previewBackupArtifact: (raw: string) => Promise<BackupArtifactPreview>;
-  restoreBackupArtifact: (raw: string) => Promise<boolean>;
-  restoreBackupSnapshot: (backupId: string) => Promise<boolean>;
+  restoreBackupArtifact: (raw: string, options?: { alertOnError?: boolean }) => Promise<boolean>;
+  restoreBackupSnapshot: (backupId: string, options?: { alertOnError?: boolean }) => Promise<boolean>;
 }
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
@@ -308,10 +308,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       enqueueSnapshotOperation(() => restoreNativeTrashItem(entityType, id)),
     exportBackup: () => exportNativeBackupArtifact(),
     previewBackupArtifact: (raw) => previewNativeBackupArtifact(raw),
-    restoreBackupArtifact: (raw) =>
-      enqueueSnapshotOperation(() => restoreNativeBackupArtifact(raw)),
-    restoreBackupSnapshot: (backupId) =>
-      enqueueSnapshotOperation(() => restoreNativeSnapshot(backupId)),
+    restoreBackupArtifact: (raw, options) =>
+      enqueueSnapshotOperation(() => restoreNativeBackupArtifact(raw), {
+        alertOnError: options?.alertOnError ?? true,
+      }),
+    restoreBackupSnapshot: (backupId, options) =>
+      enqueueSnapshotOperation(() => restoreNativeSnapshot(backupId), {
+        alertOnError: options?.alertOnError ?? true,
+      }),
   };
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>;

@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  Briefcase,
   CalendarDays,
   ClipboardCheck,
   Database,
@@ -19,6 +20,7 @@ import { listen } from "@tauri-apps/api/event";
 import { ModalShell } from "./components/modal-shell";
 import { MobileNav, NavigationButton } from "./components/ui";
 import { DashboardView } from "./features/dashboard-view";
+import { TimeFolioView } from "./features/timefolio-view";
 import { ErrorLogView } from "./features/error-log-view";
 import { PlannerView } from "./features/planner-view";
 import { PracticeTestsView } from "./features/practice-tests-view";
@@ -34,6 +36,7 @@ import {
   sendNativeReminder,
   sendReminderNotification,
 } from "./lib/reminders";
+import { FF } from "./lib/feature-flags";
 import { primaryButtonClassName, secondaryButtonClassName } from "./lib/ui";
 import { useAppStore } from "./state/app-store";
 import type {
@@ -77,6 +80,9 @@ const navigationItems = [
     label: "Settings",
     icon: Settings2,
   },
+  ...(FF.timefolio
+    ? [{ id: "timefolio" as const, label: "TimeFolio", icon: Briefcase }]
+    : []),
 ];
 
 const sectionCopy: Record<SectionId, { title: string }> = {
@@ -86,6 +92,7 @@ const sectionCopy: Record<SectionId, { title: string }> = {
   tests: { title: "Practice Tests" },
   errorLog: { title: "Exam Error Log" },
   settings: { title: "Settings" },
+  timefolio: { title: "TimeFolio" },
 };
 
 function formatCountsLine(counts: BackupMetadata["counts"]) {
@@ -510,7 +517,8 @@ export default function App() {
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
   const reminderDispatchRef = useRef(new Set<string>());
   const activeSection = state.preferences.activeSection;
-  const sectionMeta = sectionCopy[activeSection];
+  const resolvedSection = !FF.timefolio && activeSection === "timefolio" ? "dashboard" : activeSection;
+  const sectionMeta = sectionCopy[resolvedSection];
   const totalMinutes = sumStudyMinutes(state.studyBlocks);
   const dateRange = getDateRange(state.studyBlocks);
   const persistenceCopy =
@@ -538,6 +546,12 @@ export default function App() {
       ? "true"
       : "";
   }, [state.preferences.themeId, state.preferences.enhancedThemeIds]);
+
+  useEffect(() => {
+    if (!FF.timefolio && activeSection === "timefolio") {
+      void setActiveSection("dashboard");
+    }
+  }, [activeSection, setActiveSection]);
 
   useEffect(() => {
     let cancelled = false;
@@ -676,17 +690,6 @@ export default function App() {
     }
   }
 
-  async function handleExportBackup() {
-    const backup = await exportBackup();
-    const blob = new Blob([backup], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `step2-command-center-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
   async function handleBackupFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) {
@@ -745,7 +748,7 @@ export default function App() {
   }
 
   let sectionContent: JSX.Element | null;
-  switch (activeSection) {
+  switch (resolvedSection) {
     case "dashboard":
       sectionContent = <DashboardView />;
       break;
@@ -793,10 +796,9 @@ export default function App() {
           onSendTestAlert={() => {
             void handleSendTestAlert();
           }}
-          onExportBackup={() => {
-            void handleExportBackup();
-          }}
-          onImportBackup={() => restoreInputRef.current?.click()}
+          onExportBackup={() => exportBackup()}
+          onPreviewBackupImport={(raw) => previewBackupArtifact(raw)}
+          onRestoreBackupImport={(raw) => restoreBackupArtifact(raw, { alertOnError: false })}
           onOpenRecoveryCenter={() => setShowRecoveryCenter(true)}
           onSetCustomCategories={(categories) => {
             startTransition(() => {
@@ -808,8 +810,17 @@ export default function App() {
               void setResourceLinks(links);
             });
           }}
+          studyStorageCounts={{
+            studyBlocks: state.studyBlocks.length,
+            practiceTests: state.practiceTests.length,
+            weakTopicEntries: state.weakTopicEntries.length,
+            trashItems: trashItems.length,
+          }}
         />
       );
+      break;
+    case "timefolio":
+      sectionContent = <TimeFolioView />;
       break;
     default:
       sectionContent = null;
@@ -867,7 +878,7 @@ export default function App() {
                   key={item.id}
                   icon={item.icon}
                   label={item.label}
-                  active={item.id === activeSection}
+                  active={item.id === resolvedSection}
                   onClick={() => {
                     startTransition(() => {
                       void setActiveSection(item.id);
@@ -912,7 +923,7 @@ export default function App() {
 
           <MobileNav
             items={navigationItems}
-            activeSection={activeSection}
+            activeSection={resolvedSection}
             onSelect={(section) => {
               startTransition(() => {
                 void setActiveSection(section);

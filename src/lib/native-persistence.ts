@@ -8,6 +8,7 @@ import type {
   Preferences,
   PracticeTestInput,
   StudyBlockInput,
+  TfAppState,
   TrashEntityType,
   WeakTopicInput,
 } from "../types/models";
@@ -95,4 +96,16 @@ export function upsertNativeErrorLogEntry(entry: ErrorLogInput) {
 
 export function trashNativeErrorLogEntry(id: string) {
   return command<PersistenceSnapshot>("trash_error_log_entry", { id });
+}
+
+export function loadNativeTfState(): Promise<TfAppState> {
+  return command<TfAppState>("tf_load_state");
+}
+
+export function saveNativeTfState(state: TfAppState): Promise<TfAppState> {
+  return command<TfAppState>("tf_save_state", { state });
+}
+
+export function resetNativeTfState(): Promise<TfAppState> {
+  return command<TfAppState>("tf_reset_state");
 }

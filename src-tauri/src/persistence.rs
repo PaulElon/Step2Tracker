@@ -477,6 +477,8 @@ pub enum SectionId {
     Settings,
     #[serde(rename = "errorLog")]
     ErrorLog,
+    #[serde(rename = "timefolio")]
+    Timefolio,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -3460,6 +3462,7 @@ fn parse_section_id(value: &str) -> rusqlite::Result<SectionId> {
         "analytics" => Ok(SectionId::Analytics),
         "settings" => Ok(SectionId::Settings),
         "errorLog" => Ok(SectionId::ErrorLog),
+        "timefolio" => Ok(SectionId::Timefolio),
         _ => Err(enum_error("SectionId", value)),
     }
 }
@@ -3575,6 +3578,7 @@ fn serialize_section_id(value: SectionId) -> &'static str {
         SectionId::Analytics => "analytics",
         SectionId::Settings => "settings",
         SectionId::ErrorLog => "errorLog",
+        SectionId::Timefolio => "timefolio",
     }
 }
 
