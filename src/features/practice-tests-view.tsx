@@ -137,6 +137,7 @@ function PracticeTestEditorSheet({
   const [errors, setErrors] = useState<
     Partial<Record<"date" | "questionCount" | "scorePercent" | "minutesSpent", string>>
   >({});
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const id = useId();
   const dateRef = useRef<HTMLInputElement>(null);
   const titleId = `${id}-title`;
@@ -395,17 +396,35 @@ function PracticeTestEditorSheet({
 
         <div className="flex items-center justify-end gap-3 pt-4">
           {onDelete ? (
-            <button
-              type="button"
-              className="mr-auto rounded-[14px] border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-300 transition hover:bg-rose-500/20"
-              onClick={() => {
-                if (window.confirm(`Delete ${test ? getPracticeTestLabel(test) : "this test"}? This cannot be undone.`)) {
-                  onDelete();
-                }
-              }}
-            >
-              Delete test
-            </button>
+            confirmingDelete ? (
+              <div className="mr-auto flex items-center gap-2">
+                <span className="text-sm text-rose-300">Delete this test?</span>
+                <button
+                  type="button"
+                  className="rounded-[14px] border border-rose-300/30 bg-rose-300/15 px-3 py-2 text-sm font-medium text-rose-200 transition hover:bg-rose-300/25"
+                  onClick={() => {
+                    onDelete();
+                  }}
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  className={secondaryButtonClassName}
+                  onClick={() => setConfirmingDelete(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="mr-auto rounded-[14px] border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-300 transition hover:bg-rose-500/20"
+                onClick={() => setConfirmingDelete(true)}
+              >
+                Delete test
+              </button>
+            )
           ) : null}
           <button type="button" className={secondaryButtonClassName} onClick={onClose}>
             Cancel
@@ -794,20 +813,29 @@ export function PracticeTestsView() {
         <PracticeTestEditorSheet
           key={editorTest?.id ?? "new-test"}
           test={editorTest}
-          onClose={() => setShowEditor(false)}
+          onClose={() => {
+            setShowEditor(false);
+            setEditorTest(undefined);
+          }}
           onSave={(draft) => {
             void (async () => {
               const saved = await upsertPracticeTest(draft);
               if (saved) {
                 setShowEditor(false);
+                setEditorTest(undefined);
               }
             })();
           }}
           onDelete={
             editorTest
               ? () => {
-                  void trashPracticeTest(editorTest.id);
-                  setShowEditor(false);
+                  void (async () => {
+                    const deleted = await trashPracticeTest(editorTest.id);
+                    if (deleted) {
+                      setShowEditor(false);
+                      setEditorTest(undefined);
+                    }
+                  })();
                 }
               : undefined
           }
