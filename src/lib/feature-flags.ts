@@ -3,5 +3,7 @@
 // subfeature flags (sessionLog / analytics / tracker / account) will be added
 // later, once their corresponding subtabs inside the TimeFolio page exist.
 export const FF = {
-  timefolio: import.meta.env.VITE_FF_TIMEFOLIO === "true",
+  timefolio:
+    import.meta.env.VITE_FF_TIMEFOLIO === "true" ||
+    (import.meta.env.DEV && import.meta.env.VITE_FF_TIMEFOLIO !== "false"),
 } as const;
