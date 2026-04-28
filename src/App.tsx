@@ -683,17 +683,6 @@ export default function App() {
     }
   }
 
-  async function handleExportBackup() {
-    const backup = await exportBackup();
-    const blob = new Blob([backup], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `step2-command-center-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
   async function handleBackupFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) {
@@ -800,10 +789,9 @@ export default function App() {
           onSendTestAlert={() => {
             void handleSendTestAlert();
           }}
-          onExportBackup={() => {
-            void handleExportBackup();
-          }}
-          onImportBackup={() => restoreInputRef.current?.click()}
+          onExportBackup={() => exportBackup()}
+          onPreviewBackupImport={(raw) => previewBackupArtifact(raw)}
+          onRestoreBackupImport={(raw) => restoreBackupArtifact(raw, { alertOnError: false })}
           onOpenRecoveryCenter={() => setShowRecoveryCenter(true)}
           onSetCustomCategories={(categories) => {
             startTransition(() => {
@@ -814,6 +802,12 @@ export default function App() {
             startTransition(() => {
               void setResourceLinks(links);
             });
+          }}
+          studyStorageCounts={{
+            studyBlocks: state.studyBlocks.length,
+            practiceTests: state.practiceTests.length,
+            weakTopicEntries: state.weakTopicEntries.length,
+            trashItems: trashItems.length,
           }}
         />
       );

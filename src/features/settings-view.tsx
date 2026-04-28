@@ -1,9 +1,9 @@
-import { Bell, Check, Database, Download, ExternalLink, Globe, Monitor, Palette, Pencil, Plus, RotateCcw, Trash2, Upload, X, Zap } from "lucide-react";
-import { useState } from "react";
+import { Bell, Check, Database, Download, ExternalLink, Globe, Monitor, Palette, Pencil, Plus, RotateCcw, Trash2, X, Zap } from "lucide-react";
+import { useState, type ChangeEvent } from "react";
 import { Panel } from "../components/ui";
 import { themeList } from "../lib/themes";
 import { fieldClassName, secondaryButtonClassName } from "../lib/ui";
-import type { PersistenceSummary, ResourceLink, ThemeId } from "../types/models";
+import type { BackupArtifactPreview, PersistenceSummary, ResourceLink, ThemeId } from "../types/models";
 
 function formatStoragePath(path?: string | null) {
   if (!path) {
@@ -15,6 +15,24 @@ function formatStoragePath(path?: string | null) {
 
 function generateId(prefix: string) {
   return globalThis.crypto?.randomUUID?.() ?? `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function getBackupFileName(date = new Date()) {
+  return `step2-command-center-backup-${date.toISOString().slice(0, 10)}.json`;
+}
+
+function formatCountsLine(counts: BackupArtifactPreview["counts"]) {
+  return `${counts.studyBlocks} tasks · ${counts.practiceTests} tests · ${counts.weakTopicEntries} topics`;
+}
+
+function StorageStatCard({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-[16px] border border-white/10 bg-slate-950/45 p-4">
+      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
+      <p className="mt-2 text-lg font-semibold text-white">{value}</p>
+      <p className="mt-1 text-xs text-slate-400">{detail}</p>
+    </div>
+  );
 }
 
 function CategoriesPanel({
@@ -449,10 +467,12 @@ export function SettingsView({
   onEnableNotifications,
   onSendTestAlert,
   onExportBackup,
-  onImportBackup,
+  onPreviewBackupImport,
+  onRestoreBackupImport,
   onOpenRecoveryCenter,
   onSetCustomCategories,
   onSetResourceLinks,
+  studyStorageCounts,
 }: {
   themeId: ThemeId;
   dailyGoalMinutes: number;
@@ -467,11 +487,18 @@ export function SettingsView({
   onDailyGoalMinutesChange: (hours: number) => void;
   onEnableNotifications: () => void;
   onSendTestAlert: () => void;
-  onExportBackup: () => void;
-  onImportBackup: () => void;
+  onExportBackup: () => Promise<string>;
+  onPreviewBackupImport: (raw: string) => Promise<BackupArtifactPreview>;
+  onRestoreBackupImport: (raw: string) => Promise<boolean>;
   onOpenRecoveryCenter: () => void;
   onSetCustomCategories: (categories: string[]) => void;
   onSetResourceLinks: (links: ResourceLink[]) => void;
+  studyStorageCounts: {
+    studyBlocks: number;
+    practiceTests: number;
+    weakTopicEntries: number;
+    trashItems: number;
+  };
 }) {
   const reminderButtonLabel =
     notificationPermission === "granted"
@@ -484,6 +511,105 @@ export function SettingsView({
 
   const handleReminderClick =
     notificationPermission === "granted" ? onSendTestAlert : onEnableNotifications;
+  const [isStorageBusy, setIsStorageBusy] = useState(false);
+  const [storageMessage, setStorageMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [pendingImportRaw, setPendingImportRaw] = useState<string | null>(null);
+  const [pendingImportPreview, setPendingImportPreview] = useState<BackupArtifactPreview | null>(null);
+
+  async function handleExportBackup() {
+    setIsStorageBusy(true);
+    setStorageMessage(null);
+
+    try {
+      const backup = await onExportBackup();
+      const fileName = getBackupFileName();
+      const blob = new Blob([backup], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.rel = "noreferrer";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      setStorageMessage({ tone: "success", text: `Downloaded ${fileName}.` });
+    } catch (error) {
+      setStorageMessage({
+        tone: "error",
+        text: error instanceof Error && error.message ? error.message : "Unable to export Study Tracker data.",
+      });
+    } finally {
+      setIsStorageBusy(false);
+    }
+  }
+
+  async function handleImportFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) {
+      return;
+    }
+
+    setIsStorageBusy(true);
+    setStorageMessage(null);
+
+    try {
+      const raw = await file.text();
+      const preview = await onPreviewBackupImport(raw);
+      setPendingImportRaw(raw);
+      setPendingImportPreview(preview);
+      setStorageMessage({
+        tone: "success",
+        text: "Backup validated. Review the snapshot details and confirm import.",
+      });
+    } catch (error) {
+      setPendingImportRaw(null);
+      setPendingImportPreview(null);
+      setStorageMessage({
+        tone: "error",
+        text: error instanceof Error && error.message ? error.message : "Unable to validate that backup file.",
+      });
+    } finally {
+      setIsStorageBusy(false);
+    }
+  }
+
+  function handleCancelPendingImport() {
+    if (isStorageBusy) {
+      return;
+    }
+
+    setPendingImportRaw(null);
+    setPendingImportPreview(null);
+    setStorageMessage(null);
+  }
+
+  async function handleConfirmImport() {
+    if (!pendingImportRaw) {
+      return;
+    }
+
+    setIsStorageBusy(true);
+    setStorageMessage(null);
+    try {
+      const restored = await onRestoreBackupImport(pendingImportRaw);
+      if (restored) {
+        setPendingImportRaw(null);
+        setPendingImportPreview(null);
+        setStorageMessage({ tone: "success", text: "Study Tracker data imported." });
+      } else {
+        setStorageMessage({ tone: "error", text: "Unable to import the selected backup." });
+      }
+    } catch (error) {
+      setStorageMessage({
+        tone: "error",
+        text: error instanceof Error && error.message ? error.message : "Unable to import the selected backup.",
+      });
+    } finally {
+      setIsStorageBusy(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -638,28 +764,128 @@ export function SettingsView({
               ) : null}
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <button type="button" className="panel-subtle text-left transition hover:border-white/15" onClick={onImportBackup}>
-                <Upload className="h-5 w-5 text-cyan-200" />
-                <p className="mt-4 text-sm font-semibold text-white">Import backup</p>
-                <p className="mt-2 text-sm text-slate-400">Preview before restore.</p>
-              </button>
+            <div className="flex flex-col gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <StorageStatCard
+                  label="Task count"
+                  value={String(studyStorageCounts.studyBlocks)}
+                  detail="Study tasks in local Study Tracker storage."
+                />
+                <StorageStatCard
+                  label="Practice tests"
+                  value={String(studyStorageCounts.practiceTests)}
+                  detail="Saved practice test records."
+                />
+                <StorageStatCard
+                  label="Weak topics"
+                  value={String(studyStorageCounts.weakTopicEntries)}
+                  detail="Tracked weak topic entries."
+                />
+                <StorageStatCard
+                  label="Trash items"
+                  value={String(studyStorageCounts.trashItems)}
+                  detail="Recoverable records in Study Tracker trash."
+                />
+              </div>
 
-              <button type="button" className="panel-subtle text-left transition hover:border-white/15" onClick={onExportBackup}>
-                <Download className="h-5 w-5 text-cyan-200" />
-                <p className="mt-4 text-sm font-semibold text-white">Export backup</p>
-                <p className="mt-2 text-sm text-slate-400">Create a portable snapshot.</p>
-              </button>
+              {storageMessage ? (
+                <div
+                  className={`rounded-[16px] border px-4 py-3 text-sm ${
+                    storageMessage.tone === "error"
+                      ? "border-rose-500/25 bg-rose-500/10 text-rose-100"
+                      : "border-emerald-500/25 bg-emerald-500/10 text-emerald-100"
+                  }`}
+                >
+                  {storageMessage.text}
+                </div>
+              ) : null}
 
-              <button
-                type="button"
-                className="panel-subtle text-left transition hover:border-white/15"
-                onClick={onOpenRecoveryCenter}
-              >
-                <RotateCcw className="h-5 w-5 text-cyan-200" />
-                <p className="mt-4 text-sm font-semibold text-white">Recovery center</p>
-                <p className="mt-2 text-sm text-slate-400">Restore snapshots or trash.</p>
-              </button>
+              <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="rounded-[16px] border border-white/10 bg-slate-950/45 p-4">
+                  <div className="text-sm font-semibold text-white">Import JSON</div>
+                  <p className="mt-2 text-xs leading-5 text-slate-400">
+                    Select a `.json` Study Tracker backup artifact. TimeFolio data is untouched.
+                  </p>
+                  <input
+                    type="file"
+                    accept=".json,application/json"
+                    onChange={(event) => {
+                      void handleImportFileChange(event);
+                    }}
+                    disabled={isStorageBusy}
+                    className="mt-3 block w-full rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-200 file:mr-4 file:rounded-md file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-100 hover:file:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                  {pendingImportPreview ? (
+                    <div className="mt-3 rounded-[14px] border border-cyan-300/20 bg-cyan-300/10 p-3 text-sm text-slate-200">
+                      <p className="font-semibold text-white">
+                        Exported {pendingImportPreview.exportedAt.slice(0, 10)}
+                      </p>
+                      <p className="mt-1">{formatCountsLine(pendingImportPreview.counts)}</p>
+                      <p className="mt-1 text-xs text-slate-300">
+                        Schema {pendingImportPreview.schemaVersion} · App {pendingImportPreview.appVersion}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-cyan-500/30 bg-cyan-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={isStorageBusy}
+                    onClick={() => {
+                      void handleExportBackup();
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Download className="h-4 w-4" />
+                      Export JSON
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="rounded-lg border border-white/10 bg-slate-900/70 px-4 py-3 text-sm font-medium text-slate-100 transition hover:border-white/20 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={onOpenRecoveryCenter}
+                    disabled={isStorageBusy}
+                  >
+                    <div className="flex items-center gap-2">
+                      <RotateCcw className="h-4 w-4" />
+                      Recovery center
+                    </div>
+                  </button>
+
+                  {pendingImportPreview ? (
+                    <div className="rounded-[16px] border border-rose-500/25 bg-rose-500/10 p-3 text-sm text-rose-100">
+                      <p className="font-medium">Import will replace Study Tracker local data only.</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="rounded-lg border border-rose-400/40 bg-rose-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={() => {
+                            void handleConfirmImport();
+                          }}
+                          disabled={isStorageBusy}
+                        >
+                          Confirm import
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={handleCancelPendingImport}
+                          disabled={isStorageBusy}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-500">
+                Study Tracker storage here is separate from TimeFolio storage in Tracker Settings.
+              </p>
             </div>
           </div>
         </Panel>
