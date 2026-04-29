@@ -374,13 +374,13 @@ export function getGoalAlerts(blocks: StudyBlock[], tests: PracticeTest[], daily
     alerts.push({
       tone: "critical",
       title: "Pace is above target",
-      body: `You need about ${Math.round(requiredDailyMinutes / 60)}h/day to finish on time, which is above the current ${Math.round(dailyGoalMinutes / 60)}h goal.`,
+      body: `You need about ${formatAlertHours(requiredDailyMinutes)}/day to finish on time, which is above the current ${formatAlertHours(dailyGoalMinutes)} goal.`,
     });
   } else if (requiredDailyMinutes > dailyGoalMinutes * 0.9) {
     alerts.push({
       tone: "warning",
       title: "Pace is tight",
-      body: `The remaining plan needs roughly ${Math.round(requiredDailyMinutes / 60)}h/day, so slippage will immediately pressure the plan.`,
+      body: `The remaining plan needs roughly ${formatAlertHours(requiredDailyMinutes)}/day, so slippage will immediately pressure the plan.`,
     });
   }
 
@@ -388,7 +388,7 @@ export function getGoalAlerts(blocks: StudyBlock[], tests: PracticeTest[], daily
     alerts.push({
       tone: "warning",
       title: "Today is overloaded",
-      body: `Today's agenda is ${Math.round(todayMinutes / 60)}h against an ${Math.round(dailyGoalMinutes / 60)}h goal.`,
+      body: `Today's agenda is ${formatAlertHours(todayMinutes)} against an ${formatAlertHours(dailyGoalMinutes)} goal.`,
     });
   }
 
@@ -416,6 +416,21 @@ export function getGoalAlerts(blocks: StudyBlock[], tests: PracticeTest[], daily
   }
 
   return alerts.slice(0, 4);
+}
+
+function formatAlertHours(minutes: number) {
+  if (minutes < 60) {
+    return `${Math.round(minutes)}m`;
+  }
+
+  const hours = minutes / 60;
+  const roundedHours = Math.round(hours);
+
+  if (Math.abs(hours - roundedHours) < 1e-9) {
+    return `${roundedHours}h`;
+  }
+
+  return `${Number(hours.toFixed(2))}h`;
 }
 
 export function getMomentumPoints(
