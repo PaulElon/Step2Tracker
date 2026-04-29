@@ -187,7 +187,7 @@ function LogEntryModal({
         <div>
           <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{isEdit ? "Edit entry" : "New entry"}</p>
           <h3 id="log-entry-title" className="mt-2 text-2xl font-semibold text-white">
-            {isEdit ? "Edit Log Entry" : "Log Entry"}
+            {isEdit ? "Edit Log entry" : "Log entry"}
           </h3>
         </div>
         <button type="button" className={secondaryButtonClassName} onClick={onClose}>
@@ -325,7 +325,7 @@ function LogEntryModal({
             Cancel
           </button>
           <button type="submit" className={primaryButtonClassName} disabled={saving}>
-            {saving ? "Saving…" : isEdit ? "Save Changes" : "Log Entry"}
+            {saving ? "Saving…" : isEdit ? "Save changes" : "Log entry"}
           </button>
         </div>
       </form>
@@ -425,9 +425,9 @@ export function ErrorLogView() {
 
       {/* Row 1 — Metric cards */}
       <div className="grid shrink-0 grid-cols-3 gap-3">
-        <MetricCard label="Total Logged" value={String(entries.length)} />
-        <MetricCard label="Most Common Error Type" value={mostCommonErrorType ?? "—"} />
-        <MetricCard label="Most Common Category" value={mostCommonSystem ?? "—"} />
+        <MetricCard label="Total logged" value={String(entries.length)} />
+        <MetricCard label="Most common error type" value={mostCommonErrorType ?? "—"} />
+        <MetricCard label="Most common category" value={mostCommonSystem ?? "—"} />
       </div>
 
       {/* Entries list — fills remaining space */}
@@ -455,7 +455,7 @@ export function ErrorLogView() {
                   title="Log a new entry"
                 >
                   <Plus className="h-4 w-4" />
-                  Log Entry
+                  Log entry
                 </button>
                 <button
                   type="button"
@@ -485,7 +485,7 @@ export function ErrorLogView() {
                     onChange={(e) => setFilterSource(e.target.value as ErrorLogSource | "All")}
                     className="rounded-xl border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs text-white focus:outline-none"
                   >
-                    <option value="All">All Sources</option>
+                    <option value="All">All sources</option>
                     {ERROR_LOG_SOURCE_VALUES.map((s) => (
                       <option key={s} value={s}>
                         {s}
@@ -497,7 +497,7 @@ export function ErrorLogView() {
                     onChange={(e) => setFilterSystem(e.target.value as ErrorLogSystem | "All")}
                     className="rounded-xl border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs text-white focus:outline-none"
                   >
-                    <option value="All">All Systems</option>
+                    <option value="All">All systems</option>
                     {ERROR_LOG_SYSTEM_VALUES.map((s) => (
                       <option key={s} value={s}>
                         {s}
@@ -509,7 +509,7 @@ export function ErrorLogView() {
                     onChange={(e) => setFilterErrorType(e.target.value as ErrorLogErrorType | "All")}
                     className="rounded-xl border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs text-white focus:outline-none"
                   >
-                    <option value="All">All Error Types</option>
+                    <option value="All">All error types</option>
                     {ERROR_LOG_ERROR_TYPE_VALUES.map((t) => (
                       <option key={t} value={t}>
                         {t}
@@ -550,7 +550,7 @@ export function ErrorLogView() {
                 className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-white/15 bg-white/[0.02] py-10 text-base font-semibold text-slate-300 transition-colors hover:border-cyan-300/40 hover:bg-cyan-300/5 hover:text-cyan-200"
               >
                 <Plus className="h-5 w-5" />
-                Add your first log
+                Add first log entry
               </button>
             ) : sorted.length === 0 ? (
               <div className="py-8 text-center text-sm text-slate-500">
