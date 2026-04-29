@@ -73,6 +73,25 @@ test("readSnapshot returns the initial empty idle snapshot", async () => {
   });
 });
 
+test("constructor defensively clones the initial snapshot so caller mutation after construction does not leak into port internals", async () => {
+  const initialSnapshot = createNontrivialSnapshot();
+  const port = createInMemoryAutoTrackerV2SessionPersistencePort(initialSnapshot);
+
+  initialSnapshot.currentState = createAutoTrackerV2InitialState(999);
+  initialSnapshot.finalizedSessions[0].sessionId = "mutated-source";
+  initialSnapshot.finalizedSessions.push(
+    createFinalizedSession("session-c", anki, 30_000, 35_000, "manualStop"),
+  );
+
+  const reread = await port.readSnapshot();
+
+  assert.equal(reread.currentState.lastEventMs, 35_000);
+  assert.deepEqual(
+    reread.finalizedSessions.map((session) => session.sessionId),
+    ["session-a", "session-b"],
+  );
+});
+
 test("writeSnapshot then readSnapshot round-trips currentState and finalizedSessions verbatim", async () => {
   const port = createInMemoryAutoTrackerV2SessionPersistencePort();
   const snapshot = createNontrivialSnapshot();
@@ -102,6 +121,23 @@ test("writeSnapshot preserves finalized session order exactly", async () => {
     reread.finalizedSessions.map((session) => session.sessionId),
     ["session-a", "session-b", "session-c"],
   );
+});
+
+test("constructor preserves unknown top-level fields from the initial snapshot via structuredClone", async () => {
+  const initialSnapshot = {
+    ...createNontrivialSnapshot(),
+    extraTopLevelField: "keep me",
+  } as AutoTrackerV2SessionRepositorySnapshot & {
+    extraTopLevelField: string;
+  };
+  const port = createInMemoryAutoTrackerV2SessionPersistencePort(initialSnapshot);
+
+  initialSnapshot.extraTopLevelField = "mutated-source";
+
+  const reread = await port.readSnapshot();
+
+  assert.equal("extraTopLevelField" in reread, true);
+  assert.equal((reread as Record<string, unknown>).extraTopLevelField, "keep me");
 });
 
 test("writeSnapshot defensively clones input so caller mutation after write does not mutate port internals", async () => {
