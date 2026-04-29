@@ -1,13 +1,24 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import {
   probeNativeAutoTrackerBootstrap,
   type NativeAutoTrackerBootstrapProbe,
 } from "../../lib/native-persistence";
 import type { NativeTrackerSpanInput } from "../../lib/tf-native-span-reconciler";
+import { normalizeTfAppState } from "../../lib/tf-storage";
 import { useTimeFolioStore } from "../../state/tf-store";
 import type { TfAppState, TfTrackerPrefs } from "../../types/models";
 
 type TrackerListKey = keyof TfTrackerPrefs;
+const RESET_CONFIRMATION_TOKEN = "RESET";
+
+type PendingImportPreview = {
+  fileName: string;
+  nextState: TfAppState;
+  sessionCount: number;
+  summaryCount: number;
+  trackerRuleCount: number;
+  hasAccount: boolean;
+};
 
 const TRACKER_LISTS: Array<{
   key: TrackerListKey;
@@ -104,6 +115,37 @@ function formatBackupDate(date = new Date()): string {
 
 function getBackupFileName(date = new Date()): string {
   return `timefolio-tracker-backup-${formatBackupDate(date)}.json`;
+}
+
+function cloneTfStateSnapshot(state: TfAppState): TfAppState {
+  return normalizeTfAppState(state);
+}
+
+function isLikelyTfBackupPayload(payload: unknown): payload is Record<string, unknown> {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return false;
+  }
+
+  const raw = payload as Record<string, unknown>;
+  return (
+    "tfVersion" in raw ||
+    "sessionLogs" in raw ||
+    "summaries" in raw ||
+    "trackerPrefs" in raw ||
+    "account" in raw
+  );
+}
+
+function buildImportPreview(fileName: string, input: unknown): PendingImportPreview {
+  const nextState = normalizeTfAppState(input);
+  return {
+    fileName,
+    nextState,
+    sessionCount: nextState.sessionLogs.length,
+    summaryCount: nextState.summaries.length,
+    trackerRuleCount: countTrackerRules(nextState.trackerPrefs),
+    hasAccount: nextState.account !== null,
+  };
 }
 
 function formatStatusValue(value: string | number | boolean | null | undefined): string {
@@ -329,12 +371,14 @@ export function TrackerSettingsPanel() {
   const [dataMessage, setDataMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [isDataBusy, setIsDataBusy] = useState(false);
   const [isConfirmingReset, setIsConfirmingReset] = useState(false);
+  const [resetConfirmationToken, setResetConfirmationToken] = useState("");
+  const [pendingImportPreview, setPendingImportPreview] = useState<PendingImportPreview | null>(null);
+  const [rollbackSnapshot, setRollbackSnapshot] = useState<TfAppState | null>(null);
   const [autoTrackerImportMessage, setAutoTrackerImportMessage] = useState<string | null>(null);
   const [isAutoTrackerImporting, setIsAutoTrackerImporting] = useState(false);
   const [autoTrackerStatus, setAutoTrackerStatus] = useState<NativeAutoTrackerBootstrapProbe | null>(null);
   const [isAutoTrackerRefreshing, setIsAutoTrackerRefreshing] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
-  const pendingDataActionRef = useRef<{ kind: "import" | "reset"; previousState: TfAppState } | null>(null);
 
   useEffect(() => {
     setDraftPrefs(cloneTrackerPrefs(state.trackerPrefs));
@@ -343,29 +387,6 @@ export function TrackerSettingsPanel() {
   useEffect(() => {
     void handleRefreshAutoTrackerStatus();
   }, []);
-
-  useLayoutEffect(() => {
-    const pending = pendingDataActionRef.current;
-    if (!pending) {
-      return;
-    }
-
-    if (error) {
-      setDataMessage({ tone: "error", text: error });
-      pendingDataActionRef.current = null;
-      setIsDataBusy(false);
-      return;
-    }
-
-    if (state !== pending.previousState) {
-      setDataMessage({
-        tone: "success",
-        text: pending.kind === "import" ? "TimeFolio data imported." : "TimeFolio data reset.",
-      });
-      pendingDataActionRef.current = null;
-      setIsDataBusy(false);
-    }
-  }, [error, state]);
 
   if (isLoading) {
     return (
@@ -432,16 +453,19 @@ export function TrackerSettingsPanel() {
     }
 
     setDataMessage(null);
-    setIsDataBusy(true);
-    pendingDataActionRef.current = { kind: "import", previousState: state };
+    setPendingImportPreview(null);
 
     try {
       const text = await file.text();
-      const parsedState = JSON.parse(text) as TfAppState;
-      await saveState(parsedState);
+      const parsedState = JSON.parse(text) as unknown;
+      if (!isLikelyTfBackupPayload(parsedState)) {
+        throw new Error(
+          "Invalid TimeFolio backup format. Expected an object with TimeFolio state fields (sessionLogs, summaries, trackerPrefs, or account)."
+        );
+      }
+      const preview = buildImportPreview(file.name, parsedState);
+      setPendingImportPreview(preview);
     } catch (err) {
-      pendingDataActionRef.current = null;
-      setIsDataBusy(false);
       setDataMessage({
         tone: "error",
         text: err instanceof Error && err.message ? err.message : "Unable to import the selected TimeFolio backup.",
@@ -449,8 +473,40 @@ export function TrackerSettingsPanel() {
     }
   }
 
+  async function handleConfirmImportData() {
+    if (!pendingImportPreview) {
+      return;
+    }
+
+    const snapshot = cloneTfStateSnapshot(state);
+    setDataMessage(null);
+    setIsDataBusy(true);
+
+    try {
+      await saveState(pendingImportPreview.nextState);
+      setRollbackSnapshot(snapshot);
+      setPendingImportPreview(null);
+      setDataMessage({ tone: "success", text: "TimeFolio data imported." });
+    } catch (err) {
+      setDataMessage({
+        tone: "error",
+        text: err instanceof Error && err.message ? err.message : "Unable to import the selected TimeFolio backup.",
+      });
+    } finally {
+      setIsDataBusy(false);
+    }
+  }
+
+  function handleCancelImportData() {
+    if (isDataBusy) {
+      return;
+    }
+    setPendingImportPreview(null);
+  }
+
   function handleResetData() {
     setDataMessage(null);
+    setResetConfirmationToken("");
     setIsConfirmingReset(true);
   }
 
@@ -459,28 +515,72 @@ export function TrackerSettingsPanel() {
       return;
     }
 
+    setResetConfirmationToken("");
     setIsConfirmingReset(false);
   }
 
+  function handleResetConfirmationKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter") {
+      return;
+    }
+
+    event.preventDefault();
+    if (resetConfirmationToken === RESET_CONFIRMATION_TOKEN && !isDataBusy) {
+      void handleConfirmResetData();
+    }
+  }
+
   async function handleConfirmResetData() {
+    if (resetConfirmationToken !== RESET_CONFIRMATION_TOKEN) {
+      setDataMessage({
+        tone: "error",
+        text: `Type ${RESET_CONFIRMATION_TOKEN} to confirm reset.`,
+      });
+      return;
+    }
+
+    const snapshot = cloneTfStateSnapshot(state);
     setDataMessage(null);
     setIsDataBusy(true);
-    pendingDataActionRef.current = { kind: "reset", previousState: state };
 
     try {
       await reset();
+      setRollbackSnapshot(snapshot);
       setDraftPrefs(getEmptyTrackerPrefs());
       setDataMessage({ tone: "success", text: "TimeFolio data reset." });
-      pendingDataActionRef.current = null;
     } catch (err) {
-      pendingDataActionRef.current = null;
       setDataMessage({
         tone: "error",
         text: err instanceof Error && err.message ? err.message : "Unable to reset TimeFolio data.",
       });
     } finally {
       setIsDataBusy(false);
+      setResetConfirmationToken("");
       setIsConfirmingReset(false);
+    }
+  }
+
+  async function handleRestorePreviousState() {
+    if (!rollbackSnapshot) {
+      return;
+    }
+
+    setDataMessage(null);
+    setIsDataBusy(true);
+    try {
+      await saveState(rollbackSnapshot);
+      setRollbackSnapshot(null);
+      setPendingImportPreview(null);
+      setResetConfirmationToken("");
+      setIsConfirmingReset(false);
+      setDataMessage({ tone: "success", text: "Previous TimeFolio state restored." });
+    } catch (err) {
+      setDataMessage({
+        tone: "error",
+        text: err instanceof Error && err.message ? err.message : "Unable to restore the previous TimeFolio state.",
+      });
+    } finally {
+      setIsDataBusy(false);
     }
   }
 
@@ -536,6 +636,7 @@ export function TrackerSettingsPanel() {
   const trackerRuleCount = countTrackerRules(state.trackerPrefs);
   const sessionCount = state.sessionLogs.length;
   const summaryCount = state.summaries.length;
+  const canConfirmReset = resetConfirmationToken === RESET_CONFIRMATION_TOKEN;
 
   return (
     <div className="p-8 flex flex-col gap-6">
@@ -604,6 +705,20 @@ export function TrackerSettingsPanel() {
           </div>
         ) : null}
 
+        {rollbackSnapshot ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            <div>A rollback snapshot is available for this session.</div>
+            <button
+              type="button"
+              onClick={handleRestorePreviousState}
+              disabled={isDataBusy}
+              className="rounded-lg border border-amber-400/30 bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-100 transition-colors hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Restore previous TimeFolio state
+            </button>
+          </div>
+        ) : null}
+
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
           <div className="flex flex-col gap-3 rounded-xl border border-slate-700 bg-slate-950/50 p-4">
             <div className="text-sm font-medium text-slate-100">Import JSON</div>
@@ -618,6 +733,35 @@ export function TrackerSettingsPanel() {
               disabled={isDataBusy}
               className="block w-full rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-200 file:mr-4 file:rounded-md file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-100 hover:file:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
             />
+            {pendingImportPreview ? (
+              <div className="rounded-xl border border-slate-700 bg-slate-900/80 p-3 text-xs text-slate-300">
+                <div className="font-medium text-slate-100">Ready to import: {pendingImportPreview.fileName}</div>
+                <div className="mt-2 grid gap-1 sm:grid-cols-2">
+                  <div>Session count: {pendingImportPreview.sessionCount}</div>
+                  <div>Summary count: {pendingImportPreview.summaryCount}</div>
+                  <div>Tracker rule count: {pendingImportPreview.trackerRuleCount}</div>
+                  <div>Account: {pendingImportPreview.hasAccount ? "present" : "absent"}</div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleConfirmImportData}
+                    disabled={isDataBusy}
+                    className="rounded-lg border border-cyan-500/30 bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Confirm import
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelImportData}
+                    disabled={isDataBusy}
+                    className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-3">
@@ -640,11 +784,23 @@ export function TrackerSettingsPanel() {
             {isConfirmingReset ? (
               <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-100">
                 <p className="font-medium">This clears only TimeFolio data. Study Tracker data is untouched.</p>
+                <p className="mt-2 text-xs text-rose-100/90">
+                  This action is irreversible once confirmed. Type {RESET_CONFIRMATION_TOKEN} to continue.
+                </p>
+                <input
+                  type="text"
+                  value={resetConfirmationToken}
+                  onChange={(event) => setResetConfirmationToken(event.target.value)}
+                  onKeyDown={handleResetConfirmationKeyDown}
+                  disabled={isDataBusy}
+                  placeholder={`Type ${RESET_CONFIRMATION_TOKEN}`}
+                  className="mt-3 block w-full rounded-lg border border-rose-400/40 bg-rose-950/20 px-3 py-2 text-sm text-rose-100 placeholder:text-rose-200/70 outline-none transition-colors focus:border-rose-300 focus:ring-2 focus:ring-rose-400/30 disabled:cursor-not-allowed disabled:opacity-60"
+                />
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={handleConfirmResetData}
-                    disabled={isDataBusy}
+                    disabled={isDataBusy || !canConfirmReset}
                     className="rounded-lg border border-rose-400/40 bg-rose-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Confirm reset
