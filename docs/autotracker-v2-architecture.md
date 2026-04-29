@@ -22,6 +22,18 @@ This document is docs-only. It does not authorize runtime implementation, backen
 - There is no rule push.
 - Funding and donation work remains paused.
 
+## Scaffolding Stop Lock
+
+V2 pure scaffolding is complete through the reducer, adapter, in-memory repository, fake persistence port, and fake consumer.
+
+No integration harness should be added yet. Work stops here until one of these is explicitly chosen:
+
+1. a real native normalized event source,
+2. a real browser/Tauri/local persistence backend,
+3. an explicit UI integration plan.
+
+Future work must begin with a read-only audit and a new source-of-truth decision before touching runtime code. Backend, cloud, auth, billing, device lease, and span ingestion remain future-only.
+
 ## Retired V1 Assumptions
 
 Browser-timer-as-authority is retired. A browser timer, page timer, React timer, or cloud timer must never decide whether a native Auto-Tracker session exists, continues, pauses, or finalizes.
