@@ -1,6 +1,11 @@
-# Step 2 Command Center
+# TimeFolio Study Tracker
 
-Local-first Step 2 study OS for macOS. The app is a React + TypeScript + Vite frontend with a Tauri desktop shell and native SQLite persistence.
+TimeFolio Study Tracker is a free, open-source, local-first study app for macOS. It is a React + TypeScript + Vite frontend with a Tauri desktop shell and native SQLite persistence.
+
+## Distribution
+
+- [Distribution and install guide](docs/distribution.md)
+- [Post-release smoke checklist](docs/post-release-smoke-checklist.md)
 
 ## What It Does
 
