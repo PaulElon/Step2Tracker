@@ -184,6 +184,66 @@ test("finalizedSessions append and restore in adapter emission order", () => {
   assert.equal(snapshot.finalizedSessions[1].finalizedBy, "manualStop");
 });
 
+test("replaceFinalizedSessions replaces the ledger exactly, preserves order, and keeps old sessions out", () => {
+  const repository = createAutoTrackerV2SessionRepository({
+    schemaVersion: 1,
+    currentState: createFocusedState(),
+    finalizedSessions: [
+      createFinalizedSession("old-1", anki, 0, 10_000, "manualStop"),
+      createFinalizedSession("old-2", browser, 10_000, 20_000, "manualStop"),
+    ],
+  });
+
+  const replacementBrowserTarget: AutoTrackerV2Target = {
+    kind: browser.kind,
+    stableId: browser.stableId,
+    label: browser.label,
+  };
+  const replacementAnkiTarget: AutoTrackerV2Target = {
+    kind: anki.kind,
+    stableId: anki.stableId,
+    label: anki.label,
+  };
+  const replacementSessions = [
+    createFinalizedSession("new-1", replacementBrowserTarget, 30_000, 40_000, "manualStop"),
+    createFinalizedSession("new-2", replacementAnkiTarget, 40_000, 50_000, "awayGraceElapsed"),
+  ];
+
+  const replaced = repository.replaceFinalizedSessions(replacementSessions);
+
+  assert.deepEqual(
+    replaced.finalizedSessions.map((session) => session.sessionId),
+    ["new-1", "new-2"],
+  );
+  assert.deepEqual(
+    replaced.finalizedSessions.map((session) => session.target.stableId),
+    [browser.stableId, anki.stableId],
+  );
+  assert.equal(
+    replaced.finalizedSessions.some((session) => session.sessionId.startsWith("old-")),
+    false,
+  );
+
+  replacementSessions[0].sessionId = "mutated-source";
+  replacementSessions[1].target.stableId = "mutated-source-target";
+  replaced.finalizedSessions[0].endedAtMs = 99_999;
+
+  const reread = repository.getSnapshot();
+
+  assert.deepEqual(
+    reread.finalizedSessions.map((session) => session.sessionId),
+    ["new-1", "new-2"],
+  );
+  assert.deepEqual(
+    reread.finalizedSessions.map((session) => session.target.stableId),
+    [browser.stableId, anki.stableId],
+  );
+  assert.deepEqual(
+    reread.finalizedSessions.map((session) => session.endedAtMs),
+    [40_000, 50_000],
+  );
+});
+
 test("schemaVersion is preserved and explicitly checked", () => {
   const repository = createAutoTrackerV2SessionRepository({
     schemaVersion: 1,
@@ -217,6 +277,41 @@ test("unknown fields are ignored safely when loading a snapshot", () => {
   assert.equal(loaded.schemaVersion, 1);
   assert.equal("extraTopLevelField" in loaded, false);
   assert.equal(loaded.currentState.lastEventMs, 123);
+});
+
+test("loadSnapshot currently accepts malformed finalizedSessions objects and clones them verbatim", () => {
+  const repository = createAutoTrackerV2SessionRepository();
+  const malformedFinalizedSession = {
+    sessionId: "corrupted-session",
+    target: {
+      kind: "app",
+      stableId: "corrupted.app",
+    },
+    unexpectedLedgerNote: { reason: "corrupted snapshot" },
+  };
+
+  const loaded = repository.loadSnapshot({
+    schemaVersion: 1,
+    currentState: createFocusedState(123),
+    finalizedSessions: [malformedFinalizedSession],
+  });
+
+  assert.equal(loaded.finalizedSessions.length, 1);
+  assert.deepEqual(loaded.finalizedSessions[0], malformedFinalizedSession);
+
+  malformedFinalizedSession.target.stableId = "mutated-source";
+  malformedFinalizedSession.unexpectedLedgerNote.reason = "mutated-source";
+
+  const reread = repository.getSnapshot();
+
+  assert.deepEqual(reread.finalizedSessions[0], {
+    sessionId: "corrupted-session",
+    target: {
+      kind: "app",
+      stableId: "corrupted.app",
+    },
+    unexpectedLedgerNote: { reason: "corrupted snapshot" },
+  });
 });
 
 test("repository does not synthesize finalization from missingHeartbeat or any event", () => {
