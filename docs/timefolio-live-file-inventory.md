@@ -1,3 +1,9 @@
+# WARNING: Historical inventory.
+
+This document is a historical inventory and may still be useful for code archaeology. Any Auto-Tracker port 52340 / old sidecar / browser-cloud-span assumptions are superseded by the Auto-Tracker V2 docs.
+
+Live repo code and the Auto-Tracker V2 docs override this inventory for new implementation.
+
 # TimeFolio Live-File Inventory
 
 _Generated 2026-04-26. Source of truth: live import/script chains, not docs._
