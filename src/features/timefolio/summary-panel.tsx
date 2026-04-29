@@ -66,12 +66,40 @@ function buildNarrative(params: {
   return narrative;
 }
 
+function PanelState({
+  title,
+  description,
+  tone = "neutral",
+}: {
+  title: string;
+  description: string;
+  tone?: "neutral" | "error";
+}) {
+  const toneClasses =
+    tone === "error"
+      ? "border-red-500/30 bg-red-500/10 text-red-200"
+      : "border-slate-700/80 bg-slate-800/60 text-slate-200";
+
+  return (
+    <div className={`rounded-2xl border px-5 py-4 ${toneClasses}`}>
+      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+        {title}
+      </div>
+      <p className="mt-2 text-sm leading-6 text-slate-300">{description}</p>
+    </div>
+  );
+}
+
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl border border-slate-700 bg-slate-800 p-5 flex flex-col gap-1">
-      <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">{label}</span>
-      <span className="text-2xl font-semibold text-slate-100">{value}</span>
-      {sub && <span className="text-xs text-slate-500">{sub}</span>}
+    <div className="rounded-2xl border border-slate-700/80 bg-slate-800/60 p-5 shadow-sm shadow-slate-950/20">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
+        {label}
+      </span>
+      <span className="mt-3 block text-3xl font-semibold tracking-tight text-slate-100">
+        {value}
+      </span>
+      {sub && <span className="mt-2 block text-xs text-slate-500">{sub}</span>}
     </div>
   );
 }
@@ -115,23 +143,37 @@ export function SummaryPanel() {
   );
 
   if (isLoading) {
-    return <div className="p-8 text-slate-400">Loading…</div>;
+    return (
+      <div className="p-8">
+        <PanelState
+          title="Loading summary"
+          description="Building the latest TimeFolio summary cards and narrative."
+        />
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="p-8 text-red-400">Error: {error}</div>;
+    return (
+      <div className="p-8">
+        <PanelState title="Summary unavailable" description={error} tone="error" />
+      </div>
+    );
   }
 
   return (
     <div className="p-8 flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-200">Summary</h2>
-        <div className="flex gap-1 rounded-lg bg-slate-800 border border-slate-700 p-1">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold text-slate-100">Summary</h2>
+          <p className="text-sm text-slate-500">Range-based totals with a generated narrative.</p>
+        </div>
+        <div className="flex gap-1 rounded-xl border border-slate-700/80 bg-slate-800/60 p-1">
           {(["today", "7d", "30d"] as Range[]).map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                 range === r
                   ? "bg-indigo-600 text-white"
                   : "text-slate-400 hover:text-slate-200"
@@ -161,16 +203,12 @@ export function SummaryPanel() {
         )}
       </div>
 
-      {metrics.sessionCount === 0 ? (
-        <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-6 text-center text-slate-500 text-sm">
-          No sessions logged for {RANGE_LABELS[range].toLowerCase()}.
-        </div>
-      ) : (
-        <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-5 flex flex-col gap-2">
-          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Generated Narrative</span>
-          <p className="text-slate-200 text-sm leading-relaxed">{narrative}</p>
-        </div>
-      )}
+      <div className="rounded-2xl border border-slate-700/80 bg-slate-800/50 p-6 flex flex-col gap-2">
+        <span className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+          Generated Narrative
+        </span>
+        <p className="text-sm leading-7 text-slate-200">{narrative}</p>
+      </div>
     </div>
   );
 }
