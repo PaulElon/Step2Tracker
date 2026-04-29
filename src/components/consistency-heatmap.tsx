@@ -1,4 +1,4 @@
-import { addDays, getTodayKey, startOfWeek } from "../lib/datetime";
+import { addDays, formatMinutes, getTodayKey, startOfWeek } from "../lib/datetime";
 import { cn } from "../lib/ui";
 
 function intensityClass(minutes: number) {
@@ -61,7 +61,7 @@ export function ConsistencyHeatmap({
     <figure>
       <figcaption className="mb-4 text-xs text-slate-500">
         {activeDays.length
-          ? `${activeDays.length} active days · ${Math.round(totalMinutes / 60)}h · ${longestStreak}d streak`
+          ? `${activeDays.length} active days · ${formatMinutes(totalMinutes)} · ${longestStreak}d streak`
           : `No activity in the last ${weeks} weeks`}
       </figcaption>
 
@@ -100,7 +100,7 @@ export function ConsistencyHeatmap({
               return (
                 <div
                   key={dateKey}
-                  title={`${dateLabel}: ${minutes > 0 ? `${Math.round((minutes / 60) * 10) / 10}h` : "no activity"}`}
+                  title={`${dateLabel}: ${minutes > 0 ? formatMinutes(minutes) : "no activity"}`}
                   className={cn(
                     "aspect-square rounded-sm transition",
                     intensityClass(minutes),

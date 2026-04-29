@@ -1,4 +1,4 @@
-import { formatDateKey, formatMonthLabel, getTodayKey, parseDateKey } from "../lib/datetime";
+import { formatDateKey, formatMinutes, formatMonthLabel, getTodayKey, parseDateKey } from "../lib/datetime";
 import { cn } from "../lib/ui";
 
 const weekDayLabels = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -71,7 +71,7 @@ export function MiniCalendar({
               cell.isCurrentMonth ? "border-white/10 bg-white/[0.03]" : "border-transparent bg-transparent text-slate-600",
               cell.isToday ? "ring-1 ring-cyan-300/45" : "",
             )}
-            title={`${cell.dateKey} · ${Math.round(cell.minutes / 60)}h scheduled`}
+            title={`${cell.dateKey} · ${formatMinutes(cell.minutes)} scheduled`}
           >
             <span className={cn("text-sm", cell.isCurrentMonth ? "text-slate-200" : "text-slate-600")}>
               {cell.dayNumber}
