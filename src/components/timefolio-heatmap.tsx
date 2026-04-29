@@ -40,24 +40,24 @@ export function TimeFolioHeatmap({
   const canGoNext = addMonths(viewMonth, 1).slice(0, 7) <= today.slice(0, 7);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex h-full min-h-0 w-full flex-col gap-3">
       <div className="flex items-center justify-between">
         <button
           type="button"
           onClick={() => setViewMonth((m) => addMonths(m, -1))}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-white/5 hover:text-slate-200"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-[15px] font-semibold leading-none text-slate-300 transition hover:bg-white/5 hover:text-slate-100"
           aria-label="Previous month"
         >
           ‹
         </button>
-        <span className="text-sm font-semibold text-slate-200">{monthLabel}</span>
+        <span className="text-sm font-semibold text-slate-100">{monthLabel}</span>
         <button
           type="button"
           onClick={() => setViewMonth((m) => addMonths(m, 1))}
           disabled={!canGoNext}
           className={cn(
-            "flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition",
-            canGoNext ? "hover:bg-white/5 hover:text-slate-200" : "cursor-default opacity-30",
+            "flex h-8 w-8 items-center justify-center rounded-md text-[15px] font-semibold leading-none text-slate-300 transition",
+            canGoNext ? "hover:bg-white/5 hover:text-slate-100" : "cursor-default opacity-40",
           )}
           aria-label="Next month"
         >
@@ -65,18 +65,18 @@ export function TimeFolioHeatmap({
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-0.5">
         {DAY_LABELS.map((d) => (
           <div
             key={d}
-            className="text-center text-[10px] uppercase tracking-wider text-slate-500"
+            className="text-center text-[9px] uppercase tracking-wider text-slate-500"
           >
             {d[0]}
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid flex-1 min-h-0 grid-cols-7 grid-rows-6 gap-px">
         {gridDates.map((date) => {
           const isCurrentMonth = date.startsWith(currentMonthPrefix);
           const hours = dailyHours[date] ?? 0;
@@ -98,7 +98,7 @@ export function TimeFolioHeatmap({
                     : undefined
               }
               className={cn(
-                "relative flex aspect-square flex-col items-center justify-center rounded-md transition",
+                "relative flex h-full min-h-0 flex-col items-center justify-center rounded-md transition",
                 intensityClass(isCurrentMonth ? hours : 0),
                 isCurrentMonth
                   ? "cursor-pointer hover:brightness-125"
@@ -109,7 +109,7 @@ export function TimeFolioHeatmap({
             >
               <span
                 className={cn(
-                  "text-[11px] font-medium leading-none",
+                  "text-[10px] font-medium leading-none",
                   isCurrentMonth && hours > 0 ? "text-white" : "text-slate-500",
                   isToday && "text-violet-300",
                   isSelected && "text-white",
@@ -122,12 +122,12 @@ export function TimeFolioHeatmap({
         })}
       </div>
 
-      <div className="flex items-center justify-end gap-1.5 text-[11px] text-slate-500">
+      <div className="flex items-center justify-end gap-0.5 text-[9px] text-slate-500">
         <span>Less</span>
-        <span className="h-2.5 w-2.5 rounded-sm bg-violet-400/20" />
-        <span className="h-2.5 w-2.5 rounded-sm bg-violet-400/35" />
-        <span className="h-2.5 w-2.5 rounded-sm bg-violet-400/60" />
-        <span className="h-2.5 w-2.5 rounded-sm bg-violet-400/90" />
+        <span className="h-2 w-2 rounded-sm bg-violet-400/20" />
+        <span className="h-2 w-2 rounded-sm bg-violet-400/35" />
+        <span className="h-2 w-2 rounded-sm bg-violet-400/60" />
+        <span className="h-2 w-2 rounded-sm bg-violet-400/90" />
         <span>More</span>
       </div>
     </div>

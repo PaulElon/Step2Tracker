@@ -236,7 +236,7 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
             onClick={handleStopAndSave}
             disabled={isSaving}
           >
-            {isSaving ? "Saving..." : "Stop &amp; Save"}
+            {isSaving ? "Saving..." : "Stop & Save"}
           </button>
         )}
         <button
