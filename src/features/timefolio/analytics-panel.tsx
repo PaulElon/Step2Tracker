@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { allocationByMethod, totalsByDay } from "../../lib/tf-session-adapters";
+import { formatMinutes } from "../../lib/datetime";
 import { useTimeFolioStore } from "../../state/tf-store";
 import type { TfSessionLog } from "../../types/models";
 
@@ -37,8 +38,8 @@ function shiftDate(date: Date, days: number): Date {
   return next;
 }
 
-function formatHours(hours: number): string {
-  return `${hours.toFixed(1)}h`;
+function formatDurationHours(hours: number): string {
+  return formatMinutes(Math.round(hours * 60));
 }
 
 function buildTrendPoints(dailyTotals: Record<string, number>): TrendPoint[] {
@@ -108,7 +109,7 @@ function TrendBar({
         <div
           className={`relative w-full overflow-hidden rounded-lg ${isLatest ? "bg-indigo-500/25" : "bg-slate-700/40"}`}
           style={{ height: `${height}%` }}
-          title={`${label}: ${formatHours(hours)}`}
+          title={`${label}: ${formatDurationHours(hours)}`}
         >
           <div className="absolute inset-0 bg-gradient-to-t from-cyan-400 via-sky-400 to-indigo-500 opacity-90" />
           <div className="absolute inset-x-0 bottom-0 h-3/4 bg-white/10" />
@@ -119,7 +120,7 @@ function TrendBar({
           {label}
         </div>
         <div className="mt-0.5 text-[11px] tabular-nums text-slate-500">
-          {formatHours(hours)}
+          {formatDurationHours(hours)}
         </div>
       </div>
     </div>
@@ -148,7 +149,7 @@ function MethodRow({
         </div>
         <div className="shrink-0 text-right">
           <div className="text-sm font-semibold tabular-nums text-slate-100">
-            {formatHours(hours)}
+            {formatDurationHours(hours)}
           </div>
           <div className="text-xs tabular-nums text-slate-400">{percent.toFixed(0)}%</div>
         </div>
@@ -262,26 +263,26 @@ export function AnalyticsPanel() {
       <div className="relative grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <MetricCard
           label="Last 7 Days"
-          value={formatHours(analytics.last7DaysHours)}
+          value={formatDurationHours(analytics.last7DaysHours)}
           sub="Total hours"
           accentClass="bg-gradient-to-r from-cyan-400 to-sky-500"
         />
         <MetricCard
           label="Last 30 Days"
-          value={formatHours(analytics.last30DaysHours)}
+          value={formatDurationHours(analytics.last30DaysHours)}
           sub="Total hours"
           accentClass="bg-gradient-to-r from-sky-400 to-indigo-500"
         />
         <MetricCard
           label="Active Day Avg"
-          value={formatHours(analytics.activeDays > 0 ? analytics.totalHours / analytics.activeDays : 0)}
+          value={formatDurationHours(analytics.activeDays > 0 ? analytics.totalHours / analytics.activeDays : 0)}
           sub={`${analytics.activeDays} active day${analytics.activeDays === 1 ? "" : "s"}`}
           accentClass="bg-gradient-to-r from-indigo-400 to-violet-500"
         />
         <MetricCard
           label="Focus / Distraction"
           value={`${analytics.focusPercent.toFixed(0)}%`}
-          sub={`${formatHours(analytics.distractionHours)} distraction`}
+          sub={`${formatDurationHours(analytics.distractionHours)} distraction`}
           accentClass="bg-gradient-to-r from-emerald-400 to-teal-500"
         />
         <MetricCard
@@ -292,7 +293,7 @@ export function AnalyticsPanel() {
               : "—"
           }
           sub={
-            analytics.bestDayEntry ? `${formatHours(analytics.bestDayEntry[1])} total` : "No daily totals"
+            analytics.bestDayEntry ? `${formatDurationHours(analytics.bestDayEntry[1])} total` : "No daily totals"
           }
           accentClass="bg-gradient-to-r from-amber-400 to-orange-500"
         />
@@ -310,7 +311,7 @@ export function AnalyticsPanel() {
               </p>
             </div>
             <div className="text-xs tabular-nums text-slate-500">
-              Peak {formatHours(trendPeakHours)}
+              Peak {formatDurationHours(trendPeakHours)}
             </div>
           </div>
 
@@ -363,9 +364,9 @@ export function AnalyticsPanel() {
           <div className="mt-5 rounded-xl border border-slate-700/60 bg-slate-950/35 p-4 text-sm text-slate-400">
             Top method share:{" "}
             <span className="font-semibold tabular-nums text-slate-200">
-              {formatHours(topMethodTotal)}
+              {formatDurationHours(topMethodTotal)}
             </span>
-            {analytics.totalHours > 0 ? ` of ${formatHours(analytics.totalHours)} total.` : "."}
+            {analytics.totalHours > 0 ? ` of ${formatDurationHours(analytics.totalHours)} total.` : "."}
           </div>
         </section>
       </div>
