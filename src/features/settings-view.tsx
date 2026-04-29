@@ -385,7 +385,7 @@ function ResourcesPanel({
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-base font-semibold text-white">
-              Paste url of the {newName.trim() || "resource"} website
+              Paste the URL for the {newName.trim() || "resource"} website
             </h3>
             <input
               autoFocus
@@ -420,7 +420,7 @@ function ResourcesPanel({
             <p className="mt-2 text-sm text-slate-200">1. Open Finder (or press the search icon button at top of desktop)</p>
             <p className="mt-1 text-sm text-slate-200">2. Click on Applications and find the App</p>
             <p className="mt-1 text-sm text-slate-200">3. Right click on app and hold the option key ⌥</p>
-            <p className="mt-1 text-sm text-slate-200">4. Select "Copy "App" as Pathname" and paste it in the field below</p>
+            <p className="mt-1 text-sm text-slate-200">4. Choose Copy “App” as Pathname, then paste it in the field below.</p>
             <input
               autoFocus
               value={modalInput}
