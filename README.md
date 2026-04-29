@@ -67,7 +67,7 @@ If alerts do not appear:
 
 1. Open System Settings.
 2. Go to Notifications.
-3. Find Step 2 Command Center.
+3. Find TimeFolio Study Tracker.
 4. Enable notifications and alert style.
 
 ## Updater
@@ -126,4 +126,5 @@ Run these checks before shipping:
 - The app uses native persistence, so browser storage clearing does not reset data.
 - Practice test data, reminders, weak topics, planner tasks, settings, and backups are persisted together in the local database.
 - If you need a full reset, remove the app data directory only after backing it up.
-- Deleting /Applications/Step 2 Command Center.app removes the app bundle only. It does not remove user data.
+- Deleting /Applications/TimeFolio Study Tracker.app removes the app bundle only. It does not remove user data.
+- Some technical identifiers keep legacy Step 2 naming for compatibility, including the app data path, updater environment variables, signing key path, and repository URL.
