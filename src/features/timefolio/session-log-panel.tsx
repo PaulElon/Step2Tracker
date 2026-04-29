@@ -13,25 +13,42 @@ const EMPTY_FORM = {
 };
 
 type FormState = typeof EMPTY_FORM;
+type FeedbackState = {
+  kind: "success" | "error";
+  text: string;
+};
 
 function toMethodKey(method: string): string {
   return method.trim().toLowerCase().replace(/\s+/g, "-");
 }
 
 function buildSession(form: FormState, id: string): TfSessionLog {
+  const parsedHours = Number.parseFloat(form.hours);
   const startISO = `${form.date}T00:00:00.000Z`;
   return {
     id,
     date: form.date,
     method: form.method.trim(),
     methodKey: toMethodKey(form.method),
-    hours: parseFloat(form.hours as string) || 0,
+    hours: Number.isFinite(parsedHours) ? parsedHours : 0,
     startISO,
     endISO: startISO,
     notes: form.notes.trim(),
     isDistraction: form.isDistraction,
     isLive: false,
   };
+}
+
+function validateSessionForm(form: FormState): string | null {
+  if (!form.method.trim()) return "Method is required.";
+  if (!form.date) return "Date is required.";
+
+  const hours = Number.parseFloat(form.hours);
+  if (!Number.isFinite(hours)) return "Hours must be a valid number.";
+  if (hours <= 0) return "Hours must be greater than 0.";
+  if (hours > 24) return "Hours must be 24 or less.";
+
+  return null;
 }
 
 function sessionToForm(s: TfSessionLog): FormState {
@@ -71,6 +88,7 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
   const [notes, setNotes] = useState("");
   const [isDistraction, setIsDistraction] = useState(false);
   const [displayMs, setDisplayMs] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
 
   const startISORef = useRef<string>("");
   const lastResumeRef = useRef<number>(0);
@@ -115,25 +133,31 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
   }
 
   async function handleStopAndSave() {
+    if (isSaving) return;
+    setIsSaving(true);
     const endMs = Date.now();
     const totalMs =
       accumulatedRef.current + (status === "running" ? endMs - lastResumeRef.current : 0);
     const hours = Math.round((totalMs / 3600000) * 100) / 100;
-    const session: TfSessionLog = {
-      id: `tf-session-${endMs}`,
-      date: localDateStr(startISORef.current),
-      method: method.trim(),
-      methodKey: toMethodKey(method),
-      hours,
-      startISO: startISORef.current,
-      endISO: new Date(endMs).toISOString(),
-      notes: notes.trim(),
-      isDistraction,
-      isLive: false,
-    };
-    await onSave(session);
-    reset();
-    onDismiss();
+    try {
+      const session: TfSessionLog = {
+        id: `tf-session-${endMs}`,
+        date: localDateStr(startISORef.current),
+        method: method.trim(),
+        methodKey: toMethodKey(method),
+        hours,
+        startISO: startISORef.current,
+        endISO: new Date(endMs).toISOString(),
+        notes: notes.trim(),
+        isDistraction,
+        isLive: false,
+      };
+      await onSave(session);
+      reset();
+      onDismiss();
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -206,14 +230,23 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
           </button>
         )}
         {status !== "idle" && (
-          <button type="button" className={primaryButtonClassName} onClick={handleStopAndSave}>
-            Stop &amp; Save
+          <button
+            type="button"
+            className={primaryButtonClassName}
+            onClick={handleStopAndSave}
+            disabled={isSaving}
+          >
+            {isSaving ? "Saving..." : "Stop &amp; Save"}
           </button>
         )}
         <button
           type="button"
           className={secondaryButtonClassName}
-          onClick={() => { reset(); onDismiss(); }}
+          onClick={() => {
+            reset();
+            onDismiss();
+          }}
+          disabled={isSaving}
         >
           Cancel
         </button>
@@ -224,22 +257,40 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
 
 interface SessionFormProps {
   initial: FormState;
-  onSave: (form: FormState) => void;
+  onSave: (form: FormState) => Promise<void>;
   onCancel: () => void;
   isNew: boolean;
 }
 
 function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
   const [form, setForm] = useState<FormState>(initial);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   function set(key: keyof FormState, value: string | boolean) {
     setForm((prev) => ({ ...prev, [key]: value }));
+    setSubmitError(null);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.method.trim()) return;
-    onSave(form);
+    const validationError = validateSessionForm(form);
+    if (validationError) {
+      setSubmitError(validationError);
+      return;
+    }
+
+    setIsSaving(true);
+    setSubmitError(null);
+    try {
+      await onSave(form);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Unable to save session right now."
+      );
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -260,6 +311,7 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
           onChange={(e) => set("method", e.target.value)}
           placeholder="e.g. Active Recall"
           required
+          disabled={isSaving}
         />
       </div>
 
@@ -272,6 +324,7 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
             value={form.date}
             onChange={(e) => set("date", e.target.value)}
             required
+            disabled={isSaving}
           />
         </div>
         <div className="flex flex-col gap-1 w-24">
@@ -286,6 +339,7 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
             onChange={(e) => set("hours", e.target.value)}
             placeholder="1.5"
             required
+            disabled={isSaving}
           />
         </div>
       </div>
@@ -298,6 +352,7 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
           value={form.notes}
           onChange={(e) => set("notes", e.target.value)}
           placeholder="Optional notes…"
+          disabled={isSaving}
         />
       </div>
 
@@ -307,16 +362,31 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
           checked={form.isDistraction}
           onChange={(e) => set("isDistraction", e.target.checked)}
           className="accent-red-400"
+          disabled={isSaving}
         />
         Mark as distraction
       </label>
 
+      {submitError && (
+        <div
+          role="alert"
+          className="rounded-md border border-red-800/70 bg-red-950/50 px-3 py-2 text-sm text-red-200"
+        >
+          {submitError}
+        </div>
+      )}
+
       <div className="flex gap-2 justify-end pt-1">
-        <button type="button" className={secondaryButtonClassName} onClick={onCancel}>
+        <button
+          type="button"
+          className={secondaryButtonClassName}
+          onClick={onCancel}
+          disabled={isSaving}
+        >
           Cancel
         </button>
-        <button type="submit" className={primaryButtonClassName}>
-          Save
+        <button type="submit" className={primaryButtonClassName} disabled={isSaving}>
+          {isSaving ? "Saving..." : "Save"}
         </button>
       </div>
     </form>
@@ -328,6 +398,9 @@ export function SessionLogPanel() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showTimer, setShowTimer] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
 
   if (isLoading) {
     return <div className="p-8 text-slate-400">Loading sessions…</div>;
@@ -341,19 +414,47 @@ export function SessionLogPanel() {
     (a, b) => new Date(b.startISO).getTime() - new Date(a.startISO).getTime()
   );
 
+  async function persistSession(session: TfSessionLog, successText: string) {
+    try {
+      await upsertSessionLog(session);
+      setFeedback({ kind: "success", text: successText });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to save session right now.";
+      setFeedback({ kind: "error", text: message });
+      throw error;
+    }
+  }
+
+  async function removeSession(id: string) {
+    try {
+      setDeletingId(id);
+      await deleteSessionLog(id);
+      setFeedback({ kind: "success", text: "Session deleted." });
+      if (editingId === id) setEditingId(null);
+      setDeleteConfirmId((current) => (current === id ? null : current));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to delete session right now.";
+      setFeedback({ kind: "error", text: message });
+      throw error;
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   async function handleAdd(form: FormState) {
-    await upsertSessionLog(buildSession(form, `tf-session-${Date.now()}`));
+    await persistSession(buildSession(form, `tf-session-${Date.now()}`), "Session added.");
     setShowAddForm(false);
   }
 
   async function handleEdit(id: string, form: FormState) {
-    await upsertSessionLog(buildSession(form, id));
+    await persistSession(buildSession(form, id), "Session updated.");
     setEditingId(null);
   }
 
-  async function handleDelete(id: string) {
-    await deleteSessionLog(id);
-    if (editingId === id) setEditingId(null);
+  async function handleDeleteConfirm(id: string) {
+    await removeSession(id);
   }
 
   return (
@@ -369,9 +470,25 @@ export function SessionLogPanel() {
         </div>
       )}
 
+      {feedback && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={
+            feedback.kind === "success"
+              ? "rounded-lg border border-emerald-800/70 bg-emerald-950/50 px-3 py-2 text-sm text-emerald-200"
+              : "rounded-lg border border-red-800/70 bg-red-950/50 px-3 py-2 text-sm text-red-200"
+          }
+        >
+          {feedback.text}
+        </div>
+      )}
+
       {showTimer && (
         <ManualTimer
-          onSave={async (session) => { await upsertSessionLog(session); }}
+          onSave={async (session) => {
+            await persistSession(session, "Timer session saved.");
+          }}
           onDismiss={() => setShowTimer(false)}
         />
       )}
@@ -419,16 +536,40 @@ export function SessionLogPanel() {
                 <button
                   className={secondaryButtonClassName}
                   style={{ padding: "2px 10px", fontSize: "0.75rem" }}
-                  onClick={() => setEditingId(s.id)}
+                  onClick={() => {
+                    setDeleteConfirmId(null);
+                    setEditingId(s.id);
+                  }}
+                  disabled={deletingId === s.id}
                 >
                   Edit
                 </button>
-                <button
-                  className="text-xs rounded px-2.5 py-0.5 bg-red-900/40 text-red-300 hover:bg-red-900/70 transition-colors"
-                  onClick={() => handleDelete(s.id)}
-                >
-                  Delete
-                </button>
+                {deleteConfirmId === s.id ? (
+                  <>
+                    <button
+                      className="text-xs rounded px-2.5 py-0.5 bg-red-900/70 text-red-100 hover:bg-red-800 transition-colors disabled:opacity-60"
+                      onClick={() => handleDeleteConfirm(s.id)}
+                      disabled={deletingId === s.id}
+                    >
+                      {deletingId === s.id ? "Deleting..." : "Confirm delete"}
+                    </button>
+                    <button
+                      className="text-xs rounded px-2.5 py-0.5 bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors disabled:opacity-60"
+                      onClick={() => setDeleteConfirmId(null)}
+                      disabled={deletingId === s.id}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="text-xs rounded px-2.5 py-0.5 bg-red-900/40 text-red-300 hover:bg-red-900/70 transition-colors"
+                    onClick={() => setDeleteConfirmId(s.id)}
+                    disabled={deletingId === s.id}
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
             </div>
             <div className="flex gap-4 text-sm text-slate-400">
