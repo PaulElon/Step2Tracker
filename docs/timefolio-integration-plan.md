@@ -1,3 +1,14 @@
+# WARNING: Historical document.
+
+This plan is historical. The TimeFolio merge portions are mostly complete, and the Auto-Tracker Phase 6 / 52340 / sidecar / backend ingestion direction described here is superseded.
+
+Current Auto-Tracker source of truth:
+- `docs/autotracker-v2-architecture.md`
+- `docs/autotracker-v2-state-machine.md`
+- `docs/autotracker-v2-entitlement-and-sync.md`
+
+Do not use this file to implement Auto-Tracker V2.
+
 # TimeFolio Integration Plan
 
 _Generated 2026-04-26. Authoritative over all prior planning docs in space-study-quest-1._
