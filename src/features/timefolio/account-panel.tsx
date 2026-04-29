@@ -126,8 +126,8 @@ export function AccountPanel() {
   if (isLoading) {
     return (
       <PanelShell
-        title="Account / Billing"
-        subtitle="Read-only local account status for the TimeFolio integration. No auth, billing, or network actions are wired in this slice."
+        title="Account"
+        subtitle="Local-only account snapshot for this app. No billing, cloud sync, or network account connection is active yet."
       >
         <StatusBanner
           tone="loading"
@@ -141,8 +141,8 @@ export function AccountPanel() {
   if (error) {
     return (
       <PanelShell
-        title="Account / Billing"
-        subtitle="Read-only local account status for the TimeFolio integration. No auth, billing, or network actions are wired in this slice."
+        title="Account"
+        subtitle="Local-only account snapshot for this app. No billing, cloud sync, or network account connection is active yet."
       >
         <StatusBanner
           tone="error"
@@ -155,21 +155,21 @@ export function AccountPanel() {
 
   return (
     <PanelShell
-      title="Account / Billing"
-      subtitle="Read-only local account status for the TimeFolio integration. No auth, billing, or network actions are wired in this slice."
+      title="Account"
+      subtitle="Local-only account snapshot for this app. No billing, cloud sync, or network account connection is active yet."
     >
       <div className="flex flex-col gap-5">
         {account === null ? (
           <StatusBanner
             tone="info"
             title="Not connected yet"
-            message="Account sync and billing are intentionally paused during the merge. Study Tracker and TimeFolio local data continue to work offline."
+            message="This is a local-only, read-only account snapshot. Study Tracker and TimeFolio local data continue to work offline."
           />
         ) : (
           <StatusBanner
             tone="info"
             title="Connected locally"
-            message="This panel is reading the local account snapshot only. No auth, billing, or network calls are wired in."
+            message="This panel is reading the local account snapshot only. No billing, cloud sync, or network calls are wired in."
           />
         )}
 
@@ -192,7 +192,7 @@ export function AccountPanel() {
           <DetailCard
             label="Plan tier"
             value={account ? (account.planTier === "pro" ? "Pro" : "Free") : "Not available"}
-            subtext="Billing and plan updates are intentionally paused for now."
+            subtext="Plan state is shown only as part of the local snapshot."
           />
           <DetailCard
             label="Sync ID"

@@ -28,7 +28,7 @@ const TABS: { id: TimeFolioTab; label: string }[] = [
   { id: "analytics", label: "Analytics" },
   { id: "heatmap", label: "Heatmap" },
   { id: "tracker-settings", label: "Tracker Settings" },
-  { id: "account", label: "Account / Billing" },
+  { id: "account", label: "Account" },
 ];
 
 function ActivePanel({ tab }: { tab: TimeFolioTab }) {
