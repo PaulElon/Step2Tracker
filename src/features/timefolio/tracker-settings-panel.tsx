@@ -622,7 +622,9 @@ export function TrackerSettingsPanel() {
     try {
       const spans = await getLatestAutoTrackerSpansPlaceholder();
       await importNativeSpans(spans);
-      setAutoTrackerImportMessage("Auto-tracker span import is ready; transport is not connected yet.");
+      setAutoTrackerImportMessage(
+        "No Auto-Tracker ingestion is connected yet. No spans were imported. Future ingestion will need an explicit later implementation."
+      );
     } catch (err) {
       setAutoTrackerImportMessage(
         err instanceof Error && err.message ? err.message : "Unable to import auto-tracker spans."
@@ -829,7 +831,7 @@ export function TrackerSettingsPanel() {
             <div>
               <h3 className="text-base font-semibold text-slate-100">Auto-Tracker Status</h3>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-                Live bootstrap probe of the local TimeFolio Auto-Tracker service. This card does not write any data.
+                Read-only scaffold/placeholder for Auto-Tracker status. This card does not perform live ingestion or write any data.
               </p>
             </div>
           </div>
@@ -848,7 +850,7 @@ export function TrackerSettingsPanel() {
               disabled={isAutoTrackerImporting}
               className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-3 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isAutoTrackerImporting ? "Importing…" : "Import latest auto-tracker spans"}
+              {isAutoTrackerImporting ? "Previewing…" : "Preview placeholder auto-tracker import"}
             </button>
           </div>
         </div>
