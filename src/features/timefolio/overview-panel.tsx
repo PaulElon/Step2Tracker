@@ -1,3 +1,4 @@
+import { formatMinutes } from "../../lib/datetime";
 import { useTimeFolioStore } from "../../state/tf-store";
 
 function PanelState({
@@ -73,7 +74,7 @@ export function OverviewPanel() {
         <p className="text-sm text-slate-500">Latest totals and session activity at a glance.</p>
       </div>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Total Hours" value={totalHours.toFixed(1)} />
+        <StatCard label="Total Hours" value={formatMinutes(Math.round(totalHours * 60))} />
         <StatCard label="Sessions" value={String(sessionLogs.length)} />
         <StatCard label="Latest session date" value={latestDate ?? "No sessions yet"} />
         <StatCard label="Summaries" value={String(summaries.length)} />
