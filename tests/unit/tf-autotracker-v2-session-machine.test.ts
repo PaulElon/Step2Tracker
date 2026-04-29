@@ -129,10 +129,37 @@ test("app shutdown persists recoverable open state without finalizing", () => {
   assert.equal(finalized.length, 0);
 });
 
+test("app shutdown from awayPending preserves recoverable open state details", () => {
+  const leftAtMs = 42_000;
+  const { state, finalized } = reduceAll([
+    { type: "targetFocused", nowMs: 0, target: anki },
+    { type: "untrackedFocused", nowMs: leftAtMs },
+    { type: "appShutdown", nowMs: leftAtMs + 15_000 },
+  ]);
+
+  assert.equal(state.status, "recoverableOpen");
+  assert.equal(state.recoveryReason, "appShutdown");
+  assert.equal(finalized.length, 0);
+  assert.equal(state.openStateBeforeShutdown.status, "awayPending");
+  assert.equal(state.openStateBeforeShutdown.leftAtMs, leftAtMs);
+  assert.equal(state.openStateBeforeShutdown.previousTarget.stableId, anki.stableId);
+  assert.equal(state.openStateBeforeShutdown.session.target.stableId, anki.stableId);
+});
+
 test("missing native heartbeat alone does not finalize", () => {
   const { state, finalized } = reduceAll([
     { type: "targetFocused", nowMs: 0, target: anki },
     { type: "missingHeartbeat", nowMs: 120_000 },
+  ]);
+
+  assert.equal(state.status, "focused");
+  assert.equal(finalized.length, 0);
+});
+
+test("heartbeatMissed alias also does not finalize by itself", () => {
+  const { state, finalized } = reduceAll([
+    { type: "targetFocused", nowMs: 0, target: anki },
+    { type: "heartbeatMissed", nowMs: 120_000 },
   ]);
 
   assert.equal(state.status, "focused");
@@ -149,4 +176,53 @@ test("manual stop finalizes an open focused session", () => {
   assert.equal(finalized.length, 1);
   assert.equal(finalized[0].endedAtMs, 45_000);
   assert.equal(finalized[0].finalizedBy, "manualStop");
+});
+
+test("manual stop from recoverableOpen finalizes the recovered session using current reducer behavior", () => {
+  const shutdownMs = 12_000;
+  const manualStopMs = 20_000;
+
+  const { state, finalized } = reduceAll([
+    { type: "targetFocused", nowMs: 0, target: anki },
+    { type: "appShutdown", nowMs: shutdownMs },
+    { type: "manualStop", nowMs: manualStopMs },
+  ]);
+
+  assert.equal(state.status, "idle");
+  assert.equal(finalized.length, 1);
+  assert.equal(finalized[0].endedAtMs, manualStopMs);
+  assert.equal(finalized[0].finalizedAtMs, manualStopMs);
+  assert.equal(finalized[0].finalizedBy, "manualStop");
+});
+
+test("monotonic timestamp rejection throws on decreasing event time", () => {
+  assert.throws(
+    () =>
+      reduceAll([
+        { type: "targetFocused", nowMs: 5_000, target: anki },
+        { type: "tick", nowMs: 4_999 },
+      ]),
+    {
+      name: "RangeError",
+      message: "Auto-Tracker V2 event nowMs must be monotonic for a reducer state.",
+    },
+  );
+});
+
+test("same target at exactly 60 seconds after away starts finalizes the prior session", () => {
+  const leftAtMs = 8_000;
+  const resumeMs = leftAtMs + AUTO_TRACKER_V2_DEFAULT_AWAY_GRACE_MS;
+
+  const { state, finalized } = reduceAll([
+    { type: "targetFocused", nowMs: 0, target: anki },
+    { type: "untrackedFocused", nowMs: leftAtMs },
+    { type: "targetFocused", nowMs: resumeMs, target: anki },
+  ]);
+
+  assert.equal(state.status, "focused");
+  assert.equal(state.target.stableId, anki.stableId);
+  assert.equal(state.session.startedAtMs, resumeMs);
+  assert.equal(finalized.length, 1);
+  assert.equal(finalized[0].endedAtMs, leftAtMs);
+  assert.equal(finalized[0].finalizedBy, "awayGraceElapsed");
 });
