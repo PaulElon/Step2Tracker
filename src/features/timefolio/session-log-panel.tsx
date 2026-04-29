@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { useTimeFolioStore } from "../../state/tf-store";
-import { formatLongDate } from "../../lib/datetime";
+import { formatLongDate, formatMinutes } from "../../lib/datetime";
 import { fieldClassName, primaryButtonClassName, secondaryButtonClassName } from "../../lib/ui";
 import type { TfSessionLog } from "../../types/models";
 
 const EMPTY_FORM = {
   method: "",
   date: new Date().toISOString().slice(0, 10),
-  hours: "",
+  minutes: "",
   notes: "",
   isDistraction: false,
 };
@@ -23,14 +23,14 @@ function toMethodKey(method: string): string {
 }
 
 function buildSession(form: FormState, id: string): TfSessionLog {
-  const parsedHours = Number.parseFloat(form.hours);
+  const parsedMinutes = Number(form.minutes);
   const startISO = `${form.date}T00:00:00.000Z`;
   return {
     id,
     date: form.date,
     method: form.method.trim(),
     methodKey: toMethodKey(form.method),
-    hours: Number.isFinite(parsedHours) ? parsedHours : 0,
+    hours: Number.isFinite(parsedMinutes) ? parsedMinutes / 60 : 0,
     startISO,
     endISO: startISO,
     notes: form.notes.trim(),
@@ -43,10 +43,11 @@ function validateSessionForm(form: FormState): string | null {
   if (!form.method.trim()) return "Method is required.";
   if (!form.date) return "Date is required.";
 
-  const hours = Number.parseFloat(form.hours);
-  if (!Number.isFinite(hours)) return "Hours must be a valid number.";
-  if (hours <= 0) return "Hours must be greater than 0.";
-  if (hours > 24) return "Hours must be 24 or less.";
+  const minutes = Number(form.minutes);
+  if (!Number.isFinite(minutes)) return "Minutes must be a valid number.";
+  if (!Number.isInteger(minutes)) return "Minutes must be a whole number.";
+  if (minutes < 1) return "Minutes must be at least 1.";
+  if (minutes > 1440) return "Minutes must be 1440 or less.";
 
   return null;
 }
@@ -55,7 +56,7 @@ function sessionToForm(s: TfSessionLog): FormState {
   return {
     method: s.method,
     date: s.date,
-    hours: String(s.hours),
+    minutes: String(Math.round(s.hours * 60)),
     notes: s.notes,
     isDistraction: s.isDistraction,
   };
@@ -138,14 +139,14 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
     const endMs = Date.now();
     const totalMs =
       accumulatedRef.current + (status === "running" ? endMs - lastResumeRef.current : 0);
-    const hours = Math.round((totalMs / 3600000) * 100) / 100;
+    const minutes = Math.max(1, Math.floor(totalMs / 60000));
     try {
       const session: TfSessionLog = {
         id: `tf-session-${endMs}`,
         date: localDateStr(startISORef.current),
         method: method.trim(),
         methodKey: toMethodKey(method),
-        hours,
+        hours: minutes / 60,
         startISO: startISORef.current,
         endISO: new Date(endMs).toISOString(),
         notes: notes.trim(),
@@ -233,7 +234,9 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
           <button
             type="button"
             className={primaryButtonClassName}
-            onClick={handleStopAndSave}
+            onClick={() => {
+              void handleStopAndSave();
+            }}
             disabled={isSaving}
           >
             {isSaving ? "Saving..." : "Stop & Save"}
@@ -272,8 +275,7 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
     setSubmitError(null);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submitForm() {
     const validationError = validateSessionForm(form);
     if (validationError) {
       setSubmitError(validationError);
@@ -295,7 +297,10 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
 
   return (
     <form
-      onSubmit={handleSubmit}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submitForm();
+      }}
       className="rounded-lg border border-slate-600 bg-slate-800/80 p-4 flex flex-col gap-3"
     >
       <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
@@ -327,17 +332,18 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
             disabled={isSaving}
           />
         </div>
-        <div className="flex flex-col gap-1 w-24">
-          <label className="text-xs text-slate-400">Hours *</label>
+        <div className="flex flex-col gap-1 w-28">
+          <label className="text-xs text-slate-400">Minutes *</label>
           <input
             className={fieldClassName}
             type="number"
-            min="0.1"
-            max="24"
-            step="0.1"
-            value={form.hours}
-            onChange={(e) => set("hours", e.target.value)}
-            placeholder="1.5"
+            inputMode="numeric"
+            min="1"
+            max="1440"
+            step="1"
+            value={form.minutes}
+            onChange={(e) => set("minutes", e.target.value)}
+            placeholder="45"
             required
             disabled={isSaving}
           />
@@ -394,7 +400,8 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
 }
 
 export function SessionLogPanel() {
-  const { state, isLoading, error, upsertSessionLog, deleteSessionLog } = useTimeFolioStore();
+  const store = useTimeFolioStore();
+  const { state, isLoading, error } = store;
   const [showAddForm, setShowAddForm] = useState(false);
   const [showTimer, setShowTimer] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -416,7 +423,7 @@ export function SessionLogPanel() {
 
   async function persistSession(session: TfSessionLog, successText: string) {
     try {
-      await upsertSessionLog(session);
+      await store.upsertSessionLog(session);
       setFeedback({ kind: "success", text: successText });
     } catch (error) {
       const message =
@@ -429,7 +436,7 @@ export function SessionLogPanel() {
   async function removeSession(id: string) {
     try {
       setDeletingId(id);
-      await deleteSessionLog(id);
+      await store.deleteSessionLog(id);
       setFeedback({ kind: "success", text: "Session deleted." });
       if (editingId === id) setEditingId(null);
       setDeleteConfirmId((current) => (current === id ? null : current));
@@ -548,7 +555,9 @@ export function SessionLogPanel() {
                   <>
                     <button
                       className="text-xs rounded px-2.5 py-0.5 bg-red-900/70 text-red-100 hover:bg-red-800 transition-colors disabled:opacity-60"
-                      onClick={() => handleDeleteConfirm(s.id)}
+                      onClick={() => {
+                        void handleDeleteConfirm(s.id);
+                      }}
                       disabled={deletingId === s.id}
                     >
                       {deletingId === s.id ? "Deleting..." : "Confirm delete"}
@@ -574,7 +583,7 @@ export function SessionLogPanel() {
             </div>
             <div className="flex gap-4 text-sm text-slate-400">
               <span>{formatLongDate(s.date)}</span>
-              <span>{s.hours}h</span>
+              <span>{formatMinutes(Math.max(0, Math.round(s.hours * 60)))}</span>
             </div>
             {s.notes && <p className="text-sm text-slate-300 mt-1">{s.notes}</p>}
           </div>
