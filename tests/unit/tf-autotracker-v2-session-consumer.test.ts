@@ -149,39 +149,42 @@ test("consumer applyEvent for targetFocused persists focused state through the p
   assert.deepEqual(snapshot.finalizedSessions, []);
 });
 
-test("consumer untracked then tick past away grace appends a finalized session in order", async () => {
+test("consumer forwards custom awayGraceMs through applyEvent and preserves finalized ledger order", async () => {
   const initialSnapshot = createSnapshot({
-    currentState: {
-      status: "focused",
-      lastEventMs: 0,
-      target: anki,
-      session: {
-        sessionId: "app:com.ankiapp.client:0",
-        target: anki,
-        startedAtMs: 0,
-        pauseIntervals: [],
-      },
-    },
     finalizedSessions: [createFinalizedSession("session-0", browser, 1_000, 2_000, "manualStop")],
   });
   const { consumer, port } = createConsumer(initialSnapshot);
+  const customAwayGraceMs = 5_000;
 
   await consumer.applyEvent({
-    type: "untrackedFocused",
-    nowMs: 5_000,
+    type: "targetFocused",
+    nowMs: 0,
+    target: anki,
   });
-  const snapshot = await consumer.applyEvent({
-    type: "tick",
-    nowMs: 5_000 + 60_000,
-  });
+  await consumer.applyEvent(
+    {
+      type: "untrackedFocused",
+      nowMs: 5_000,
+    },
+    { awayGraceMs: customAwayGraceMs },
+  );
+  const snapshot = await consumer.applyEvent(
+    {
+      type: "tick",
+      nowMs: 5_000 + customAwayGraceMs,
+    },
+    { awayGraceMs: customAwayGraceMs },
+  );
 
-  assert.equal(port.calls.readSnapshot, 2);
-  assert.equal(port.calls.writeSnapshot, 2);
+  assert.equal(port.calls.readSnapshot, 3);
+  assert.equal(port.calls.writeSnapshot, 3);
+  assert.equal(snapshot.currentState.status, "idle");
   assert.equal(snapshot.finalizedSessions.length, 2);
   assert.deepEqual(
     snapshot.finalizedSessions.map((session) => session.sessionId),
     ["session-0", "app:com.ankiapp.client:0"],
   );
+  assert.equal(snapshot.finalizedSessions[1].endedAtMs, 5_000);
   assert.equal(snapshot.finalizedSessions[1].finalizedBy, "awayGraceElapsed");
 });
 
