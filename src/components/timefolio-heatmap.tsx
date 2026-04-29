@@ -3,6 +3,7 @@ import { cn } from "../lib/ui";
 import {
   addMonths,
   formatMonthLabel,
+  formatMinutes,
   getMonthGridDates,
   getTodayKey,
   parseDateKey,
@@ -92,7 +93,7 @@ export function TimeFolioHeatmap({
               disabled={!isCurrentMonth}
               title={
                 isCurrentMonth && hours > 0
-                  ? `${date}: ${hours}h`
+                  ? `${date}: ${formatMinutes(Math.round(hours * 60))}`
                   : isCurrentMonth
                     ? date
                     : undefined

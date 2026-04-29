@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTimeFolioStore } from "../../state/tf-store";
 import { totalsByDay } from "../../lib/tf-session-adapters";
-import { formatLongDate } from "../../lib/datetime";
+import { formatLongDate, formatMinutes } from "../../lib/datetime";
 import { TimeFolioHeatmap } from "../../components/timefolio-heatmap";
 import type { TfSessionLog } from "../../types/models";
 
@@ -45,7 +45,7 @@ function SessionRow({ session }: { session: TfSessionLog }) {
           </span>
         )}
         <span className="text-sm font-semibold tabular-nums text-slate-300">
-          {session.hours}h
+          {formatMinutes(Math.round(session.hours * 60))}
         </span>
       </div>
     </div>
@@ -104,7 +104,9 @@ function SelectedDaySessionModal({
               {formatLongDate(selectedDate)}
             </div>
             <div className="text-xs font-semibold tabular-nums text-violet-300">
-              {selectedHours > 0 ? `${selectedHours}h total` : "No activity"}
+              {selectedHours > 0
+                ? `${formatMinutes(Math.round(selectedHours * 60))} total`
+                : "No activity"}
             </div>
           </div>
 
@@ -159,7 +161,11 @@ function SelectedDaySessionLog({
 
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs font-semibold tabular-nums text-violet-300">
-              {selectedDate ? (selectedHours > 0 ? `${selectedHours}h total` : "No activity") : "Select a day"}
+              {selectedDate
+                ? selectedHours > 0
+                  ? `${formatMinutes(Math.round(selectedHours * 60))} total`
+                  : "No activity"
+                : "Select a day"}
             </span>
             <button
               type="button"
