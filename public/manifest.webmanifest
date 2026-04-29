@@ -1,7 +1,7 @@
 {
-  "name": "Step 2 Command Center",
-  "short_name": "Step2 Command",
-  "description": "Local-first Step 2 planning, remediation, and analytics workspace.",
+  "name": "TimeFolio Study Tracker",
+  "short_name": "TimeFolio",
+  "description": "TimeFolio Study Tracker for tracking study sessions and progress.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#07101a",
