@@ -97,7 +97,7 @@ function getIdentityValue(account: {
     return account.username;
   }
 
-  return "No email or username connected";
+  return "No local identity available";
 }
 
 function getIdentitySubtext(account: {
@@ -116,7 +116,7 @@ function getIdentitySubtext(account: {
     return "Email is not set in the local snapshot.";
   }
 
-  return "Signed out / no account connected.";
+  return "No local account snapshot is present.";
 }
 
 export function AccountPanel() {
@@ -127,12 +127,12 @@ export function AccountPanel() {
     return (
       <PanelShell
         title="Account"
-        subtitle="Local-only account snapshot for this app. No billing, cloud sync, or network account connection is active yet."
+        subtitle="Local-only, read-only account snapshot for this app. No network account connection is active."
       >
         <StatusBanner
           tone="loading"
           title="Loading local TimeFolio account state"
-          message="Fetching the current account snapshot from the local store."
+          message="Showing the current read-only account snapshot from local state."
         />
       </PanelShell>
     );
@@ -142,7 +142,7 @@ export function AccountPanel() {
     return (
       <PanelShell
         title="Account"
-        subtitle="Local-only account snapshot for this app. No billing, cloud sync, or network account connection is active yet."
+        subtitle="Local-only, read-only account snapshot for this app. No network account connection is active."
       >
         <StatusBanner
           tone="error"
@@ -156,7 +156,7 @@ export function AccountPanel() {
   return (
     <PanelShell
       title="Account"
-      subtitle="Local-only account snapshot for this app. No billing, cloud sync, or network account connection is active yet."
+      subtitle="Local-only, read-only account snapshot for this app. No network account connection is active."
     >
       <div className="flex flex-col gap-5">
         {account === null ? (
@@ -169,20 +169,20 @@ export function AccountPanel() {
           <StatusBanner
             tone="info"
             title="Connected locally"
-            message="This panel is reading the local account snapshot only. No billing, cloud sync, or network calls are wired in."
+            message="This panel shows the local account snapshot only. No network account connection is active."
           />
         )}
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <DetailCard
             label="Current local account state"
-            value={account === null ? "Signed out / no account connected" : "Connected locally"}
+            value={account === null ? "No local account snapshot is present." : "Connected locally"}
             subtext="This is a read-only snapshot from the local TimeFolio store."
           />
           <DetailCard
             label="Identity"
-            value={account ? getIdentityValue(account) : "No email or username connected"}
-            subtext={account ? getIdentitySubtext(account) : "Signed out / no account connected."}
+            value={account ? getIdentityValue(account) : "No local identity available"}
+            subtext={account ? getIdentitySubtext(account) : "No local account snapshot is present."}
           />
           <DetailCard
             label="Email verified"
@@ -190,7 +190,7 @@ export function AccountPanel() {
             subtext="Verification status is shown only when an account snapshot exists."
           />
           <DetailCard
-            label="Plan tier"
+            label="Access tier"
             value={account ? (account.planTier === "pro" ? "Pro" : "Free") : "Not available"}
             subtext="Plan state is shown only as part of the local snapshot."
           />
@@ -200,36 +200,36 @@ export function AccountPanel() {
             subtext={account?.syncId ? "Local sync reference." : "No sync identifier is available yet."}
           />
           <DetailCard
-            label="Billing customer ID"
+            label="Customer reference"
             value={account?.billingCustomerId ?? "Not set"}
             subtext={
               account?.billingCustomerId
                 ? "Stored as a local placeholder reference only."
-                : "No billing customer is linked yet."
+                : "No customer reference is set yet."
             }
           />
         </div>
 
         {account === null ? (
           <SectionCard
-            title="Planned later"
+            title="Deferred"
             description="These surfaces are intentionally paused while the merge is in progress."
           >
             <ul className="space-y-2 text-sm leading-6 text-slate-300">
-              <li>account sync</li>
-              <li>billing / plan status</li>
-              <li>Auto-Tracker entitlement checks</li>
+              <li>account snapshot sync</li>
+              <li>access tier status</li>
+              <li>Auto-Tracker availability checks</li>
             </ul>
           </SectionCard>
         ) : (
           <SectionCard
-            title="Planned later"
+            title="Deferred"
             description="These surfaces remain paused even when a local account snapshot is present."
           >
             <ul className="space-y-2 text-sm leading-6 text-slate-300">
-              <li>account sync</li>
-              <li>billing / plan status</li>
-              <li>Auto-Tracker entitlement checks</li>
+              <li>account snapshot sync</li>
+              <li>access tier status</li>
+              <li>Auto-Tracker availability checks</li>
             </ul>
           </SectionCard>
         )}
