@@ -74,7 +74,7 @@ jobs:
           VITE_FF_TIMEFOLIO: "true"
         with:
           tagName: app-v__VERSION__
-          releaseName: Step 2 Command Center v__VERSION__
+          releaseName: TimeFolio Study Tracker v__VERSION__
           releaseBody: |
             Automated Apple Silicon macOS desktop release for commit ${{ github.sha }}.
             Signed updater artifacts and latest.json are attached below.
