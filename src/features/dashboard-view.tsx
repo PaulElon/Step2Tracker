@@ -37,19 +37,14 @@ export function DashboardView() {
   const practiceMetrics = getPracticeMetrics(state.practiceTests);
   const remediationLinks = getRemediationLinks(state.practiceTests, state.studyBlocks);
   const uncoveredTopicNames = [...new Set(remediationLinks.flatMap((l) => l.uncoveredTopics))];
-  const goalHours = Math.round(todayGoalMinutes / 60);
 
-  const formatDailyGoalLabel = (minutes: number) => {
-    if (minutes < 60) {
-      return `${Math.round(minutes)}m goal`;
+  const commitGoalMinutes = () => {
+    const parsedMinutes = Number(goalInputValue);
+    if (Number.isInteger(parsedMinutes) && parsedMinutes >= 1 && parsedMinutes <= 1440) {
+      void setDailyGoalMinutes(parsedMinutes);
     }
 
-    if (minutes % 60 === 0) {
-      return `${minutes / 60}h goal`;
-    }
-
-    const fractionalHours = Math.round((minutes / 60) * 100) / 100;
-    return `${fractionalHours}h goal`;
+    setEditingGoal(false);
   };
 
   return (
@@ -57,7 +52,7 @@ export function DashboardView() {
       <div className="grid shrink-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Today"
-          value={todayTasks.length ? `${Math.round(plannedMinutes / 60 * 10) / 10}h` : "Clear"}
+          value={todayTasks.length ? formatMinutes(plannedMinutes) : "Clear"}
           meta={todayTasks.length ? `${todayTasks.length} tasks planned` : "No tasks yet"}
           icon={Clock3}
           accentClassName="border-cyan-300/20 bg-cyan-300/10"
@@ -154,37 +149,35 @@ export function DashboardView() {
               <div className="mt-4 flex items-center justify-between gap-3 text-sm text-slate-300">
                 <span>{openCount} open</span>
                 {editingGoal ? (
-                  <input
-                    type="number"
-                    autoFocus
-                    min="0.5"
-                    max="24"
-                    step="0.5"
-                    className="w-20 rounded-[14px] border border-white/20 bg-slate-900/80 px-2 py-1 text-sm text-white outline-none"
-                    value={goalInputValue}
-                    onChange={(e) => setGoalInputValue(e.target.value)}
-                    onBlur={() => {
-                      const hours = parseFloat(goalInputValue);
-                      if (!isNaN(hours) && hours > 0) {
-                        void setDailyGoalMinutes(hours * 60);
-                      }
-                      setEditingGoal(false);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
-                      if (e.key === "Escape") setEditingGoal(false);
-                    }}
-                  />
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs uppercase tracking-[0.18em] text-slate-500">Minutes</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      autoFocus
+                      min="1"
+                      max="1440"
+                      step="1"
+                      className="w-20 rounded-[14px] border border-white/20 bg-slate-900/80 px-2 py-1 text-sm text-white outline-none"
+                      value={goalInputValue}
+                      onChange={(e) => setGoalInputValue(e.target.value)}
+                      onBlur={commitGoalMinutes}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                        if (e.key === "Escape") setEditingGoal(false);
+                      }}
+                    />
+                  </div>
                 ) : (
                   <button
                     type="button"
                     className={secondaryButtonClassName}
                     onClick={() => {
-                      setGoalInputValue(String(goalHours));
+                      setGoalInputValue(String(todayGoalMinutes));
                       setEditingGoal(true);
                     }}
                   >
-                    {formatDailyGoalLabel(todayGoalMinutes)}
+                    {`${formatMinutes(todayGoalMinutes)} goal`}
                   </button>
                 )}
               </div>
