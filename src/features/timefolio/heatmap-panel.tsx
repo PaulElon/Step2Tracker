@@ -121,7 +121,7 @@ function SelectedDaySessionModal({
         <div className="flex-1 px-5 py-4">
           {selectedSessions.length === 0 ? (
             <p className="text-sm leading-6 text-slate-500">
-              No sessions for selected day.
+              No sessions recorded for this day.
             </p>
           ) : (
             <SessionList sessions={selectedSessions} maxVisibleRows={15} />
@@ -180,7 +180,7 @@ function SelectedDaySessionLog({
           </p>
         ) : selectedSessions.length === 0 ? (
           <p className="text-sm leading-6 text-slate-500">
-            No sessions for selected day.
+            No sessions recorded for this day.
           </p>
         ) : (
           <SessionList sessions={selectedSessions} maxVisibleRows={5} />
@@ -241,7 +241,7 @@ export function HeatmapPanel() {
           <div className="h-full min-h-0 min-w-0 overflow-hidden">
             {sessionLogs.length === 0 ? (
               <p className="text-sm leading-6 text-slate-500">
-                No heatmap data yet. Log a TimeFolio session to populate the calendar and daily details.
+                No sessions yet. Log a TimeFolio session to fill the calendar.
               </p>
             ) : (
               <TimeFolioHeatmap

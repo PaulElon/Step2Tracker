@@ -75,7 +75,7 @@ export function OverviewPanel() {
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard label="Total Hours" value={totalHours.toFixed(1)} />
         <StatCard label="Sessions" value={String(sessionLogs.length)} />
-        <StatCard label="Latest Session" value={latestDate ?? "No sessions yet"} />
+        <StatCard label="Latest session date" value={latestDate ?? "No sessions yet"} />
         <StatCard label="Summaries" value={String(summaries.length)} />
       </div>
     </div>

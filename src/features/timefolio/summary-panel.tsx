@@ -199,7 +199,7 @@ export function SummaryPanel() {
             sub={`${metrics.distractionHours.toFixed(1)}h distraction`}
           />
         ) : (
-          <StatCard label="Focus Rate" value="—" sub="No distraction data" />
+          <StatCard label="Focus Rate" value="—" sub="No distraction sessions yet." />
         )}
       </div>
 
