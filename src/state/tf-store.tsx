@@ -8,6 +8,11 @@ import {
   saveTfState,
   upsertTfSessionLog,
 } from "../lib/tf-storage";
+import {
+  reconcileNativeSpansToSessions,
+  type NativeSpanAckKey,
+  type NativeTrackerSpanInput,
+} from "../lib/tf-native-span-reconciler";
 import type { TfAppState, TfSessionLog } from "../types/models";
 
 interface TimeFolioStoreValue {
@@ -19,6 +24,9 @@ interface TimeFolioStoreValue {
   saveState(nextState: TfAppState): Promise<void>;
   upsertSessionLog(session: TfSessionLog): Promise<void>;
   deleteSessionLog(id: string): Promise<void>;
+  importNativeSpans(
+    spans: NativeTrackerSpanInput[]
+  ): Promise<{ imported: number; skipped: number; ackKeys: NativeSpanAckKey[] }>;
 }
 
 const TimeFolioStoreContext = createContext<TimeFolioStoreValue | null>(null);
@@ -133,6 +141,34 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const importNativeSpans = useCallback(
+    async (spans: NativeTrackerSpanInput[]) => {
+      setError(null);
+      try {
+        const { newEntries, skipped, ackKeys } = reconcileNativeSpansToSessions(spans, state.sessionLogs);
+        if (newEntries.length === 0) {
+          return { imported: 0, skipped, ackKeys };
+        }
+
+        const nextState: TfAppState = {
+          ...state,
+          sessionLogs: [...state.sessionLogs, ...newEntries],
+        };
+        const saved = await saveTfState(nextState);
+        if (mountedRef.current) {
+          setState(saved);
+        }
+        return { imported: newEntries.length, skipped, ackKeys };
+      } catch (err) {
+        if (mountedRef.current) {
+          setError(toErrorString(err));
+        }
+        throw err;
+      }
+    },
+    [state]
+  );
+
   const value: TimeFolioStoreValue = {
     state,
     isLoading,
@@ -142,6 +178,7 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
     saveState,
     upsertSessionLog,
     deleteSessionLog,
+    importNativeSpans,
   };
 
   return (

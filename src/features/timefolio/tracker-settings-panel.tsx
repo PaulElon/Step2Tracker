@@ -3,6 +3,7 @@ import {
   probeNativeAutoTrackerBootstrap,
   type NativeAutoTrackerBootstrapProbe,
 } from "../../lib/native-persistence";
+import type { NativeTrackerSpanInput } from "../../lib/tf-native-span-reconciler";
 import { useTimeFolioStore } from "../../state/tf-store";
 import type { TfAppState, TfTrackerPrefs } from "../../types/models";
 
@@ -127,6 +128,10 @@ function formatLastChecked(value: string | null | undefined): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(parsed);
+}
+
+async function getLatestAutoTrackerSpansPlaceholder(): Promise<NativeTrackerSpanInput[]> {
+  return [];
 }
 
 function DataStatCard({
@@ -318,12 +323,14 @@ function TrackerListCard({
 }
 
 export function TrackerSettingsPanel() {
-  const { state, isLoading, error, reload, reset, saveState } = useTimeFolioStore();
+  const { state, isLoading, error, reload, reset, saveState, importNativeSpans } = useTimeFolioStore();
   const [draftPrefs, setDraftPrefs] = useState<TfTrackerPrefs>(() => cloneTrackerPrefs(state.trackerPrefs));
   const [savingKey, setSavingKey] = useState<TrackerListKey | null>(null);
   const [dataMessage, setDataMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [isDataBusy, setIsDataBusy] = useState(false);
   const [isConfirmingReset, setIsConfirmingReset] = useState(false);
+  const [autoTrackerImportMessage, setAutoTrackerImportMessage] = useState<string | null>(null);
+  const [isAutoTrackerImporting, setIsAutoTrackerImporting] = useState(false);
   const [autoTrackerStatus, setAutoTrackerStatus] = useState<NativeAutoTrackerBootstrapProbe | null>(null);
   const [isAutoTrackerRefreshing, setIsAutoTrackerRefreshing] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -509,6 +516,22 @@ export function TrackerSettingsPanel() {
     }
   }
 
+  async function handleImportLatestAutoTrackerSpans() {
+    setAutoTrackerImportMessage(null);
+    setIsAutoTrackerImporting(true);
+    try {
+      const spans = await getLatestAutoTrackerSpansPlaceholder();
+      await importNativeSpans(spans);
+      setAutoTrackerImportMessage("Auto-tracker span import is ready; transport is not connected yet.");
+    } catch (err) {
+      setAutoTrackerImportMessage(
+        err instanceof Error && err.message ? err.message : "Unable to import auto-tracker spans."
+      );
+    } finally {
+      setIsAutoTrackerImporting(false);
+    }
+  }
+
   const accountSummary = getAccountSummary(state.account);
   const trackerRuleCount = countTrackerRules(state.trackerPrefs);
   const sessionCount = state.sessionLogs.length;
@@ -654,15 +677,31 @@ export function TrackerSettingsPanel() {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleRefreshAutoTrackerStatus}
-            disabled={isAutoTrackerRefreshing}
-            className="rounded-lg border border-teal-500/30 bg-teal-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isAutoTrackerRefreshing ? "Refreshing…" : "Refresh status"}
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={handleRefreshAutoTrackerStatus}
+              disabled={isAutoTrackerRefreshing}
+              className="rounded-lg border border-teal-500/30 bg-teal-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isAutoTrackerRefreshing ? "Refreshing…" : "Refresh status"}
+            </button>
+            <button
+              type="button"
+              onClick={handleImportLatestAutoTrackerSpans}
+              disabled={isAutoTrackerImporting}
+              className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-3 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isAutoTrackerImporting ? "Importing…" : "Import latest auto-tracker spans"}
+            </button>
+          </div>
         </div>
+
+        {autoTrackerImportMessage ? (
+          <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
+            {autoTrackerImportMessage}
+          </div>
+        ) : null}
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <DataStatCard
