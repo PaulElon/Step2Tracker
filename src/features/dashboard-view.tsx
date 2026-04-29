@@ -37,8 +37,20 @@ export function DashboardView() {
   const practiceMetrics = getPracticeMetrics(state.practiceTests);
   const remediationLinks = getRemediationLinks(state.practiceTests, state.studyBlocks);
   const uncoveredTopicNames = [...new Set(remediationLinks.flatMap((l) => l.uncoveredTopics))];
-
   const goalHours = Math.round(todayGoalMinutes / 60);
+
+  const formatDailyGoalLabel = (minutes: number) => {
+    if (minutes < 60) {
+      return `${Math.round(minutes)}m goal`;
+    }
+
+    if (minutes % 60 === 0) {
+      return `${minutes / 60}h goal`;
+    }
+
+    const fractionalHours = Math.round((minutes / 60) * 100) / 100;
+    return `${fractionalHours}h goal`;
+  };
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden">
@@ -172,7 +184,7 @@ export function DashboardView() {
                       setEditingGoal(true);
                     }}
                   >
-                    {goalHours}h goal
+                    {formatDailyGoalLabel(todayGoalMinutes)}
                   </button>
                 )}
               </div>
