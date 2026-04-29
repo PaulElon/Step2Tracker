@@ -529,7 +529,7 @@ export function SettingsView({
     } catch (error) {
       setStorageMessage({
         tone: "error",
-        text: error instanceof Error && error.message ? error.message : "Unable to export Study Tracker data.",
+        text: error instanceof Error && error.message ? error.message : "Unable to export TimeFolio Study Tracker data.",
       });
     } finally {
       setIsStorageBusy(false);
@@ -589,7 +589,7 @@ export function SettingsView({
       if (restored) {
         setPendingImportRaw(null);
         setPendingImportPreview(null);
-        setStorageMessage({ tone: "success", text: "Study Tracker data imported." });
+        setStorageMessage({ tone: "success", text: "TimeFolio Study Tracker data imported." });
       } else {
         setStorageMessage({ tone: "error", text: "Unable to import the selected backup." });
       }
@@ -780,7 +780,7 @@ export function SettingsView({
                 <div className="rounded-[16px] border border-white/10 bg-slate-950/45 p-4">
                   <div className="text-sm font-semibold text-white">Import JSON</div>
                   <p className="mt-2 text-xs leading-5 text-slate-400">
-                    Select a `.json` Study Tracker backup artifact. TimeFolio data is untouched.
+                    Select a `.json` TimeFolio Study Tracker backup artifact. TimeFolio data is untouched.
                   </p>
                   <input
                     type="file"

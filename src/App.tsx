@@ -867,7 +867,7 @@ export default function App() {
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-[0.24em] text-slate-400">TimeFolio</p>
-                  <h1 className="mt-1 text-2xl font-semibold text-white">Study Tracker</h1>
+                  <h1 className="mt-1 text-2xl font-semibold text-white">TimeFolio Study Tracker</h1>
                 </div>
               </div>
             </div>
