@@ -51,3 +51,4 @@ VITE_FF_TIMEFOLIO=true npm run tauri:build
 - Auto-Tracker ingestion is intentionally paused for now.
 - The status card and reconciler are scaffolded, but ingestion is not expected yet.
 - Funding and support links will be added later.
+- Some technical identifiers still use legacy Step 2 naming for compatibility, including the repository URL, updater environment variables, and signing key path.
