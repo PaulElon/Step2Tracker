@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useTimeFolioStore } from "../../state/tf-store";
 import { allocationByMethod } from "../../lib/tf-session-adapters";
+import { formatMinutes } from "../../lib/datetime";
 
 function PanelState({
   title,
@@ -82,7 +83,10 @@ export function AllocationPanel() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <StatCard label="Total Hours" value={`${totalHours.toFixed(1)}h`} />
+        <StatCard
+          label="Total Hours"
+          value={formatMinutes(Math.round(totalHours * 60))}
+        />
         <StatCard label="Methods" value={String(rows.length)} />
         <StatCard label="Sessions" value={String(totalSessions)} />
       </div>
@@ -108,7 +112,7 @@ export function AllocationPanel() {
                   {row.method}
                 </span>
                 <div className="flex items-center gap-3 text-xs text-slate-400">
-                  <span>{row.hours.toFixed(1)}h</span>
+                  <span>{formatMinutes(Math.round(row.hours * 60))}</span>
                   <span>{row.sessionCount} session{row.sessionCount !== 1 ? "s" : ""}</span>
                   <span className="text-slate-300 font-semibold w-10 text-right">
                     {pct.toFixed(0)}%
