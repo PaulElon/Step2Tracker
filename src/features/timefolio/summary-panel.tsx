@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useTimeFolioStore } from "../../state/tf-store";
 import { allocationByMethod } from "../../lib/tf-session-adapters";
+import { formatMinutes } from "../../lib/datetime";
 import type { TfSessionLog } from "../../types/models";
 
 type Range = "today" | "7d" | "30d";
@@ -44,7 +45,7 @@ function buildNarrative(params: {
     return `No sessions logged ${rangeLabel}. Log a session to see your summary.`;
   }
 
-  const hoursText = totalHours === 1 ? "1 hour" : `${totalHours.toFixed(1)} hours`;
+  const hoursText = formatMinutes(Math.round(totalHours * 60));
   const sessionText = sessionCount === 1 ? "1 session" : `${sessionCount} sessions`;
 
   let narrative = `You logged ${hoursText} across ${sessionText} ${rangeLabel}.`;
@@ -186,7 +187,7 @@ export function SummaryPanel() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Total Hours" value={metrics.totalHours.toFixed(1)} />
+        <StatCard label="Total Hours" value={formatMinutes(Math.round(metrics.totalHours * 60))} />
         <StatCard label="Sessions" value={String(metrics.sessionCount)} />
         <StatCard
           label="Top Method"
@@ -196,7 +197,7 @@ export function SummaryPanel() {
           <StatCard
             label="Focus Rate"
             value={`${metrics.focusRate.toFixed(0)}%`}
-            sub={`${metrics.distractionHours.toFixed(1)}h distraction`}
+            sub={`${formatMinutes(Math.round(metrics.distractionHours * 60))} distraction`}
           />
         ) : (
           <StatCard label="Focus Rate" value="—" sub="No distraction sessions yet." />
