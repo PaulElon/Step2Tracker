@@ -419,18 +419,19 @@ export function getGoalAlerts(blocks: StudyBlock[], tests: PracticeTest[], daily
 }
 
 function formatAlertHours(minutes: number) {
-  if (minutes < 60) {
-    return `${Math.round(minutes)}m`;
+  const safeMinutes = Math.max(Math.round(minutes), 0);
+  const hours = Math.floor(safeMinutes / 60);
+  const remainder = safeMinutes % 60;
+
+  if (!hours) {
+    return `${remainder}m`;
   }
 
-  const hours = minutes / 60;
-  const roundedHours = Math.round(hours);
-
-  if (Math.abs(hours - roundedHours) < 1e-9) {
-    return `${roundedHours}h`;
+  if (!remainder) {
+    return `${hours}h`;
   }
 
-  return `${Number(hours.toFixed(2))}h`;
+  return `${hours}h ${remainder}m`;
 }
 
 export function getMomentumPoints(
