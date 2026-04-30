@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 const APP_ID: &str = "step2-command-center";
 const APP_STATE_VERSION: u32 = 6;
-const DB_SCHEMA_VERSION: i32 = 7;
+const DB_SCHEMA_VERSION: i32 = 8;
 const LIVE_DB_FILE: &str = "command-center.sqlite3";
 const MAX_BACKUPS: usize = 20;
 const SAFE_CHECKPOINT_INTERVAL_HOURS: i64 = 6;
@@ -261,6 +261,8 @@ pub struct StudyBlock {
     pub status: StudyStatus,
     pub notes: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub import_source_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reminder_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reminder_sent_at: Option<String>,
@@ -285,6 +287,8 @@ pub struct StudyBlockInput {
     pub task: String,
     pub status: Option<StudyStatus>,
     pub notes: Option<String>,
+    #[serde(default, alias = "importSourceId", skip_serializing_if = "Option::is_none")]
+    pub import_source_id: Option<String>,
     #[serde(default, alias = "reminderAt", skip_serializing_if = "Option::is_none")]
     pub reminder_at: Option<String>,
     #[serde(
@@ -757,6 +761,7 @@ impl StorageService {
             task: source.block.task.clone(),
             status: Some(StudyStatus::NotStarted),
             notes: Some(source.block.notes.clone()),
+            import_source_id: None,
             reminder_at: None,
             reminder_sent_at: None,
         };
@@ -813,31 +818,59 @@ impl StorageService {
 
         for raw_block in normalized {
             let date = raw_block.date.clone();
-            let existing = transaction
-                .query_row(
-                    "SELECT id, created_at, sort_order
-                     FROM study_blocks
-                     WHERE deleted_at IS NULL
-                       AND lower(trim(date)) = lower(trim(?1))
-                       AND lower(trim(start_time)) = lower(trim(?2))
-                       AND lower(trim(category)) = lower(trim(?3))
-                       AND lower(trim(task)) = lower(trim(?4))
-                     LIMIT 1",
-                    params![
-                        raw_block.date,
-                        raw_block.start_time.clone().unwrap_or_default(),
-                        raw_block.category,
-                        raw_block.task
-                    ],
-                    |row| {
-                        Ok((
-                            row.get::<_, String>(0)?,
-                            row.get::<_, String>(1)?,
-                            row.get::<_, i64>(2)?,
-                        ))
-                    },
-                )
-                .optional()?;
+            if let Some(import_source_id) = raw_block.import_source_id.as_deref() {
+                let existing = transaction
+                    .query_row(
+                        "SELECT id, created_at, sort_order
+                         FROM study_blocks
+                         WHERE deleted_at IS NULL
+                           AND import_source_id = ?1
+                         LIMIT 1",
+                        params![import_source_id],
+                        |row| {
+                            Ok((
+                                row.get::<_, String>(0)?,
+                                row.get::<_, String>(1)?,
+                                row.get::<_, i64>(2)?,
+                            ))
+                        },
+                    )
+                    .optional()?;
+
+                if existing.is_some() {
+                    continue;
+                }
+            }
+
+            let existing = if raw_block.import_source_id.is_some() {
+                None
+            } else {
+                transaction
+                    .query_row(
+                        "SELECT id, created_at, sort_order
+                         FROM study_blocks
+                         WHERE deleted_at IS NULL
+                           AND lower(trim(date)) = lower(trim(?1))
+                           AND lower(trim(start_time)) = lower(trim(?2))
+                           AND lower(trim(category)) = lower(trim(?3))
+                           AND lower(trim(task)) = lower(trim(?4))
+                         LIMIT 1",
+                        params![
+                            raw_block.date,
+                            raw_block.start_time.clone().unwrap_or_default(),
+                            raw_block.category,
+                            raw_block.task
+                        ],
+                        |row| {
+                            Ok((
+                                row.get::<_, String>(0)?,
+                                row.get::<_, String>(1)?,
+                                row.get::<_, i64>(2)?,
+                            ))
+                        },
+                    )
+                    .optional()?
+            };
 
             let next_order = if let Some((_, _, order)) = existing.as_ref() {
                 *order
@@ -855,7 +888,6 @@ impl StorageService {
             };
 
             let block = self.normalize_study_block(raw_block, None, next_order)?;
-            let identity = Self::study_block_identity(&block);
             let imported = if let Some((id, created_at, order)) = existing {
                 StudyBlock {
                     id,
@@ -866,7 +898,7 @@ impl StorageService {
             } else {
                 block
             };
-            self.persist_study_block(&transaction, &imported, Some(identity))?;
+            self.persist_study_block(&transaction, &imported, None)?;
         }
 
         self.touch_saved(&transaction)?;
@@ -1275,6 +1307,9 @@ impl StorageService {
         if current_version < 7 {
             self.ensure_error_log_scoring_columns(&transaction)?;
         }
+        if current_version < 8 {
+            self.ensure_study_block_import_source_columns(&transaction)?;
+        }
         transaction.pragma_update(None, "user_version", DB_SCHEMA_VERSION)?;
         self.set_metadata_tx(&transaction, "app_version", &self.app_version)?;
         self.log_event(
@@ -1338,6 +1373,7 @@ impl StorageService {
               task TEXT NOT NULL,
               status TEXT NOT NULL,
               notes TEXT NOT NULL,
+              import_source_id TEXT,
               reminder_at TEXT,
               reminder_sent_at TEXT,
               created_at TEXT NOT NULL,
@@ -1345,6 +1381,10 @@ impl StorageService {
               deleted_at TEXT,
               delete_reason TEXT
             );
+
+            CREATE UNIQUE INDEX IF NOT EXISTS study_blocks_import_source_id_idx
+              ON study_blocks(import_source_id)
+              WHERE import_source_id IS NOT NULL;
 
             CREATE TABLE IF NOT EXISTS practice_tests (
               id TEXT PRIMARY KEY,
@@ -1454,6 +1494,29 @@ impl StorageService {
                 [],
             )?;
         }
+
+        Ok(())
+    }
+
+    fn ensure_study_block_import_source_columns(
+        &self,
+        transaction: &Transaction<'_>,
+    ) -> StorageResult<()> {
+        let columns = self.table_columns(transaction, "study_blocks")?;
+        if !columns.contains(&"import_source_id".to_string()) {
+            transaction.execute(
+                "ALTER TABLE study_blocks ADD COLUMN import_source_id TEXT",
+                [],
+            )?;
+        }
+
+        transaction.execute_batch(
+            "
+            CREATE UNIQUE INDEX IF NOT EXISTS study_blocks_import_source_id_idx
+              ON study_blocks(import_source_id)
+              WHERE import_source_id IS NOT NULL;
+            ",
+        )?;
 
         Ok(())
     }
@@ -1699,6 +1762,7 @@ impl StorageService {
                 task: row.get(10)?,
                 status: parse_study_status(&row.get::<_, String>(11)?)?,
                 notes: row.get(12)?,
+                import_source_id: None,
                 reminder_at: None,
                 reminder_sent_at: None,
                 created_at: String::new(),
@@ -2178,7 +2242,7 @@ impl StorageService {
             SELECT
               id, date, day, duration_hours, duration_minutes, completed, sort_order,
               start_time, end_time, is_overnight, category, task, status, notes,
-              reminder_at, reminder_sent_at, created_at, updated_at
+              import_source_id, reminder_at, reminder_sent_at, created_at, updated_at
             FROM study_blocks
             WHERE deleted_at IS NULL
             ORDER BY date ASC, sort_order ASC, created_at ASC, task ASC
@@ -2200,10 +2264,11 @@ impl StorageService {
                 task: row.get(11)?,
                 status: parse_study_status(&row.get::<_, String>(12)?)?,
                 notes: row.get(13)?,
-                reminder_at: row.get(14)?,
-                reminder_sent_at: row.get(15)?,
-                created_at: row.get(16)?,
-                updated_at: row.get(17)?,
+                import_source_id: row.get(14)?,
+                reminder_at: row.get(15)?,
+                reminder_sent_at: row.get(16)?,
+                created_at: row.get(17)?,
+                updated_at: row.get(18)?,
             })
         })?;
         rows.collect::<Result<Vec<_>, _>>()
@@ -2298,7 +2363,7 @@ impl StorageService {
                 SELECT
                   id, date, day, duration_hours, duration_minutes, completed, sort_order,
                   start_time, end_time, is_overnight, category, task, status, notes,
-                  reminder_at, reminder_sent_at, created_at, updated_at, deleted_at
+                  import_source_id, reminder_at, reminder_sent_at, created_at, updated_at, deleted_at
                 FROM study_blocks
                 WHERE id = ?1
                 LIMIT 1
@@ -2321,12 +2386,13 @@ impl StorageService {
                             task: row.get(11)?,
                             status: parse_study_status(&row.get::<_, String>(12)?)?,
                             notes: row.get(13)?,
-                            reminder_at: row.get(14)?,
-                            reminder_sent_at: row.get(15)?,
-                            created_at: row.get(16)?,
-                            updated_at: row.get(17)?,
+                            import_source_id: row.get(14)?,
+                            reminder_at: row.get(15)?,
+                            reminder_sent_at: row.get(16)?,
+                            created_at: row.get(17)?,
+                            updated_at: row.get(18)?,
                         },
-                        deleted_at: row.get(18)?,
+                        deleted_at: row.get(19)?,
                     })
                 },
             )
@@ -2535,9 +2601,9 @@ impl StorageService {
             INSERT INTO study_blocks (
               id, date, day, duration_hours, duration_minutes, completed, sort_order,
               start_time, end_time, is_overnight, category, task,
-              status, notes, reminder_at, reminder_sent_at, created_at, updated_at, deleted_at, delete_reason
+              status, notes, import_source_id, reminder_at, reminder_sent_at, created_at, updated_at, deleted_at, delete_reason
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL, NULL)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, NULL, NULL)
             ON CONFLICT(id) DO UPDATE SET
               date = excluded.date,
               day = excluded.day,
@@ -2552,6 +2618,7 @@ impl StorageService {
               task = excluded.task,
               status = excluded.status,
               notes = excluded.notes,
+              import_source_id = excluded.import_source_id,
               reminder_at = excluded.reminder_at,
               reminder_sent_at = excluded.reminder_sent_at,
               created_at = excluded.created_at,
@@ -2574,6 +2641,7 @@ impl StorageService {
                 block.task,
                 serialize_study_status(block.status),
                 block.notes,
+                block.import_source_id,
                 block.reminder_at,
                 block.reminder_sent_at,
                 block.created_at,
@@ -3151,6 +3219,13 @@ impl StorageService {
             }
             None => existing.and_then(|row| row.reminder_sent_at.clone()),
         };
+        let import_source_id = input
+            .import_source_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string)
+            .or_else(|| existing.and_then(|row| row.import_source_id.clone()));
         let timestamp = now_iso();
         let date = input.date;
         let day = input
@@ -3190,6 +3265,7 @@ impl StorageService {
                 StudyStatus::NotStarted
             },
             notes: sanitize_text(input.notes.as_deref().unwrap_or(""), ""),
+            import_source_id,
             reminder_at,
             reminder_sent_at,
             created_at: existing
@@ -3355,6 +3431,7 @@ impl StorageService {
                         task: entry.task,
                         status: Some(entry.status),
                         notes: Some(entry.notes),
+                        import_source_id: None,
                         reminder_at: None,
                         reminder_sent_at: None,
                     },
@@ -3381,20 +3458,6 @@ impl StorageService {
             error_log_entries: Vec::new(),
             preferences: default_preferences(),
         })
-    }
-
-    fn study_block_identity(block: &StudyBlock) -> String {
-        [
-            block.date.trim().to_lowercase(),
-            if block.start_time.trim().is_empty() {
-                "task".into()
-            } else {
-                block.start_time.trim().to_lowercase()
-            },
-            block.category.trim().to_lowercase(),
-            block.task.trim().to_lowercase(),
-        ]
-        .join("|")
     }
 
     fn run_integrity_check(connection: &Connection) -> StorageResult<()> {
@@ -4125,6 +4188,7 @@ mod tests {
                 task: task.into(),
                 status: Some(StudyStatus::NotStarted),
                 notes: Some(String::new()),
+                import_source_id: None,
                 reminder_at: None,
                 reminder_sent_at: None,
             })
@@ -4244,6 +4308,7 @@ mod tests {
                 task: "Mutated task".into(),
                 status: Some(StudyStatus::Completed),
                 notes: Some(block.notes),
+                import_source_id: block.import_source_id.clone(),
                 reminder_at: None,
                 reminder_sent_at: None,
             })
@@ -4432,6 +4497,7 @@ mod tests {
                 task: "Persisted task".into(),
                 status: Some(StudyStatus::InProgress),
                 notes: Some("persisted notes".into()),
+                import_source_id: block.import_source_id.clone(),
                 reminder_at: None,
                 reminder_sent_at: None,
             })
@@ -4447,5 +4513,56 @@ mod tests {
         assert_eq!(persisted.task, "Persisted task");
         assert_eq!(persisted.status, StudyStatus::NotStarted);
         assert_eq!(persisted.notes, "persisted notes");
+    }
+
+    #[test]
+    fn imported_study_blocks_dedupe_by_import_source_id() {
+        let (_temp, service) = test_service();
+        service.load_snapshot().expect("bootstrap snapshot");
+
+        let imported = StudyBlockInput {
+            id: None,
+            date: "2026-04-29".into(),
+            day: None,
+            duration_hours: None,
+            duration_minutes: None,
+            completed: None,
+            order: None,
+            start_time: None,
+            end_time: None,
+            is_overnight: None,
+            category: "Review".into(),
+            task: "Imported chapter".into(),
+            status: Some(StudyStatus::NotStarted),
+            notes: Some("source notes".into()),
+            import_source_id: Some("ics:uid-123".into()),
+            reminder_at: None,
+            reminder_sent_at: None,
+        };
+
+        service
+            .import_study_blocks(vec![imported.clone()], ImportMode::Merge)
+            .expect("initial import");
+        service
+            .import_study_blocks(
+                vec![StudyBlockInput {
+                    task: "Changed title".into(),
+                    ..imported
+                }],
+                ImportMode::Merge,
+            )
+            .expect("duplicate import");
+
+        let reloaded = service.load_snapshot().expect("reload");
+        let imported_blocks = reloaded
+            .state
+            .study_blocks
+            .iter()
+            .filter(|block| block.import_source_id.as_deref() == Some("ics:uid-123"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(imported_blocks.len(), 1);
+        assert_eq!(imported_blocks[0].task, "Imported chapter");
+        assert_eq!(imported_blocks[0].notes, "source notes");
     }
 }

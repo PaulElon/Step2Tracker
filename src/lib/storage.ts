@@ -375,6 +375,7 @@ export function normalizeStudyBlock(
     task: sanitizeText(input.task) || (allowLegacyFallbacks ? "Untitled study task" : ""),
     status: completed ? "Completed" : "Not Started",
     notes: sanitizeText(input.notes),
+    importSourceId: sanitizeText(input.importSourceId) || undefined,
     reminderAt: sanitizeText(input.reminderAt) || undefined,
     reminderSentAt: sanitizeText(input.reminderSentAt) || undefined,
     createdAt: sanitizeText(input.createdAt) || timestamp,

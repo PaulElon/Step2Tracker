@@ -36,6 +36,7 @@ export interface StudyBlock {
   task: string;
   status: StudyStatus;
   notes: string;
+  importSourceId?: string;
   reminderAt?: string;
   reminderSentAt?: string | null;
   createdAt: string;
@@ -57,6 +58,7 @@ export interface StudyBlockInput {
   task: string;
   status?: StudyStatus;
   notes?: string;
+  importSourceId?: string;
   reminderAt?: string;
   reminderSentAt?: string | null;
 }

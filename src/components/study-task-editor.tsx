@@ -17,6 +17,7 @@ type StudyTaskEditorDraft = {
   durationHoursText: string;
   durationMinutesText: string;
   reminderAtText: string;
+  importSourceId?: string;
 };
 
 function createInitialDraft(
@@ -45,6 +46,7 @@ function createInitialDraft(
       durationHoursText: draft.durationHours ? String(draft.durationHours) : "",
       durationMinutesText: draft.durationMinutes ? String(draft.durationMinutes) : "",
       reminderAtText: draft.reminderAt ?? "",
+      importSourceId: draft.importSourceId,
     } satisfies StudyTaskEditorDraft;
   }
 
@@ -58,6 +60,7 @@ function createInitialDraft(
     durationHoursText: task.durationHours ? String(task.durationHours) : "",
     durationMinutesText: task.durationMinutes ? String(task.durationMinutes) : "",
     reminderAtText: task.reminderAt ?? "",
+    importSourceId: task.importSourceId,
   } satisfies StudyTaskEditorDraft;
 }
 
@@ -143,6 +146,7 @@ export function StudyTaskEditorSheet({
             task: draft.task,
             completed: draft.completed ?? false,
             order: draft.order ?? 0,
+            importSourceId: draft.importSourceId,
             reminderAt,
             reminderSentAt: reminderAt && reminderAt === task?.reminderAt ? task?.reminderSentAt ?? "" : "",
           } satisfies StudyBlockInput & { id?: string };
@@ -214,7 +218,7 @@ export function StudyTaskEditorSheet({
             onChange={(event) => {
               setDraft((current) => ({
                 ...current,
-                category: event.target.value as StudyBlockInput["category"],
+                category: event.target.value,
               }));
               setErrors((current) => ({ ...current, category: undefined }));
             }}
