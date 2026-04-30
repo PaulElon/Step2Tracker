@@ -1139,24 +1139,6 @@ function FullReasoningModal({
             <ReviewSection title="Fix">
               {renderStudyContent(entry.fix)}
             </ReviewSection>
-          </div>
-
-          <div className="space-y-3.5">
-            <ReviewSection title="Correct rule">
-              {renderStudyContent(entry.whyCorrectAnswerIsCorrect)}
-            </ReviewSection>
-
-            <ReviewSection title="Tempting wrong answer">
-              {renderStudyContent(entry.whyTemptingWrongAnswerIsWrong)}
-            </ReviewSection>
-
-            <ReviewSection title="Decision rule / algorithm">
-              {renderStudyContent(entry.decisionRule)}
-            </ReviewSection>
-
-            <ReviewSection title="Next action">
-              {renderStudyContent(nextReview)}
-            </ReviewSection>
 
             <ReviewSection title="Additional details">
               <div className="grid gap-2 text-[0.95rem] leading-6 text-slate-200 sm:grid-cols-2">
@@ -1174,6 +1156,24 @@ function FullReasoningModal({
                   <span className="text-slate-500">Final sheet:</span> {entry.addToFinalSheet ? "Yes" : "No"}
                 </p>
               </div>
+            </ReviewSection>
+          </div>
+
+          <div className="space-y-3.5">
+            <ReviewSection title="Correct rule">
+              {renderStudyContent(entry.whyCorrectAnswerIsCorrect)}
+            </ReviewSection>
+
+            <ReviewSection title="Tempting wrong answer">
+              {renderStudyContent(entry.whyTemptingWrongAnswerIsWrong)}
+            </ReviewSection>
+
+            <ReviewSection title="Decision rule / algorithm">
+              {renderStudyContent(entry.decisionRule)}
+            </ReviewSection>
+
+            <ReviewSection title="Next action">
+              {renderStudyContent(nextReview)}
             </ReviewSection>
           </div>
         </div>
