@@ -1,5 +1,5 @@
 import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Download, Edit2, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Download, Edit2, Plus, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { MetricCard } from "../components/ui";
 import { ModalShell } from "../components/modal-shell";
 import { RichTextEditor, RichTextRender, richTextToPlain } from "../components/rich-text-editor";
@@ -49,9 +49,10 @@ const FOLLOW_UP_ACTION_LABELS: Record<ErrorLogFollowUpAction, string> = {
 };
 
 const REVIEW_SECTION_CLASS =
-  "min-w-0 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
+  "min-w-0 rounded-2xl border border-white/[0.07] bg-white/[0.035] px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]";
 const FILTER_FIELD_CLASS = "h-9 w-full rounded-lg border border-white/10 bg-slate-900/70 px-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-cyan-400/30";
 const STUDY_TEXT_CLASS = "break-words whitespace-pre-wrap text-[0.95rem] leading-6 text-slate-200";
+const REVIEW_LABEL_CLASS = "text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-500";
 const ENTRY_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
@@ -129,28 +130,30 @@ function renderStudyContent(content: string) {
 function StudyPreview({
   label,
   content,
-  accentClassName,
-  maxHeightClassName = "max-h-[4.75rem]",
+  maxHeightClassName = "max-h-10",
 }: {
   label: string;
   content: string;
-  accentClassName: string;
   maxHeightClassName?: string;
 }) {
   const hasContent = content.trim().length > 0;
+  const plainContent = looksLikeHtml(content) ? richTextToPlain(content) : content;
+  const shouldFade = (plainContent.match(/\r?\n/g)?.length ?? 0) >= 2;
 
   return (
     <section className="min-w-0">
-      <p className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${accentClassName}`}>{label}</p>
+      <p className={REVIEW_LABEL_CLASS}>{label}</p>
       {hasContent ? (
-        <div className="relative mt-1.5 min-w-0">
-          <div className={`${maxHeightClassName} overflow-hidden text-sm leading-6 text-slate-200`}>
+        <div className="relative mt-1 min-w-0">
+          <div className={`${maxHeightClassName} overflow-hidden text-[0.82rem] leading-[1.12rem] text-slate-100`}>
             {renderStudyContent(content)}
           </div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-9 bg-gradient-to-b from-transparent via-slate-950/55 to-slate-950/95" />
+          {shouldFade ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-b from-transparent to-slate-950/85" />
+          ) : null}
         </div>
       ) : (
-        <p className="mt-1.5 text-sm leading-6 text-slate-500">Not provided</p>
+        <p className="mt-1 text-[0.82rem] leading-[1.12rem] text-slate-500">Not provided</p>
       )}
     </section>
   );
@@ -187,7 +190,7 @@ function IconActionButton({
 
 function Badge({ className, children }: { className: string; children: React.ReactNode }) {
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-medium uppercase tracking-[0.12em] ${className}`}>
+    <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] ${className}`}>
       {children}
     </span>
   );
@@ -663,10 +666,10 @@ export function ErrorLogView() {
   const [showFilters, setShowFilters] = useState(false);
   const [editingEntry, setEditingEntry] = useState<ErrorLogEntry | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [reasoningEntryId, setReasoningEntryId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [addedWeakTopicIds, setAddedWeakTopicIds] = useState<Set<string>>(new Set());
-  const [expandedEntryIds, setExpandedEntryIds] = useState<Set<string>>(new Set());
   const deferredSearch = useDeferredValue(search);
   const topicRef = useRef<HTMLInputElement>(null);
 
@@ -723,6 +726,7 @@ export function ErrorLogView() {
     filterPriority !== "All",
     sortKey !== "newest",
   ].filter(Boolean).length;
+  const reasoningEntry = reasoningEntryId ? entries.find((entry) => entry.id === reasoningEntryId) ?? null : null;
 
   async function handleSave(input: ErrorLogInput) {
     await upsertErrorLogEntry(input);
@@ -764,18 +768,6 @@ export function ErrorLogView() {
     setToast(`Added "${entry.topic}" as a weak topic.`);
   }
 
-  function toggleExpandedEntry(id: string) {
-    setExpandedEntryIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }
-
   return (
     <div className="flex h-full flex-col gap-3 pb-6">
       {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
@@ -789,20 +781,22 @@ export function ErrorLogView() {
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Top repeated weak topics</p>
             {topRepeatedWeakTopics.length ? (
-              <div className="mt-3 space-y-1.5">
-                {topRepeatedWeakTopics.slice(0, 3).map(([topic, count]) => (
-                  <div key={topic} className="flex min-w-0 items-center justify-between gap-2 text-xs">
-                    <span className="truncate font-medium text-slate-200">{topic}</span>
-                    <span className="shrink-0 text-slate-500">{count}x</span>
-                  </div>
-                ))}
+              <div className="mt-2 min-w-0">
+                <p className="truncate text-[1.75rem] font-semibold tracking-[-0.04em] text-white">
+                  {topRepeatedWeakTopics[0][0]}
+                </p>
               </div>
             ) : (
-              <p className="mt-3 text-sm font-medium text-slate-300">No repeated misses yet</p>
+              <div className="mt-2">
+                <p className="text-[1.75rem] font-semibold tracking-[-0.04em] text-white">None yet</p>
+                <p className="mt-1 text-sm text-slate-300">No repeated misses yet</p>
+              </div>
             )}
           </div>
           <p className="mt-3 text-xs text-slate-500">
-            {topRepeatedWeakTopics.length ? `${topRepeatedWeakTopics.length} tracked` : "Ready when patterns repeat"}
+            {topRepeatedWeakTopics.length
+              ? `${topRepeatedWeakTopics[0][1]} repeat${topRepeatedWeakTopics[0][1] === 1 ? "" : "s"} tracked · ${topRepeatedWeakTopics.length} repeated topic${topRepeatedWeakTopics.length === 1 ? "" : "s"}`
+              : "0 repeats tracked · 0 repeated topics"}
           </p>
         </div>
       </div>
@@ -820,53 +814,77 @@ export function ErrorLogView() {
                 </span>
               ) : null}
             </p>
-          </div>
 
-          {/* Search + compact filters (only visible when there are entries) */}
-          {entries.length > 0 ? (
-            <>
-              <div className="mt-3 grid gap-2 xl:grid-cols-[minmax(18rem,1fr)_auto]">
+            {entries.length > 0 ? (
+              <div className="flex min-w-0 flex-1 flex-wrap items-center justify-start gap-2 sm:justify-end">
                 <input
                   type="text"
                   placeholder="Search topic, source, pattern..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="h-10 min-w-0 rounded-xl border border-white/10 bg-slate-900/60 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
+                  className="h-10 w-full min-w-0 rounded-xl border border-white/10 bg-slate-900/60 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40 sm:w-72 lg:w-80"
                 />
-                <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setShowFilters((value) => !value)}
-                    className={`${secondaryButtonClassName} h-10 shrink-0`}
-                    aria-expanded={showFilters}
-                  >
-                    <SlidersHorizontal className="h-4 w-4" />
-                    Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
-                  </button>
-                  <button
-                    type="button"
-                    className={`${primaryButtonClassName} h-10 shrink-0`}
-                    onClick={() => {
-                      setEditingEntry(null);
-                      setShowModal(true);
-                    }}
-                    title="Log a new entry"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Log entry
-                  </button>
-                  <button
-                    type="button"
-                    className={`${secondaryButtonClassName} h-10 shrink-0`}
-                    onClick={() => exportCsv(sorted)}
-                    title="Export CSV"
-                  >
-                    <Download className="h-4 w-4" />
-                    Export
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowFilters((value) => !value)}
+                  className={`${secondaryButtonClassName} h-10 shrink-0`}
+                  aria-expanded={showFilters}
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
+                </button>
+                <button
+                  type="button"
+                  className={`${primaryButtonClassName} h-10 shrink-0`}
+                  onClick={() => {
+                    setEditingEntry(null);
+                    setShowModal(true);
+                  }}
+                  title="Log a new entry"
+                >
+                  <Plus className="h-4 w-4" />
+                  Log entry
+                </button>
+                <button
+                  type="button"
+                  className={`${secondaryButtonClassName} h-10 shrink-0`}
+                  onClick={() => exportCsv(sorted)}
+                  title="Export CSV"
+                >
+                  <Download className="h-4 w-4" />
+                  Export
+                </button>
               </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className={`${primaryButtonClassName} h-10 shrink-0`}
+                  onClick={() => {
+                    setEditingEntry(null);
+                    setShowModal(true);
+                  }}
+                  title="Log a new entry"
+                >
+                  <Plus className="h-4 w-4" />
+                  Log entry
+                </button>
+                <button
+                  type="button"
+                  className={`${secondaryButtonClassName} h-10 shrink-0`}
+                  onClick={() => exportCsv(sorted)}
+                  title="Export CSV"
+                >
+                  <Download className="h-4 w-4" />
+                  Export
+                </button>
+              </div>
+            )}
+          </div>
 
+          {/* Compact filters */}
+          {entries.length > 0 ? (
+            <>
               {showFilters ? (
                 <div className="mt-2 rounded-xl border border-white/[0.08] bg-slate-950/35 p-3">
                   <div className="grid gap-2 md:grid-cols-5">
@@ -946,33 +964,7 @@ export function ErrorLogView() {
                 </div>
               ) : null}
             </>
-          ) : (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className={`${primaryButtonClassName} h-10 shrink-0`}
-                  onClick={() => {
-                    setEditingEntry(null);
-                    setShowModal(true);
-                  }}
-                  title="Log a new entry"
-                >
-                  <Plus className="h-4 w-4" />
-                  Log entry
-                </button>
-                <button
-                  type="button"
-                  className={`${secondaryButtonClassName} h-10 shrink-0`}
-                  onClick={() => exportCsv(sorted)}
-                  title="Export CSV"
-                >
-                  <Download className="h-4 w-4" />
-                  Export
-                </button>
-              </div>
-            </div>
-          )}
+          ) : null}
         </div>
 
         {/* Entries */}
@@ -1000,10 +992,9 @@ export function ErrorLogView() {
                   key={entry.id}
                   entry={entry}
                   isEditing={editingEntry?.id === entry.id}
-                  isExpanded={expandedEntryIds.has(entry.id)}
                   confirmDeleteId={confirmDeleteId}
                   weakTopicAdded={addedWeakTopicIds.has(entry.id)}
-                  onToggleExpanded={() => toggleExpandedEntry(entry.id)}
+                  onShowReasoning={() => setReasoningEntryId(entry.id)}
                   onEdit={() => {
                     setEditingEntry(entry);
                     setConfirmDeleteId(null);
@@ -1034,17 +1025,121 @@ export function ErrorLogView() {
           onSave={(input) => handleSave(input)}
         />
       ) : null}
+
+      {reasoningEntry ? (
+        <FullReasoningModal entry={reasoningEntry} onClose={() => setReasoningEntryId(null)} />
+      ) : null}
     </div>
+  );
+}
+
+function FullReasoningModal({
+  entry,
+  onClose,
+}: {
+  entry: ErrorLogEntry;
+  onClose: () => void;
+}) {
+  const priority = entry.priority ?? "medium";
+  const displayDate = formatEntryDate(entry.entryDate || entry.createdAt.slice(0, 10));
+  const metadata = [
+    entry.system,
+    entry.source,
+    entry.examBlock,
+    displayDate,
+  ].filter(Boolean);
+  const nextReview = describeNextReview(entry);
+
+  return (
+    <ModalShell
+      onClose={onClose}
+      position="center"
+      titleId="full-reasoning-title"
+      contentClassName="max-h-[88vh] max-w-[900px] overflow-y-auto p-0"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close full reasoning"
+        title="Close full reasoning"
+        className="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-slate-950/75 text-slate-300 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+      >
+        <X className="h-4 w-4" />
+      </button>
+
+      <div className="border-b border-white/[0.08] bg-slate-950/45 px-5 py-5 pr-16 sm:px-6 sm:pr-16">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Full reasoning</p>
+            <h3 id="full-reasoning-title" className="mt-2 break-words text-2xl font-semibold leading-tight text-white">
+              {entry.topic || "Untitled topic"}
+            </h3>
+            <p className="mt-2 break-words text-sm leading-5 text-slate-400">{metadata.join(" · ")}</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+            <Badge className={NEUTRAL_TAG}>{entry.errorType}</Badge>
+            <Badge className={PRIORITY_PILL[priority]}>{priority}</Badge>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3.5 px-5 py-5 sm:px-6">
+        <ReviewSection title="Missed">
+          {renderStudyContent(entry.missedPattern)}
+        </ReviewSection>
+
+        <ReviewSection title="Why I missed it">
+          {renderStudyContent(entry.whyPickedWrongAnswer)}
+        </ReviewSection>
+
+        <ReviewSection title="Correct rule">
+          {renderStudyContent(entry.whyCorrectAnswerIsCorrect)}
+        </ReviewSection>
+
+        <ReviewSection title="Tempting wrong answer">
+          {renderStudyContent(entry.whyTemptingWrongAnswerIsWrong)}
+        </ReviewSection>
+
+        <ReviewSection title="Decision rule / algorithm">
+          {renderStudyContent(entry.decisionRule)}
+        </ReviewSection>
+
+        <ReviewSection title="Fix">
+          {renderStudyContent(entry.fix)}
+        </ReviewSection>
+
+        <ReviewSection title="Next action">
+          {renderStudyContent(nextReview)}
+        </ReviewSection>
+
+        <ReviewSection title="Additional details">
+          <div className="grid gap-2 text-[0.95rem] leading-6 text-slate-200 sm:grid-cols-2">
+            <p className="break-words">
+              <span className="text-slate-500">Follow-up:</span>{" "}
+              {FOLLOW_UP_ACTION_LABELS[entry.followUpAction] ?? entry.followUpAction}
+            </p>
+            <p>
+              <span className="text-slate-500">Repeat miss:</span> {entry.isRepeatMiss ? "Yes" : "No"}
+            </p>
+            <p>
+              <span className="text-slate-500">Guessed correct:</span> {entry.isGuessedCorrect ? "Yes" : "No"}
+            </p>
+            <p>
+              <span className="text-slate-500">Final sheet:</span> {entry.addToFinalSheet ? "Yes" : "No"}
+            </p>
+          </div>
+        </ReviewSection>
+      </div>
+    </ModalShell>
   );
 }
 
 function EntryCard({
   entry,
   isEditing,
-  isExpanded,
   confirmDeleteId,
   weakTopicAdded,
-  onToggleExpanded,
+  onShowReasoning,
   onEdit,
   onDeleteRequest,
   onDeleteConfirm,
@@ -1053,10 +1148,9 @@ function EntryCard({
 }: {
   entry: ErrorLogEntry;
   isEditing: boolean;
-  isExpanded: boolean;
   confirmDeleteId: string | null;
   weakTopicAdded: boolean;
-  onToggleExpanded: () => void;
+  onShowReasoning: () => void;
   onEdit: () => void;
   onDeleteRequest: () => void;
   onDeleteConfirm: () => void;
@@ -1065,8 +1159,6 @@ function EntryCard({
 }) {
   const priority = entry.priority ?? "medium";
   const displayDate = formatEntryDate(entry.entryDate || entry.createdAt.slice(0, 10));
-  const nextReview = describeNextReview(entry);
-  const showNextActionPreview = nextReview !== "No follow-up set";
   const metadata = [
     entry.system,
     entry.source,
@@ -1076,21 +1168,21 @@ function EntryCard({
 
   return (
     <div
-      className={`flex w-full flex-col rounded-2xl border border-l-4 px-4 py-4 transition-colors sm:px-5 sm:py-[1.125rem] ${
+      className={`flex h-[15.5rem] w-full flex-col overflow-hidden rounded-2xl border border-l-4 px-4 py-3 transition-colors ${
         isEditing
           ? "border-cyan-400/30 bg-cyan-400/[0.06]"
           : "border-white/[0.08] bg-slate-950/45 hover:border-white/15"
-      } ${PRIORITY_CARD_ACCENT[priority]} ${isExpanded ? "min-h-[22rem]" : "min-h-[18.5rem]"}`}
+      } ${PRIORITY_CARD_ACCENT[priority]}`}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
-          <h3 className="line-clamp-3 break-words text-lg font-semibold leading-tight text-white">
+          <h3 className="line-clamp-2 break-words text-base font-semibold leading-tight text-white">
             {entry.topic || "Untitled topic"}
           </h3>
-          <p className="mt-2 break-words text-[13px] leading-5 text-slate-400">{metadata.join(" · ")}</p>
+          <p className="mt-1.5 line-clamp-1 break-words text-xs leading-4 text-slate-400">{metadata.join(" · ")}</p>
         </div>
         <div className="min-w-0 sm:max-w-[16rem]">
-          <div className="flex flex-wrap gap-1.5 sm:justify-end">
+          <div className="flex max-h-6 flex-wrap gap-1.5 overflow-hidden sm:justify-end">
             <Badge className={NEUTRAL_TAG}>{entry.errorType}</Badge>
             <Badge className={PRIORITY_PILL[priority]}>{priority}</Badge>
             {entry.isRepeatMiss ? <Badge className={NEUTRAL_TAG}>Repeat miss</Badge> : null}
@@ -1100,91 +1192,29 @@ function EntryCard({
         </div>
       </div>
 
-      {isExpanded ? (
-        <div className="mt-5 flex flex-col gap-3.5">
-          <ReviewSection title="Missed" titleClassName="text-rose-200">
-            {renderStudyContent(entry.missedPattern)}
-          </ReviewSection>
-
-          <ReviewSection title="Why I missed it" titleClassName="text-slate-300">
-            {renderStudyContent(entry.whyPickedWrongAnswer)}
-          </ReviewSection>
-
-          <ReviewSection title="Correct rule" titleClassName="text-slate-300">
-            {renderStudyContent(entry.whyCorrectAnswerIsCorrect)}
-          </ReviewSection>
-
-          <ReviewSection title="Tempting wrong answer" titleClassName="text-slate-300">
-            {renderStudyContent(entry.whyTemptingWrongAnswerIsWrong)}
-          </ReviewSection>
-
-          <ReviewSection title="Decision rule / algorithm" titleClassName="text-slate-300">
-            {renderStudyContent(entry.decisionRule)}
-          </ReviewSection>
-
-          <ReviewSection title="Fix" titleClassName="text-slate-300">
-            {renderStudyContent(entry.fix)}
-          </ReviewSection>
-
-          <ReviewSection title="Next action" titleClassName="text-slate-300">
-            {renderStudyContent(nextReview)}
-          </ReviewSection>
-
-          <ReviewSection title="Additional details" titleClassName="text-slate-300">
-            <div className="grid gap-2 text-sm leading-6 text-slate-200 sm:grid-cols-2">
-              <p className="break-words">
-                <span className="text-slate-400">Follow-up:</span>{" "}
-                {FOLLOW_UP_ACTION_LABELS[entry.followUpAction] ?? entry.followUpAction}
-              </p>
-              <p>
-                <span className="text-slate-400">Repeat miss:</span> {entry.isRepeatMiss ? "Yes" : "No"}
-              </p>
-              <p>
-                <span className="text-slate-400">Guessed correct:</span> {entry.isGuessedCorrect ? "Yes" : "No"}
-              </p>
-              <p>
-                <span className="text-slate-400">Final sheet:</span> {entry.addToFinalSheet ? "Yes" : "No"}
-              </p>
-            </div>
-          </ReviewSection>
-        </div>
-      ) : (
-        <div className="mt-5 flex flex-col">
+      <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden">
+        <StudyPreview
+          label="Missed"
+          content={entry.missedPattern}
+          maxHeightClassName="max-h-9"
+        />
+        <div className="mt-3 border-t border-white/[0.07] pt-3">
           <StudyPreview
-            label="Missed"
-            content={entry.missedPattern}
-            accentClassName="text-rose-200"
-            maxHeightClassName="max-h-[4.75rem]"
+            label="Why I missed it"
+            content={entry.whyPickedWrongAnswer}
+            maxHeightClassName="max-h-9"
           />
-          <div className="mt-4 border-t border-white/[0.07] pt-4">
-            <StudyPreview
-              label="Why I missed it"
-              content={entry.whyPickedWrongAnswer}
-              accentClassName="text-slate-300"
-              maxHeightClassName="max-h-[3.1rem]"
-            />
-          </div>
-          {showNextActionPreview ? (
-            <div className="mt-4 border-t border-white/[0.07] pt-4">
-              <StudyPreview
-                label="Next action"
-                content={nextReview}
-                accentClassName="text-slate-400"
-                maxHeightClassName="max-h-[2.6rem]"
-              />
-            </div>
-          ) : null}
         </div>
-      )}
+      </div>
 
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] pt-3">
+      <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/[0.07] pt-2">
         <button
           type="button"
-          onClick={onToggleExpanded}
-          className="text-sm font-medium text-slate-400 transition-colors hover:text-cyan-200"
-          aria-expanded={isExpanded}
+          onClick={onShowReasoning}
+          className="text-[11px] font-medium text-slate-400 transition-colors hover:text-cyan-200"
+          aria-haspopup="dialog"
         >
-          {isExpanded ? "Hide full reasoning" : "Show full reasoning"}
+          Show full reasoning
         </button>
 
         <div className="flex items-center justify-end gap-1">
@@ -1227,19 +1257,17 @@ function EntryCard({
 
 function ReviewSection({
   title,
-  titleClassName,
   children,
   className = "",
 }: {
   title: string;
-  titleClassName: string;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <section className={`${REVIEW_SECTION_CLASS} ${className}`}>
-      <p className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${titleClassName}`}>{title}</p>
-      <div className="mt-2 text-sm leading-6">{children}</div>
+      <p className={REVIEW_LABEL_CLASS}>{title}</p>
+      <div className="mt-2 text-[0.95rem] leading-6 text-slate-200">{children}</div>
     </section>
   );
 }
