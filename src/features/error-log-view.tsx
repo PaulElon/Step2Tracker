@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Edit2, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { MetricCard } from "../components/ui";
 import { ModalShell } from "../components/modal-shell";
@@ -48,8 +48,136 @@ const FOLLOW_UP_ACTION_LABELS: Record<ErrorLogFollowUpAction, string> = {
   "ignore-one-off-detail": "Ignore one-off detail",
 };
 
-const REVIEW_SECTION_CLASS = "min-w-0 overflow-hidden rounded-lg border border-white/[0.07] bg-slate-950/25 p-1.5";
+const REVIEW_SECTION_CLASS = "min-w-0 rounded-lg border border-white/[0.07] bg-slate-950/25 p-1.5";
 const FILTER_FIELD_CLASS = "h-9 w-full rounded-lg border border-white/10 bg-slate-900/70 px-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-cyan-400/30";
+const STUDY_TEXT_CLASS = "break-words whitespace-pre-wrap text-slate-300";
+
+function looksLikeHtml(value: string) {
+  return /<\/?[a-z][\s\S]*>/i.test(value);
+}
+
+function renderBasicFormattedInline(text: string, keyPrefix = "segment"): React.ReactNode[] {
+  const pattern = /(\*\*[\s\S]+?\*\*|__[\s\S]+?__|<u>[\s\S]+?<\/u>|\*[^*\n][\s\S]*?\*|_[^_\n][\s\S]*?_)/g;
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  let segmentIndex = 0;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > cursor) {
+      parts.push(text.slice(cursor, match.index));
+    }
+
+    const token = match[0];
+    const tokenKey = `${keyPrefix}-${segmentIndex}`;
+
+    if (token.startsWith("**") && token.endsWith("**")) {
+      parts.push(<strong key={tokenKey}>{renderBasicFormattedInline(token.slice(2, -2), tokenKey)}</strong>);
+    } else if (token.startsWith("__") && token.endsWith("__")) {
+      parts.push(<u key={tokenKey}>{renderBasicFormattedInline(token.slice(2, -2), tokenKey)}</u>);
+    } else if (token.startsWith("<u>") && token.endsWith("</u>")) {
+      parts.push(<u key={tokenKey}>{renderBasicFormattedInline(token.slice(3, -4), tokenKey)}</u>);
+    } else if ((token.startsWith("*") && token.endsWith("*")) || (token.startsWith("_") && token.endsWith("_"))) {
+      parts.push(<em key={tokenKey}>{renderBasicFormattedInline(token.slice(1, -1), tokenKey)}</em>);
+    } else {
+      parts.push(token);
+    }
+
+    cursor = match.index + token.length;
+    segmentIndex += 1;
+  }
+
+  if (cursor < text.length) {
+    parts.push(text.slice(cursor));
+  }
+
+  return parts;
+}
+
+function renderStudyContent(content: string) {
+  if (!content.trim()) {
+    return <p className="text-slate-500">Not provided</p>;
+  }
+
+  if (looksLikeHtml(content)) {
+    return (
+      <div className="rich-text-render break-words text-slate-300 [&_p]:my-0 [&_li]:my-0.5 [&_ul]:my-1 [&_ol]:my-1">
+        <RichTextRender html={content} />
+      </div>
+    );
+  }
+
+  const lines = content.split("\n");
+  return (
+    <div className={STUDY_TEXT_CLASS}>
+      {lines.map((line, index) => (
+        <Fragment key={`${line}-${index}`}>
+          {renderBasicFormattedInline(line, `line-${index}`)}
+          {index < lines.length - 1 ? <br /> : null}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+function StudyPreview({
+  label,
+  content,
+  accentClassName,
+  maxHeightClassName = "max-h-[3.5rem]",
+}: {
+  label: string;
+  content: string;
+  accentClassName: string;
+  maxHeightClassName?: string;
+}) {
+  const hasContent = content.trim().length > 0;
+
+  return (
+    <section className="rounded-lg border border-white/[0.07] bg-slate-950/25 px-2.5 py-1.5">
+      <p className={`text-[10px] font-semibold uppercase tracking-[0.16em] ${accentClassName}`}>{label}</p>
+      {hasContent ? (
+        <div className="relative mt-0.5">
+          <div className={`${maxHeightClassName} overflow-hidden text-xs leading-relaxed text-slate-300`}>
+            {renderStudyContent(content)}
+          </div>
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-b from-transparent to-slate-950/95" />
+        </div>
+      ) : (
+        <p className="mt-0.5 text-xs text-slate-500">Not provided</p>
+      )}
+    </section>
+  );
+}
+
+function IconActionButton({
+  icon,
+  label,
+  onClick,
+  disabled = false,
+  className = "",
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className={`inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors ${className} ${
+        disabled ? "cursor-default opacity-70" : "hover:bg-white/5"
+      }`}
+    >
+      {icon}
+    </button>
+  );
+}
 
 function Badge({ className, children }: { className: string; children: React.ReactNode }) {
   return (
@@ -691,37 +819,40 @@ export function ErrorLogView() {
                   onChange={(e) => setSearch(e.target.value)}
                   className="h-10 min-w-0 rounded-xl border border-white/10 bg-slate-900/60 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
                 />
-                <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setShowFilters((value) => !value)}
-                    className={`${secondaryButtonClassName} h-10 shrink-0`}
-                    aria-expanded={showFilters}
-                  >
-                    <SlidersHorizontal className="h-4 w-4" />
-                    Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
-                  </button>
-                  <button
-                    type="button"
-                    className={`${primaryButtonClassName} h-10 shrink-0`}
-                    onClick={() => {
-                      setEditingEntry(null);
-                      setShowModal(true);
-                    }}
-                    title="Log a new entry"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Log entry
-                  </button>
-                  <button
-                    type="button"
-                    className={`${secondaryButtonClassName} h-10 shrink-0`}
-                    onClick={() => exportCsv(sorted)}
-                    title="Export CSV"
-                  >
-                    <Download className="h-4 w-4" />
-                    Export
-                  </button>
+                <div className="flex min-w-0 flex-col items-start gap-1 lg:items-end">
+                  <p className="pr-1 text-[10px] leading-none text-slate-500">Press + to add to Weak Topics</p>
+                  <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setShowFilters((value) => !value)}
+                      className={`${secondaryButtonClassName} h-10 shrink-0`}
+                      aria-expanded={showFilters}
+                    >
+                      <SlidersHorizontal className="h-4 w-4" />
+                      Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
+                    </button>
+                    <button
+                      type="button"
+                      className={`${primaryButtonClassName} h-10 shrink-0`}
+                      onClick={() => {
+                        setEditingEntry(null);
+                        setShowModal(true);
+                      }}
+                      title="Log a new entry"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Log entry
+                    </button>
+                    <button
+                      type="button"
+                      className={`${secondaryButtonClassName} h-10 shrink-0`}
+                      onClick={() => exportCsv(sorted)}
+                      title="Export CSV"
+                    >
+                      <Download className="h-4 w-4" />
+                      Export
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -805,28 +936,31 @@ export function ErrorLogView() {
               ) : null}
             </>
           ) : (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className={`${primaryButtonClassName} h-10 shrink-0`}
-                onClick={() => {
-                  setEditingEntry(null);
-                  setShowModal(true);
-                }}
-                title="Log a new entry"
-              >
-                <Plus className="h-4 w-4" />
-                Log entry
-              </button>
-              <button
-                type="button"
-                className={`${secondaryButtonClassName} h-10 shrink-0`}
-                onClick={() => exportCsv(sorted)}
-                title="Export CSV"
-              >
-                <Download className="h-4 w-4" />
-                Export
-              </button>
+            <div className="mt-2 flex flex-col items-start gap-1 sm:items-end">
+              <p className="pr-1 text-[10px] leading-none text-slate-500">Press + to add to Weak Topics</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className={`${primaryButtonClassName} h-10 shrink-0`}
+                  onClick={() => {
+                    setEditingEntry(null);
+                    setShowModal(true);
+                  }}
+                  title="Log a new entry"
+                >
+                  <Plus className="h-4 w-4" />
+                  Log entry
+                </button>
+                <button
+                  type="button"
+                  className={`${secondaryButtonClassName} h-10 shrink-0`}
+                  onClick={() => exportCsv(sorted)}
+                  title="Export CSV"
+                >
+                  <Download className="h-4 w-4" />
+                  Export
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -922,7 +1056,6 @@ function EntryCard({
   const priority = entry.priority ?? "medium";
   const displayDate = entry.entryDate || entry.createdAt.slice(0, 10);
   const nextReview = describeNextReview(entry);
-  const missedPatternText = richTextToPlain(entry.missedPattern);
   const metadata = [
     entry.system,
     entry.source,
@@ -936,82 +1069,58 @@ function EntryCard({
         isEditing
           ? "border-cyan-400/30 bg-cyan-400/5"
           : "border-white/[0.08] bg-slate-950/30 hover:border-white/15"
-      } ${PRIORITY_CARD_ACCENT[priority]} ${isExpanded ? "min-h-[17rem]" : "h-32 overflow-hidden"}`}
+      } ${PRIORITY_CARD_ACCENT[priority]} ${isExpanded ? "min-h-[17rem]" : "h-[15rem]"}`}
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-base font-semibold text-white">{entry.topic || "Untitled topic"}</h3>
-          <p className="mt-1 truncate text-xs text-slate-400">{metadata.join(" / ")}</p>
+          <h3 className="line-clamp-2 break-words text-base font-semibold text-white">{entry.topic || "Untitled topic"}</h3>
         </div>
-        <div className="flex max-w-full flex-wrap justify-start gap-1 sm:max-w-[68%] sm:justify-end">
-          <Badge className={NEUTRAL_TAG}>{entry.source}</Badge>
-          <Badge className={NEUTRAL_TAG}>{entry.errorType}</Badge>
-          <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${PRIORITY_PILL[priority]}`}>
-            {priority}
-          </span>
-          {entry.isRepeatMiss ? <Badge className={NEUTRAL_TAG}>Repeat miss</Badge> : null}
-          {entry.isGuessedCorrect ? <Badge className={NEUTRAL_TAG}>Guessed correct</Badge> : null}
-          {entry.addToFinalSheet ? <Badge className={NEUTRAL_TAG}>Final sheet</Badge> : null}
+        <div className="min-w-0 max-w-[60%] shrink-0">
+          <div className="flex flex-wrap justify-end gap-1">
+            <Badge className={NEUTRAL_TAG}>{entry.errorType}</Badge>
+            <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${PRIORITY_PILL[priority]}`}>
+              {priority}
+            </span>
+            {entry.isRepeatMiss ? <Badge className={NEUTRAL_TAG}>Repeat miss</Badge> : null}
+            {entry.isGuessedCorrect ? <Badge className={NEUTRAL_TAG}>Guessed correct</Badge> : null}
+            {entry.addToFinalSheet ? <Badge className={NEUTRAL_TAG}>Final sheet</Badge> : null}
+          </div>
+          <p className="mt-1 break-words text-right text-[11px] leading-relaxed text-slate-400">{metadata.join(" / ")}</p>
         </div>
-      </div>
-
-      <div className="mt-1.5 h-6 shrink-0 overflow-hidden rounded-lg border border-white/[0.07] bg-slate-950/25 px-2 py-1 text-xs leading-snug text-slate-300">
-        <p className="truncate">
-          <span className="mr-1 font-semibold uppercase tracking-wider text-rose-200">Missed</span>
-          {missedPatternText || "Not provided"}
-        </p>
       </div>
 
       {isExpanded ? (
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <ReviewSection title="Correct rule" titleClassName="text-slate-300">
-            {entry.whyCorrectAnswerIsCorrect ? (
-              <p className="whitespace-pre-wrap text-slate-300">{entry.whyCorrectAnswerIsCorrect}</p>
-            ) : (
-              <p className="text-slate-500">Not provided</p>
-            )}
+          <ReviewSection title="Missed" titleClassName="text-rose-200" className="sm:col-span-2">
+            {renderStudyContent(entry.missedPattern)}
           </ReviewSection>
 
           <ReviewSection title="Why I missed it" titleClassName="text-slate-300">
-            {entry.whyPickedWrongAnswer ? (
-              <p className="whitespace-pre-wrap text-slate-300">{entry.whyPickedWrongAnswer}</p>
-            ) : (
-              <p className="text-slate-500">Not provided</p>
-            )}
+            {renderStudyContent(entry.whyPickedWrongAnswer)}
+          </ReviewSection>
+
+          <ReviewSection title="Correct rule" titleClassName="text-slate-300">
+            {renderStudyContent(entry.whyCorrectAnswerIsCorrect)}
           </ReviewSection>
 
           <ReviewSection title="Tempting wrong answer" titleClassName="text-slate-300">
-            {entry.whyTemptingWrongAnswerIsWrong ? (
-              <p className="whitespace-pre-wrap text-slate-300">{entry.whyTemptingWrongAnswerIsWrong}</p>
-            ) : (
-              <p className="text-slate-500">Not provided</p>
-            )}
+            {renderStudyContent(entry.whyTemptingWrongAnswerIsWrong)}
           </ReviewSection>
 
           <ReviewSection title="Decision rule / algorithm" titleClassName="text-slate-300">
-            {entry.decisionRule ? (
-              <p className="whitespace-pre-wrap text-slate-300">{entry.decisionRule}</p>
-            ) : (
-              <p className="text-slate-500">Not provided</p>
-            )}
+            {renderStudyContent(entry.decisionRule)}
           </ReviewSection>
 
-          <ReviewSection title="Fix" titleClassName="text-slate-300">
-            {entry.fix ? (
-              <div className="rich-text-render text-slate-300">
-                <RichTextRender html={entry.fix} />
-              </div>
-            ) : (
-              <p className="text-slate-500">Not provided</p>
-            )}
+          <ReviewSection title="Fix" titleClassName="text-slate-300" className="sm:col-span-2">
+            {renderStudyContent(entry.fix)}
           </ReviewSection>
 
           <ReviewSection title="Next action" titleClassName="text-slate-300">
-            <p className="whitespace-pre-wrap text-slate-300">{nextReview}</p>
+            {renderStudyContent(nextReview)}
           </ReviewSection>
 
-          <ReviewSection title="Additional details" titleClassName="text-slate-300">
-            <div className="space-y-1 text-slate-300">
+          <ReviewSection title="Additional details" titleClassName="text-slate-300" className="sm:col-span-2">
+            <div className="space-y-1 break-words text-xs leading-relaxed text-slate-300">
               <p>Follow-up: {FOLLOW_UP_ACTION_LABELS[entry.followUpAction] ?? entry.followUpAction}</p>
               <p>Repeat miss: {entry.isRepeatMiss ? "Yes" : "No"}</p>
               <p>Guessed correct: {entry.isGuessedCorrect ? "Yes" : "No"}</p>
@@ -1019,62 +1128,55 @@ function EntryCard({
             </div>
           </ReviewSection>
         </div>
-      ) : null}
+      ) : (
+        <div className="mt-3 flex min-h-0 flex-1 flex-col gap-2">
+          <StudyPreview label="Missed" content={entry.missedPattern} accentClassName="text-rose-200" />
+          <StudyPreview label="Why I missed it" content={entry.whyPickedWrongAnswer} accentClassName="text-slate-300" />
+        </div>
+      )}
 
-      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.07] pt-1.5">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.07] pt-1.5">
         <button
           type="button"
           onClick={onToggleExpanded}
-          className="text-xs font-medium text-slate-400 transition-colors hover:text-cyan-200"
+          className="text-[11px] font-medium text-slate-400 transition-colors hover:text-cyan-200"
           aria-expanded={isExpanded}
         >
           {isExpanded ? "Hide full reasoning" : "Show full reasoning"}
         </button>
 
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-1">
           {confirmDeleteId === entry.id ? (
             <div className="flex items-center gap-3">
-              <button type="button" onClick={onDeleteConfirm} className="text-xs font-medium text-rose-300 hover:text-rose-200">
+              <button type="button" onClick={onDeleteConfirm} className="text-[11px] font-medium text-rose-300 hover:text-rose-200">
                 Confirm delete
               </button>
-              <button type="button" onClick={onDeleteCancel} className="text-xs text-slate-500 hover:text-slate-300">
+              <button type="button" onClick={onDeleteCancel} className="text-[11px] text-slate-500 hover:text-slate-300">
                 Cancel
               </button>
             </div>
           ) : (
-            <button
-              type="button"
+            <IconActionButton
+              icon={<Plus className="h-3.5 w-3.5" />}
+              label={weakTopicAdded ? "Already added as weak topic" : "Add as weak topic"}
               onClick={weakTopicAdded ? undefined : onAddWeakTopic}
               disabled={weakTopicAdded}
-              className={`rounded-lg px-2 py-1 text-xs font-medium transition-colors ${
-                weakTopicAdded
-                  ? "cursor-default text-emerald-300"
-                  : "text-slate-400 hover:bg-white/5 hover:text-cyan-300"
-              }`}
-              title={weakTopicAdded ? "Already added as weak topic" : "Add as weak topic"}
-            >
-              {weakTopicAdded ? "Added Weak Topic" : "+ Weak Topic"}
-            </button>
+              className={weakTopicAdded ? "text-emerald-300" : "hover:text-cyan-300"}
+            />
           )}
 
-          <button
-            type="button"
+          <IconActionButton
+            icon={<Edit2 className="h-3.5 w-3.5" />}
+            label="Edit"
             onClick={onEdit}
-            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 transition-colors hover:bg-white/5 hover:text-cyan-300"
-            title="Edit"
-          >
-            <Edit2 className="h-3.5 w-3.5" />
-            Edit
-          </button>
-          <button
-            type="button"
+            className="hover:text-cyan-300"
+          />
+          <IconActionButton
+            icon={<Trash2 className="h-3.5 w-3.5" />}
+            label="Delete"
             onClick={onDeleteRequest}
-            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 transition-colors hover:bg-white/5 hover:text-rose-300"
-            title="Delete"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete
-          </button>
+            className="hover:text-rose-300"
+          />
         </div>
       </div>
     </div>
@@ -1085,13 +1187,15 @@ function ReviewSection({
   title,
   titleClassName,
   children,
+  className = "",
 }: {
   title: string;
   titleClassName: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <section className={REVIEW_SECTION_CLASS}>
+    <section className={`${REVIEW_SECTION_CLASS} ${className}`}>
       <p className={`text-[11px] font-semibold uppercase tracking-wider ${titleClassName}`}>{title}</p>
       <div className="mt-1 text-xs leading-relaxed">{children}</div>
     </section>
