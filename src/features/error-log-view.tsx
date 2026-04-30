@@ -48,9 +48,15 @@ const FOLLOW_UP_ACTION_LABELS: Record<ErrorLogFollowUpAction, string> = {
   "ignore-one-off-detail": "Ignore one-off detail",
 };
 
-const REVIEW_SECTION_CLASS = "min-w-0 rounded-lg border border-white/[0.07] bg-slate-950/25 p-1.5";
+const REVIEW_SECTION_CLASS =
+  "min-w-0 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
 const FILTER_FIELD_CLASS = "h-9 w-full rounded-lg border border-white/10 bg-slate-900/70 px-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-cyan-400/30";
-const STUDY_TEXT_CLASS = "break-words whitespace-pre-wrap text-slate-300";
+const STUDY_TEXT_CLASS = "break-words whitespace-pre-wrap text-[0.95rem] leading-6 text-slate-200";
+const ENTRY_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
 
 function looksLikeHtml(value: string) {
   return /<\/?[a-z][\s\S]*>/i.test(value);
@@ -101,7 +107,7 @@ function renderStudyContent(content: string) {
 
   if (looksLikeHtml(content)) {
     return (
-      <div className="rich-text-render break-words text-slate-300 [&_p]:my-0 [&_li]:my-0.5 [&_ul]:my-1 [&_ol]:my-1">
+      <div className="rich-text-render break-words text-[0.95rem] leading-6 text-slate-200 [&_p]:my-0 [&_li]:my-0.5 [&_ul]:my-1 [&_ol]:my-1">
         <RichTextRender html={content} />
       </div>
     );
@@ -124,7 +130,7 @@ function StudyPreview({
   label,
   content,
   accentClassName,
-  maxHeightClassName = "max-h-[3.5rem]",
+  maxHeightClassName = "max-h-[4.75rem]",
 }: {
   label: string;
   content: string;
@@ -134,17 +140,17 @@ function StudyPreview({
   const hasContent = content.trim().length > 0;
 
   return (
-    <section className="rounded-lg border border-white/[0.07] bg-slate-950/25 px-2.5 py-1.5">
-      <p className={`text-[10px] font-semibold uppercase tracking-[0.16em] ${accentClassName}`}>{label}</p>
+    <section className="min-w-0">
+      <p className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${accentClassName}`}>{label}</p>
       {hasContent ? (
-        <div className="relative mt-0.5">
-          <div className={`${maxHeightClassName} overflow-hidden text-xs leading-relaxed text-slate-300`}>
+        <div className="relative mt-1.5 min-w-0">
+          <div className={`${maxHeightClassName} overflow-hidden text-sm leading-6 text-slate-200`}>
             {renderStudyContent(content)}
           </div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-b from-transparent to-slate-950/95" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-9 bg-gradient-to-b from-transparent via-slate-950/55 to-slate-950/95" />
         </div>
       ) : (
-        <p className="mt-0.5 text-xs text-slate-500">Not provided</p>
+        <p className="mt-1.5 text-sm leading-6 text-slate-500">Not provided</p>
       )}
     </section>
   );
@@ -170,7 +176,7 @@ function IconActionButton({
       disabled={disabled}
       aria-label={label}
       title={label}
-      className={`inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors ${className} ${
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors ${className} ${
         disabled ? "cursor-default opacity-70" : "hover:bg-white/5"
       }`}
     >
@@ -181,7 +187,7 @@ function IconActionButton({
 
 function Badge({ className, children }: { className: string; children: React.ReactNode }) {
   return (
-    <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${className}`}>
+    <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-medium uppercase tracking-[0.12em] ${className}`}>
       {children}
     </span>
   );
@@ -264,6 +270,14 @@ function exportCsv(entries: ErrorLogEntry[]) {
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function formatEntryDate(value: string) {
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return ENTRY_DATE_FORMATTER.format(parsed);
 }
 
 const EMPTY_FORM: ErrorLogInput = {
@@ -811,7 +825,7 @@ export function ErrorLogView() {
           {/* Search + compact filters (only visible when there are entries) */}
           {entries.length > 0 ? (
             <>
-              <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(18rem,1fr)_auto]">
+              <div className="mt-3 grid gap-2 xl:grid-cols-[minmax(18rem,1fr)_auto]">
                 <input
                   type="text"
                   placeholder="Search topic, source, pattern..."
@@ -819,40 +833,37 @@ export function ErrorLogView() {
                   onChange={(e) => setSearch(e.target.value)}
                   className="h-10 min-w-0 rounded-xl border border-white/10 bg-slate-900/60 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
                 />
-                <div className="flex min-w-0 flex-col items-start gap-1 lg:items-end">
-                  <p className="pr-1 text-[10px] leading-none text-slate-500">Press + to add to Weak Topics</p>
-                  <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setShowFilters((value) => !value)}
-                      className={`${secondaryButtonClassName} h-10 shrink-0`}
-                      aria-expanded={showFilters}
-                    >
-                      <SlidersHorizontal className="h-4 w-4" />
-                      Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
-                    </button>
-                    <button
-                      type="button"
-                      className={`${primaryButtonClassName} h-10 shrink-0`}
-                      onClick={() => {
-                        setEditingEntry(null);
-                        setShowModal(true);
-                      }}
-                      title="Log a new entry"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Log entry
-                    </button>
-                    <button
-                      type="button"
-                      className={`${secondaryButtonClassName} h-10 shrink-0`}
-                      onClick={() => exportCsv(sorted)}
-                      title="Export CSV"
-                    >
-                      <Download className="h-4 w-4" />
-                      Export
-                    </button>
-                  </div>
+                <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowFilters((value) => !value)}
+                    className={`${secondaryButtonClassName} h-10 shrink-0`}
+                    aria-expanded={showFilters}
+                  >
+                    <SlidersHorizontal className="h-4 w-4" />
+                    Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
+                  </button>
+                  <button
+                    type="button"
+                    className={`${primaryButtonClassName} h-10 shrink-0`}
+                    onClick={() => {
+                      setEditingEntry(null);
+                      setShowModal(true);
+                    }}
+                    title="Log a new entry"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Log entry
+                  </button>
+                  <button
+                    type="button"
+                    className={`${secondaryButtonClassName} h-10 shrink-0`}
+                    onClick={() => exportCsv(sorted)}
+                    title="Export CSV"
+                  >
+                    <Download className="h-4 w-4" />
+                    Export
+                  </button>
                 </div>
               </div>
 
@@ -936,8 +947,7 @@ export function ErrorLogView() {
               ) : null}
             </>
           ) : (
-            <div className="mt-2 flex flex-col items-start gap-1 sm:items-end">
-              <p className="pr-1 text-[10px] leading-none text-slate-500">Press + to add to Weak Topics</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -984,7 +994,7 @@ export function ErrorLogView() {
               No entries match the current filters.
             </div>
           ) : (
-            <div className="grid gap-2 pb-3 lg:grid-cols-2">
+            <div className="grid gap-3 pb-4 lg:grid-cols-2">
               {sorted.map((entry) => (
                 <EntryCard
                   key={entry.id}
@@ -1054,8 +1064,9 @@ function EntryCard({
   onAddWeakTopic: () => void;
 }) {
   const priority = entry.priority ?? "medium";
-  const displayDate = entry.entryDate || entry.createdAt.slice(0, 10);
+  const displayDate = formatEntryDate(entry.entryDate || entry.createdAt.slice(0, 10));
   const nextReview = describeNextReview(entry);
+  const showNextActionPreview = nextReview !== "No follow-up set";
   const metadata = [
     entry.system,
     entry.source,
@@ -1065,33 +1076,33 @@ function EntryCard({
 
   return (
     <div
-      className={`flex w-full flex-col rounded-xl border border-l-4 p-2.5 transition-colors ${
+      className={`flex w-full flex-col rounded-2xl border border-l-4 px-4 py-4 transition-colors sm:px-5 sm:py-[1.125rem] ${
         isEditing
-          ? "border-cyan-400/30 bg-cyan-400/5"
-          : "border-white/[0.08] bg-slate-950/30 hover:border-white/15"
-      } ${PRIORITY_CARD_ACCENT[priority]} ${isExpanded ? "min-h-[17rem]" : "h-[15rem]"}`}
+          ? "border-cyan-400/30 bg-cyan-400/[0.06]"
+          : "border-white/[0.08] bg-slate-950/45 hover:border-white/15"
+      } ${PRIORITY_CARD_ACCENT[priority]} ${isExpanded ? "min-h-[22rem]" : "min-h-[18.5rem]"}`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
-          <h3 className="line-clamp-2 break-words text-base font-semibold text-white">{entry.topic || "Untitled topic"}</h3>
+          <h3 className="line-clamp-3 break-words text-lg font-semibold leading-tight text-white">
+            {entry.topic || "Untitled topic"}
+          </h3>
+          <p className="mt-2 break-words text-[13px] leading-5 text-slate-400">{metadata.join(" · ")}</p>
         </div>
-        <div className="min-w-0 max-w-[60%] shrink-0">
-          <div className="flex flex-wrap justify-end gap-1">
+        <div className="min-w-0 sm:max-w-[16rem]">
+          <div className="flex flex-wrap gap-1.5 sm:justify-end">
             <Badge className={NEUTRAL_TAG}>{entry.errorType}</Badge>
-            <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${PRIORITY_PILL[priority]}`}>
-              {priority}
-            </span>
+            <Badge className={PRIORITY_PILL[priority]}>{priority}</Badge>
             {entry.isRepeatMiss ? <Badge className={NEUTRAL_TAG}>Repeat miss</Badge> : null}
             {entry.isGuessedCorrect ? <Badge className={NEUTRAL_TAG}>Guessed correct</Badge> : null}
             {entry.addToFinalSheet ? <Badge className={NEUTRAL_TAG}>Final sheet</Badge> : null}
           </div>
-          <p className="mt-1 break-words text-right text-[11px] leading-relaxed text-slate-400">{metadata.join(" / ")}</p>
         </div>
       </div>
 
       {isExpanded ? (
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <ReviewSection title="Missed" titleClassName="text-rose-200" className="sm:col-span-2">
+        <div className="mt-5 flex flex-col gap-3.5">
+          <ReviewSection title="Missed" titleClassName="text-rose-200">
             {renderStudyContent(entry.missedPattern)}
           </ReviewSection>
 
@@ -1111,7 +1122,7 @@ function EntryCard({
             {renderStudyContent(entry.decisionRule)}
           </ReviewSection>
 
-          <ReviewSection title="Fix" titleClassName="text-slate-300" className="sm:col-span-2">
+          <ReviewSection title="Fix" titleClassName="text-slate-300">
             {renderStudyContent(entry.fix)}
           </ReviewSection>
 
@@ -1119,27 +1130,58 @@ function EntryCard({
             {renderStudyContent(nextReview)}
           </ReviewSection>
 
-          <ReviewSection title="Additional details" titleClassName="text-slate-300" className="sm:col-span-2">
-            <div className="space-y-1 break-words text-xs leading-relaxed text-slate-300">
-              <p>Follow-up: {FOLLOW_UP_ACTION_LABELS[entry.followUpAction] ?? entry.followUpAction}</p>
-              <p>Repeat miss: {entry.isRepeatMiss ? "Yes" : "No"}</p>
-              <p>Guessed correct: {entry.isGuessedCorrect ? "Yes" : "No"}</p>
-              <p>Final sheet: {entry.addToFinalSheet ? "Yes" : "No"}</p>
+          <ReviewSection title="Additional details" titleClassName="text-slate-300">
+            <div className="grid gap-2 text-sm leading-6 text-slate-200 sm:grid-cols-2">
+              <p className="break-words">
+                <span className="text-slate-400">Follow-up:</span>{" "}
+                {FOLLOW_UP_ACTION_LABELS[entry.followUpAction] ?? entry.followUpAction}
+              </p>
+              <p>
+                <span className="text-slate-400">Repeat miss:</span> {entry.isRepeatMiss ? "Yes" : "No"}
+              </p>
+              <p>
+                <span className="text-slate-400">Guessed correct:</span> {entry.isGuessedCorrect ? "Yes" : "No"}
+              </p>
+              <p>
+                <span className="text-slate-400">Final sheet:</span> {entry.addToFinalSheet ? "Yes" : "No"}
+              </p>
             </div>
           </ReviewSection>
         </div>
       ) : (
-        <div className="mt-3 flex min-h-0 flex-1 flex-col gap-2">
-          <StudyPreview label="Missed" content={entry.missedPattern} accentClassName="text-rose-200" />
-          <StudyPreview label="Why I missed it" content={entry.whyPickedWrongAnswer} accentClassName="text-slate-300" />
+        <div className="mt-5 flex flex-col">
+          <StudyPreview
+            label="Missed"
+            content={entry.missedPattern}
+            accentClassName="text-rose-200"
+            maxHeightClassName="max-h-[4.75rem]"
+          />
+          <div className="mt-4 border-t border-white/[0.07] pt-4">
+            <StudyPreview
+              label="Why I missed it"
+              content={entry.whyPickedWrongAnswer}
+              accentClassName="text-slate-300"
+              maxHeightClassName="max-h-[3.1rem]"
+            />
+          </div>
+          {showNextActionPreview ? (
+            <div className="mt-4 border-t border-white/[0.07] pt-4">
+              <StudyPreview
+                label="Next action"
+                content={nextReview}
+                accentClassName="text-slate-400"
+                maxHeightClassName="max-h-[2.6rem]"
+              />
+            </div>
+          ) : null}
         </div>
       )}
 
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.07] pt-1.5">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] pt-3">
         <button
           type="button"
           onClick={onToggleExpanded}
-          className="text-[11px] font-medium text-slate-400 transition-colors hover:text-cyan-200"
+          className="text-sm font-medium text-slate-400 transition-colors hover:text-cyan-200"
           aria-expanded={isExpanded}
         >
           {isExpanded ? "Hide full reasoning" : "Show full reasoning"}
@@ -1157,7 +1199,7 @@ function EntryCard({
             </div>
           ) : (
             <IconActionButton
-              icon={<Plus className="h-3.5 w-3.5" />}
+              icon={<Plus className="h-4 w-4" />}
               label={weakTopicAdded ? "Already added as weak topic" : "Add as weak topic"}
               onClick={weakTopicAdded ? undefined : onAddWeakTopic}
               disabled={weakTopicAdded}
@@ -1166,13 +1208,13 @@ function EntryCard({
           )}
 
           <IconActionButton
-            icon={<Edit2 className="h-3.5 w-3.5" />}
+            icon={<Edit2 className="h-4 w-4" />}
             label="Edit"
             onClick={onEdit}
             className="hover:text-cyan-300"
           />
           <IconActionButton
-            icon={<Trash2 className="h-3.5 w-3.5" />}
+            icon={<Trash2 className="h-4 w-4" />}
             label="Delete"
             onClick={onDeleteRequest}
             className="hover:text-rose-300"
@@ -1196,8 +1238,8 @@ function ReviewSection({
 }) {
   return (
     <section className={`${REVIEW_SECTION_CLASS} ${className}`}>
-      <p className={`text-[11px] font-semibold uppercase tracking-wider ${titleClassName}`}>{title}</p>
-      <div className="mt-1 text-xs leading-relaxed">{children}</div>
+      <p className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${titleClassName}`}>{title}</p>
+      <div className="mt-2 text-sm leading-6">{children}</div>
     </section>
   );
 }
