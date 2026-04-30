@@ -432,15 +432,16 @@ function LogEntryModal({
     "h-9 w-full rounded-lg border border-white/10 bg-slate-900/60 px-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40";
   const selectClass = fieldClass;
   const labelClass = "mb-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400";
+  const bodyTextClass = "!font-sans !text-base !font-normal !leading-relaxed !tracking-normal";
   const textareaClass =
-    `${fieldClass} h-[6.5rem] min-h-[6.5rem] max-h-[6.5rem] resize-none overflow-y-auto py-2`;
+    `${fieldClass} ${bodyTextClass} h-[6.5rem] min-h-[6.5rem] max-h-[6.5rem] resize-none overflow-y-auto py-2`;
 
   return (
     <ModalShell
       onClose={onClose}
       position="center"
       titleId="log-entry-title"
-      contentClassName="flex h-[calc(100vh-3rem)] max-h-[calc(100vh-3rem)] w-full max-w-[720px] flex-col overflow-hidden p-6"
+      contentClassName="flex max-h-[calc(100vh-3rem)] w-full max-w-[720px] flex-col overflow-hidden p-6"
     >
       <div className="flex shrink-0 items-start justify-between gap-4">
         <div>
@@ -557,7 +558,7 @@ function LogEntryModal({
               placeholder="What did you miss?"
               minLines={4}
               scrollable
-              className="mt-1"
+              className={`mt-1 ${bodyTextClass}`}
             />
             {errors.missedPattern ? <p className="mt-1 text-xs text-rose-400">{errors.missedPattern}</p> : null}
           </div>
@@ -570,7 +571,7 @@ function LogEntryModal({
               placeholder="What will you do differently?"
               minLines={4}
               scrollable
-              className="mt-1"
+              className={`mt-1 ${bodyTextClass}`}
             />
             {errors.fix ? <p className="mt-1 text-xs text-rose-400">{errors.fix}</p> : null}
           </div>
@@ -630,8 +631,8 @@ function LogEntryModal({
                   ))}
                 </select>
               </div>
-              <div className="grid gap-2 sm:grid-cols-3">
-                <label className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 px-2.5 text-[11px] font-medium text-slate-300">
+              <div className="grid gap-2 sm:grid-cols-3 sm:pt-[1.25rem]">
+                <label className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 px-2.5 text-[11px] font-medium leading-tight text-slate-300">
                   <input
                     type="checkbox"
                     checked={draft.isRepeatMiss}
@@ -646,7 +647,7 @@ function LogEntryModal({
                   />
                   Repeat miss
                 </label>
-                <label className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 px-2.5 text-[11px] font-medium text-slate-300">
+                <label className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 px-2.5 text-[11px] font-medium leading-tight text-slate-300">
                   <input
                     type="checkbox"
                     checked={draft.isGuessedCorrect}
@@ -655,7 +656,7 @@ function LogEntryModal({
                   />
                   Guessed correct
                 </label>
-                <label className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 px-2.5 text-[11px] font-medium text-slate-300">
+                <label className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 px-2.5 text-[11px] font-medium leading-tight text-slate-300">
                   <input
                     type="checkbox"
                     checked={draft.addToFinalSheet}
