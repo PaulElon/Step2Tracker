@@ -1,5 +1,5 @@
 import { AlertTriangle, ArrowDown, ArrowUp, Bell, ChevronLeft, ChevronRight, Pencil, Plus, Search, Upload } from "lucide-react";
-import { useDeferredValue, useEffect, useId, useRef, useState, useTransition } from "react";
+import { useDeferredValue, useId, useRef, useState, useTransition } from "react";
 import { getStudyBlockMinutes, getWeekDates } from "../lib/analytics";
 import {
   addDays,
@@ -217,7 +217,9 @@ function IcsImportDialog({
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const fileButtonRef = useRef<HTMLButtonElement>(null);
   const parseRequestRef = useRef(0);
+  const [selectedFileName, setSelectedFileName] = useState("");
   const id = useId();
   const titleId = `${id}-title`;
   const descriptionId = `${id}-description`;
@@ -255,163 +257,191 @@ function IcsImportDialog({
       position="center"
       titleId={titleId}
       descriptionId={descriptionId}
-      initialFocusRef={fileRef}
+      initialFocusRef={fileButtonRef}
+      contentClassName="max-h-[calc(100vh-3rem)] overflow-hidden p-0"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Calendar import</p>
-          <h3 id={titleId} className="mt-2 text-2xl font-semibold text-white">
-            Import .ics
-          </h3>
-          <p id={descriptionId} className="mt-2 text-sm text-slate-400">
-            Imports all-day VEVENTs as Planner tasks on their DTSTART date. Existing UID matches are skipped.
-          </p>
+      <div className="flex max-h-[calc(100vh-3rem)] flex-col">
+        <div className="flex items-start justify-between gap-4 px-6 pb-4 pt-6">
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Calendar import</p>
+            <h3 id={titleId} className="mt-2 text-2xl font-semibold text-white">
+              Import .ics
+            </h3>
+            <p id={descriptionId} className="mt-2 text-sm text-slate-400">
+              Imports all-day VEVENTs as Planner tasks on their DTSTART date. Existing UID matches are skipped.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className={secondaryButtonClassName} aria-label="Close import dialog">
+            Close
+          </button>
         </div>
-        <button type="button" onClick={onClose} className={secondaryButtonClassName} aria-label="Close import dialog">
-          Close
-        </button>
-      </div>
 
-      <div className="mt-6 rounded-[24px] border border-dashed border-white/10 bg-slate-900/55 p-6">
-        <label htmlFor={fileId} className="text-sm font-medium text-white">
-          Select .ics file
-        </label>
-        <input
-          ref={fileRef}
-          id={fileId}
-          type="file"
-          accept=".ics,text/calendar"
-          aria-describedby={fileHelpId}
-          className={`${fieldClassName} mt-3`}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (!file) {
-              return;
-            }
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 scrollbar-subtle">
+          <div className="rounded-[24px] border border-dashed border-white/10 bg-slate-900/55 p-6">
+            <label htmlFor={fileId} className="text-sm font-medium text-white">
+              Select .ics file
+            </label>
+            <input
+              ref={fileRef}
+              id={fileId}
+              type="file"
+              accept=".ics,text/calendar"
+              aria-describedby={fileHelpId}
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (!file) {
+                  return;
+                }
 
-            void handleFileChange(file);
-          }}
-        />
-        <p id={fileHelpId} className="mt-3 text-sm text-slate-500">
-          All-day DTSTART values are imported locally. Timed events, alarms, attendees, and timezone metadata are ignored.
-        </p>
-      </div>
+                setSelectedFileName(file.name);
+                void handleFileChange(file);
+              }}
+            />
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                ref={fileButtonRef}
+                type="button"
+                className={secondaryButtonClassName}
+                onClick={() => {
+                  if (!fileRef.current) {
+                    return;
+                  }
 
-      {preview ? (
-        <div className="mt-6 space-y-4">
-          <div className="grid gap-4 sm:grid-cols-4">
-            <div className="rounded-[22px] border border-white/10 bg-slate-900/55 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">VEVENTs</p>
-              <p className="mt-2 text-2xl font-semibold text-white">{preview.totalEvents}</p>
+                  fileRef.current.value = "";
+                  fileRef.current.click();
+                }}
+              >
+                Choose .ics file
+              </button>
+              <p className="min-w-0 flex-1 text-sm text-slate-300">
+                <span className="block truncate">{selectedFileName || "No file selected"}</span>
+              </p>
             </div>
-            <div className="rounded-[22px] border border-white/10 bg-slate-900/55 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Importable</p>
-              <p className="mt-2 text-2xl font-semibold text-white">{preview.importableCount}</p>
-            </div>
-            <div className="rounded-[22px] border border-white/10 bg-slate-900/55 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Duplicates</p>
-              <p className="mt-2 text-2xl font-semibold text-white">{preview.duplicateCount}</p>
-            </div>
-            <div className="rounded-[22px] border border-white/10 bg-slate-900/55 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Skipped</p>
-              <p className="mt-2 text-2xl font-semibold text-white">{preview.skippedCount}</p>
-            </div>
+            <p id={fileHelpId} className="mt-3 text-sm text-slate-500">
+              All-day DTSTART values are imported locally. Timed events, alarms, attendees, and timezone metadata are ignored.
+            </p>
           </div>
 
-          {preview.issues.length ? (
-            <div className="rounded-[22px] border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100">
-              <p className="font-medium text-amber-50">Import notes</p>
-              <ul className="mt-2 space-y-1">
-                {preview.issues.slice(0, 4).map((issue) => (
-                  <li key={issue}>{issue}</li>
-                ))}
-                {preview.issues.length > 4 ? (
-                  <li>+{preview.issues.length - 4} more notes</li>
-                ) : null}
-              </ul>
+          {preview ? (
+            <div className="mt-6 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-4">
+                <div className="rounded-[22px] border border-white/10 bg-slate-900/55 p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">VEVENTs</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">{preview.totalEvents}</p>
+                </div>
+                <div className="rounded-[22px] border border-white/10 bg-slate-900/55 p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Importable</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">{preview.importableCount}</p>
+                </div>
+                <div className="rounded-[22px] border border-white/10 bg-slate-900/55 p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Duplicates</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">{preview.duplicateCount}</p>
+                </div>
+                <div className="rounded-[22px] border border-white/10 bg-slate-900/55 p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Skipped</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">{preview.skippedCount}</p>
+                </div>
+              </div>
+
+              {preview.issues.length ? (
+                <div className="rounded-[22px] border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100">
+                  <p className="font-medium text-amber-50">Import notes</p>
+                  <ul className="mt-2 space-y-1">
+                    {preview.issues.slice(0, 4).map((issue) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                    {preview.issues.length > 4 ? (
+                      <li>+{preview.issues.length - 4} more notes</li>
+                    ) : null}
+                  </ul>
+                </div>
+              ) : null}
+
+              <div className="overflow-hidden rounded-[24px] border border-white/10 bg-slate-900/55">
+                <div className="flex items-center justify-between gap-3 px-5 pb-4 pt-5">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Preview</p>
+                    <p className="mt-1 text-sm text-slate-400">{preview.fileName}</p>
+                  </div>
+                  <p className="text-sm text-slate-400">
+                    {preview.groups.length} date{preview.groups.length === 1 ? "" : "s"}
+                  </p>
+                </div>
+
+                <div className="border-t border-white/10 px-5 pb-5 pt-4">
+                  {preview.groups.length ? (
+                    <div className="max-h-[min(22rem,40vh)] space-y-3 overflow-y-auto pr-2 scrollbar-subtle">
+                      {preview.groups.map((group, groupIndex) => (
+                        <section
+                          key={`${group.date}-${groupIndex}`}
+                          className="rounded-[20px] border border-white/10 bg-slate-950/40 p-4"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="font-medium text-white">{formatShortDate(group.date)}</p>
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                              {group.titles.length} task{group.titles.length === 1 ? "" : "s"}
+                            </p>
+                          </div>
+                          <ul className="mt-3 space-y-2">
+                            {group.titles.map((title, titleIndex) => (
+                              <li
+                                key={`${title}-${titleIndex}`}
+                                className="rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2 text-sm text-slate-200"
+                              >
+                                {title}
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState
+                      title="No importable all-day tasks"
+                      description="The file parsed, but no VEVENTs met the all-day task requirements."
+                    />
+                  )}
+                </div>
+              </div>
             </div>
           ) : null}
 
-          <div className="rounded-[24px] border border-white/10 bg-slate-900/55 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Preview</p>
-                <p className="mt-1 text-sm text-slate-400">{preview.fileName}</p>
-              </div>
-              <p className="text-sm text-slate-400">
-                {preview.groups.length} date{preview.groups.length === 1 ? "" : "s"}
-              </p>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {preview.groups.length ? (
-                preview.groups.map((group, groupIndex) => (
-                  <section
-                    key={`${group.date}-${groupIndex}`}
-                    className="rounded-[20px] border border-white/10 bg-slate-950/40 p-4"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium text-white">{formatShortDate(group.date)}</p>
-                      <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
-                        {group.titles.length} task{group.titles.length === 1 ? "" : "s"}
-                      </p>
-                    </div>
-                    <ul className="mt-3 space-y-2">
-                      {group.titles.map((title, titleIndex) => (
-                        <li
-                          key={`${title}-${titleIndex}`}
-                          className="rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2 text-sm text-slate-200"
-                        >
-                          {title}
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ))
-              ) : (
-                <EmptyState
-                  title="No importable all-day tasks"
-                  description="The file parsed, but no VEVENTs met the all-day task requirements."
-                />
-              )}
-            </div>
-          </div>
+          {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
         </div>
-      ) : null}
 
-      {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
-
-      <div className="mt-6 flex items-center justify-end gap-3">
-        <button type="button" className={secondaryButtonClassName} onClick={onClose}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          disabled={!preview || !preview.importableCount || isParsing || isImporting}
-          onClick={() => {
-            if (!preview) {
-              return;
-            }
-
-            void (async () => {
-              setError("");
-              setIsImporting(true);
-              try {
-                const imported = await onImport(preview.studyBlocks);
-                if (imported) {
-                  onClose();
-                } else {
-                  setError("Unable to import the selected .ics file.");
-                }
-              } finally {
-                setIsImporting(false);
+        <div className="flex shrink-0 items-center justify-start gap-3 border-t border-white/10 bg-slate-950/20 px-6 py-4">
+          <button type="button" className={secondaryButtonClassName} onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!preview || !preview.importableCount || isParsing || isImporting}
+            onClick={() => {
+              if (!preview) {
+                return;
               }
-            })();
-          }}
-          className={`${primaryButtonClassName} disabled:cursor-not-allowed disabled:opacity-50`}
-        >
-          {isImporting ? "Importing…" : isParsing ? "Parsing…" : "Import into planner"}
-        </button>
+
+              void (async () => {
+                setError("");
+                setIsImporting(true);
+                try {
+                  const imported = await onImport(preview.studyBlocks);
+                  if (imported) {
+                    onClose();
+                  } else {
+                    setError("Unable to import the selected .ics file.");
+                  }
+                } finally {
+                  setIsImporting(false);
+                }
+              })();
+            }}
+            className={`${primaryButtonClassName} disabled:cursor-not-allowed disabled:opacity-50`}
+          >
+            {isImporting ? "Importing…" : isParsing ? "Parsing…" : "Import into planner"}
+          </button>
+        </div>
       </div>
     </ModalShell>
   );
@@ -447,9 +477,6 @@ export function PlannerView() {
   const [showImport, setShowImport] = useState(false);
   const [showIcsImport, setShowIcsImport] = useState(false);
 
-  useEffect(() => {
-    void setPlannerFocusDate(getTodayKey());
-  }, [setPlannerFocusDate]);
   const id = useId();
   const deferredSearch = useDeferredValue(state.preferences.plannerFilters.search);
   const searchId = `${id}-search`;
