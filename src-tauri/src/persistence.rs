@@ -1068,12 +1068,11 @@ impl StorageService {
         }
         let connection = Self::open_read_only_connection(&backup_path)?;
         Self::run_integrity_check(&connection)?;
-        let state = self.read_state(&connection)?;
-        self.validate_app_state(&state)?;
         drop(connection);
 
         self.create_snapshot("pre-snapshot-restore")?;
         self.replace_live_file(&backup_path)?;
+        self.try_validate_live_database()?;
         let live = self.open_live_connection()?;
         self.set_metadata(
             &live,
