@@ -441,7 +441,7 @@ function LogEntryModal({
       onClose={onClose}
       position="center"
       titleId="log-entry-title"
-      contentClassName="flex max-h-[calc(100vh-3rem)] w-full max-w-[720px] flex-col overflow-hidden p-6"
+      contentClassName="flex h-[calc(100vh-3rem)] max-h-[calc(100vh-3rem)] w-full max-w-[720px] flex-col overflow-hidden p-6"
     >
       <div className="flex shrink-0 items-start justify-between gap-4">
         <div>
@@ -450,8 +450,14 @@ function LogEntryModal({
             {isEdit ? "Edit Log entry" : "Log entry"}
           </h3>
         </div>
-        <button type="button" className={secondaryButtonClassName} onClick={onClose}>
-          Close
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close modal"
+          title="Close modal"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-slate-900/60 text-slate-300 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
+        >
+          <X className="h-4 w-4" />
         </button>
       </div>
 
@@ -556,7 +562,7 @@ function LogEntryModal({
               value={draft.missedPattern}
               onChange={(html) => setDraft((d) => ({ ...d, missedPattern: html }))}
               placeholder="What did you miss?"
-              minLines={4}
+              minLines={7}
               scrollable
               className={`mt-1 ${bodyTextClass}`}
             />
@@ -569,7 +575,7 @@ function LogEntryModal({
               value={draft.fix}
               onChange={(html) => setDraft((d) => ({ ...d, fix: html }))}
               placeholder="What will you do differently?"
-              minLines={4}
+              minLines={7}
               scrollable
               className={`mt-1 ${bodyTextClass}`}
             />
@@ -670,11 +676,11 @@ function LogEntryModal({
           </section>
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-3 pt-2">
-          <button type="button" className={secondaryButtonClassName} onClick={onClose}>
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-white/[0.08] pt-2.5">
+          <button type="button" className={`${secondaryButtonClassName} h-8 px-3 text-sm`} onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className={primaryButtonClassName} disabled={saving}>
+          <button type="submit" className={`${primaryButtonClassName} h-8 px-3 text-sm`} disabled={saving}>
             {saving ? "Saving…" : isEdit ? "Save changes" : "Log entry"}
           </button>
         </div>
