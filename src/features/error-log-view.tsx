@@ -5,6 +5,7 @@ import { ModalShell } from "../components/modal-shell";
 import { RichTextEditor, RichTextRender, richTextToPlain } from "../components/rich-text-editor";
 import { primaryButtonClassName, secondaryButtonClassName } from "../lib/ui";
 import {
+  ERROR_LOG_FOLLOW_UP_ACTION_VALUES,
   ERROR_LOG_ERROR_TYPE_VALUES,
   ERROR_LOG_SOURCE_VALUES,
   ERROR_LOG_SYSTEM_VALUES,
@@ -13,6 +14,7 @@ import { useAppStore } from "../state/app-store";
 import type {
   ErrorLogEntry,
   ErrorLogErrorType,
+  ErrorLogFollowUpAction,
   ErrorLogInput,
   ErrorLogPriority,
   ErrorLogSource,
@@ -44,7 +46,23 @@ const ERROR_TYPE_COLORS: Record<ErrorLogErrorType, string> = {
   "Misread Question": "bg-blue-500/15 border-blue-500/25 text-blue-200",
   "Wrong Algorithm": "bg-rose-500/15 border-rose-500/25 text-rose-200",
   "Trap Answer": "bg-purple-500/15 border-purple-500/25 text-purple-200",
+  "Reasoning Error": "bg-cyan-500/15 border-cyan-500/25 text-cyan-200",
+  "Trap / Misread": "bg-fuchsia-500/15 border-fuchsia-500/25 text-fuchsia-200",
+  "Management Algorithm": "bg-emerald-500/15 border-emerald-500/25 text-emerald-200",
 };
+
+const FOLLOW_UP_ACTION_LABELS: Record<ErrorLogFollowUpAction, string> = {
+  "": "No follow-up set",
+  "make-anki": "Make Anki",
+  "do-10-targeted-questions": "Do 10 targeted questions",
+  "review-algorithm": "Review algorithm",
+  "add-to-final-sheet": "Add to final sheet",
+  "ignore-one-off-detail": "Ignore one-off detail",
+};
+
+const REPEAT_PILL = "border-rose-300/30 bg-rose-300/15 text-rose-200";
+const FINAL_SHEET_PILL = "border-emerald-300/30 bg-emerald-300/15 text-emerald-200";
+const GUESSED_PILL = "border-sky-300/30 bg-sky-300/15 text-sky-200";
 
 function Badge({ className, children }: { className: string; children: React.ReactNode }) {
   return (
@@ -79,7 +97,25 @@ function Toast({ message, onDismiss }: { message: string; onDismiss: () => void 
 }
 
 function exportCsv(entries: ErrorLogEntry[]) {
-  const headers = ["Source", "Exam/Block", "System", "Topic", "Error Type", "Priority", "Missed Pattern", "Fix", "Date"];
+  const headers = [
+    "Source",
+    "Exam/Block",
+    "System",
+    "Topic",
+    "Error Type",
+    "Priority",
+    "Missed Pattern",
+    "Why Picked Wrong Answer",
+    "Why Correct Answer Is Correct",
+    "Why Tempting Wrong Answer Is Wrong",
+    "Decision Rule",
+    "Fix",
+    "Repeat Miss",
+    "Follow-Up Action",
+    "Guessed Correct",
+    "Add To Final Sheet",
+    "Date",
+  ];
   const rows = entries.map((e) => [
     e.source,
     e.examBlock,
@@ -88,7 +124,15 @@ function exportCsv(entries: ErrorLogEntry[]) {
     e.errorType,
     e.priority,
     richTextToPlain(e.missedPattern),
+    e.whyPickedWrongAnswer,
+    e.whyCorrectAnswerIsCorrect,
+    e.whyTemptingWrongAnswerIsWrong,
+    e.decisionRule,
     richTextToPlain(e.fix),
+    e.isRepeatMiss ? "Yes" : "No",
+    FOLLOW_UP_ACTION_LABELS[e.followUpAction] ?? e.followUpAction,
+    e.isGuessedCorrect ? "Yes" : "No",
+    e.addToFinalSheet ? "Yes" : "No",
     e.entryDate || e.createdAt.slice(0, 10),
   ]);
   const csv = [headers, ...rows]
@@ -115,6 +159,14 @@ const EMPTY_FORM: ErrorLogInput = {
   errorType: "Knowledge Gap",
   missedPattern: "",
   fix: "",
+  whyPickedWrongAnswer: "",
+  whyCorrectAnswerIsCorrect: "",
+  whyTemptingWrongAnswerIsWrong: "",
+  decisionRule: "",
+  isRepeatMiss: false,
+  followUpAction: "",
+  isGuessedCorrect: false,
+  addToFinalSheet: false,
   priority: "medium",
   entryDate: todayIso(),
 };
@@ -134,6 +186,20 @@ function validateForm(draft: ErrorLogInput): FormErrors {
 
 const PRIORITY_SORT_ORDER: Record<ErrorLogPriority, number> = { high: 0, medium: 1, low: 2 };
 
+function describeNextReview(entry: ErrorLogEntry) {
+  const parts = [
+    entry.followUpAction ? FOLLOW_UP_ACTION_LABELS[entry.followUpAction] ?? entry.followUpAction : "",
+    entry.isRepeatMiss ? "repeat miss" : "",
+    entry.addToFinalSheet ? "final sheet" : "",
+  ].filter(Boolean);
+
+  if (!parts.length) {
+    return "No follow-up set";
+  }
+
+  return parts.join(" / ");
+}
+
 function LogEntryModal({
   initial,
   onClose,
@@ -147,14 +213,22 @@ function LogEntryModal({
     initial
       ? {
           id: initial.id,
-          source: initial.source as ErrorLogSource,
+          source: initial.source,
           examBlock: initial.examBlock,
-          system: initial.system as ErrorLogSystem,
+          system: initial.system,
           topic: initial.topic,
-          errorType: initial.errorType as ErrorLogErrorType,
+          errorType: initial.errorType,
           missedPattern: initial.missedPattern,
           fix: initial.fix,
-          priority: (initial.priority ?? "medium") as ErrorLogPriority,
+          whyPickedWrongAnswer: initial.whyPickedWrongAnswer,
+          whyCorrectAnswerIsCorrect: initial.whyCorrectAnswerIsCorrect,
+          whyTemptingWrongAnswerIsWrong: initial.whyTemptingWrongAnswerIsWrong,
+          decisionRule: initial.decisionRule,
+          isRepeatMiss: initial.isRepeatMiss,
+          followUpAction: initial.followUpAction,
+          isGuessedCorrect: initial.isGuessedCorrect,
+          addToFinalSheet: initial.addToFinalSheet,
+          priority: initial.priority ?? "medium",
           entryDate: initial.entryDate || initial.createdAt.slice(0, 10),
         }
       : { ...EMPTY_FORM, entryDate: todayIso() },
@@ -165,14 +239,19 @@ function LogEntryModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const next = validateForm(draft);
+    const nextDraft = {
+      ...draft,
+      followUpAction:
+        draft.isRepeatMiss && !draft.followUpAction ? "make-anki" : draft.followUpAction,
+    } satisfies ErrorLogInput;
+    const next = validateForm(nextDraft);
     if (Object.keys(next).length) {
       setErrors(next);
       return;
     }
     setSaving(true);
     try {
-      await onSave(draft);
+      await onSave(nextDraft);
     } finally {
       setSaving(false);
     }
@@ -320,6 +399,115 @@ function LogEntryModal({
           {errors.fix ? <p className="mt-1 text-xs text-rose-400">{errors.fix}</p> : null}
         </div>
 
+        <section className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Reasoning / correction
+            </p>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                Why I picked wrong answer
+              </label>
+              <textarea
+                value={draft.whyPickedWrongAnswer}
+                onChange={(e) => setDraft((d) => ({ ...d, whyPickedWrongAnswer: e.target.value }))}
+                rows={3}
+                className={`${fieldClass} mt-1 resize-y`}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                Why correct answer is correct
+              </label>
+              <textarea
+                value={draft.whyCorrectAnswerIsCorrect}
+                onChange={(e) => setDraft((d) => ({ ...d, whyCorrectAnswerIsCorrect: e.target.value }))}
+                rows={3}
+                className={`${fieldClass} mt-1 resize-y`}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                Why tempting wrong answer is wrong
+              </label>
+              <textarea
+                value={draft.whyTemptingWrongAnswerIsWrong}
+                onChange={(e) => setDraft((d) => ({ ...d, whyTemptingWrongAnswerIsWrong: e.target.value }))}
+                rows={3}
+                className={`${fieldClass} mt-1 resize-y`}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                Decision rule / algorithm
+              </label>
+              <textarea
+                value={draft.decisionRule}
+                onChange={(e) => setDraft((d) => ({ ...d, decisionRule: e.target.value }))}
+                rows={3}
+                className={`${fieldClass} mt-1 resize-y`}
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1.4fr]">
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                Follow-up action
+              </label>
+              <select
+                value={draft.followUpAction}
+                onChange={(e) => setDraft((d) => ({ ...d, followUpAction: e.target.value as ErrorLogFollowUpAction }))}
+                className={`${selectClass} mt-1`}
+              >
+                {ERROR_LOG_FOLLOW_UP_ACTION_VALUES.map((action) => (
+                  <option key={action || "none"} value={action}>
+                    {FOLLOW_UP_ACTION_LABELS[action]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/50 px-3 py-2 text-xs font-medium text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={draft.isRepeatMiss}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      isRepeatMiss: e.target.checked,
+                      followUpAction: e.target.checked && !d.followUpAction ? "make-anki" : d.followUpAction,
+                    }))
+                  }
+                  className="h-4 w-4 accent-cyan-400"
+                />
+                Repeat miss
+              </label>
+              <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/50 px-3 py-2 text-xs font-medium text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={draft.isGuessedCorrect}
+                  onChange={(e) => setDraft((d) => ({ ...d, isGuessedCorrect: e.target.checked }))}
+                  className="h-4 w-4 accent-cyan-400"
+                />
+                Guessed correct
+              </label>
+              <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/50 px-3 py-2 text-xs font-medium text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={draft.addToFinalSheet}
+                  onChange={(e) => setDraft((d) => ({ ...d, addToFinalSheet: e.target.checked }))}
+                  className="h-4 w-4 accent-cyan-400"
+                />
+                Add to final sheet
+              </label>
+            </div>
+          </div>
+        </section>
+
         <div className="flex items-center justify-end gap-3 pt-2">
           <button type="button" className={secondaryButtonClassName} onClick={onClose}>
             Cancel
@@ -356,7 +544,12 @@ export function ErrorLogView() {
       if (filterSource !== "All" && e.source !== filterSource) return false;
       if (filterSystem !== "All" && e.system !== filterSystem) return false;
       if (filterErrorType !== "All" && e.errorType !== filterErrorType) return false;
-      if (q && !`${e.topic} ${e.source} ${e.examBlock} ${richTextToPlain(e.missedPattern)}`.toLowerCase().includes(q)) return false;
+      if (
+        q &&
+        !`${e.topic} ${e.source} ${e.examBlock} ${richTextToPlain(e.missedPattern)} ${e.whyPickedWrongAnswer} ${e.whyCorrectAnswerIsCorrect} ${e.decisionRule}`
+          .toLowerCase()
+          .includes(q)
+      ) return false;
       return true;
     });
   }, [entries, deferredSearch, filterSource, filterSystem, filterErrorType]);
@@ -368,16 +561,28 @@ export function ErrorLogView() {
       if (sortKey === "topic") return a.topic.localeCompare(b.topic);
       if (sortKey === "errorType") return a.errorType.localeCompare(b.errorType) || b.createdAt.localeCompare(a.createdAt);
       if (sortKey === "priority") {
-        const pa = PRIORITY_SORT_ORDER[(a.priority ?? "medium") as ErrorLogPriority] ?? 1;
-        const pb = PRIORITY_SORT_ORDER[(b.priority ?? "medium") as ErrorLogPriority] ?? 1;
+        const pa = PRIORITY_SORT_ORDER[a.priority ?? "medium"] ?? 1;
+        const pb = PRIORITY_SORT_ORDER[b.priority ?? "medium"] ?? 1;
         return pa - pb || b.createdAt.localeCompare(a.createdAt);
       }
       return 0;
     });
   }, [filtered, sortKey]);
 
-  const mostCommonErrorType = modeCount(entries.map((e) => e.errorType as ErrorLogErrorType));
-  const mostCommonSystem = modeCount(entries.map((e) => e.system as ErrorLogSystem));
+  const mostCommonErrorType = modeCount(entries.map((e) => e.errorType));
+  const mostCommonSystem = modeCount(entries.map((e) => e.system));
+  const topRepeatedWeakTopics = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const entry of entries) {
+      if (!entry.isRepeatMiss) continue;
+      const topic = entry.topic.trim();
+      if (!topic) continue;
+      counts.set(topic, (counts.get(topic) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+      .slice(0, 5);
+  }, [entries]);
 
   async function handleSave(input: ErrorLogInput) {
     await upsertErrorLogEntry(input);
@@ -429,6 +634,30 @@ export function ErrorLogView() {
         <MetricCard label="Most common error type" value={mostCommonErrorType ?? "—"} />
         <MetricCard label="Most common category" value={mostCommonSystem ?? "—"} />
       </div>
+
+      <section className="shrink-0 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-white">Top 5 repeated weak topics</p>
+          <span className="text-xs text-slate-500">{topRepeatedWeakTopics.length} tracked</span>
+        </div>
+        {topRepeatedWeakTopics.length ? (
+          <ol className="mt-2 grid gap-2 sm:grid-cols-5">
+            {topRepeatedWeakTopics.map(([topic, count]) => (
+              <li
+                key={topic}
+                className="min-w-0 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-2"
+              >
+                <p className="truncate text-xs font-semibold text-slate-200">{topic}</p>
+                <p className="mt-1 text-[11px] text-rose-200">{count} repeat miss{count === 1 ? "" : "es"}</p>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="mt-2 rounded-lg border border-dashed border-white/10 bg-slate-950/20 px-3 py-2 text-xs text-slate-500">
+            No repeated misses logged yet.
+          </p>
+        )}
+      </section>
 
       {/* Entries list — fills remaining space */}
       <section className="glass-panel min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -619,8 +848,9 @@ function EntryCard({
   onDeleteCancel: () => void;
   onAddWeakTopic: () => void;
 }) {
-  const priority = (entry.priority ?? "medium") as ErrorLogPriority;
+  const priority = entry.priority ?? "medium";
   const displayDate = entry.entryDate || entry.createdAt.slice(0, 10);
+  const nextReview = describeNextReview(entry);
 
   return (
     <div
@@ -633,15 +863,18 @@ function EntryCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <Badge className={SOURCE_COLORS[entry.source as ErrorLogSource] ?? SOURCE_COLORS.Other}>
+            <Badge className={SOURCE_COLORS[entry.source] ?? SOURCE_COLORS.Other}>
               {entry.source}
             </Badge>
-            <Badge className={ERROR_TYPE_COLORS[entry.errorType as ErrorLogErrorType] ?? ERROR_TYPE_COLORS["Knowledge Gap"]}>
+            <Badge className={ERROR_TYPE_COLORS[entry.errorType] ?? ERROR_TYPE_COLORS["Knowledge Gap"]}>
               {entry.errorType}
             </Badge>
-            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${PRIORITY_PILL[priority]}`}>
-              {priority}
+            <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wider shadow-sm ${PRIORITY_PILL[priority]}`}>
+              {priority} priority
             </span>
+            {entry.isRepeatMiss ? <Badge className={REPEAT_PILL}>Repeat miss</Badge> : null}
+            {entry.addToFinalSheet ? <Badge className={FINAL_SHEET_PILL}>Final sheet</Badge> : null}
+            {entry.isGuessedCorrect ? <Badge className={GUESSED_PILL}>Guessed correct</Badge> : null}
             {entry.examBlock ? (
               <span className="text-[10px] text-slate-500">{entry.examBlock}</span>
             ) : null}
@@ -698,18 +931,51 @@ function EntryCard({
       </div>
 
       {entry.missedPattern ? (
-        <p className="mt-1.5 text-xs text-slate-300 rich-text-render">
+        <div className="mt-2 text-xs text-slate-300 rich-text-render">
           <span className="font-medium text-slate-500">Missed: </span>
           <RichTextRender html={entry.missedPattern} />
+        </div>
+      ) : null}
+
+      {entry.whyCorrectAnswerIsCorrect ? (
+        <p className="mt-1 text-xs whitespace-pre-wrap text-slate-300">
+          <span className="font-medium text-slate-500">Correct rule: </span>
+          {entry.whyCorrectAnswerIsCorrect}
+        </p>
+      ) : null}
+
+      {entry.whyPickedWrongAnswer ? (
+        <p className="mt-1 text-xs whitespace-pre-wrap text-slate-300">
+          <span className="font-medium text-slate-500">Why I missed it: </span>
+          {entry.whyPickedWrongAnswer}
+        </p>
+      ) : null}
+
+      {entry.whyTemptingWrongAnswerIsWrong ? (
+        <p className="mt-1 text-xs whitespace-pre-wrap text-slate-400">
+          <span className="font-medium text-slate-500">Tempting wrong answer: </span>
+          {entry.whyTemptingWrongAnswerIsWrong}
+        </p>
+      ) : null}
+
+      {entry.decisionRule ? (
+        <p className="mt-1 text-xs whitespace-pre-wrap text-slate-400">
+          <span className="font-medium text-slate-500">Decision rule: </span>
+          {entry.decisionRule}
         </p>
       ) : null}
 
       {entry.fix ? (
-        <p className="mt-1 text-xs text-slate-400 rich-text-render">
+        <div className="mt-1 text-xs text-slate-400 rich-text-render">
           <span className="font-medium text-slate-500">Fix: </span>
           <RichTextRender html={entry.fix} />
-        </p>
+        </div>
       ) : null}
+
+      <p className="mt-1 text-xs text-slate-400">
+        <span className="font-medium text-slate-500">Next review: </span>
+        {nextReview}
+      </p>
     </div>
   );
 }

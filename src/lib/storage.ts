@@ -4,9 +4,13 @@ import { compareStudyBlocks, getDayName, getTodayKey, minutesBetween, parseTimeT
 import type {
   AppState,
   BackupPayload,
+  ErrorLogEntry,
+  ErrorLogErrorType,
+  ErrorLogFollowUpAction,
+  ErrorLogInput,
+  ErrorLogPriority,
   ErrorLogSource,
   ErrorLogSystem,
-  ErrorLogErrorType,
   PlannerFilters,
   PracticeTest,
   PracticeTestInput,
@@ -60,7 +64,23 @@ export const WEAK_TOPIC_STATUS_VALUES: WeakTopicStatus[] = [
 ];
 export const ERROR_LOG_SOURCE_VALUES: ErrorLogSource[] = ["UWorld", "TrueLearn", "NBME", "CMS Form", "AMBOSS", "COMSAE", "Other"];
 export const ERROR_LOG_SYSTEM_VALUES: ErrorLogSystem[] = ["IM/FM", "Surgery", "OB/GYN", "Pediatrics", "Psychiatry", "Ethics/Biostats", "OMT", "Other"];
-export const ERROR_LOG_ERROR_TYPE_VALUES: ErrorLogErrorType[] = ["Knowledge Gap", "Misread Question", "Wrong Algorithm", "Trap Answer"];
+export const ERROR_LOG_ERROR_TYPE_VALUES: ErrorLogErrorType[] = [
+  "Knowledge Gap",
+  "Reasoning Error",
+  "Trap / Misread",
+  "Management Algorithm",
+  "Misread Question",
+  "Wrong Algorithm",
+  "Trap Answer",
+];
+export const ERROR_LOG_FOLLOW_UP_ACTION_VALUES: ErrorLogFollowUpAction[] = [
+  "",
+  "make-anki",
+  "do-10-targeted-questions",
+  "review-algorithm",
+  "add-to-final-sheet",
+  "ignore-one-off-detail",
+];
 
 const defaultPlannerFilters: PlannerFilters = {
   search: "",
@@ -448,6 +468,68 @@ export function normalizeWeakTopicEntry(
   } satisfies WeakTopicEntry;
 }
 
+function normalizeErrorLogSource(value: unknown): ErrorLogSource {
+  const text = sanitizeText(value);
+  return ERROR_LOG_SOURCE_VALUES.includes(text as ErrorLogSource) ? (text as ErrorLogSource) : "Other";
+}
+
+function normalizeErrorLogSystem(value: unknown): ErrorLogSystem {
+  const text = sanitizeText(value);
+  return ERROR_LOG_SYSTEM_VALUES.includes(text as ErrorLogSystem) ? (text as ErrorLogSystem) : "Other";
+}
+
+function normalizeErrorLogErrorType(value: unknown): ErrorLogErrorType {
+  const text = sanitizeText(value);
+  return ERROR_LOG_ERROR_TYPE_VALUES.includes(text as ErrorLogErrorType)
+    ? (text as ErrorLogErrorType)
+    : "Knowledge Gap";
+}
+
+function normalizeErrorLogPriority(value: unknown): ErrorLogPriority {
+  const normalized = sanitizeText(value).toLowerCase();
+  if (normalized === "high" || normalized === "low") {
+    return normalized;
+  }
+  return "medium";
+}
+
+function normalizeErrorLogFollowUpAction(value: unknown): ErrorLogFollowUpAction {
+  const text = sanitizeText(value);
+  return ERROR_LOG_FOLLOW_UP_ACTION_VALUES.includes(text as ErrorLogFollowUpAction)
+    ? (text as ErrorLogFollowUpAction)
+    : "";
+}
+
+export function normalizeErrorLogEntry(
+  input: Partial<ErrorLogInput & ErrorLogEntry>,
+  fallbackId?: string,
+) {
+  const timestamp = sanitizeText(input.updatedAt) || nowIso();
+
+  return {
+    id: sanitizeText(input.id) || fallbackId || createId("error-log"),
+    source: normalizeErrorLogSource(input.source),
+    examBlock: sanitizeText(input.examBlock),
+    system: normalizeErrorLogSystem(input.system),
+    topic: sanitizeText(input.topic),
+    errorType: normalizeErrorLogErrorType(input.errorType),
+    missedPattern: sanitizeText(input.missedPattern),
+    fix: sanitizeText(input.fix),
+    whyPickedWrongAnswer: sanitizeText(input.whyPickedWrongAnswer),
+    whyCorrectAnswerIsCorrect: sanitizeText(input.whyCorrectAnswerIsCorrect),
+    whyTemptingWrongAnswerIsWrong: sanitizeText(input.whyTemptingWrongAnswerIsWrong),
+    decisionRule: sanitizeText(input.decisionRule),
+    isRepeatMiss: input.isRepeatMiss === true,
+    followUpAction: normalizeErrorLogFollowUpAction(input.followUpAction),
+    isGuessedCorrect: input.isGuessedCorrect === true,
+    addToFinalSheet: input.addToFinalSheet === true,
+    priority: normalizeErrorLogPriority(input.priority),
+    entryDate: sanitizeText(input.entryDate),
+    createdAt: sanitizeText(input.createdAt) || timestamp,
+    updatedAt: timestamp,
+  } satisfies ErrorLogEntry;
+}
+
 export function mergeWeakTopicEntriesFromPracticeTests(
   tests: PracticeTest[],
   existingEntries: WeakTopicEntry[] = [],
@@ -554,7 +636,9 @@ function stripLegacyBootstrapSchedule(state: AppState) {
   return {
     ...state,
     studyBlocks: [],
-    errorLogEntries: state.errorLogEntries ?? [],
+    errorLogEntries: (state.errorLogEntries ?? []).map((entry, index) =>
+      normalizeErrorLogEntry(entry, `error-log-${index}`),
+    ),
   } satisfies AppState;
 }
 
@@ -650,15 +734,15 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
     : DEFAULT_PREFERENCES.plannerMode;
 
   const enhancedThemeIds = Array.isArray(value?.enhancedThemeIds)
-    ? value!.enhancedThemeIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+    ? value.enhancedThemeIds.filter((id): id is string => typeof id === "string" && id.length > 0)
     : [];
   const customCategories = Array.isArray(value?.customCategories)
-    ? value!.customCategories
+    ? value.customCategories
         .map((cat) => (typeof cat === "string" ? cat.trim() : ""))
         .filter((cat) => cat.length > 0)
     : [...DEFAULT_STUDY_CATEGORIES];
   const resourceLinks = Array.isArray(value?.resourceLinks)
-    ? value!.resourceLinks
+    ? value.resourceLinks
         .map((link) => ({
           id: typeof link?.id === "string" && link.id ? link.id : createId("link"),
           label: sanitizeText(link?.label),
@@ -693,7 +777,7 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
     customCategories: customCategories.length ? customCategories : [...DEFAULT_STUDY_CATEGORIES],
     resourceLinks,
     examTimers: Array.isArray(value?.examTimers)
-      ? value!.examTimers
+      ? value.examTimers
           .map((t) => ({
             id: typeof t?.id === "string" && t.id ? t.id : createId("exam"),
             label: sanitizeText(t?.label),
@@ -771,7 +855,9 @@ export function normalizeAppState(raw: unknown): AppState {
     studyBlocks: normalizeStudyBlocksForState(studyBlocks).sort(compareStudyBlocks),
     practiceTests: practiceTests.sort((left, right) => left.date.localeCompare(right.date)),
     weakTopicEntries: mergeWeakTopicEntriesFromPracticeTests(practiceTests, weakTopicEntries),
-    errorLogEntries: Array.isArray(candidate.errorLogEntries) ? candidate.errorLogEntries : [],
+    errorLogEntries: Array.isArray(candidate.errorLogEntries)
+      ? candidate.errorLogEntries.map((entry, index) => normalizeErrorLogEntry(entry, `error-log-${index}`))
+      : [],
     preferences: normalizePreferences(candidate.preferences),
   });
 }

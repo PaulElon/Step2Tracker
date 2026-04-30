@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 const APP_ID: &str = "step2-command-center";
 const APP_STATE_VERSION: u32 = 6;
-const DB_SCHEMA_VERSION: i32 = 6;
+const DB_SCHEMA_VERSION: i32 = 7;
 const LIVE_DB_FILE: &str = "command-center.sqlite3";
 const MAX_BACKUPS: usize = 20;
 const SAFE_CHECKPOINT_INTERVAL_HOURS: i64 = 6;
@@ -182,6 +182,22 @@ pub struct ErrorLogEntry {
     pub error_type: String,
     pub missed_pattern: String,
     pub fix: String,
+    #[serde(default)]
+    pub why_picked_wrong_answer: String,
+    #[serde(default)]
+    pub why_correct_answer_is_correct: String,
+    #[serde(default)]
+    pub why_tempting_wrong_answer_is_wrong: String,
+    #[serde(default)]
+    pub decision_rule: String,
+    #[serde(default)]
+    pub is_repeat_miss: bool,
+    #[serde(default)]
+    pub follow_up_action: String,
+    #[serde(default)]
+    pub is_guessed_correct: bool,
+    #[serde(default)]
+    pub add_to_final_sheet: bool,
     #[serde(default = "default_error_log_priority")]
     pub priority: String,
     #[serde(default)]
@@ -201,6 +217,22 @@ pub struct ErrorLogInput {
     pub error_type: String,
     pub missed_pattern: String,
     pub fix: String,
+    #[serde(default)]
+    pub why_picked_wrong_answer: String,
+    #[serde(default)]
+    pub why_correct_answer_is_correct: String,
+    #[serde(default)]
+    pub why_tempting_wrong_answer_is_wrong: String,
+    #[serde(default)]
+    pub decision_rule: String,
+    #[serde(default)]
+    pub is_repeat_miss: bool,
+    #[serde(default)]
+    pub follow_up_action: String,
+    #[serde(default)]
+    pub is_guessed_correct: bool,
+    #[serde(default)]
+    pub add_to_final_sheet: bool,
     #[serde(default = "default_error_log_priority")]
     pub priority: String,
     #[serde(default)]
@@ -255,7 +287,11 @@ pub struct StudyBlockInput {
     pub notes: Option<String>,
     #[serde(default, alias = "reminderAt", skip_serializing_if = "Option::is_none")]
     pub reminder_at: Option<String>,
-    #[serde(default, alias = "reminderSentAt", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        alias = "reminderSentAt",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub reminder_sent_at: Option<String>,
 }
 
@@ -631,10 +667,8 @@ impl StorageService {
                 app_version: self.app_version.clone(),
                 last_saved_at: self.metadata_value(&connection, "last_saved_at")?,
                 recovery_message,
-                legacy_migration_completed_at: self.metadata_value(
-                    &connection,
-                    "legacy_browser_migration_completed_at",
-                )?,
+                legacy_migration_completed_at: self
+                    .metadata_value(&connection, "legacy_browser_migration_completed_at")?,
             },
             backups: self.list_backups()?,
             trash: self.list_trash_items(&connection)?,
@@ -648,7 +682,13 @@ impl StorageService {
         let transaction = connection.transaction()?;
         self.persist_preferences(&transaction, &preferences)?;
         self.touch_saved(&transaction)?;
-        self.log_event(&transaction, "preferences_saved", "preferences", Some("preferences"), None)?;
+        self.log_event(
+            &transaction,
+            "preferences_saved",
+            "preferences",
+            Some("preferences"),
+            None,
+        )?;
         transaction.commit()?;
         self.load_snapshot()
     }
@@ -668,13 +708,21 @@ impl StorageService {
         } else {
             self.next_study_block_order(&connection, &target_date)?
         };
-        let block = self.normalize_study_block(input, existing.as_ref().map(|row| &row.block), fallback_order)?;
+        let block = self.normalize_study_block(
+            input,
+            existing.as_ref().map(|row| &row.block),
+            fallback_order,
+        )?;
         let transaction = connection.transaction()?;
         self.persist_study_block(&transaction, &block, None)?;
         self.touch_saved(&transaction)?;
         self.log_event(
             &transaction,
-            if existing.is_some() { "study_block_updated" } else { "study_block_created" },
+            if existing.is_some() {
+                "study_block_updated"
+            } else {
+                "study_block_created"
+            },
             "study_block",
             Some(&block.id),
             None,
@@ -736,7 +784,12 @@ impl StorageService {
         normalized.sort_by(|left, right| {
             left.date
                 .cmp(&right.date)
-                .then_with(|| left.start_time.clone().unwrap_or_default().cmp(&right.start_time.clone().unwrap_or_default()))
+                .then_with(|| {
+                    left.start_time
+                        .clone()
+                        .unwrap_or_default()
+                        .cmp(&right.start_time.clone().unwrap_or_default())
+                })
                 .then_with(|| left.task.cmp(&right.task))
         });
 
@@ -776,7 +829,13 @@ impl StorageService {
                         raw_block.category,
                         raw_block.task
                     ],
-                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?)),
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, i64>(2)?,
+                        ))
+                    },
                 )
                 .optional()?;
 
@@ -787,9 +846,9 @@ impl StorageService {
                     let starting_order = self.next_study_block_order_tx(&transaction, &date)?;
                     next_order_by_date.insert(date.clone(), starting_order);
                 }
-                let entry = next_order_by_date
-                    .get_mut(&date)
-                    .ok_or_else(|| StorageError::Validation("Unable to compute import order.".into()))?;
+                let entry = next_order_by_date.get_mut(&date).ok_or_else(|| {
+                    StorageError::Validation("Unable to compute import order.".into())
+                })?;
                 let order = *entry;
                 *entry += 1;
                 order
@@ -837,7 +896,11 @@ impl StorageService {
         self.touch_saved(&transaction)?;
         self.log_event(
             &transaction,
-            if existing.is_some() { "practice_test_updated" } else { "practice_test_created" },
+            if existing.is_some() {
+                "practice_test_updated"
+            } else {
+                "practice_test_created"
+            },
             "practice_test",
             Some(&test.id),
             None,
@@ -862,7 +925,13 @@ impl StorageService {
         }
         self.reconcile_weak_topics(&transaction)?;
         self.touch_saved(&transaction)?;
-        self.log_event(&transaction, "practice_test_trashed", "practice_test", Some(&id), None)?;
+        self.log_event(
+            &transaction,
+            "practice_test_trashed",
+            "practice_test",
+            Some(&id),
+            None,
+        )?;
         transaction.commit()?;
         self.load_snapshot()
     }
@@ -879,7 +948,11 @@ impl StorageService {
         self.touch_saved(&transaction)?;
         self.log_event(
             &transaction,
-            if existing.is_some() { "weak_topic_updated" } else { "weak_topic_created" },
+            if existing.is_some() {
+                "weak_topic_updated"
+            } else {
+                "weak_topic_created"
+            },
             "weak_topic",
             Some(&entry.id),
             None,
@@ -984,9 +1057,14 @@ impl StorageService {
     }
 
     pub fn restore_from_snapshot(&self, backup_id: String) -> StorageResult<ClientSnapshot> {
-        let backup_path = self.paths.backups_dir.join(format!("{}.sqlite3", backup_id));
+        let backup_path = self
+            .paths
+            .backups_dir
+            .join(format!("{}.sqlite3", backup_id));
         if !backup_path.exists() {
-            return Err(StorageError::Validation("Backup snapshot not found.".into()));
+            return Err(StorageError::Validation(
+                "Backup snapshot not found.".into(),
+            ));
         }
         let connection = Self::open_read_only_connection(&backup_path)?;
         Self::run_integrity_check(&connection)?;
@@ -997,7 +1075,11 @@ impl StorageService {
         self.create_snapshot("pre-snapshot-restore")?;
         self.replace_live_file(&backup_path)?;
         let live = self.open_live_connection()?;
-        self.set_metadata(&live, "recovery_message", &format!("Restored snapshot {}.", backup_id))?;
+        self.set_metadata(
+            &live,
+            "recovery_message",
+            &format!("Restored snapshot {}.", backup_id),
+        )?;
         self.touch_saved_direct(&live)?;
         self.create_snapshot("post-snapshot-restore")?;
         self.load_snapshot()
@@ -1020,12 +1102,16 @@ impl StorageService {
             > 0
         {
             return Err(StorageError::Validation(
-                "Native storage already contains data. Legacy browser migration was skipped.".into(),
+                "Native storage already contains data. Legacy browser migration was skipped."
+                    .into(),
             ));
         }
 
         let artifact_name = format!("legacy-browser-{}.json", timestamp_slug());
-        fs::write(self.paths.legacy_dir.join(artifact_name), legacy_source_json)?;
+        fs::write(
+            self.paths.legacy_dir.join(artifact_name),
+            legacy_source_json,
+        )?;
         self.replace_live_state(state, "legacy_browser_migration")?;
         let connection = self.open_live_connection()?;
         self.set_metadata(
@@ -1033,7 +1119,11 @@ impl StorageService {
             "legacy_browser_migration_completed_at",
             &now_iso(),
         )?;
-        self.set_metadata(&connection, "recovery_message", "Legacy browser data migrated into native storage.")?;
+        self.set_metadata(
+            &connection,
+            "recovery_message",
+            "Legacy browser data migrated into native storage.",
+        )?;
         self.touch_saved_direct(&connection)?;
         self.create_snapshot("post-legacy-browser-migration")?;
         self.load_snapshot()
@@ -1119,7 +1209,10 @@ impl StorageService {
                         "Canonical data was quarantined at {}, and no usable backup snapshot was found.",
                         quarantined.display()
                     )))?;
-                let backup_path = self.paths.backups_dir.join(format!("{}.sqlite3", latest_backup.id));
+                let backup_path = self
+                    .paths
+                    .backups_dir
+                    .join(format!("{}.sqlite3", latest_backup.id));
                 self.replace_live_file(&backup_path)?;
                 let connection = self.open_live_connection()?;
                 self.set_metadata(
@@ -1147,7 +1240,8 @@ impl StorageService {
     }
 
     fn run_migrations(&self, connection: &mut Connection) -> StorageResult<()> {
-        let current_version = connection.pragma_query_value(None, "user_version", |row| row.get::<_, i32>(0))?;
+        let current_version =
+            connection.pragma_query_value(None, "user_version", |row| row.get::<_, i32>(0))?;
         if current_version > DB_SCHEMA_VERSION {
             return Err(StorageError::Validation(
                 "The local database uses a newer schema version than this app understands.".into(),
@@ -1178,6 +1272,9 @@ impl StorageService {
         }
         if current_version < 6 {
             self.ensure_error_log_priority_columns(&transaction)?;
+        }
+        if current_version < 7 {
+            self.ensure_error_log_scoring_columns(&transaction)?;
         }
         transaction.pragma_update(None, "user_version", DB_SCHEMA_VERSION)?;
         self.set_metadata_tx(&transaction, "app_version", &self.app_version)?;
@@ -1293,6 +1390,14 @@ impl StorageService {
               error_type TEXT NOT NULL,
               missed_pattern TEXT NOT NULL,
               fix TEXT NOT NULL,
+              why_picked_wrong_answer TEXT NOT NULL DEFAULT '',
+              why_correct_answer_is_correct TEXT NOT NULL DEFAULT '',
+              why_tempting_wrong_answer_is_wrong TEXT NOT NULL DEFAULT '',
+              decision_rule TEXT NOT NULL DEFAULT '',
+              is_repeat_miss INTEGER NOT NULL DEFAULT 0,
+              follow_up_action TEXT NOT NULL DEFAULT '',
+              is_guessed_correct INTEGER NOT NULL DEFAULT 0,
+              add_to_final_sheet INTEGER NOT NULL DEFAULT 0,
               priority TEXT NOT NULL DEFAULT 'medium',
               entry_date TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL,
@@ -1345,7 +1450,10 @@ impl StorageService {
             transaction.execute("ALTER TABLE study_blocks ADD COLUMN reminder_at TEXT", [])?;
         }
         if !columns.contains(&"reminder_sent_at".to_string()) {
-            transaction.execute("ALTER TABLE study_blocks ADD COLUMN reminder_sent_at TEXT", [])?;
+            transaction.execute(
+                "ALTER TABLE study_blocks ADD COLUMN reminder_sent_at TEXT",
+                [],
+            )?;
         }
 
         Ok(())
@@ -1406,6 +1514,14 @@ impl StorageService {
               error_type TEXT NOT NULL,
               missed_pattern TEXT NOT NULL,
               fix TEXT NOT NULL,
+              why_picked_wrong_answer TEXT NOT NULL DEFAULT '',
+              why_correct_answer_is_correct TEXT NOT NULL DEFAULT '',
+              why_tempting_wrong_answer_is_wrong TEXT NOT NULL DEFAULT '',
+              decision_rule TEXT NOT NULL DEFAULT '',
+              is_repeat_miss INTEGER NOT NULL DEFAULT 0,
+              follow_up_action TEXT NOT NULL DEFAULT '',
+              is_guessed_correct INTEGER NOT NULL DEFAULT 0,
+              add_to_final_sheet INTEGER NOT NULL DEFAULT 0,
               priority TEXT NOT NULL DEFAULT 'medium',
               entry_date TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL,
@@ -1418,7 +1534,10 @@ impl StorageService {
         Ok(())
     }
 
-    fn ensure_error_log_priority_columns(&self, transaction: &Transaction<'_>) -> StorageResult<()> {
+    fn ensure_error_log_priority_columns(
+        &self,
+        transaction: &Transaction<'_>,
+    ) -> StorageResult<()> {
         let columns = self.table_columns(transaction, "error_log_entries")?;
         if !columns.contains(&"priority".to_string()) {
             transaction.execute(
@@ -1435,11 +1554,53 @@ impl StorageService {
         Ok(())
     }
 
-    fn table_columns(&self, transaction: &Transaction<'_>, table: &str) -> StorageResult<Vec<String>> {
+    fn ensure_error_log_scoring_columns(&self, transaction: &Transaction<'_>) -> StorageResult<()> {
+        let columns = self.table_columns(transaction, "error_log_entries")?;
+        let text_columns = [
+            "why_picked_wrong_answer",
+            "why_correct_answer_is_correct",
+            "why_tempting_wrong_answer_is_wrong",
+            "decision_rule",
+            "follow_up_action",
+        ];
+        for column in text_columns {
+            if !columns.contains(&column.to_string()) {
+                transaction.execute(
+                    &format!(
+                        "ALTER TABLE error_log_entries ADD COLUMN {} TEXT NOT NULL DEFAULT ''",
+                        column
+                    ),
+                    [],
+                )?;
+            }
+        }
+
+        let boolean_columns = ["is_repeat_miss", "is_guessed_correct", "add_to_final_sheet"];
+        for column in boolean_columns {
+            if !columns.contains(&column.to_string()) {
+                transaction.execute(
+                    &format!(
+                        "ALTER TABLE error_log_entries ADD COLUMN {} INTEGER NOT NULL DEFAULT 0",
+                        column
+                    ),
+                    [],
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn table_columns(
+        &self,
+        transaction: &Transaction<'_>,
+        table: &str,
+    ) -> StorageResult<Vec<String>> {
         let sql = format!("PRAGMA table_info({})", table);
         let mut statement = transaction.prepare(&sql)?;
         let rows = statement.query_map([], |row| row.get::<_, String>(1))?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(StorageError::from)
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
     }
 
     fn backfill_study_block_task_fields(&self, transaction: &Transaction<'_>) -> StorageResult<()> {
@@ -1467,7 +1628,8 @@ impl StorageService {
 
         let mut order_by_date = std::collections::HashMap::<String, i64>::new();
         for row in rows {
-            let (id, date, start_time, end_time, is_overnight, category, task, notes, status) = row?;
+            let (id, date, start_time, end_time, is_overnight, category, task, notes, status) =
+                row?;
             let (duration_hours, duration_minutes) =
                 derive_duration_from_legacy_range(&start_time, &end_time, is_overnight)?;
             let order = {
@@ -1494,7 +1656,11 @@ impl StorageService {
                     i64::from(status == "Completed"),
                     order,
                     normalize_study_task_category(&category, &task, &notes),
-                    if status == "Completed" { "Completed" } else { "Not Started" },
+                    if status == "Completed" {
+                        "Completed"
+                    } else {
+                        "Not Started"
+                    },
                     id
                 ],
             )?;
@@ -1503,7 +1669,10 @@ impl StorageService {
         Ok(())
     }
 
-    fn clear_legacy_bootstrap_schedule_if_needed(&self, transaction: &Transaction<'_>) -> StorageResult<()> {
+    fn clear_legacy_bootstrap_schedule_if_needed(
+        &self,
+        transaction: &Transaction<'_>,
+    ) -> StorageResult<()> {
         let legacy_bootstrap = self.legacy_bootstrap_study_blocks()?;
         let mut statement = transaction.prepare(
             "
@@ -1537,27 +1706,32 @@ impl StorageService {
                 updated_at: String::new(),
             })
         })?;
-        let current = rows.collect::<Result<Vec<_>, _>>().map_err(StorageError::from)?;
+        let current = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)?;
 
         if current.len() != legacy_bootstrap.len() {
             return Ok(());
         }
 
-        let matches_bootstrap = current.iter().zip(legacy_bootstrap.iter()).all(|(left, right)| {
-            left.date == right.date
-                && left.day == right.day
-                && left.duration_hours == right.duration_hours
-                && left.duration_minutes == right.duration_minutes
-                && left.completed == right.completed
-                && left.order == right.order
-                && left.start_time == right.start_time
-                && left.end_time == right.end_time
-                && left.is_overnight == right.is_overnight
-                && left.category == right.category
-                && left.task == right.task
-                && left.status == right.status
-                && left.notes == right.notes
-        });
+        let matches_bootstrap = current
+            .iter()
+            .zip(legacy_bootstrap.iter())
+            .all(|(left, right)| {
+                left.date == right.date
+                    && left.day == right.day
+                    && left.duration_hours == right.duration_hours
+                    && left.duration_minutes == right.duration_minutes
+                    && left.completed == right.completed
+                    && left.order == right.order
+                    && left.start_time == right.start_time
+                    && left.end_time == right.end_time
+                    && left.is_overnight == right.is_overnight
+                    && left.category == right.category
+                    && left.task == right.task
+                    && left.status == right.status
+                    && left.notes == right.notes
+            });
 
         if matches_bootstrap {
             transaction.execute("DELETE FROM study_blocks WHERE deleted_at IS NULL", [])?;
@@ -1587,7 +1761,8 @@ impl StorageService {
     }
 
     fn open_read_only_connection(path: &Path) -> StorageResult<Connection> {
-        let connection = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        let connection =
+            Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
         connection.pragma_update(None, "foreign_keys", "ON")?;
         Ok(connection)
     }
@@ -1607,7 +1782,10 @@ impl StorageService {
 
         let connection = self.open_live_connection()?;
         let backup_id = timestamp_slug();
-        let target_path = self.paths.backups_dir.join(format!("{}.sqlite3", backup_id));
+        let target_path = self
+            .paths
+            .backups_dir
+            .join(format!("{}.sqlite3", backup_id));
         if target_path.exists() {
             fs::remove_file(&target_path)?;
         }
@@ -1633,7 +1811,12 @@ impl StorageService {
         let should_create = latest
             .as_ref()
             .and_then(|entry| chrono::DateTime::parse_from_rfc3339(&entry.created_at).ok())
-            .map(|timestamp| Utc::now().signed_duration_since(timestamp.with_timezone(&Utc)).num_hours() >= SAFE_CHECKPOINT_INTERVAL_HOURS)
+            .map(|timestamp| {
+                Utc::now()
+                    .signed_duration_since(timestamp.with_timezone(&Utc))
+                    .num_hours()
+                    >= SAFE_CHECKPOINT_INTERVAL_HOURS
+            })
             .unwrap_or(true);
 
         if should_create {
@@ -1645,7 +1828,10 @@ impl StorageService {
     fn prune_backups(&self) -> StorageResult<()> {
         let backups = self.list_backups()?;
         for backup in backups.into_iter().skip(MAX_BACKUPS) {
-            let db_path = self.paths.backups_dir.join(format!("{}.sqlite3", backup.id));
+            let db_path = self
+                .paths
+                .backups_dir
+                .join(format!("{}.sqlite3", backup.id));
             let meta_path = self.paths.backups_dir.join(format!("{}.json", backup.id));
             if db_path.exists() {
                 fs::remove_file(db_path)?;
@@ -1702,8 +1888,16 @@ impl StorageService {
         if self.paths.live_db.exists() {
             let _ = fs::remove_file(self.paths.live_db.with_extension("sqlite3-wal"));
             let _ = fs::remove_file(self.paths.live_db.with_extension("sqlite3-shm"));
-            let _ = fs::remove_file(self.paths.live_db.with_file_name(format!("{}-wal", LIVE_DB_FILE)));
-            let _ = fs::remove_file(self.paths.live_db.with_file_name(format!("{}-shm", LIVE_DB_FILE)));
+            let _ = fs::remove_file(
+                self.paths
+                    .live_db
+                    .with_file_name(format!("{}-wal", LIVE_DB_FILE)),
+            );
+            let _ = fs::remove_file(
+                self.paths
+                    .live_db
+                    .with_file_name(format!("{}-shm", LIVE_DB_FILE)),
+            );
             fs::remove_file(&self.paths.live_db)?;
         }
         fs::copy(source, &self.paths.live_db)?;
@@ -1720,12 +1914,14 @@ impl StorageService {
             let candidate = if suffix.is_empty() {
                 self.paths.live_db.clone()
             } else {
-                self.paths.live_db.with_file_name(format!("{}{}", LIVE_DB_FILE, suffix))
+                self.paths
+                    .live_db
+                    .with_file_name(format!("{}{}", LIVE_DB_FILE, suffix))
             };
             if candidate.exists() {
-                let file_name = candidate
-                    .file_name()
-                    .ok_or_else(|| StorageError::Recovery("Unable to quarantine live database.".into()))?;
+                let file_name = candidate.file_name().ok_or_else(|| {
+                    StorageError::Recovery("Unable to quarantine live database.".into())
+                })?;
                 fs::rename(&candidate, folder.join(file_name))?;
             }
         }
@@ -1736,7 +1932,10 @@ impl StorageService {
         let connection = self.open_live_connection()?;
         let message = self.metadata_value(&connection, "recovery_message")?;
         if message.is_some() {
-            connection.execute("DELETE FROM app_metadata WHERE key = 'recovery_message'", [])?;
+            connection.execute(
+                "DELETE FROM app_metadata WHERE key = 'recovery_message'",
+                [],
+            )?;
         }
         Ok(message)
     }
@@ -1772,7 +1971,11 @@ impl StorageService {
     fn read_error_log_entries(&self, connection: &Connection) -> StorageResult<Vec<ErrorLogEntry>> {
         let mut statement = connection.prepare(
             "
-            SELECT id, source, exam_block, system, topic, error_type, missed_pattern, fix, priority, entry_date, created_at, updated_at
+            SELECT
+              id, source, exam_block, system, topic, error_type, missed_pattern, fix,
+              why_picked_wrong_answer, why_correct_answer_is_correct, why_tempting_wrong_answer_is_wrong,
+              decision_rule, is_repeat_miss, follow_up_action, is_guessed_correct, add_to_final_sheet,
+              priority, entry_date, created_at, updated_at
             FROM error_log_entries
             WHERE deleted_at IS NULL
             ORDER BY created_at DESC
@@ -1788,13 +1991,26 @@ impl StorageService {
                 error_type: row.get(5)?,
                 missed_pattern: row.get(6)?,
                 fix: row.get(7)?,
-                priority: row.get::<_, Option<String>>(8)?.unwrap_or_else(|| "medium".to_string()),
-                entry_date: row.get::<_, Option<String>>(9)?.unwrap_or_default(),
-                created_at: row.get(10)?,
-                updated_at: row.get(11)?,
+                why_picked_wrong_answer: row.get::<_, Option<String>>(8)?.unwrap_or_default(),
+                why_correct_answer_is_correct: row.get::<_, Option<String>>(9)?.unwrap_or_default(),
+                why_tempting_wrong_answer_is_wrong: row
+                    .get::<_, Option<String>>(10)?
+                    .unwrap_or_default(),
+                decision_rule: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
+                is_repeat_miss: row.get::<_, i64>(12)? != 0,
+                follow_up_action: row.get::<_, Option<String>>(13)?.unwrap_or_default(),
+                is_guessed_correct: row.get::<_, i64>(14)? != 0,
+                add_to_final_sheet: row.get::<_, i64>(15)? != 0,
+                priority: row
+                    .get::<_, Option<String>>(16)?
+                    .unwrap_or_else(|| "medium".to_string()),
+                entry_date: row.get::<_, Option<String>>(17)?.unwrap_or_default(),
+                created_at: row.get(18)?,
+                updated_at: row.get(19)?,
             })
         })?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(StorageError::from)
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
     }
 
     fn read_preferences(&self, connection: &Connection) -> StorageResult<Preferences> {
@@ -1829,8 +2045,8 @@ impl StorageService {
                     let enhanced_theme_ids = parse_string_list(&row.get::<_, String>(13)?)?;
                     let custom_categories = parse_string_list(&row.get::<_, String>(14)?)?;
                     let resource_links_raw = row.get::<_, String>(15)?;
-                    let resource_links: Vec<ResourceLink> = serde_json::from_str(&resource_links_raw)
-                        .map_err(|error| {
+                    let resource_links: Vec<ResourceLink> =
+                        serde_json::from_str(&resource_links_raw).map_err(|error| {
                             rusqlite::Error::FromSqlConversionFailure(
                                 resource_links_raw.len(),
                                 Type::Text,
@@ -1848,8 +2064,9 @@ impl StorageService {
                         })?;
                     let notes_html: String = row.get(17)?;
                     let score_trend_raw = row.get::<_, String>(18)?;
-                    let score_trend_options: ScoreTrendOptions = serde_json::from_str(&score_trend_raw)
-                        .unwrap_or_else(|_| default_score_trend_options());
+                    let score_trend_options: ScoreTrendOptions =
+                        serde_json::from_str(&score_trend_raw)
+                            .unwrap_or_else(|_| default_score_trend_options());
                     Ok(Preferences {
                         active_section: parse_section_id(&row.get::<_, String>(0)?)?,
                         last_active_date: row.get(1)?,
@@ -1915,7 +2132,8 @@ impl StorageService {
                 updated_at: row.get(17)?,
             })
         })?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(StorageError::from)
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
     }
 
     fn read_practice_tests(&self, connection: &Connection) -> StorageResult<Vec<PracticeTest>> {
@@ -1952,7 +2170,8 @@ impl StorageService {
                 updated_at: row.get(13)?,
             })
         })?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(StorageError::from)
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
     }
 
     fn reconciled_weak_topics(
@@ -1982,8 +2201,13 @@ impl StorageService {
                 updated_at: row.get(9)?,
             })
         })?;
-        let existing = rows.collect::<Result<Vec<_>, _>>().map_err(StorageError::from)?;
-        Ok(merge_weak_topic_entries_from_practice_tests(practice_tests, &existing))
+        let existing = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)?;
+        Ok(merge_weak_topic_entries_from_practice_tests(
+            practice_tests,
+            &existing,
+        ))
     }
 
     fn study_block_by_id(
@@ -2100,7 +2324,11 @@ impl StorageService {
             .map_err(StorageError::from)
     }
 
-    fn next_study_block_order_tx(&self, transaction: &Transaction<'_>, date: &str) -> StorageResult<i64> {
+    fn next_study_block_order_tx(
+        &self,
+        transaction: &Transaction<'_>,
+        date: &str,
+    ) -> StorageResult<i64> {
         transaction
             .query_row(
                 "
@@ -2153,7 +2381,11 @@ impl StorageService {
             .map_err(StorageError::from)
     }
 
-    fn persist_preferences(&self, transaction: &Transaction<'_>, preferences: &Preferences) -> StorageResult<()> {
+    fn persist_preferences(
+        &self,
+        transaction: &Transaction<'_>,
+        preferences: &Preferences,
+    ) -> StorageResult<()> {
         let enhanced_theme_ids_json = serde_json::to_string(&preferences.enhanced_theme_ids)?;
         let custom_categories_json = serde_json::to_string(&preferences.custom_categories)?;
         let resource_links_json = serde_json::to_string(&preferences.resource_links)?;
@@ -2277,7 +2509,11 @@ impl StorageService {
         Ok(())
     }
 
-    fn persist_practice_test(&self, transaction: &Transaction<'_>, test: &PracticeTest) -> StorageResult<()> {
+    fn persist_practice_test(
+        &self,
+        transaction: &Transaction<'_>,
+        test: &PracticeTest,
+    ) -> StorageResult<()> {
         let source = resolve_practice_test_source(&test.source, test.legacy_test_type.as_deref());
         let test_type = sanitize_optional_text(test.legacy_test_type.as_deref())
             .unwrap_or_else(|| source.clone());
@@ -2327,7 +2563,11 @@ impl StorageService {
         Ok(())
     }
 
-    fn persist_weak_topic(&self, transaction: &Transaction<'_>, entry: &WeakTopicEntry) -> StorageResult<()> {
+    fn persist_weak_topic(
+        &self,
+        transaction: &Transaction<'_>,
+        entry: &WeakTopicEntry,
+    ) -> StorageResult<()> {
         transaction.execute(
             "
             INSERT INTO weak_topic_entries (
@@ -2364,14 +2604,20 @@ impl StorageService {
         Ok(())
     }
 
-    fn persist_error_log_entry(&self, transaction: &Transaction<'_>, entry: &ErrorLogEntry) -> StorageResult<()> {
+    fn persist_error_log_entry(
+        &self,
+        transaction: &Transaction<'_>,
+        entry: &ErrorLogEntry,
+    ) -> StorageResult<()> {
         transaction.execute(
             "
             INSERT INTO error_log_entries (
               id, source, exam_block, system, topic, error_type, missed_pattern, fix,
+              why_picked_wrong_answer, why_correct_answer_is_correct, why_tempting_wrong_answer_is_wrong,
+              decision_rule, is_repeat_miss, follow_up_action, is_guessed_correct, add_to_final_sheet,
               priority, entry_date, created_at, updated_at, deleted_at, delete_reason
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, NULL, NULL)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, NULL, NULL)
             ON CONFLICT(id) DO UPDATE SET
               source = excluded.source,
               exam_block = excluded.exam_block,
@@ -2380,6 +2626,14 @@ impl StorageService {
               error_type = excluded.error_type,
               missed_pattern = excluded.missed_pattern,
               fix = excluded.fix,
+              why_picked_wrong_answer = excluded.why_picked_wrong_answer,
+              why_correct_answer_is_correct = excluded.why_correct_answer_is_correct,
+              why_tempting_wrong_answer_is_wrong = excluded.why_tempting_wrong_answer_is_wrong,
+              decision_rule = excluded.decision_rule,
+              is_repeat_miss = excluded.is_repeat_miss,
+              follow_up_action = excluded.follow_up_action,
+              is_guessed_correct = excluded.is_guessed_correct,
+              add_to_final_sheet = excluded.add_to_final_sheet,
               priority = excluded.priority,
               entry_date = excluded.entry_date,
               created_at = excluded.created_at,
@@ -2396,6 +2650,14 @@ impl StorageService {
                 entry.error_type,
                 entry.missed_pattern,
                 entry.fix,
+                entry.why_picked_wrong_answer,
+                entry.why_correct_answer_is_correct,
+                entry.why_tempting_wrong_answer_is_wrong,
+                entry.decision_rule,
+                entry.is_repeat_miss as i64,
+                entry.follow_up_action,
+                entry.is_guessed_correct as i64,
+                entry.add_to_final_sheet as i64,
                 entry.priority,
                 entry.entry_date,
                 entry.created_at,
@@ -2434,6 +2696,11 @@ impl StorageService {
         } else {
             input.entry_date
         };
+        let follow_up_action = if input.is_repeat_miss && input.follow_up_action.trim().is_empty() {
+            "make-anki".to_string()
+        } else {
+            input.follow_up_action.trim().to_string()
+        };
         let entry = ErrorLogEntry {
             id: input.id.unwrap_or_else(new_id),
             source: input.source.trim().to_string(),
@@ -2443,7 +2710,22 @@ impl StorageService {
             error_type: input.error_type.trim().to_string(),
             missed_pattern: input.missed_pattern.trim().to_string(),
             fix: input.fix.trim().to_string(),
-            priority: if input.priority.is_empty() { "medium".to_string() } else { input.priority },
+            why_picked_wrong_answer: input.why_picked_wrong_answer.trim().to_string(),
+            why_correct_answer_is_correct: input.why_correct_answer_is_correct.trim().to_string(),
+            why_tempting_wrong_answer_is_wrong: input
+                .why_tempting_wrong_answer_is_wrong
+                .trim()
+                .to_string(),
+            decision_rule: input.decision_rule.trim().to_string(),
+            is_repeat_miss: input.is_repeat_miss,
+            follow_up_action,
+            is_guessed_correct: input.is_guessed_correct,
+            add_to_final_sheet: input.add_to_final_sheet,
+            priority: if input.priority.is_empty() {
+                "medium".to_string()
+            } else {
+                input.priority
+            },
             entry_date,
             created_at,
             updated_at: timestamp,
@@ -2454,7 +2736,11 @@ impl StorageService {
         self.touch_saved(&transaction)?;
         self.log_event(
             &transaction,
-            if is_update { "error_log_entry_updated" } else { "error_log_entry_created" },
+            if is_update {
+                "error_log_entry_updated"
+            } else {
+                "error_log_entry_created"
+            },
             "error_log_entry",
             Some(&entry.id),
             None,
@@ -2473,10 +2759,18 @@ impl StorageService {
             params![deleted_at, id],
         )?;
         if updated == 0 {
-            return Err(StorageError::Validation("Error log entry not found.".into()));
+            return Err(StorageError::Validation(
+                "Error log entry not found.".into(),
+            ));
         }
         self.touch_saved(&transaction)?;
-        self.log_event(&transaction, "error_log_entry_trashed", "error_log_entry", Some(&id), None)?;
+        self.log_event(
+            &transaction,
+            "error_log_entry_trashed",
+            "error_log_entry",
+            Some(&id),
+            None,
+        )?;
         transaction.commit()?;
         self.load_snapshot()
     }
@@ -2556,7 +2850,8 @@ impl StorageService {
                         deleted_at: row.get(3)?,
                     })
                 })?;
-                rows.collect::<Result<Vec<_>, _>>().map_err(StorageError::from)
+                rows.collect::<Result<Vec<_>, _>>()
+                    .map_err(StorageError::from)
             }
             TrashEntityType::PracticeTest => {
                 let mut statement = connection.prepare(
@@ -2580,7 +2875,8 @@ impl StorageService {
                         deleted_at: row.get(5)?,
                     })
                 })?;
-                rows.collect::<Result<Vec<_>, _>>().map_err(StorageError::from)
+                rows.collect::<Result<Vec<_>, _>>()
+                    .map_err(StorageError::from)
             }
             TrashEntityType::WeakTopic => {
                 let mut statement = connection.prepare(
@@ -2599,12 +2895,18 @@ impl StorageService {
                         deleted_at: row.get(3)?,
                     })
                 })?;
-                rows.collect::<Result<Vec<_>, _>>().map_err(StorageError::from)
+                rows.collect::<Result<Vec<_>, _>>()
+                    .map_err(StorageError::from)
             }
         }
     }
 
-    fn soft_delete(&self, entity_type: TrashEntityType, id: &str, reason: &str) -> StorageResult<()> {
+    fn soft_delete(
+        &self,
+        entity_type: TrashEntityType,
+        id: &str,
+        reason: &str,
+    ) -> StorageResult<()> {
         let mut connection = self.open_live_connection()?;
         let transaction = connection.transaction()?;
         let deleted_at = now_iso();
@@ -2669,7 +2971,12 @@ impl StorageService {
         Ok(())
     }
 
-    fn set_metadata_tx(&self, transaction: &Transaction<'_>, key: &str, value: &str) -> StorageResult<()> {
+    fn set_metadata_tx(
+        &self,
+        transaction: &Transaction<'_>,
+        key: &str,
+        value: &str,
+    ) -> StorageResult<()> {
         transaction.execute(
             "
             INSERT INTO app_metadata (key, value)
@@ -2721,9 +3028,11 @@ impl StorageService {
     ) -> StorageResult<StudyBlock> {
         validate_date(&input.date, "Study block date")?;
         validate_non_empty(&input.task, "Study block task")?;
-        let start_time = input
-            .start_time
-            .unwrap_or_else(|| existing.map(|row| row.start_time.clone()).unwrap_or_default());
+        let start_time = input.start_time.unwrap_or_else(|| {
+            existing
+                .map(|row| row.start_time.clone())
+                .unwrap_or_default()
+        });
         let end_time = input
             .end_time
             .unwrap_or_else(|| existing.map(|row| row.end_time.clone()).unwrap_or_default());
@@ -2736,14 +3045,16 @@ impl StorageService {
             validate_time_range(&start_time, &end_time, is_overnight)?;
         }
 
-        let legacy_duration = derive_duration_from_legacy_range(&start_time, &end_time, is_overnight)?;
+        let legacy_duration =
+            derive_duration_from_legacy_range(&start_time, &end_time, is_overnight)?;
         let (duration_hours, duration_minutes) = normalize_duration_parts(
             input.duration_hours.unwrap_or(legacy_duration.0),
             input.duration_minutes.unwrap_or(legacy_duration.1),
         );
-        let completed = input
-            .completed
-            .unwrap_or_else(|| input.status == Some(StudyStatus::Completed) || existing.map(|row| row.completed).unwrap_or(false));
+        let completed = input.completed.unwrap_or_else(|| {
+            input.status == Some(StudyStatus::Completed)
+                || existing.map(|row| row.completed).unwrap_or(false)
+        });
         let reminder_at = match input.reminder_at {
             Some(reminder_at) => {
                 let trimmed = reminder_at.trim().to_string();
@@ -2773,7 +3084,13 @@ impl StorageService {
             .unwrap_or_else(|| weekday_name(&date).unwrap_or_else(|_| "".into()));
         let order = input.order.unwrap_or_else(|| {
             existing
-                .map(|row| if row.date == date { row.order } else { fallback_order })
+                .map(|row| {
+                    if row.date == date {
+                        row.order
+                    } else {
+                        fallback_order
+                    }
+                })
                 .unwrap_or(fallback_order)
         });
         Ok(StudyBlock {
@@ -2787,9 +3104,17 @@ impl StorageService {
             start_time,
             end_time,
             is_overnight,
-            category: normalize_study_task_category(&input.category, &input.task, input.notes.as_deref().unwrap_or("")),
+            category: normalize_study_task_category(
+                &input.category,
+                &input.task,
+                input.notes.as_deref().unwrap_or(""),
+            ),
             task: input.task.trim().to_string(),
-            status: if completed { StudyStatus::Completed } else { StudyStatus::NotStarted },
+            status: if completed {
+                StudyStatus::Completed
+            } else {
+                StudyStatus::NotStarted
+            },
             notes: sanitize_text(input.notes.as_deref().unwrap_or(""), ""),
             reminder_at,
             reminder_sent_at,
@@ -2854,7 +3179,10 @@ impl StorageService {
         Ok(WeakTopicEntry {
             id: input.id.unwrap_or_else(new_id),
             topic: input.topic.trim().to_string(),
-            entry_type: input.entry_type.or_else(|| existing.map(|row| row.entry_type)).unwrap_or(WeakTopicEntryType::Manual),
+            entry_type: input
+                .entry_type
+                .or_else(|| existing.map(|row| row.entry_type))
+                .unwrap_or(WeakTopicEntryType::Manual),
             priority: input.priority,
             status: input.status,
             notes: sanitize_text(&input.notes, ""),
@@ -2885,7 +3213,10 @@ impl StorageService {
         }
         for test in &state.practice_tests {
             validate_date(&test.date, "Practice test date")?;
-            if test.question_count <= 0 || !(0.0..=100.0).contains(&test.score_percent) || test.minutes_spent < 0 {
+            if test.question_count <= 0
+                || !(0.0..=100.0).contains(&test.score_percent)
+                || test.minutes_spent < 0
+            {
                 return Err(StorageError::Validation(
                     "Practice test values are outside the allowed range.".into(),
                 ));
@@ -2904,12 +3235,21 @@ impl StorageService {
 
     fn validate_preferences(&self, preferences: &Preferences) -> StorageResult<()> {
         validate_date(&preferences.last_active_date, "Preferences lastActiveDate")?;
-        validate_date(&preferences.planner_focus_date, "Preferences plannerFocusDate")?;
+        validate_date(
+            &preferences.planner_focus_date,
+            "Preferences plannerFocusDate",
+        )?;
         if !preferences.planner_filters.from_date.is_empty() {
-            validate_date(&preferences.planner_filters.from_date, "Planner filter fromDate")?;
+            validate_date(
+                &preferences.planner_filters.from_date,
+                "Planner filter fromDate",
+            )?;
         }
         if !preferences.planner_filters.to_date.is_empty() {
-            validate_date(&preferences.planner_filters.to_date, "Planner filter toDate")?;
+            validate_date(
+                &preferences.planner_filters.to_date,
+                "Planner filter toDate",
+            )?;
         }
         if preferences.daily_goal_minutes < 0 {
             return Err(StorageError::Validation(
@@ -3017,7 +3357,10 @@ struct StoredWeakTopic {
     deleted_at: Option<String>,
 }
 
-fn calculate_counts<'a>(state: &AppState, trash: impl Iterator<Item = &'a TrashItem>) -> RecordCounts {
+fn calculate_counts<'a>(
+    state: &AppState,
+    trash: impl Iterator<Item = &'a TrashItem>,
+) -> RecordCounts {
     let mut counts = RecordCounts {
         study_blocks: state.study_blocks.len(),
         practice_tests: state.practice_tests.len(),
@@ -3114,7 +3457,10 @@ fn validate_time_range(start_time: &str, end_time: &str, is_overnight: bool) -> 
 
 fn validate_non_negative_integer(value: i64, label: &str) -> StorageResult<()> {
     if value < 0 {
-        Err(StorageError::Validation(format!("{} must be 0 or greater.", label)))
+        Err(StorageError::Validation(format!(
+            "{} must be 0 or greater.",
+            label
+        )))
     } else {
         Ok(())
     }
@@ -3277,8 +3623,9 @@ fn reindex_study_blocks(mut blocks: Vec<StudyBlock>) -> Vec<StudyBlock> {
 }
 
 fn parse_string_list(raw: &str) -> rusqlite::Result<Vec<String>> {
-    serde_json::from_str(raw)
-        .map_err(|error| rusqlite::Error::FromSqlConversionFailure(raw.len(), Type::Text, Box::new(error)))
+    serde_json::from_str(raw).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(raw.len(), Type::Text, Box::new(error))
+    })
 }
 
 fn merge_weak_topic_entries_from_practice_tests(
@@ -3338,9 +3685,18 @@ fn merge_weak_topic_entries_from_practice_tests(
                     .map(|entry| entry.topic.clone())
                     .unwrap_or_else(|| trimmed.to_string()),
                 entry_type: WeakTopicEntryType::PracticeTest,
-                priority: existing.as_ref().map(|entry| entry.priority).unwrap_or(WeakTopicPriority::High),
-                status: existing.as_ref().map(|entry| entry.status).unwrap_or(WeakTopicStatus::Active),
-                notes: existing.as_ref().map(|entry| entry.notes.clone()).unwrap_or_default(),
+                priority: existing
+                    .as_ref()
+                    .map(|entry| entry.priority)
+                    .unwrap_or(WeakTopicPriority::High),
+                status: existing
+                    .as_ref()
+                    .map(|entry| entry.status)
+                    .unwrap_or(WeakTopicStatus::Active),
+                notes: existing
+                    .as_ref()
+                    .map(|entry| entry.notes.clone())
+                    .unwrap_or_default(),
                 last_seen_at: last_seen_at.clone(),
                 source_label: if last_seen_at == test.date {
                     source_label.clone()
@@ -3739,13 +4095,21 @@ mod tests {
         let id = snapshot.state.study_blocks[0].id.clone();
 
         let trashed = service.trash_study_block(id.clone()).expect("trash");
-        assert!(trashed.state.study_blocks.iter().all(|block| block.id != id));
+        assert!(trashed
+            .state
+            .study_blocks
+            .iter()
+            .all(|block| block.id != id));
         assert!(trashed.trash.iter().any(|item| item.id == id));
 
         let restored = service
             .restore_trashed_item(TrashEntityType::StudyBlock, id.clone())
             .expect("restore");
-        assert!(restored.state.study_blocks.iter().any(|block| block.id == id));
+        assert!(restored
+            .state
+            .study_blocks
+            .iter()
+            .any(|block| block.id == id));
     }
 
     #[test]
@@ -3774,9 +4138,15 @@ mod tests {
 
         let backups = service.list_backups().expect("list backups");
         let target_backup = backups.last().expect("oldest backup").id.clone();
-        let restored = service.restore_from_snapshot(target_backup).expect("restore");
+        let restored = service
+            .restore_from_snapshot(target_backup)
+            .expect("restore");
         assert!(restored.backups.len() >= initial_backup_count + 1);
-        assert!(restored.state.study_blocks.iter().any(|entry| entry.task != "Mutated task"));
+        assert!(restored
+            .state
+            .study_blocks
+            .iter()
+            .any(|entry| entry.task != "Mutated task"));
     }
 
     #[test]
@@ -3785,7 +4155,9 @@ mod tests {
         let error = service
             .preview_backup_artifact("{\"app\":\"wrong-app\"}".into())
             .expect_err("should reject");
-        assert!(error.to_string().contains("not a TimeFolio Study Tracker backup artifact"));
+        assert!(error
+            .to_string()
+            .contains("not a TimeFolio Study Tracker backup artifact"));
     }
 
     #[test]
@@ -3793,7 +4165,9 @@ mod tests {
         let (_temp, service) = test_service();
         let snapshot = service.load_snapshot().expect("initial snapshot");
         let original_task = snapshot.state.study_blocks[0].task.clone();
-        service.create_snapshot("manual-test-backup").expect("snapshot");
+        service
+            .create_snapshot("manual-test-backup")
+            .expect("snapshot");
 
         fs::write(&service.paths.live_db, b"not-a-sqlite-database").expect("corrupt db");
 

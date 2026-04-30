@@ -175,8 +175,22 @@ export interface Preferences {
 
 export type ErrorLogSource = "UWorld" | "TrueLearn" | "NBME" | "CMS Form" | "AMBOSS" | "COMSAE" | "Other";
 export type ErrorLogSystem = "IM/FM" | "Surgery" | "OB/GYN" | "Pediatrics" | "Psychiatry" | "Ethics/Biostats" | "OMT" | "Other";
-export type ErrorLogErrorType = "Knowledge Gap" | "Misread Question" | "Wrong Algorithm" | "Trap Answer";
+export type ErrorLogErrorType =
+  | "Knowledge Gap"
+  | "Misread Question"
+  | "Wrong Algorithm"
+  | "Trap Answer"
+  | "Reasoning Error"
+  | "Trap / Misread"
+  | "Management Algorithm";
 export type ErrorLogPriority = "high" | "medium" | "low";
+export type ErrorLogFollowUpAction =
+  | ""
+  | "make-anki"
+  | "do-10-targeted-questions"
+  | "review-algorithm"
+  | "add-to-final-sheet"
+  | "ignore-one-off-detail";
 
 export interface ErrorLogEntry {
   id: string;
@@ -189,6 +203,14 @@ export interface ErrorLogEntry {
   missedPattern: string;
   // May contain inline HTML: <b>, <i>, <u>, <br> only (sanitized on save)
   fix: string;
+  whyPickedWrongAnswer: string;
+  whyCorrectAnswerIsCorrect: string;
+  whyTemptingWrongAnswerIsWrong: string;
+  decisionRule: string;
+  isRepeatMiss: boolean;
+  followUpAction: ErrorLogFollowUpAction;
+  isGuessedCorrect: boolean;
+  addToFinalSheet: boolean;
   priority: ErrorLogPriority;
   entryDate: string;
   createdAt: string;
@@ -204,6 +226,14 @@ export interface ErrorLogInput {
   errorType: ErrorLogErrorType;
   missedPattern: string;
   fix: string;
+  whyPickedWrongAnswer: string;
+  whyCorrectAnswerIsCorrect: string;
+  whyTemptingWrongAnswerIsWrong: string;
+  decisionRule: string;
+  isRepeatMiss: boolean;
+  followUpAction: ErrorLogFollowUpAction;
+  isGuessedCorrect: boolean;
+  addToFinalSheet: boolean;
   priority: ErrorLogPriority;
   entryDate: string;
 }
