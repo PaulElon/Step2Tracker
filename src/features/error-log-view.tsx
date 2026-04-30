@@ -429,13 +429,13 @@ function LogEntryModal({
   }
 
   const fieldClass =
-    "h-9 w-full rounded-lg border border-white/10 bg-slate-900/60 px-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40";
+    "h-9 w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40";
   const selectClass = fieldClass;
   const labelClass = "mb-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400";
-  const bodyTextClass = "!font-sans !text-base !font-normal !leading-6 !tracking-normal";
+  const bodyTextClass = "!font-sans !text-base !font-normal !leading-[1.65] !tracking-normal [word-spacing:0.05em]";
   const topTextareaClass = `mt-1 ${bodyTextClass}`;
   const bottomTextareaClass =
-    `${fieldClass} ${bodyTextClass} h-[7.5rem] min-h-[7.5rem] max-h-[7.5rem] resize-none overflow-y-auto py-2.5`;
+    `${fieldClass} ${bodyTextClass} h-[7.75rem] min-h-[7.75rem] max-h-[7.75rem] resize-none overflow-y-auto py-3`;
 
   return (
     <ModalShell
@@ -446,8 +446,7 @@ function LogEntryModal({
     >
       <div className="flex shrink-0 items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{isEdit ? "Edit entry" : "New entry"}</p>
-          <h3 id="log-entry-title" className="mt-1 text-[1.35rem] font-semibold leading-tight text-white">
+          <h3 id="log-entry-title" className="text-[1.35rem] font-semibold leading-tight text-white">
             {isEdit ? "Edit Log entry" : "Log entry"}
           </h3>
         </div>
@@ -466,9 +465,9 @@ function LogEntryModal({
         onSubmit={(e) => {
           void handleSubmit(e);
         }}
-        className="mt-4 flex min-h-0 flex-1 flex-col"
+        className="mt-2 flex min-h-0 flex-1 flex-col"
       >
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pl-1 pr-1">
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             <div>
               <label className={labelClass}>Source</label>
