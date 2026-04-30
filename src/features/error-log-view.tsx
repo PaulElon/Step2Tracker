@@ -63,6 +63,17 @@ const ENTRY_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 
+function getEntryTags(entry: ErrorLogEntry) {
+  const priority = entry.priority ?? "medium";
+  return [
+    { label: entry.errorType, className: NEUTRAL_TAG },
+    { label: priority, className: PRIORITY_PILL[priority] },
+    ...(entry.isRepeatMiss ? [{ label: "Repeat miss", className: NEUTRAL_TAG }] : []),
+    ...(entry.isGuessedCorrect ? [{ label: "Guessed correct", className: NEUTRAL_TAG }] : []),
+    ...(entry.addToFinalSheet ? [{ label: "Final sheet", className: NEUTRAL_TAG }] : []),
+  ];
+}
+
 function looksLikeHtml(value: string) {
   return /<\/?[a-z][\s\S]*>/i.test(value);
 }
@@ -1068,7 +1079,6 @@ function FullReasoningModal({
   entry: ErrorLogEntry;
   onClose: () => void;
 }) {
-  const priority = entry.priority ?? "medium";
   const displayDate = formatEntryDate(entry.entryDate || entry.createdAt.slice(0, 10));
   const metadata = [
     entry.system,
@@ -1076,6 +1086,7 @@ function FullReasoningModal({
     entry.examBlock,
     displayDate,
   ].filter(Boolean);
+  const tags = getEntryTags(entry);
   const nextReview = describeNextReview(entry);
 
   return (
@@ -1105,8 +1116,11 @@ function FullReasoningModal({
             <p className="mt-2 break-words text-sm leading-5 text-slate-400">{metadata.join(" · ")}</p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-            <Badge className={NEUTRAL_TAG}>{entry.errorType}</Badge>
-            <Badge className={PRIORITY_PILL[priority]}>{priority}</Badge>
+            {tags.map((tag) => (
+              <Badge key={tag.label} className={tag.className}>
+                {tag.label}
+              </Badge>
+            ))}
           </div>
         </div>
       </div>
@@ -1199,13 +1213,7 @@ function EntryCard({
     entry.examBlock,
     displayDate,
   ].filter(Boolean);
-  const tags = [
-    { label: entry.errorType, className: NEUTRAL_TAG },
-    { label: priority, className: PRIORITY_PILL[priority] },
-    ...(entry.isRepeatMiss ? [{ label: "Repeat miss", className: NEUTRAL_TAG }] : []),
-    ...(entry.isGuessedCorrect ? [{ label: "Guessed correct", className: NEUTRAL_TAG }] : []),
-    ...(entry.addToFinalSheet ? [{ label: "Final sheet", className: NEUTRAL_TAG }] : []),
-  ];
+  const tags = getEntryTags(entry);
   const visibleTags = tags.slice(0, COLLAPSED_CARD_VISIBLE_TAGS);
   const hiddenTagCount = Math.max(0, tags.length - visibleTags.length);
 
