@@ -432,9 +432,10 @@ function LogEntryModal({
     "h-9 w-full rounded-lg border border-white/10 bg-slate-900/60 px-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40";
   const selectClass = fieldClass;
   const labelClass = "mb-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400";
-  const bodyTextClass = "!font-sans !text-base !font-normal !leading-relaxed !tracking-normal";
-  const textareaClass =
-    `${fieldClass} ${bodyTextClass} h-[6.5rem] min-h-[6.5rem] max-h-[6.5rem] resize-none overflow-y-auto py-2`;
+  const bodyTextClass = "!font-sans !text-base !font-normal !leading-6 !tracking-normal";
+  const topTextareaClass = `mt-1 ${bodyTextClass}`;
+  const bottomTextareaClass =
+    `${fieldClass} ${bodyTextClass} h-[7.5rem] min-h-[7.5rem] max-h-[7.5rem] resize-none overflow-y-auto py-2.5`;
 
   return (
     <ModalShell
@@ -564,7 +565,7 @@ function LogEntryModal({
               placeholder="What did you miss?"
               minLines={7}
               scrollable
-              className={`mt-1 ${bodyTextClass}`}
+              className={topTextareaClass}
             />
             {errors.missedPattern ? <p className="mt-1 text-xs text-rose-400">{errors.missedPattern}</p> : null}
           </div>
@@ -577,7 +578,7 @@ function LogEntryModal({
               placeholder="What will you do differently?"
               minLines={7}
               scrollable
-              className={`mt-1 ${bodyTextClass}`}
+              className={topTextareaClass}
             />
             {errors.fix ? <p className="mt-1 text-xs text-rose-400">{errors.fix}</p> : null}
           </div>
@@ -590,7 +591,7 @@ function LogEntryModal({
                   value={draft.whyPickedWrongAnswer}
                   onChange={(e) => setDraft((d) => ({ ...d, whyPickedWrongAnswer: e.target.value }))}
                   rows={4}
-                  className={textareaClass}
+                  className={bottomTextareaClass}
                 />
               </div>
               <div>
@@ -599,7 +600,7 @@ function LogEntryModal({
                   value={draft.whyCorrectAnswerIsCorrect}
                   onChange={(e) => setDraft((d) => ({ ...d, whyCorrectAnswerIsCorrect: e.target.value }))}
                   rows={4}
-                  className={textareaClass}
+                  className={bottomTextareaClass}
                 />
               </div>
               <div>
@@ -608,7 +609,7 @@ function LogEntryModal({
                   value={draft.whyTemptingWrongAnswerIsWrong}
                   onChange={(e) => setDraft((d) => ({ ...d, whyTemptingWrongAnswerIsWrong: e.target.value }))}
                   rows={4}
-                  className={textareaClass}
+                  className={bottomTextareaClass}
                 />
               </div>
               <div>
@@ -617,7 +618,7 @@ function LogEntryModal({
                   value={draft.decisionRule}
                   onChange={(e) => setDraft((d) => ({ ...d, decisionRule: e.target.value }))}
                   rows={4}
-                  className={textareaClass}
+                  className={bottomTextareaClass}
                 />
               </div>
             </div>
