@@ -428,11 +428,12 @@ function LogEntryModal({
     }
   }
 
-  const fieldClass = "w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40";
+  const fieldClass =
+    "h-9 w-full rounded-lg border border-white/10 bg-slate-900/60 px-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40";
   const selectClass = fieldClass;
-
+  const labelClass = "mb-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400";
   const textareaClass =
-    `${fieldClass} mt-1 min-h-[7rem] max-h-[9rem] resize-none overflow-y-auto`;
+    `${fieldClass} h-[6.5rem] min-h-[6.5rem] max-h-[6.5rem] resize-none overflow-y-auto py-2`;
 
   return (
     <ModalShell
@@ -444,7 +445,7 @@ function LogEntryModal({
       <div className="flex shrink-0 items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{isEdit ? "Edit entry" : "New entry"}</p>
-          <h3 id="log-entry-title" className="mt-2 text-2xl font-semibold text-white">
+          <h3 id="log-entry-title" className="mt-1 text-[1.35rem] font-semibold leading-tight text-white">
             {isEdit ? "Edit Log entry" : "Log entry"}
           </h3>
         </div>
@@ -457,16 +458,16 @@ function LogEntryModal({
         onSubmit={(e) => {
           void handleSubmit(e);
         }}
-        className="mt-6 flex min-h-0 flex-1 flex-col"
+        className="mt-4 flex min-h-0 flex-1 flex-col"
       >
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-          <div className="grid gap-3 sm:grid-cols-2">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Source</label>
+              <label className={labelClass}>Source</label>
               <select
                 value={draft.source}
                 onChange={(e) => setDraft((d) => ({ ...d, source: e.target.value as ErrorLogSource }))}
-                className={`${selectClass} mt-1`}
+                className={selectClass}
               >
                 {ERROR_LOG_SOURCE_VALUES.map((s) => (
                   <option key={s} value={s}>
@@ -476,23 +477,20 @@ function LogEntryModal({
               </select>
             </div>
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Exam / Block</label>
+              <label className={labelClass}>Exam / Block</label>
               <input
                 value={draft.examBlock}
                 onChange={(e) => setDraft((d) => ({ ...d, examBlock: e.target.value }))}
                 placeholder="Block 2"
-                className={`${fieldClass} mt-1`}
+                className={fieldClass}
               />
             </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">System</label>
+              <label className={labelClass}>System</label>
               <select
                 value={draft.system}
                 onChange={(e) => setDraft((d) => ({ ...d, system: e.target.value as ErrorLogSystem }))}
-                className={`${selectClass} mt-1`}
+                className={selectClass}
               >
                 {ERROR_LOG_SYSTEM_VALUES.map((s) => (
                   <option key={s} value={s}>
@@ -502,24 +500,24 @@ function LogEntryModal({
               </select>
             </div>
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Topic</label>
+              <label className={labelClass}>Topic</label>
               <input
                 value={draft.topic}
                 onChange={(e) => setDraft((d) => ({ ...d, topic: e.target.value }))}
                 placeholder="Aortic dissection"
-                className={`${fieldClass} mt-1`}
+                className={fieldClass}
               />
               {errors.topic ? <p className="mt-1 text-xs text-rose-400">{errors.topic}</p> : null}
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Error Type</label>
+              <label className={labelClass}>Error Type</label>
               <select
                 value={draft.errorType}
                 onChange={(e) => setDraft((d) => ({ ...d, errorType: e.target.value as ErrorLogErrorType }))}
-                className={`${selectClass} mt-1`}
+                className={selectClass}
               >
                 {ERROR_LOG_ERROR_TYPE_VALUES.map((t) => (
                   <option key={t} value={t}>
@@ -529,11 +527,11 @@ function LogEntryModal({
               </select>
             </div>
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Priority</label>
+              <label className={labelClass}>Priority</label>
               <select
                 value={draft.priority}
                 onChange={(e) => setDraft((d) => ({ ...d, priority: e.target.value as ErrorLogPriority }))}
-                className={`${selectClass} mt-1`}
+                className={selectClass}
               >
                 <option value="high">High</option>
                 <option value="medium">Medium</option>
@@ -541,25 +539,23 @@ function LogEntryModal({
               </select>
             </div>
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Date</label>
+              <label className={labelClass}>Date</label>
               <input
                 type="date"
                 value={draft.entryDate}
                 onChange={(e) => setDraft((d) => ({ ...d, entryDate: e.target.value }))}
-                className={`${fieldClass} mt-1`}
+                className={fieldClass}
               />
             </div>
           </div>
 
           <div>
-            <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-              Missed Pattern
-            </label>
+            <label className={labelClass}>Missed Pattern</label>
             <RichTextEditor
               value={draft.missedPattern}
               onChange={(html) => setDraft((d) => ({ ...d, missedPattern: html }))}
               placeholder="What did you miss?"
-              minLines={3}
+              minLines={4}
               scrollable
               className="mt-1"
             />
@@ -567,30 +563,22 @@ function LogEntryModal({
           </div>
 
           <div>
-            <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Fix</label>
+            <label className={labelClass}>Fix</label>
             <RichTextEditor
               value={draft.fix}
               onChange={(html) => setDraft((d) => ({ ...d, fix: html }))}
               placeholder="What will you do differently?"
-              minLines={3}
+              minLines={4}
               scrollable
               className="mt-1"
             />
             {errors.fix ? <p className="mt-1 text-xs text-rose-400">{errors.fix}</p> : null}
           </div>
 
-          <section className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                Reasoning / correction
-              </p>
-            </div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <section className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+            <div className="grid gap-2 sm:grid-cols-2">
               <div>
-                <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                  Why I picked wrong answer
-                </label>
+                <label className={labelClass}>Why I picked wrong answer</label>
                 <textarea
                   value={draft.whyPickedWrongAnswer}
                   onChange={(e) => setDraft((d) => ({ ...d, whyPickedWrongAnswer: e.target.value }))}
@@ -599,9 +587,7 @@ function LogEntryModal({
                 />
               </div>
               <div>
-                <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                  Why correct answer is correct
-                </label>
+                <label className={labelClass}>Why correct answer is correct</label>
                 <textarea
                   value={draft.whyCorrectAnswerIsCorrect}
                   onChange={(e) => setDraft((d) => ({ ...d, whyCorrectAnswerIsCorrect: e.target.value }))}
@@ -610,9 +596,7 @@ function LogEntryModal({
                 />
               </div>
               <div>
-                <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                  Why tempting wrong answer is wrong
-                </label>
+                <label className={labelClass}>Why tempting wrong answer is wrong</label>
                 <textarea
                   value={draft.whyTemptingWrongAnswerIsWrong}
                   onChange={(e) => setDraft((d) => ({ ...d, whyTemptingWrongAnswerIsWrong: e.target.value }))}
@@ -621,9 +605,7 @@ function LogEntryModal({
                 />
               </div>
               <div>
-                <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                  Decision rule / algorithm
-                </label>
+                <label className={labelClass}>Decision rule / algorithm</label>
                 <textarea
                   value={draft.decisionRule}
                   onChange={(e) => setDraft((d) => ({ ...d, decisionRule: e.target.value }))}
@@ -633,15 +615,13 @@ function LogEntryModal({
               </div>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1.4fr]">
+            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
               <div>
-                <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                  Follow-up action
-                </label>
+                <label className={labelClass}>Follow-up action</label>
                 <select
                   value={draft.followUpAction}
                   onChange={(e) => setDraft((d) => ({ ...d, followUpAction: e.target.value as ErrorLogFollowUpAction }))}
-                  className={`${selectClass} mt-1`}
+                  className={selectClass}
                 >
                   {ERROR_LOG_FOLLOW_UP_ACTION_VALUES.map((action) => (
                     <option key={action || "none"} value={action}>
@@ -651,7 +631,7 @@ function LogEntryModal({
                 </select>
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
-                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/50 px-3 py-2 text-xs font-medium text-slate-300">
+                <label className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 px-2.5 text-[11px] font-medium text-slate-300">
                   <input
                     type="checkbox"
                     checked={draft.isRepeatMiss}
@@ -662,25 +642,25 @@ function LogEntryModal({
                         followUpAction: e.target.checked && !d.followUpAction ? "make-anki" : d.followUpAction,
                       }))
                     }
-                    className="h-4 w-4 accent-cyan-400"
+                    className="h-3.5 w-3.5 accent-cyan-400"
                   />
                   Repeat miss
                 </label>
-                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/50 px-3 py-2 text-xs font-medium text-slate-300">
+                <label className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 px-2.5 text-[11px] font-medium text-slate-300">
                   <input
                     type="checkbox"
                     checked={draft.isGuessedCorrect}
                     onChange={(e) => setDraft((d) => ({ ...d, isGuessedCorrect: e.target.checked }))}
-                    className="h-4 w-4 accent-cyan-400"
+                    className="h-3.5 w-3.5 accent-cyan-400"
                   />
                   Guessed correct
                 </label>
-                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/50 px-3 py-2 text-xs font-medium text-slate-300">
+                <label className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-slate-900/50 px-2.5 text-[11px] font-medium text-slate-300">
                   <input
                     type="checkbox"
                     checked={draft.addToFinalSheet}
                     onChange={(e) => setDraft((d) => ({ ...d, addToFinalSheet: e.target.checked }))}
-                    className="h-4 w-4 accent-cyan-400"
+                    className="h-3.5 w-3.5 accent-cyan-400"
                   />
                   Add to final sheet
                 </label>
