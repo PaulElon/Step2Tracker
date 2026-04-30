@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Download, Edit2, Plus, Trash2 } from "lucide-react";
+import { Download, Edit2, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { MetricCard } from "../components/ui";
 import { ModalShell } from "../components/modal-shell";
 import { RichTextEditor, RichTextRender, richTextToPlain } from "../components/rich-text-editor";
@@ -26,9 +26,9 @@ import type {
 type SortKey = "newest" | "system" | "topic" | "errorType" | "priority";
 
 const PRIORITY_PILL: Record<ErrorLogPriority, string> = {
-  high: "border-rose-300/45 bg-rose-300/20 text-rose-100 shadow-[0_0_18px_rgba(251,113,133,0.14)]",
-  medium: "border-amber-300/35 bg-amber-300/15 text-amber-100",
-  low: "border-slate-300/20 bg-slate-300/10 text-slate-300",
+  high: "border-white/10 bg-white/[0.04] text-slate-300",
+  medium: "border-white/10 bg-white/[0.04] text-slate-300",
+  low: "border-white/10 bg-white/[0.04] text-slate-300",
 };
 
 const PRIORITY_CARD_ACCENT: Record<ErrorLogPriority, string> = {
@@ -37,25 +37,7 @@ const PRIORITY_CARD_ACCENT: Record<ErrorLogPriority, string> = {
   low: "border-l-slate-500/70 shadow-[inset_3px_0_0_rgba(100,116,139,0.46)]",
 };
 
-const SOURCE_COLORS: Record<ErrorLogSource, string> = {
-  UWorld: "bg-sky-500/10 border-sky-400/20 text-sky-200",
-  TrueLearn: "bg-teal-500/10 border-teal-400/20 text-teal-200",
-  NBME: "bg-indigo-500/10 border-indigo-400/20 text-indigo-200",
-  "CMS Form": "bg-rose-500/10 border-rose-400/20 text-rose-200",
-  AMBOSS: "bg-amber-500/10 border-amber-400/20 text-amber-200",
-  COMSAE: "bg-blue-500/10 border-blue-400/20 text-blue-200",
-  Other: "bg-slate-500/15 border-slate-500/25 text-slate-300",
-};
-
-const ERROR_TYPE_COLORS: Record<ErrorLogErrorType, string> = {
-  "Knowledge Gap": "bg-amber-500/10 border-amber-400/20 text-amber-200",
-  "Misread Question": "bg-sky-500/10 border-sky-400/20 text-sky-200",
-  "Wrong Algorithm": "bg-rose-500/10 border-rose-400/20 text-rose-200",
-  "Trap Answer": "bg-violet-500/10 border-violet-400/20 text-violet-200",
-  "Reasoning Error": "bg-cyan-500/10 border-cyan-400/20 text-cyan-200",
-  "Trap / Misread": "bg-fuchsia-500/10 border-fuchsia-400/20 text-fuchsia-200",
-  "Management Algorithm": "bg-emerald-500/10 border-emerald-400/20 text-emerald-200",
-};
+const NEUTRAL_TAG = "border-white/10 bg-white/[0.04] text-slate-300";
 
 const FOLLOW_UP_ACTION_LABELS: Record<ErrorLogFollowUpAction, string> = {
   "": "No follow-up set",
@@ -66,14 +48,12 @@ const FOLLOW_UP_ACTION_LABELS: Record<ErrorLogFollowUpAction, string> = {
   "ignore-one-off-detail": "Ignore one-off detail",
 };
 
-const REPEAT_PILL = "border-rose-300/30 bg-rose-300/15 text-rose-200";
-const FINAL_SHEET_PILL = "border-emerald-300/30 bg-emerald-300/15 text-emerald-200";
-const GUESSED_PILL = "border-sky-300/30 bg-sky-300/15 text-sky-200";
-const REVIEW_SECTION_CLASS = "min-w-0 rounded-lg border border-white/[0.07] bg-slate-950/25 p-2";
+const REVIEW_SECTION_CLASS = "min-w-0 overflow-hidden rounded-lg border border-white/[0.07] bg-slate-950/25 p-1.5";
+const FILTER_FIELD_CLASS = "h-9 w-full rounded-lg border border-white/10 bg-slate-900/70 px-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-cyan-400/30";
 
 function Badge({ className, children }: { className: string; children: React.ReactNode }) {
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${className}`}>
+    <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${className}`}>
       {children}
     </span>
   );
@@ -537,6 +517,8 @@ export function ErrorLogView() {
   const [filterSource, setFilterSource] = useState<ErrorLogSource | "All">("All");
   const [filterSystem, setFilterSystem] = useState<ErrorLogSystem | "All">("All");
   const [filterErrorType, setFilterErrorType] = useState<ErrorLogErrorType | "All">("All");
+  const [filterPriority, setFilterPriority] = useState<ErrorLogPriority | "All">("All");
+  const [showFilters, setShowFilters] = useState(false);
   const [editingEntry, setEditingEntry] = useState<ErrorLogEntry | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -552,6 +534,7 @@ export function ErrorLogView() {
       if (filterSource !== "All" && e.source !== filterSource) return false;
       if (filterSystem !== "All" && e.system !== filterSystem) return false;
       if (filterErrorType !== "All" && e.errorType !== filterErrorType) return false;
+      if (filterPriority !== "All" && (e.priority ?? "medium") !== filterPriority) return false;
       if (
         q &&
         !`${e.topic} ${e.source} ${e.examBlock} ${richTextToPlain(e.missedPattern)} ${e.whyPickedWrongAnswer} ${e.whyCorrectAnswerIsCorrect} ${e.decisionRule}`
@@ -560,7 +543,7 @@ export function ErrorLogView() {
       ) return false;
       return true;
     });
-  }, [entries, deferredSearch, filterSource, filterSystem, filterErrorType]);
+  }, [entries, deferredSearch, filterSource, filterSystem, filterErrorType, filterPriority]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -591,6 +574,13 @@ export function ErrorLogView() {
       .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
       .slice(0, 5);
   }, [entries]);
+  const activeFilterCount = [
+    filterSource !== "All",
+    filterSystem !== "All",
+    filterErrorType !== "All",
+    filterPriority !== "All",
+    sortKey !== "newest",
+  ].filter(Boolean).length;
 
   async function handleSave(input: ErrorLogInput) {
     await upsertErrorLogEntry(input);
@@ -649,41 +639,37 @@ export function ErrorLogView() {
       {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
 
       {/* Row 1 — Metric cards */}
-      <div className="grid shrink-0 grid-cols-3 gap-3">
+      <div className="grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Total logged" value={String(entries.length)} />
         <MetricCard label="Most common error type" value={mostCommonErrorType ?? "—"} />
         <MetricCard label="Most common category" value={mostCommonSystem ?? "—"} />
+        <div className="panel-subtle flex min-h-[132px] min-w-0 flex-col justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Top repeated weak topics</p>
+            {topRepeatedWeakTopics.length ? (
+              <div className="mt-3 space-y-1.5">
+                {topRepeatedWeakTopics.slice(0, 3).map(([topic, count]) => (
+                  <div key={topic} className="flex min-w-0 items-center justify-between gap-2 text-xs">
+                    <span className="truncate font-medium text-slate-200">{topic}</span>
+                    <span className="shrink-0 text-slate-500">{count}x</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm font-medium text-slate-300">No repeated misses yet</p>
+            )}
+          </div>
+          <p className="mt-3 text-xs text-slate-500">
+            {topRepeatedWeakTopics.length ? `${topRepeatedWeakTopics.length} tracked` : "Ready when patterns repeat"}
+          </p>
+        </div>
       </div>
 
-      <section className="shrink-0 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-white">Top 5 repeated weak topics</p>
-          <span className="text-xs text-slate-500">{topRepeatedWeakTopics.length} tracked</span>
-        </div>
-        {topRepeatedWeakTopics.length ? (
-          <ol className="mt-2 grid gap-2 sm:grid-cols-5">
-            {topRepeatedWeakTopics.map(([topic, count]) => (
-              <li
-                key={topic}
-                className="min-w-0 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-2"
-              >
-                <p className="truncate text-xs font-semibold text-slate-200">{topic}</p>
-                <p className="mt-1 text-[11px] text-rose-200">{count} repeat miss{count === 1 ? "" : "es"}</p>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="mt-2 rounded-lg border border-dashed border-white/10 bg-slate-950/20 px-3 py-2 text-xs text-slate-500">
-            No repeated misses logged yet.
-          </p>
-        )}
-      </section>
-
       {/* Entries list — fills remaining space */}
-      <section className="glass-panel flex min-h-[34rem] min-w-0 flex-1 flex-col overflow-hidden">
+      <section className="glass-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {/* Header + controls stay fixed while cards scroll */}
         <div className="shrink-0 border-b border-white/[0.07] pb-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-semibold text-white">
               Entries
               {sorted.length !== entries.length ? (
@@ -692,10 +678,137 @@ export function ErrorLogView() {
                 </span>
               ) : null}
             </p>
-            <div className="flex items-center gap-2">
+          </div>
+
+          {/* Search + compact filters (only visible when there are entries) */}
+          {entries.length > 0 ? (
+            <>
+              <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(18rem,1fr)_auto]">
+                <input
+                  type="text"
+                  placeholder="Search topic, source, pattern..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-10 min-w-0 rounded-xl border border-white/10 bg-slate-900/60 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
+                />
+                <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowFilters((value) => !value)}
+                    className={`${secondaryButtonClassName} h-10 shrink-0`}
+                    aria-expanded={showFilters}
+                  >
+                    <SlidersHorizontal className="h-4 w-4" />
+                    Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
+                  </button>
+                  <button
+                    type="button"
+                    className={`${primaryButtonClassName} h-10 shrink-0`}
+                    onClick={() => {
+                      setEditingEntry(null);
+                      setShowModal(true);
+                    }}
+                    title="Log a new entry"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Log entry
+                  </button>
+                  <button
+                    type="button"
+                    className={`${secondaryButtonClassName} h-10 shrink-0`}
+                    onClick={() => exportCsv(sorted)}
+                    title="Export CSV"
+                  >
+                    <Download className="h-4 w-4" />
+                    Export
+                  </button>
+                </div>
+              </div>
+
+              {showFilters ? (
+                <div className="mt-2 rounded-xl border border-white/[0.08] bg-slate-950/35 p-3">
+                  <div className="grid gap-2 md:grid-cols-5">
+                    <label className="min-w-0">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Source</span>
+                      <select
+                        value={filterSource}
+                        onChange={(e) => setFilterSource(e.target.value as ErrorLogSource | "All")}
+                        className={`${FILTER_FIELD_CLASS} mt-1`}
+                      >
+                        <option value="All">All sources</option>
+                        {ERROR_LOG_SOURCE_VALUES.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="min-w-0">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">System</span>
+                      <select
+                        value={filterSystem}
+                        onChange={(e) => setFilterSystem(e.target.value as ErrorLogSystem | "All")}
+                        className={`${FILTER_FIELD_CLASS} mt-1`}
+                      >
+                        <option value="All">All systems</option>
+                        {ERROR_LOG_SYSTEM_VALUES.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="min-w-0">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Error type</span>
+                      <select
+                        value={filterErrorType}
+                        onChange={(e) => setFilterErrorType(e.target.value as ErrorLogErrorType | "All")}
+                        className={`${FILTER_FIELD_CLASS} mt-1`}
+                      >
+                        <option value="All">All error types</option>
+                        {ERROR_LOG_ERROR_TYPE_VALUES.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="min-w-0">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Priority</span>
+                      <select
+                        value={filterPriority}
+                        onChange={(e) => setFilterPriority(e.target.value as ErrorLogPriority | "All")}
+                        className={`${FILTER_FIELD_CLASS} mt-1`}
+                      >
+                        <option value="All">All priorities</option>
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
+                      </select>
+                    </label>
+                    <label className="min-w-0">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Sort</span>
+                      <select
+                        value={sortKey}
+                        onChange={(e) => setSortKey(e.target.value as SortKey)}
+                        className={`${FILTER_FIELD_CLASS} mt-1`}
+                      >
+                        <option value="newest">Newest</option>
+                        <option value="priority">Priority</option>
+                        <option value="system">System</option>
+                        <option value="topic">Topic</option>
+                        <option value="errorType">Error Type</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                className={primaryButtonClassName}
+                className={`${primaryButtonClassName} h-10 shrink-0`}
                 onClick={() => {
                   setEditingEntry(null);
                   setShowModal(true);
@@ -707,7 +820,7 @@ export function ErrorLogView() {
               </button>
               <button
                 type="button"
-                className={secondaryButtonClassName}
+                className={`${secondaryButtonClassName} h-10 shrink-0`}
                 onClick={() => exportCsv(sorted)}
                 title="Export CSV"
               >
@@ -715,79 +828,11 @@ export function ErrorLogView() {
                 Export
               </button>
             </div>
-          </div>
-
-          {/* Search + filters (only visible when there are entries) */}
-          {entries.length > 0 ? (
-            <>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <input
-                  type="text"
-                  placeholder="Search topic, source, pattern..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="min-w-[180px] flex-1 rounded-xl border border-white/10 bg-slate-900/60 px-3 py-1.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
-                />
-                <select
-                  value={filterSource}
-                  onChange={(e) => setFilterSource(e.target.value as ErrorLogSource | "All")}
-                  className="rounded-xl border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs text-white focus:outline-none"
-                >
-                  <option value="All">All sources</option>
-                  {ERROR_LOG_SOURCE_VALUES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filterSystem}
-                  onChange={(e) => setFilterSystem(e.target.value as ErrorLogSystem | "All")}
-                  className="rounded-xl border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs text-white focus:outline-none"
-                >
-                  <option value="All">All systems</option>
-                  {ERROR_LOG_SYSTEM_VALUES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filterErrorType}
-                  onChange={(e) => setFilterErrorType(e.target.value as ErrorLogErrorType | "All")}
-                  className="rounded-xl border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs text-white focus:outline-none"
-                >
-                  <option value="All">All error types</option>
-                  {ERROR_LOG_ERROR_TYPE_VALUES.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {(["newest", "priority", "system", "topic", "errorType"] as SortKey[]).map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setSortKey(key)}
-                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                      sortKey === key
-                        ? "border-cyan-400/40 bg-cyan-400/15 text-cyan-200"
-                        : "border-white/10 bg-white/5 text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    {key === "newest" ? "Newest" : key === "errorType" ? "Error Type" : key.charAt(0).toUpperCase() + key.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </>
-          ) : null}
+          )}
         </div>
 
         {/* Entries */}
-        <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-subtle lg:max-h-[37rem]">
+        <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-subtle">
           {entries.length === 0 ? (
             <button
               type="button"
@@ -805,7 +850,7 @@ export function ErrorLogView() {
               No entries match the current filters.
             </div>
           ) : (
-            <div className="grid gap-3 pb-3 lg:grid-cols-2">
+            <div className="grid gap-2 pb-3 lg:grid-cols-2">
               {sorted.map((entry) => (
                 <EntryCard
                   key={entry.id}
@@ -877,6 +922,7 @@ function EntryCard({
   const priority = entry.priority ?? "medium";
   const displayDate = entry.entryDate || entry.createdAt.slice(0, 10);
   const nextReview = describeNextReview(entry);
+  const missedPatternText = richTextToPlain(entry.missedPattern);
   const metadata = [
     entry.system,
     entry.source,
@@ -886,71 +932,96 @@ function EntryCard({
 
   return (
     <div
-      className={`flex w-full flex-col rounded-xl border border-l-4 p-3 transition-colors ${
+      className={`flex w-full flex-col rounded-xl border border-l-4 p-2.5 transition-colors ${
         isEditing
           ? "border-cyan-400/30 bg-cyan-400/5"
           : "border-white/[0.08] bg-slate-950/30 hover:border-white/15"
-      } ${PRIORITY_CARD_ACCENT[priority]} ${isExpanded ? "min-h-[17.5rem]" : "h-[17.5rem] overflow-hidden"}`}
+      } ${PRIORITY_CARD_ACCENT[priority]} ${isExpanded ? "min-h-[17rem]" : "h-32 overflow-hidden"}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
           <h3 className="truncate text-base font-semibold text-white">{entry.topic || "Untitled topic"}</h3>
           <p className="mt-1 truncate text-xs text-slate-400">{metadata.join(" / ")}</p>
         </div>
+        <div className="flex max-w-full flex-wrap justify-start gap-1 sm:max-w-[68%] sm:justify-end">
+          <Badge className={NEUTRAL_TAG}>{entry.source}</Badge>
+          <Badge className={NEUTRAL_TAG}>{entry.errorType}</Badge>
+          <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${PRIORITY_PILL[priority]}`}>
+            {priority}
+          </span>
+          {entry.isRepeatMiss ? <Badge className={NEUTRAL_TAG}>Repeat miss</Badge> : null}
+          {entry.isGuessedCorrect ? <Badge className={NEUTRAL_TAG}>Guessed correct</Badge> : null}
+          {entry.addToFinalSheet ? <Badge className={NEUTRAL_TAG}>Final sheet</Badge> : null}
+        </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        <Badge className={SOURCE_COLORS[entry.source] ?? SOURCE_COLORS.Other}>
-          {entry.source}
-        </Badge>
-        <Badge className={ERROR_TYPE_COLORS[entry.errorType] ?? ERROR_TYPE_COLORS["Knowledge Gap"]}>
-          {entry.errorType}
-        </Badge>
-        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${PRIORITY_PILL[priority]}`}>
-          {priority} priority
-        </span>
-        {entry.isRepeatMiss ? <Badge className={REPEAT_PILL}>Repeat miss</Badge> : null}
-        {entry.isGuessedCorrect ? <Badge className={GUESSED_PILL}>Guessed correct</Badge> : null}
-        {entry.addToFinalSheet ? <Badge className={FINAL_SHEET_PILL}>Final sheet</Badge> : null}
+      <div className="mt-1.5 h-6 shrink-0 overflow-hidden rounded-lg border border-white/[0.07] bg-slate-950/25 px-2 py-1 text-xs leading-snug text-slate-300">
+        <p className="truncate">
+          <span className="mr-1 font-semibold uppercase tracking-wider text-rose-200">Missed</span>
+          {missedPatternText || "Not provided"}
+        </p>
       </div>
 
-      <div className="mt-3 grid min-h-0 flex-1 gap-2 sm:grid-cols-2">
-        <ReviewSection title="Missed" titleClassName="text-rose-200">
-          {entry.missedPattern ? (
-            <div className="rich-text-render max-h-10 overflow-hidden text-slate-300">
-              <RichTextRender html={entry.missedPattern} />
+      {isExpanded ? (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <ReviewSection title="Correct rule" titleClassName="text-slate-300">
+            {entry.whyCorrectAnswerIsCorrect ? (
+              <p className="whitespace-pre-wrap text-slate-300">{entry.whyCorrectAnswerIsCorrect}</p>
+            ) : (
+              <p className="text-slate-500">Not provided</p>
+            )}
+          </ReviewSection>
+
+          <ReviewSection title="Why I missed it" titleClassName="text-slate-300">
+            {entry.whyPickedWrongAnswer ? (
+              <p className="whitespace-pre-wrap text-slate-300">{entry.whyPickedWrongAnswer}</p>
+            ) : (
+              <p className="text-slate-500">Not provided</p>
+            )}
+          </ReviewSection>
+
+          <ReviewSection title="Tempting wrong answer" titleClassName="text-slate-300">
+            {entry.whyTemptingWrongAnswerIsWrong ? (
+              <p className="whitespace-pre-wrap text-slate-300">{entry.whyTemptingWrongAnswerIsWrong}</p>
+            ) : (
+              <p className="text-slate-500">Not provided</p>
+            )}
+          </ReviewSection>
+
+          <ReviewSection title="Decision rule / algorithm" titleClassName="text-slate-300">
+            {entry.decisionRule ? (
+              <p className="whitespace-pre-wrap text-slate-300">{entry.decisionRule}</p>
+            ) : (
+              <p className="text-slate-500">Not provided</p>
+            )}
+          </ReviewSection>
+
+          <ReviewSection title="Fix" titleClassName="text-slate-300">
+            {entry.fix ? (
+              <div className="rich-text-render text-slate-300">
+                <RichTextRender html={entry.fix} />
+              </div>
+            ) : (
+              <p className="text-slate-500">Not provided</p>
+            )}
+          </ReviewSection>
+
+          <ReviewSection title="Next action" titleClassName="text-slate-300">
+            <p className="whitespace-pre-wrap text-slate-300">{nextReview}</p>
+          </ReviewSection>
+
+          <ReviewSection title="Additional details" titleClassName="text-slate-300">
+            <div className="space-y-1 text-slate-300">
+              <p>Follow-up: {FOLLOW_UP_ACTION_LABELS[entry.followUpAction] ?? entry.followUpAction}</p>
+              <p>Repeat miss: {entry.isRepeatMiss ? "Yes" : "No"}</p>
+              <p>Guessed correct: {entry.isGuessedCorrect ? "Yes" : "No"}</p>
+              <p>Final sheet: {entry.addToFinalSheet ? "Yes" : "No"}</p>
             </div>
-          ) : (
-            <p className="text-slate-500">Not provided</p>
-          )}
-        </ReviewSection>
+          </ReviewSection>
+        </div>
+      ) : null}
 
-        <ReviewSection title="Correct rule" titleClassName="text-emerald-200">
-          {entry.whyCorrectAnswerIsCorrect ? (
-            <p className="max-h-10 overflow-hidden whitespace-pre-wrap text-slate-300">
-              {entry.whyCorrectAnswerIsCorrect}
-            </p>
-          ) : (
-            <p className="text-slate-500">Not provided</p>
-          )}
-        </ReviewSection>
-
-        <ReviewSection title="Why I missed it" titleClassName="text-amber-200">
-          {entry.whyPickedWrongAnswer ? (
-            <p className="max-h-10 overflow-hidden whitespace-pre-wrap text-slate-300">
-              {entry.whyPickedWrongAnswer}
-            </p>
-          ) : (
-            <p className="text-slate-500">Not provided</p>
-          )}
-        </ReviewSection>
-
-        <ReviewSection title="Next action" titleClassName="text-cyan-200">
-          <p className="max-h-10 overflow-hidden whitespace-pre-wrap text-slate-300">{nextReview}</p>
-        </ReviewSection>
-      </div>
-
-      <div className="mt-2 border-t border-white/[0.07] pt-2">
+      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.07] pt-1.5">
         <button
           type="button"
           onClick={onToggleExpanded}
@@ -960,48 +1031,7 @@ function EntryCard({
           {isExpanded ? "Hide full reasoning" : "Show full reasoning"}
         </button>
 
-        {isExpanded ? (
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <ReviewSection title="Tempting wrong answer" titleClassName="text-slate-300">
-              {entry.whyTemptingWrongAnswerIsWrong ? (
-                <p className="whitespace-pre-wrap text-slate-300">{entry.whyTemptingWrongAnswerIsWrong}</p>
-              ) : (
-                <p className="text-slate-500">Not provided</p>
-              )}
-            </ReviewSection>
-
-            <ReviewSection title="Decision rule / algorithm" titleClassName="text-slate-300">
-              {entry.decisionRule ? (
-                <p className="whitespace-pre-wrap text-slate-300">{entry.decisionRule}</p>
-              ) : (
-                <p className="text-slate-500">Not provided</p>
-              )}
-            </ReviewSection>
-
-            <ReviewSection title="Fix" titleClassName="text-slate-300">
-              {entry.fix ? (
-                <div className="rich-text-render text-slate-300">
-                  <RichTextRender html={entry.fix} />
-                </div>
-              ) : (
-                <p className="text-slate-500">Not provided</p>
-              )}
-            </ReviewSection>
-
-            <ReviewSection title="Additional details" titleClassName="text-slate-300">
-              <div className="space-y-1 text-slate-300">
-                <p>Follow-up: {FOLLOW_UP_ACTION_LABELS[entry.followUpAction] ?? entry.followUpAction}</p>
-                <p>Repeat miss: {entry.isRepeatMiss ? "Yes" : "No"}</p>
-                <p>Guessed correct: {entry.isGuessedCorrect ? "Yes" : "No"}</p>
-                <p>Final sheet: {entry.addToFinalSheet ? "Yes" : "No"}</p>
-              </div>
-            </ReviewSection>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {confirmDeleteId === entry.id ? (
             <div className="flex items-center gap-3">
               <button type="button" onClick={onDeleteConfirm} className="text-xs font-medium text-rose-300 hover:text-rose-200">
@@ -1026,9 +1056,7 @@ function EntryCard({
               {weakTopicAdded ? "Added Weak Topic" : "+ Weak Topic"}
             </button>
           )}
-        </div>
 
-        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onEdit}
