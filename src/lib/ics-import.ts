@@ -208,6 +208,7 @@ export async function parseIcsImport(file: File, existingImportSourceIds: Iterab
   const studyBlocks: StudyBlockInput[] = [];
   const issues: string[] = [];
   let currentEvent: IcsEventDraft | null = null;
+  let currentEventDepth = 0;
   let totalEvents = 0;
   let skippedCount = 0;
   let duplicateCount = 0;
@@ -225,17 +226,22 @@ export async function parseIcsImport(file: File, existingImportSourceIds: Iterab
         uid: null,
         dtStart: null,
       };
+      currentEventDepth = 1;
       totalEvents += 1;
       continue;
     }
 
     if (normalized.toUpperCase() === "END:VEVENT") {
       if (currentEvent) {
-        const result = finalizeEvent(currentEvent, totalEvents, seenImportSourceIds, studyBlocks, issues);
-        skippedCount += result.skipped;
-        duplicateCount += result.duplicate;
+        currentEventDepth -= 1;
+        if (currentEventDepth <= 0) {
+          const result = finalizeEvent(currentEvent, totalEvents, seenImportSourceIds, studyBlocks, issues);
+          skippedCount += result.skipped;
+          duplicateCount += result.duplicate;
+          currentEvent = null;
+          currentEventDepth = 0;
+        }
       }
-      currentEvent = null;
       continue;
     }
 
@@ -245,6 +251,20 @@ export async function parseIcsImport(file: File, existingImportSourceIds: Iterab
 
     const property = parseIcsProperty(line);
     if (!property) {
+      continue;
+    }
+
+    if (property.name === "BEGIN") {
+      currentEventDepth += 1;
+      continue;
+    }
+
+    if (property.name === "END") {
+      currentEventDepth = Math.max(0, currentEventDepth - 1);
+      continue;
+    }
+
+    if (currentEventDepth !== 1) {
       continue;
     }
 
