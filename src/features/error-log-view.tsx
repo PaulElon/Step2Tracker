@@ -55,7 +55,8 @@ const STUDY_TEXT_CLASS = "break-words whitespace-pre-wrap text-[0.95rem] leading
 const REVIEW_LABEL_CLASS = "text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-500";
 const PREVIEW_TEXT_CLASS =
   "break-words whitespace-pre-wrap text-[0.84rem] leading-[1.2rem] text-slate-100 [&_p]:my-0 [&_li]:my-0.5 [&_ul]:my-1 [&_ol]:my-1";
-const PREVIEW_MAX_HEIGHT = "2.4rem";
+const PREVIEW_MAX_HEIGHT = "2.6rem";
+const COLLAPSED_CARD_VISIBLE_TAGS = 2;
 const ENTRY_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
@@ -164,15 +165,19 @@ function StudyPreview({
   }, [content, hasContent]);
 
   return (
-    <section className="min-w-0">
+    <section className="flex min-h-0 min-w-0 flex-col">
       <p className={REVIEW_LABEL_CLASS}>{label}</p>
       {hasContent ? (
         <div className="mt-1 min-w-0">
-          <div ref={previewRef} className="overflow-hidden pr-1" style={{ maxHeight: PREVIEW_MAX_HEIGHT }}>
+          <div
+            ref={previewRef}
+            className="overflow-hidden pr-1"
+            style={{ minHeight: PREVIEW_MAX_HEIGHT, maxHeight: PREVIEW_MAX_HEIGHT }}
+          >
             {renderStudyContent(content, PREVIEW_TEXT_CLASS)}
           </div>
           {hasOverflow ? (
-            <div className="pointer-events-none mt-1 h-2 rounded-full bg-gradient-to-b from-white/[0.08] via-white/[0.03] to-transparent" />
+            <div className="pointer-events-none mt-1 h-1.5 rounded-full bg-gradient-to-b from-white/[0.07] via-white/[0.02] to-transparent" />
           ) : null}
         </div>
       ) : (
@@ -1194,45 +1199,55 @@ function EntryCard({
     entry.examBlock,
     displayDate,
   ].filter(Boolean);
+  const tags = [
+    { label: entry.errorType, className: NEUTRAL_TAG },
+    { label: priority, className: PRIORITY_PILL[priority] },
+    ...(entry.isRepeatMiss ? [{ label: "Repeat miss", className: NEUTRAL_TAG }] : []),
+    ...(entry.isGuessedCorrect ? [{ label: "Guessed correct", className: NEUTRAL_TAG }] : []),
+    ...(entry.addToFinalSheet ? [{ label: "Final sheet", className: NEUTRAL_TAG }] : []),
+  ];
+  const visibleTags = tags.slice(0, COLLAPSED_CARD_VISIBLE_TAGS);
+  const hiddenTagCount = Math.max(0, tags.length - visibleTags.length);
 
   return (
     <div
-      className={`flex min-h-[16rem] w-full flex-col overflow-hidden rounded-2xl border border-l-4 px-4 py-3.5 transition-colors md:h-[16rem] ${
+      className={`flex min-h-[17rem] w-full flex-col overflow-hidden rounded-2xl border border-l-4 px-4 py-3.5 transition-colors md:h-[17rem] ${
         isEditing
           ? "border-cyan-400/30 bg-cyan-400/[0.06]"
           : "border-white/[0.08] bg-slate-950/45 hover:border-white/15"
       } ${PRIORITY_CARD_ACCENT[priority]}`}
     >
-      <div className="grid gap-x-4 gap-y-2 md:grid-cols-[minmax(0,1fr)_minmax(13rem,15.5rem)] md:items-start">
+      <div className="grid gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_minmax(11rem,12.75rem)] md:items-start">
         <div className="min-w-0">
           <h3 className="line-clamp-2 break-words text-base font-semibold leading-tight text-white">
             {entry.topic || "Untitled topic"}
           </h3>
         </div>
-        <div className="min-w-0 md:justify-self-end">
-          <div className="flex flex-col gap-1.5 md:items-end">
+        <div className="min-w-0 md:max-w-[12.75rem] md:justify-self-end">
+          <div className="flex flex-col gap-1 md:items-end">
             <div className="flex flex-wrap gap-1.5 md:justify-end">
-              <Badge className={NEUTRAL_TAG}>{entry.errorType}</Badge>
-              <Badge className={PRIORITY_PILL[priority]}>{priority}</Badge>
-              {entry.isRepeatMiss ? <Badge className={NEUTRAL_TAG}>Repeat miss</Badge> : null}
-              {entry.isGuessedCorrect ? <Badge className={NEUTRAL_TAG}>Guessed correct</Badge> : null}
-              {entry.addToFinalSheet ? <Badge className={NEUTRAL_TAG}>Final sheet</Badge> : null}
+              {visibleTags.map((tag) => (
+                <Badge key={tag.label} className={tag.className}>
+                  {tag.label}
+                </Badge>
+              ))}
+              {hiddenTagCount > 0 ? <Badge className={NEUTRAL_TAG}>+{hiddenTagCount}</Badge> : null}
             </div>
-            <p className="break-words text-[11px] leading-4 text-slate-400 md:text-right">
+            <p className="line-clamp-2 break-words text-[10px] leading-4 text-slate-400 md:text-right">
               {metadata.join(" · ")}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="mt-2.5 flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="mt-2.5 grid min-h-0 flex-1 grid-rows-[repeat(2,minmax(0,1fr))] gap-2">
         <StudyPreview label="Missed" content={entry.missedPattern} />
-        <div className="mt-3 border-t border-white/[0.07] pt-3">
+        <div className="min-h-0">
           <StudyPreview label="Correct rule" content={entry.whyCorrectAnswerIsCorrect} />
         </div>
       </div>
 
-      <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/[0.07] pt-2.5">
+      <div className="mt-2.5 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/[0.07] pt-2">
         <button
           type="button"
           onClick={onShowReasoning}
