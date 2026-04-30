@@ -26,29 +26,35 @@ import type {
 type SortKey = "newest" | "system" | "topic" | "errorType" | "priority";
 
 const PRIORITY_PILL: Record<ErrorLogPriority, string> = {
-  high: "border-rose-300/30 bg-rose-300/15 text-rose-200",
-  medium: "border-amber-300/30 bg-amber-300/15 text-amber-200",
+  high: "border-rose-300/45 bg-rose-300/20 text-rose-100 shadow-[0_0_18px_rgba(251,113,133,0.14)]",
+  medium: "border-amber-300/35 bg-amber-300/15 text-amber-100",
   low: "border-slate-300/20 bg-slate-300/10 text-slate-300",
 };
 
+const PRIORITY_CARD_ACCENT: Record<ErrorLogPriority, string> = {
+  high: "border-l-rose-400/80 shadow-[inset_3px_0_0_rgba(251,113,133,0.72)]",
+  medium: "border-l-amber-400/70 shadow-[inset_3px_0_0_rgba(251,191,36,0.58)]",
+  low: "border-l-slate-500/70 shadow-[inset_3px_0_0_rgba(100,116,139,0.46)]",
+};
+
 const SOURCE_COLORS: Record<ErrorLogSource, string> = {
-  UWorld: "bg-cyan-500/15 border-cyan-500/25 text-cyan-200",
-  TrueLearn: "bg-emerald-500/15 border-emerald-500/25 text-emerald-200",
-  NBME: "bg-violet-500/15 border-violet-500/25 text-violet-200",
-  "CMS Form": "bg-rose-500/15 border-rose-500/25 text-rose-200",
-  AMBOSS: "bg-amber-500/15 border-amber-500/25 text-amber-200",
-  COMSAE: "bg-indigo-500/15 border-indigo-500/25 text-indigo-200",
+  UWorld: "bg-sky-500/10 border-sky-400/20 text-sky-200",
+  TrueLearn: "bg-teal-500/10 border-teal-400/20 text-teal-200",
+  NBME: "bg-indigo-500/10 border-indigo-400/20 text-indigo-200",
+  "CMS Form": "bg-rose-500/10 border-rose-400/20 text-rose-200",
+  AMBOSS: "bg-amber-500/10 border-amber-400/20 text-amber-200",
+  COMSAE: "bg-blue-500/10 border-blue-400/20 text-blue-200",
   Other: "bg-slate-500/15 border-slate-500/25 text-slate-300",
 };
 
 const ERROR_TYPE_COLORS: Record<ErrorLogErrorType, string> = {
-  "Knowledge Gap": "bg-amber-500/15 border-amber-500/25 text-amber-200",
-  "Misread Question": "bg-blue-500/15 border-blue-500/25 text-blue-200",
-  "Wrong Algorithm": "bg-rose-500/15 border-rose-500/25 text-rose-200",
-  "Trap Answer": "bg-purple-500/15 border-purple-500/25 text-purple-200",
-  "Reasoning Error": "bg-cyan-500/15 border-cyan-500/25 text-cyan-200",
-  "Trap / Misread": "bg-fuchsia-500/15 border-fuchsia-500/25 text-fuchsia-200",
-  "Management Algorithm": "bg-emerald-500/15 border-emerald-500/25 text-emerald-200",
+  "Knowledge Gap": "bg-amber-500/10 border-amber-400/20 text-amber-200",
+  "Misread Question": "bg-sky-500/10 border-sky-400/20 text-sky-200",
+  "Wrong Algorithm": "bg-rose-500/10 border-rose-400/20 text-rose-200",
+  "Trap Answer": "bg-violet-500/10 border-violet-400/20 text-violet-200",
+  "Reasoning Error": "bg-cyan-500/10 border-cyan-400/20 text-cyan-200",
+  "Trap / Misread": "bg-fuchsia-500/10 border-fuchsia-400/20 text-fuchsia-200",
+  "Management Algorithm": "bg-emerald-500/10 border-emerald-400/20 text-emerald-200",
 };
 
 const FOLLOW_UP_ACTION_LABELS: Record<ErrorLogFollowUpAction, string> = {
@@ -63,6 +69,7 @@ const FOLLOW_UP_ACTION_LABELS: Record<ErrorLogFollowUpAction, string> = {
 const REPEAT_PILL = "border-rose-300/30 bg-rose-300/15 text-rose-200";
 const FINAL_SHEET_PILL = "border-emerald-300/30 bg-emerald-300/15 text-emerald-200";
 const GUESSED_PILL = "border-sky-300/30 bg-sky-300/15 text-sky-200";
+const REVIEW_SECTION_CLASS = "min-w-0 rounded-lg border border-white/[0.07] bg-slate-950/25 p-2";
 
 function Badge({ className, children }: { className: string; children: React.ReactNode }) {
   return (
@@ -535,6 +542,7 @@ export function ErrorLogView() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [addedWeakTopicIds, setAddedWeakTopicIds] = useState<Set<string>>(new Set());
+  const [expandedEntryIds, setExpandedEntryIds] = useState<Set<string>>(new Set());
   const deferredSearch = useDeferredValue(search);
   const topicRef = useRef<HTMLInputElement>(null);
 
@@ -624,6 +632,18 @@ export function ErrorLogView() {
     setToast(`Added "${entry.topic}" as a weak topic.`);
   }
 
+  function toggleExpandedEntry(id: string) {
+    setExpandedEntryIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
   return (
     <div className="flex h-full flex-col gap-3 pb-6">
       {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
@@ -660,139 +680,141 @@ export function ErrorLogView() {
       </section>
 
       {/* Entries list — fills remaining space */}
-      <section className="glass-panel min-h-0 min-w-0 flex-1 overflow-hidden">
-        <div className="h-full overflow-y-auto scrollbar-subtle">
-          {/* Header + controls */}
-          <div className="sticky top-0 z-10 bg-inherit pb-2">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-white">
-                Entries
-                {sorted.length !== entries.length ? (
-                  <span className="ml-1.5 text-xs font-normal text-slate-400">
-                    ({sorted.length} of {entries.length})
-                  </span>
-                ) : null}
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className={primaryButtonClassName}
-                  onClick={() => {
-                    setEditingEntry(null);
-                    setShowModal(true);
-                  }}
-                  title="Log a new entry"
-                >
-                  <Plus className="h-4 w-4" />
-                  Log entry
-                </button>
-                <button
-                  type="button"
-                  className={secondaryButtonClassName}
-                  onClick={() => exportCsv(sorted)}
-                  title="Export CSV"
-                >
-                  <Download className="h-4 w-4" />
-                  Export
-                </button>
-              </div>
-            </div>
-
-            {/* Search + filters (only visible when there are entries) */}
-            {entries.length > 0 ? (
-              <>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <input
-                    type="text"
-                    placeholder="Search topic, source, pattern…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="min-w-[180px] flex-1 rounded-xl border border-white/10 bg-slate-900/60 px-3 py-1.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
-                  />
-                  <select
-                    value={filterSource}
-                    onChange={(e) => setFilterSource(e.target.value as ErrorLogSource | "All")}
-                    className="rounded-xl border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs text-white focus:outline-none"
-                  >
-                    <option value="All">All sources</option>
-                    {ERROR_LOG_SOURCE_VALUES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={filterSystem}
-                    onChange={(e) => setFilterSystem(e.target.value as ErrorLogSystem | "All")}
-                    className="rounded-xl border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs text-white focus:outline-none"
-                  >
-                    <option value="All">All systems</option>
-                    {ERROR_LOG_SYSTEM_VALUES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={filterErrorType}
-                    onChange={(e) => setFilterErrorType(e.target.value as ErrorLogErrorType | "All")}
-                    className="rounded-xl border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs text-white focus:outline-none"
-                  >
-                    <option value="All">All error types</option>
-                    {ERROR_LOG_ERROR_TYPE_VALUES.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {(["newest", "priority", "system", "topic", "errorType"] as SortKey[]).map((key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setSortKey(key)}
-                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                        sortKey === key
-                          ? "border-cyan-400/40 bg-cyan-400/15 text-cyan-200"
-                          : "border-white/10 bg-white/5 text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      {key === "newest" ? "Newest" : key === "errorType" ? "Error Type" : key.charAt(0).toUpperCase() + key.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : null}
-          </div>
-
-          {/* Entries */}
-          <div className="mt-2 space-y-2 pb-4">
-            {entries.length === 0 ? (
+      <section className="glass-panel flex min-h-[34rem] min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Header + controls stay fixed while cards scroll */}
+        <div className="shrink-0 border-b border-white/[0.07] pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-white">
+              Entries
+              {sorted.length !== entries.length ? (
+                <span className="ml-1.5 text-xs font-normal text-slate-400">
+                  ({sorted.length} of {entries.length})
+                </span>
+              ) : null}
+            </p>
+            <div className="flex items-center gap-2">
               <button
                 type="button"
+                className={primaryButtonClassName}
                 onClick={() => {
                   setEditingEntry(null);
                   setShowModal(true);
                 }}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-white/15 bg-white/[0.02] py-10 text-base font-semibold text-slate-300 transition-colors hover:border-cyan-300/40 hover:bg-cyan-300/5 hover:text-cyan-200"
+                title="Log a new entry"
               >
-                <Plus className="h-5 w-5" />
-                Add first log entry
+                <Plus className="h-4 w-4" />
+                Log entry
               </button>
-            ) : sorted.length === 0 ? (
-              <div className="py-8 text-center text-sm text-slate-500">
-                No entries match the current filters.
+              <button
+                type="button"
+                className={secondaryButtonClassName}
+                onClick={() => exportCsv(sorted)}
+                title="Export CSV"
+              >
+                <Download className="h-4 w-4" />
+                Export
+              </button>
+            </div>
+          </div>
+
+          {/* Search + filters (only visible when there are entries) */}
+          {entries.length > 0 ? (
+            <>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <input
+                  type="text"
+                  placeholder="Search topic, source, pattern..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="min-w-[180px] flex-1 rounded-xl border border-white/10 bg-slate-900/60 px-3 py-1.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
+                />
+                <select
+                  value={filterSource}
+                  onChange={(e) => setFilterSource(e.target.value as ErrorLogSource | "All")}
+                  className="rounded-xl border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs text-white focus:outline-none"
+                >
+                  <option value="All">All sources</option>
+                  {ERROR_LOG_SOURCE_VALUES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filterSystem}
+                  onChange={(e) => setFilterSystem(e.target.value as ErrorLogSystem | "All")}
+                  className="rounded-xl border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs text-white focus:outline-none"
+                >
+                  <option value="All">All systems</option>
+                  {ERROR_LOG_SYSTEM_VALUES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filterErrorType}
+                  onChange={(e) => setFilterErrorType(e.target.value as ErrorLogErrorType | "All")}
+                  className="rounded-xl border border-white/10 bg-slate-900/60 px-2 py-1.5 text-xs text-white focus:outline-none"
+                >
+                  <option value="All">All error types</option>
+                  {ERROR_LOG_ERROR_TYPE_VALUES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
               </div>
-            ) : (
-              sorted.map((entry) => (
+
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {(["newest", "priority", "system", "topic", "errorType"] as SortKey[]).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setSortKey(key)}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                      sortKey === key
+                        ? "border-cyan-400/40 bg-cyan-400/15 text-cyan-200"
+                        : "border-white/10 bg-white/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    {key === "newest" ? "Newest" : key === "errorType" ? "Error Type" : key.charAt(0).toUpperCase() + key.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </div>
+
+        {/* Entries */}
+        <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-subtle lg:max-h-[37rem]">
+          {entries.length === 0 ? (
+            <button
+              type="button"
+              onClick={() => {
+                setEditingEntry(null);
+                setShowModal(true);
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-white/15 bg-white/[0.02] py-10 text-base font-semibold text-slate-300 transition-colors hover:border-cyan-300/40 hover:bg-cyan-300/5 hover:text-cyan-200"
+            >
+              <Plus className="h-5 w-5" />
+              Add first log entry
+            </button>
+          ) : sorted.length === 0 ? (
+            <div className="py-8 text-center text-sm text-slate-500">
+              No entries match the current filters.
+            </div>
+          ) : (
+            <div className="grid gap-3 pb-3 lg:grid-cols-2">
+              {sorted.map((entry) => (
                 <EntryCard
                   key={entry.id}
                   entry={entry}
                   isEditing={editingEntry?.id === entry.id}
+                  isExpanded={expandedEntryIds.has(entry.id)}
                   confirmDeleteId={confirmDeleteId}
                   weakTopicAdded={addedWeakTopicIds.has(entry.id)}
+                  onToggleExpanded={() => toggleExpandedEntry(entry.id)}
                   onEdit={() => {
                     setEditingEntry(entry);
                     setConfirmDeleteId(null);
@@ -807,9 +829,9 @@ export function ErrorLogView() {
                     void handleAddWeakTopic(entry);
                   }}
                 />
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -830,8 +852,10 @@ export function ErrorLogView() {
 function EntryCard({
   entry,
   isEditing,
+  isExpanded,
   confirmDeleteId,
   weakTopicAdded,
+  onToggleExpanded,
   onEdit,
   onDeleteRequest,
   onDeleteConfirm,
@@ -840,8 +864,10 @@ function EntryCard({
 }: {
   entry: ErrorLogEntry;
   isEditing: boolean;
+  isExpanded: boolean;
   confirmDeleteId: string | null;
   weakTopicAdded: boolean;
+  onToggleExpanded: () => void;
   onEdit: () => void;
   onDeleteRequest: () => void;
   onDeleteConfirm: () => void;
@@ -851,43 +877,134 @@ function EntryCard({
   const priority = entry.priority ?? "medium";
   const displayDate = entry.entryDate || entry.createdAt.slice(0, 10);
   const nextReview = describeNextReview(entry);
+  const metadata = [
+    entry.system,
+    entry.source,
+    entry.examBlock,
+    displayDate,
+  ].filter(Boolean);
 
   return (
     <div
-      className={`w-full rounded-xl border p-3 transition-colors ${
+      className={`flex w-full flex-col rounded-xl border border-l-4 p-3 transition-colors ${
         isEditing
           ? "border-cyan-400/30 bg-cyan-400/5"
-          : "border-white/[0.07] bg-white/[0.03] hover:border-white/15"
-      }`}
+          : "border-white/[0.08] bg-slate-950/30 hover:border-white/15"
+      } ${PRIORITY_CARD_ACCENT[priority]} ${isExpanded ? "min-h-[17.5rem]" : "h-[17.5rem] overflow-hidden"}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge className={SOURCE_COLORS[entry.source] ?? SOURCE_COLORS.Other}>
-              {entry.source}
-            </Badge>
-            <Badge className={ERROR_TYPE_COLORS[entry.errorType] ?? ERROR_TYPE_COLORS["Knowledge Gap"]}>
-              {entry.errorType}
-            </Badge>
-            <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wider shadow-sm ${PRIORITY_PILL[priority]}`}>
-              {priority} priority
-            </span>
-            {entry.isRepeatMiss ? <Badge className={REPEAT_PILL}>Repeat miss</Badge> : null}
-            {entry.addToFinalSheet ? <Badge className={FINAL_SHEET_PILL}>Final sheet</Badge> : null}
-            {entry.isGuessedCorrect ? <Badge className={GUESSED_PILL}>Guessed correct</Badge> : null}
-            {entry.examBlock ? (
-              <span className="text-[10px] text-slate-500">{entry.examBlock}</span>
-            ) : null}
-            <span className="text-xs font-semibold text-white">{entry.topic}</span>
-            <span className="text-xs text-slate-400">{entry.system}</span>
-            <span className="text-[10px] text-slate-500">{displayDate}</span>
-          </div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-semibold text-white">{entry.topic || "Untitled topic"}</h3>
+          <p className="mt-1 truncate text-xs text-slate-400">{metadata.join(" / ")}</p>
         </div>
+      </div>
 
-        <div className="flex shrink-0 items-center gap-1">
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <Badge className={SOURCE_COLORS[entry.source] ?? SOURCE_COLORS.Other}>
+          {entry.source}
+        </Badge>
+        <Badge className={ERROR_TYPE_COLORS[entry.errorType] ?? ERROR_TYPE_COLORS["Knowledge Gap"]}>
+          {entry.errorType}
+        </Badge>
+        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${PRIORITY_PILL[priority]}`}>
+          {priority} priority
+        </span>
+        {entry.isRepeatMiss ? <Badge className={REPEAT_PILL}>Repeat miss</Badge> : null}
+        {entry.isGuessedCorrect ? <Badge className={GUESSED_PILL}>Guessed correct</Badge> : null}
+        {entry.addToFinalSheet ? <Badge className={FINAL_SHEET_PILL}>Final sheet</Badge> : null}
+      </div>
+
+      <div className="mt-3 grid min-h-0 flex-1 gap-2 sm:grid-cols-2">
+        <ReviewSection title="Missed" titleClassName="text-rose-200">
+          {entry.missedPattern ? (
+            <div className="rich-text-render max-h-10 overflow-hidden text-slate-300">
+              <RichTextRender html={entry.missedPattern} />
+            </div>
+          ) : (
+            <p className="text-slate-500">Not provided</p>
+          )}
+        </ReviewSection>
+
+        <ReviewSection title="Correct rule" titleClassName="text-emerald-200">
+          {entry.whyCorrectAnswerIsCorrect ? (
+            <p className="max-h-10 overflow-hidden whitespace-pre-wrap text-slate-300">
+              {entry.whyCorrectAnswerIsCorrect}
+            </p>
+          ) : (
+            <p className="text-slate-500">Not provided</p>
+          )}
+        </ReviewSection>
+
+        <ReviewSection title="Why I missed it" titleClassName="text-amber-200">
+          {entry.whyPickedWrongAnswer ? (
+            <p className="max-h-10 overflow-hidden whitespace-pre-wrap text-slate-300">
+              {entry.whyPickedWrongAnswer}
+            </p>
+          ) : (
+            <p className="text-slate-500">Not provided</p>
+          )}
+        </ReviewSection>
+
+        <ReviewSection title="Next action" titleClassName="text-cyan-200">
+          <p className="max-h-10 overflow-hidden whitespace-pre-wrap text-slate-300">{nextReview}</p>
+        </ReviewSection>
+      </div>
+
+      <div className="mt-2 border-t border-white/[0.07] pt-2">
+        <button
+          type="button"
+          onClick={onToggleExpanded}
+          className="text-xs font-medium text-slate-400 transition-colors hover:text-cyan-200"
+          aria-expanded={isExpanded}
+        >
+          {isExpanded ? "Hide full reasoning" : "Show full reasoning"}
+        </button>
+
+        {isExpanded ? (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <ReviewSection title="Tempting wrong answer" titleClassName="text-slate-300">
+              {entry.whyTemptingWrongAnswerIsWrong ? (
+                <p className="whitespace-pre-wrap text-slate-300">{entry.whyTemptingWrongAnswerIsWrong}</p>
+              ) : (
+                <p className="text-slate-500">Not provided</p>
+              )}
+            </ReviewSection>
+
+            <ReviewSection title="Decision rule / algorithm" titleClassName="text-slate-300">
+              {entry.decisionRule ? (
+                <p className="whitespace-pre-wrap text-slate-300">{entry.decisionRule}</p>
+              ) : (
+                <p className="text-slate-500">Not provided</p>
+              )}
+            </ReviewSection>
+
+            <ReviewSection title="Fix" titleClassName="text-slate-300">
+              {entry.fix ? (
+                <div className="rich-text-render text-slate-300">
+                  <RichTextRender html={entry.fix} />
+                </div>
+              ) : (
+                <p className="text-slate-500">Not provided</p>
+              )}
+            </ReviewSection>
+
+            <ReviewSection title="Additional details" titleClassName="text-slate-300">
+              <div className="space-y-1 text-slate-300">
+                <p>Follow-up: {FOLLOW_UP_ACTION_LABELS[entry.followUpAction] ?? entry.followUpAction}</p>
+                <p>Repeat miss: {entry.isRepeatMiss ? "Yes" : "No"}</p>
+                <p>Guessed correct: {entry.isGuessedCorrect ? "Yes" : "No"}</p>
+                <p>Final sheet: {entry.addToFinalSheet ? "Yes" : "No"}</p>
+              </div>
+            </ReviewSection>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <div>
           {confirmDeleteId === entry.id ? (
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={onDeleteConfirm} className="text-xs font-medium text-rose-400 hover:text-rose-300">
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={onDeleteConfirm} className="text-xs font-medium text-rose-300 hover:text-rose-200">
                 Confirm delete
               </button>
               <button type="button" onClick={onDeleteCancel} className="text-xs text-slate-500 hover:text-slate-300">
@@ -895,87 +1012,60 @@ function EntryCard({
               </button>
             </div>
           ) : (
-            <>
-              <button
-                type="button"
-                onClick={weakTopicAdded ? undefined : onAddWeakTopic}
-                disabled={weakTopicAdded}
-                className={`rounded-lg px-2 py-1 text-[10px] font-medium transition-colors ${
-                  weakTopicAdded
-                    ? "text-emerald-400 cursor-default"
-                    : "text-slate-400 hover:bg-white/5 hover:text-cyan-300"
-                }`}
-                title={weakTopicAdded ? "Already added as weak topic" : "Add as weak topic"}
-              >
-                {weakTopicAdded ? "✓ Added" : "+ Weak Topic"}
-              </button>
-              <button
-                type="button"
-                onClick={onEdit}
-                className="rounded-lg p-1.5 text-slate-500 hover:text-cyan-300 transition-colors"
-                title="Edit"
-              >
-                <Edit2 className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={onDeleteRequest}
-                className="rounded-lg p-1.5 text-slate-500 hover:text-rose-400 transition-colors"
-                title="Delete"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={weakTopicAdded ? undefined : onAddWeakTopic}
+              disabled={weakTopicAdded}
+              className={`rounded-lg px-2 py-1 text-xs font-medium transition-colors ${
+                weakTopicAdded
+                  ? "cursor-default text-emerald-300"
+                  : "text-slate-400 hover:bg-white/5 hover:text-cyan-300"
+              }`}
+              title={weakTopicAdded ? "Already added as weak topic" : "Add as weak topic"}
+            >
+              {weakTopicAdded ? "Added Weak Topic" : "+ Weak Topic"}
+            </button>
           )}
         </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 transition-colors hover:bg-white/5 hover:text-cyan-300"
+            title="Edit"
+          >
+            <Edit2 className="h-3.5 w-3.5" />
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={onDeleteRequest}
+            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 transition-colors hover:bg-white/5 hover:text-rose-300"
+            title="Delete"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </button>
+        </div>
       </div>
-
-      {entry.missedPattern ? (
-        <div className="mt-2 text-xs text-slate-300 rich-text-render">
-          <span className="font-medium text-slate-500">Missed: </span>
-          <RichTextRender html={entry.missedPattern} />
-        </div>
-      ) : null}
-
-      {entry.whyCorrectAnswerIsCorrect ? (
-        <p className="mt-1 text-xs whitespace-pre-wrap text-slate-300">
-          <span className="font-medium text-slate-500">Correct rule: </span>
-          {entry.whyCorrectAnswerIsCorrect}
-        </p>
-      ) : null}
-
-      {entry.whyPickedWrongAnswer ? (
-        <p className="mt-1 text-xs whitespace-pre-wrap text-slate-300">
-          <span className="font-medium text-slate-500">Why I missed it: </span>
-          {entry.whyPickedWrongAnswer}
-        </p>
-      ) : null}
-
-      {entry.whyTemptingWrongAnswerIsWrong ? (
-        <p className="mt-1 text-xs whitespace-pre-wrap text-slate-400">
-          <span className="font-medium text-slate-500">Tempting wrong answer: </span>
-          {entry.whyTemptingWrongAnswerIsWrong}
-        </p>
-      ) : null}
-
-      {entry.decisionRule ? (
-        <p className="mt-1 text-xs whitespace-pre-wrap text-slate-400">
-          <span className="font-medium text-slate-500">Decision rule: </span>
-          {entry.decisionRule}
-        </p>
-      ) : null}
-
-      {entry.fix ? (
-        <div className="mt-1 text-xs text-slate-400 rich-text-render">
-          <span className="font-medium text-slate-500">Fix: </span>
-          <RichTextRender html={entry.fix} />
-        </div>
-      ) : null}
-
-      <p className="mt-1 text-xs text-slate-400">
-        <span className="font-medium text-slate-500">Next review: </span>
-        {nextReview}
-      </p>
     </div>
+  );
+}
+
+function ReviewSection({
+  title,
+  titleClassName,
+  children,
+}: {
+  title: string;
+  titleClassName: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className={REVIEW_SECTION_CLASS}>
+      <p className={`text-[11px] font-semibold uppercase tracking-wider ${titleClassName}`}>{title}</p>
+      <div className="mt-1 text-xs leading-relaxed">{children}</div>
+    </section>
   );
 }
