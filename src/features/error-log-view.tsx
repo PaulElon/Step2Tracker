@@ -53,6 +53,9 @@ const REVIEW_SECTION_CLASS =
 const FILTER_FIELD_CLASS = "h-9 w-full rounded-lg border border-white/10 bg-slate-900/70 px-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-cyan-400/30";
 const STUDY_TEXT_CLASS = "break-words whitespace-pre-wrap text-[0.95rem] leading-6 text-slate-200";
 const REVIEW_LABEL_CLASS = "text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-500";
+const PREVIEW_TEXT_CLASS =
+  "break-words whitespace-pre-wrap text-[0.84rem] leading-[1.2rem] text-slate-100 [&_p]:my-0 [&_li]:my-0.5 [&_ul]:my-1 [&_ol]:my-1";
+const PREVIEW_MAX_HEIGHT = "2.4rem";
 const ENTRY_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
@@ -101,14 +104,14 @@ function renderBasicFormattedInline(text: string, keyPrefix = "segment"): React.
   return parts;
 }
 
-function renderStudyContent(content: string) {
+function renderStudyContent(content: string, className = STUDY_TEXT_CLASS) {
   if (!content.trim()) {
     return <p className="text-slate-500">Not provided</p>;
   }
 
   if (looksLikeHtml(content)) {
     return (
-      <div className="rich-text-render break-words text-[0.95rem] leading-6 text-slate-200 [&_p]:my-0 [&_li]:my-0.5 [&_ul]:my-1 [&_ol]:my-1">
+      <div className={`rich-text-render ${className} [&_p]:my-0 [&_li]:my-0.5 [&_ul]:my-1 [&_ol]:my-1`}>
         <RichTextRender html={content} />
       </div>
     );
@@ -116,7 +119,7 @@ function renderStudyContent(content: string) {
 
   const lines = content.split("\n");
   return (
-    <div className={STUDY_TEXT_CLASS}>
+    <div className={className}>
       {lines.map((line, index) => (
         <Fragment key={`${line}-${index}`}>
           {renderBasicFormattedInline(line, `line-${index}`)}
@@ -130,30 +133,50 @@ function renderStudyContent(content: string) {
 function StudyPreview({
   label,
   content,
-  maxHeightClassName = "max-h-10",
 }: {
   label: string;
   content: string;
-  maxHeightClassName?: string;
 }) {
   const hasContent = content.trim().length > 0;
-  const plainContent = looksLikeHtml(content) ? richTextToPlain(content) : content;
-  const shouldFade = (plainContent.match(/\r?\n/g)?.length ?? 0) >= 2;
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  const [hasOverflow, setHasOverflow] = useState(false);
+
+  useEffect(() => {
+    const node = previewRef.current;
+    if (!node || !hasContent) {
+      setHasOverflow(false);
+      return;
+    }
+
+    const measureOverflow = () => {
+      setHasOverflow(node.scrollHeight - node.clientHeight > 1);
+    };
+
+    measureOverflow();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(measureOverflow);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [content, hasContent]);
 
   return (
     <section className="min-w-0">
       <p className={REVIEW_LABEL_CLASS}>{label}</p>
       {hasContent ? (
-        <div className="relative mt-1 min-w-0">
-          <div className={`${maxHeightClassName} overflow-hidden text-[0.82rem] leading-[1.12rem] text-slate-100`}>
-            {renderStudyContent(content)}
+        <div className="mt-1 min-w-0">
+          <div ref={previewRef} className="overflow-hidden pr-1" style={{ maxHeight: PREVIEW_MAX_HEIGHT }}>
+            {renderStudyContent(content, PREVIEW_TEXT_CLASS)}
           </div>
-          {shouldFade ? (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-b from-transparent to-slate-950/85" />
+          {hasOverflow ? (
+            <div className="pointer-events-none mt-1 h-2 rounded-full bg-gradient-to-b from-white/[0.08] via-white/[0.03] to-transparent" />
           ) : null}
         </div>
       ) : (
-        <p className="mt-1 text-[0.82rem] leading-[1.12rem] text-slate-500">Not provided</p>
+        <p className="mt-1 text-[0.84rem] leading-[1.2rem] text-slate-500">Not provided</p>
       )}
     </section>
   );
@@ -822,7 +845,7 @@ export function ErrorLogView() {
                   placeholder="Search topic, source, pattern..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="h-10 w-full min-w-0 rounded-xl border border-white/10 bg-slate-900/60 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40 sm:w-72 lg:w-80"
+                  className="h-10 w-full min-w-0 rounded-xl border border-white/10 bg-slate-900/60 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40 sm:min-w-[20rem] sm:flex-1 sm:max-w-[28rem] lg:max-w-[30rem]"
                 />
                 <button
                   type="button"
@@ -1055,7 +1078,7 @@ function FullReasoningModal({
       onClose={onClose}
       position="center"
       titleId="full-reasoning-title"
-      contentClassName="max-h-[88vh] max-w-[900px] overflow-y-auto p-0"
+      contentClassName="max-h-[90vh] w-full max-w-[1080px] overflow-y-auto p-0"
     >
       <button
         type="button"
@@ -1083,52 +1106,58 @@ function FullReasoningModal({
         </div>
       </div>
 
-      <div className="space-y-3.5 px-5 py-5 sm:px-6">
-        <ReviewSection title="Missed">
-          {renderStudyContent(entry.missedPattern)}
-        </ReviewSection>
+      <div className="px-5 py-5 sm:px-6">
+        <div className="grid gap-3.5 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
+          <div className="space-y-3.5">
+            <ReviewSection title="Missed">
+              {renderStudyContent(entry.missedPattern)}
+            </ReviewSection>
 
-        <ReviewSection title="Why I missed it">
-          {renderStudyContent(entry.whyPickedWrongAnswer)}
-        </ReviewSection>
+            <ReviewSection title="Why I missed it">
+              {renderStudyContent(entry.whyPickedWrongAnswer)}
+            </ReviewSection>
 
-        <ReviewSection title="Correct rule">
-          {renderStudyContent(entry.whyCorrectAnswerIsCorrect)}
-        </ReviewSection>
-
-        <ReviewSection title="Tempting wrong answer">
-          {renderStudyContent(entry.whyTemptingWrongAnswerIsWrong)}
-        </ReviewSection>
-
-        <ReviewSection title="Decision rule / algorithm">
-          {renderStudyContent(entry.decisionRule)}
-        </ReviewSection>
-
-        <ReviewSection title="Fix">
-          {renderStudyContent(entry.fix)}
-        </ReviewSection>
-
-        <ReviewSection title="Next action">
-          {renderStudyContent(nextReview)}
-        </ReviewSection>
-
-        <ReviewSection title="Additional details">
-          <div className="grid gap-2 text-[0.95rem] leading-6 text-slate-200 sm:grid-cols-2">
-            <p className="break-words">
-              <span className="text-slate-500">Follow-up:</span>{" "}
-              {FOLLOW_UP_ACTION_LABELS[entry.followUpAction] ?? entry.followUpAction}
-            </p>
-            <p>
-              <span className="text-slate-500">Repeat miss:</span> {entry.isRepeatMiss ? "Yes" : "No"}
-            </p>
-            <p>
-              <span className="text-slate-500">Guessed correct:</span> {entry.isGuessedCorrect ? "Yes" : "No"}
-            </p>
-            <p>
-              <span className="text-slate-500">Final sheet:</span> {entry.addToFinalSheet ? "Yes" : "No"}
-            </p>
+            <ReviewSection title="Fix">
+              {renderStudyContent(entry.fix)}
+            </ReviewSection>
           </div>
-        </ReviewSection>
+
+          <div className="space-y-3.5">
+            <ReviewSection title="Correct rule">
+              {renderStudyContent(entry.whyCorrectAnswerIsCorrect)}
+            </ReviewSection>
+
+            <ReviewSection title="Tempting wrong answer">
+              {renderStudyContent(entry.whyTemptingWrongAnswerIsWrong)}
+            </ReviewSection>
+
+            <ReviewSection title="Decision rule / algorithm">
+              {renderStudyContent(entry.decisionRule)}
+            </ReviewSection>
+
+            <ReviewSection title="Next action">
+              {renderStudyContent(nextReview)}
+            </ReviewSection>
+
+            <ReviewSection title="Additional details">
+              <div className="grid gap-2 text-[0.95rem] leading-6 text-slate-200 sm:grid-cols-2">
+                <p className="break-words">
+                  <span className="text-slate-500">Follow-up:</span>{" "}
+                  {FOLLOW_UP_ACTION_LABELS[entry.followUpAction] ?? entry.followUpAction}
+                </p>
+                <p>
+                  <span className="text-slate-500">Repeat miss:</span> {entry.isRepeatMiss ? "Yes" : "No"}
+                </p>
+                <p>
+                  <span className="text-slate-500">Guessed correct:</span> {entry.isGuessedCorrect ? "Yes" : "No"}
+                </p>
+                <p>
+                  <span className="text-slate-500">Final sheet:</span> {entry.addToFinalSheet ? "Yes" : "No"}
+                </p>
+              </div>
+            </ReviewSection>
+          </div>
+        </div>
       </div>
     </ModalShell>
   );
@@ -1168,50 +1197,46 @@ function EntryCard({
 
   return (
     <div
-      className={`flex h-[15.5rem] w-full flex-col overflow-hidden rounded-2xl border border-l-4 px-4 py-3 transition-colors ${
+      className={`flex min-h-[16rem] w-full flex-col overflow-hidden rounded-2xl border border-l-4 px-4 py-3.5 transition-colors md:h-[16rem] ${
         isEditing
           ? "border-cyan-400/30 bg-cyan-400/[0.06]"
           : "border-white/[0.08] bg-slate-950/45 hover:border-white/15"
       } ${PRIORITY_CARD_ACCENT[priority]}`}
     >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1">
+      <div className="grid gap-x-4 gap-y-2 md:grid-cols-[minmax(0,1fr)_minmax(13rem,15.5rem)] md:items-start">
+        <div className="min-w-0">
           <h3 className="line-clamp-2 break-words text-base font-semibold leading-tight text-white">
             {entry.topic || "Untitled topic"}
           </h3>
-          <p className="mt-1.5 line-clamp-1 break-words text-xs leading-4 text-slate-400">{metadata.join(" · ")}</p>
         </div>
-        <div className="min-w-0 sm:max-w-[16rem]">
-          <div className="flex max-h-6 flex-wrap gap-1.5 overflow-hidden sm:justify-end">
-            <Badge className={NEUTRAL_TAG}>{entry.errorType}</Badge>
-            <Badge className={PRIORITY_PILL[priority]}>{priority}</Badge>
-            {entry.isRepeatMiss ? <Badge className={NEUTRAL_TAG}>Repeat miss</Badge> : null}
-            {entry.isGuessedCorrect ? <Badge className={NEUTRAL_TAG}>Guessed correct</Badge> : null}
-            {entry.addToFinalSheet ? <Badge className={NEUTRAL_TAG}>Final sheet</Badge> : null}
+        <div className="min-w-0 md:justify-self-end">
+          <div className="flex flex-col gap-1.5 md:items-end">
+            <div className="flex flex-wrap gap-1.5 md:justify-end">
+              <Badge className={NEUTRAL_TAG}>{entry.errorType}</Badge>
+              <Badge className={PRIORITY_PILL[priority]}>{priority}</Badge>
+              {entry.isRepeatMiss ? <Badge className={NEUTRAL_TAG}>Repeat miss</Badge> : null}
+              {entry.isGuessedCorrect ? <Badge className={NEUTRAL_TAG}>Guessed correct</Badge> : null}
+              {entry.addToFinalSheet ? <Badge className={NEUTRAL_TAG}>Final sheet</Badge> : null}
+            </div>
+            <p className="break-words text-[11px] leading-4 text-slate-400 md:text-right">
+              {metadata.join(" · ")}
+            </p>
           </div>
         </div>
       </div>
 
-      <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden">
-        <StudyPreview
-          label="Missed"
-          content={entry.missedPattern}
-          maxHeightClassName="max-h-9"
-        />
+      <div className="mt-2.5 flex min-h-0 flex-1 flex-col overflow-hidden">
+        <StudyPreview label="Missed" content={entry.missedPattern} />
         <div className="mt-3 border-t border-white/[0.07] pt-3">
-          <StudyPreview
-            label="Why I missed it"
-            content={entry.whyPickedWrongAnswer}
-            maxHeightClassName="max-h-9"
-          />
+          <StudyPreview label="Correct rule" content={entry.whyCorrectAnswerIsCorrect} />
         </div>
       </div>
 
-      <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/[0.07] pt-2">
+      <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/[0.07] pt-2.5">
         <button
           type="button"
           onClick={onShowReasoning}
-          className="text-[11px] font-medium text-slate-400 transition-colors hover:text-cyan-200"
+          className="text-[10px] font-medium tracking-[0.08em] text-slate-500 transition-colors hover:text-cyan-200"
           aria-haspopup="dialog"
         >
           Show full reasoning
