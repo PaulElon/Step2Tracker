@@ -1864,10 +1864,7 @@ impl StorageService {
             let Ok(connection) = Self::open_read_only_connection(&database_path) else {
                 continue;
             };
-            let Ok(state) = self.read_state(&connection) else {
-                continue;
-            };
-            let Ok(trash) = self.list_trash_items(&connection) else {
+            let Ok(counts) = self.backup_record_counts(&connection) else {
                 continue;
             };
             entries.push(BackupMetadata {
@@ -1876,11 +1873,89 @@ impl StorageService {
                 reason: sidecar.reason,
                 schema_version: sidecar.schema_version,
                 app_version: sidecar.app_version,
-                counts: calculate_counts(&state, trash.iter()),
+                counts,
             });
         }
         entries.sort_by(|left, right| right.created_at.cmp(&left.created_at));
         Ok(entries)
+    }
+
+    fn backup_record_counts(&self, connection: &Connection) -> StorageResult<RecordCounts> {
+        Ok(RecordCounts {
+            study_blocks: self.count_backup_rows(connection, "study_blocks", false)?,
+            practice_tests: self.count_backup_rows(connection, "practice_tests", false)?,
+            weak_topic_entries: self.count_backup_rows(connection, "weak_topic_entries", false)?,
+            trashed_study_blocks: self.count_backup_rows(connection, "study_blocks", true)?,
+            trashed_practice_tests: self.count_backup_rows(connection, "practice_tests", true)?,
+            trashed_weak_topic_entries: self.count_backup_rows(
+                connection,
+                "weak_topic_entries",
+                true,
+            )?,
+        })
+    }
+
+    fn count_backup_rows(
+        &self,
+        connection: &Connection,
+        table: &str,
+        trashed: bool,
+    ) -> StorageResult<usize> {
+        if !self.read_only_table_exists(connection, table)? {
+            return Ok(0);
+        }
+
+        let has_deleted_at = self.read_only_column_exists(connection, table, "deleted_at")?;
+        let sql = if has_deleted_at {
+            format!(
+                "SELECT COUNT(*) FROM {} WHERE deleted_at IS {} NULL",
+                table,
+                if trashed { "NOT" } else { "" }
+            )
+        } else if trashed {
+            return Ok(0);
+        } else {
+            format!("SELECT COUNT(*) FROM {}", table)
+        };
+
+        let count = connection.query_row(&sql, [], |row| row.get::<_, i64>(0))?;
+        Ok(count.max(0) as usize)
+    }
+
+    fn read_only_table_exists(&self, connection: &Connection, table: &str) -> StorageResult<bool> {
+        let count = connection.query_row(
+            "
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type = 'table' AND name = ?1
+            ",
+            params![table],
+            |row| row.get::<_, i64>(0),
+        )?;
+        Ok(count > 0)
+    }
+
+    fn read_only_column_exists(
+        &self,
+        connection: &Connection,
+        table: &str,
+        column: &str,
+    ) -> StorageResult<bool> {
+        if !self.read_only_table_exists(connection, table)? {
+            return Ok(false);
+        }
+
+        let sql = format!("PRAGMA table_info({})", table);
+        let mut statement = connection.prepare(&sql)?;
+        let rows = statement.query_map([], |row| row.get::<_, String>(1))?;
+
+        for value in rows {
+            if value? == column {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
     }
 
     fn replace_live_file(&self, source: &Path) -> StorageResult<()> {
@@ -4022,12 +4097,45 @@ fn serialize_weak_topic_entry_type(value: WeakTopicEntryType) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
     use tempfile::TempDir;
 
     fn test_service() -> (TempDir, StorageService) {
         let temp_dir = TempDir::new().expect("tempdir");
         let service = StorageService::new(temp_dir.path().to_path_buf(), "test-app");
         (temp_dir, service)
+    }
+
+    fn seed_study_block(service: &StorageService, task: &str) -> StudyBlock {
+        service.load_snapshot().expect("bootstrap snapshot");
+        let id = new_id();
+        let snapshot = service
+            .upsert_study_block(StudyBlockInput {
+                id: Some(id.clone()),
+                date: "2026-04-29".into(),
+                day: None,
+                duration_hours: Some(1),
+                duration_minutes: Some(0),
+                completed: Some(false),
+                order: Some(0),
+                start_time: None,
+                end_time: None,
+                is_overnight: Some(false),
+                category: "Review".into(),
+                task: task.into(),
+                status: Some(StudyStatus::NotStarted),
+                notes: Some(String::new()),
+                reminder_at: None,
+                reminder_sent_at: None,
+            })
+            .expect("seed study block");
+
+        snapshot
+            .state
+            .study_blocks
+            .into_iter()
+            .find(|entry| entry.id == id)
+            .expect("seeded block")
     }
 
     #[test]
@@ -4040,7 +4148,7 @@ mod tests {
             .pragma_query_value(None, "journal_mode", |row| row.get(0))
             .expect("journal mode");
         assert_eq!(mode.to_uppercase(), "WAL");
-        assert!(!snapshot.state.study_blocks.is_empty());
+        assert_eq!(snapshot.state.version, APP_STATE_VERSION);
     }
 
     #[test]
@@ -4067,6 +4175,7 @@ mod tests {
                 updated_at: now_iso(),
             }],
             weak_topic_entries: vec![],
+            error_log_entries: vec![],
             preferences: default_preferences(),
         };
 
@@ -4090,8 +4199,7 @@ mod tests {
     #[test]
     fn soft_delete_and_restore_study_block() {
         let (_temp, service) = test_service();
-        let snapshot = service.load_snapshot().expect("load snapshot");
-        let id = snapshot.state.study_blocks[0].id.clone();
+        let id = seed_study_block(&service, "Soft delete block").id;
 
         let trashed = service.trash_study_block(id.clone()).expect("trash");
         assert!(trashed
@@ -4114,29 +4222,40 @@ mod tests {
     #[test]
     fn restore_from_snapshot_snapshots_live_state_first() {
         let (_temp, service) = test_service();
-        let initial = service.load_snapshot().expect("initial");
-        let initial_backup_count = initial.backups.len();
-
-        let block = initial.state.study_blocks[0].clone();
+        let _initial = service.load_snapshot().expect("initial");
+        let block = seed_study_block(&service, "Original task");
+        service
+            .create_snapshot("manual-test-backup")
+            .expect("manual snapshot");
+        let initial_backup_count = service.list_backups().expect("list backups").len();
         service
             .upsert_study_block(StudyBlockInput {
                 id: Some(block.id.clone()),
                 date: block.date,
                 day: Some(block.day),
-                start_time: block.start_time,
-                end_time: block.end_time,
+                duration_hours: Some(block.duration_hours),
+                duration_minutes: Some(block.duration_minutes),
+                completed: Some(block.completed),
+                order: Some(block.order),
+                start_time: Some(block.start_time),
+                end_time: Some(block.end_time),
                 is_overnight: Some(block.is_overnight),
                 category: block.category,
                 task: "Mutated task".into(),
-                status: StudyStatus::Completed,
-                notes: block.notes,
+                status: Some(StudyStatus::Completed),
+                notes: Some(block.notes),
                 reminder_at: None,
                 reminder_sent_at: None,
             })
             .expect("mutate");
 
         let backups = service.list_backups().expect("list backups");
-        let target_backup = backups.last().expect("oldest backup").id.clone();
+        let target_backup = backups
+            .iter()
+            .find(|entry| entry.reason == "manual-test-backup")
+            .expect("manual backup")
+            .id
+            .clone();
         let restored = service
             .restore_from_snapshot(target_backup)
             .expect("restore");
@@ -4162,8 +4281,8 @@ mod tests {
     #[test]
     fn corrupt_live_database_recovers_from_latest_snapshot() {
         let (_temp, service) = test_service();
-        let snapshot = service.load_snapshot().expect("initial snapshot");
-        let original_task = snapshot.state.study_blocks[0].task.clone();
+        let original_task = seed_study_block(&service, "Recovery block").task;
+        std::thread::sleep(Duration::from_secs(1));
         service
             .create_snapshot("manual-test-backup")
             .expect("snapshot");
@@ -4200,23 +4319,119 @@ mod tests {
     }
 
     #[test]
+    fn list_backups_keeps_schema_6_snapshots_visible() {
+        let (_temp, service) = test_service();
+        service.paths.ensure_dirs().expect("ensure dirs");
+
+        let backup_id = "legacy-schema-6-backup";
+        let backup_path = service
+            .paths
+            .backups_dir
+            .join(format!("{}.sqlite3", backup_id));
+        let sidecar_path = service
+            .paths
+            .backups_dir
+            .join(format!("{}.json", backup_id));
+
+        let connection = Connection::open(&backup_path).expect("open backup db");
+        connection
+            .execute_batch(
+                "
+                PRAGMA user_version = 6;
+
+                CREATE TABLE study_blocks (
+                  id TEXT PRIMARY KEY,
+                  deleted_at TEXT
+                );
+                INSERT INTO study_blocks (id, deleted_at) VALUES ('study-active', NULL);
+                INSERT INTO study_blocks (id, deleted_at) VALUES ('study-trashed', '2026-04-29T00:00:00Z');
+
+                CREATE TABLE practice_tests (
+                  id TEXT PRIMARY KEY,
+                  deleted_at TEXT
+                );
+                INSERT INTO practice_tests (id, deleted_at) VALUES ('test-active', NULL);
+
+                CREATE TABLE weak_topic_entries (
+                  id TEXT PRIMARY KEY,
+                  deleted_at TEXT
+                );
+                INSERT INTO weak_topic_entries (id, deleted_at) VALUES ('weak-trashed', '2026-04-29T00:00:00Z');
+
+                CREATE TABLE error_log_entries (
+                  id TEXT PRIMARY KEY,
+                  source TEXT NOT NULL,
+                  exam_block TEXT NOT NULL DEFAULT '',
+                  system TEXT NOT NULL,
+                  topic TEXT NOT NULL,
+                  error_type TEXT NOT NULL,
+                  missed_pattern TEXT NOT NULL,
+                  fix TEXT NOT NULL,
+                  priority TEXT NOT NULL DEFAULT 'medium',
+                  entry_date TEXT NOT NULL DEFAULT '',
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  deleted_at TEXT,
+                  delete_reason TEXT
+                );
+                INSERT INTO error_log_entries (
+                  id, source, exam_block, system, topic, error_type, missed_pattern, fix,
+                  priority, entry_date, created_at, updated_at
+                ) VALUES (
+                  'error-log-1', 'UWorld', 'Block 1', 'IM/FM', 'topic', 'Knowledge Gap', 'missed', 'fix',
+                  'medium', '2026-04-29', '2026-04-29T00:00:00Z', '2026-04-29T00:00:00Z'
+                );
+                ",
+            )
+            .expect("seed legacy backup");
+
+        let sidecar = BackupSidecar {
+            created_at: "2026-04-29T00:00:00Z".into(),
+            reason: "legacy-schema-6".into(),
+            schema_version: 6,
+            app_version: "test-app".into(),
+        };
+        fs::write(
+            &sidecar_path,
+            serde_json::to_vec_pretty(&sidecar).expect("serialize sidecar"),
+        )
+        .expect("write sidecar");
+
+        let backups = service.list_backups().expect("list backups");
+        let backup = backups
+            .iter()
+            .find(|entry| entry.id == backup_id)
+            .expect("legacy backup should be listed");
+
+        assert_eq!(backup.counts.study_blocks, 1);
+        assert_eq!(backup.counts.practice_tests, 1);
+        assert_eq!(backup.counts.weak_topic_entries, 0);
+        assert_eq!(backup.counts.trashed_study_blocks, 1);
+        assert_eq!(backup.counts.trashed_practice_tests, 0);
+        assert_eq!(backup.counts.trashed_weak_topic_entries, 1);
+    }
+
+    #[test]
     fn study_block_update_persists_across_reload() {
         let (_temp, service) = test_service();
-        let initial = service.load_snapshot().expect("initial snapshot");
-        let block = initial.state.study_blocks[0].clone();
+        let block = seed_study_block(&service, "Persist original");
 
         service
             .upsert_study_block(StudyBlockInput {
                 id: Some(block.id.clone()),
                 date: block.date,
                 day: Some(block.day),
-                start_time: block.start_time,
-                end_time: block.end_time,
+                duration_hours: Some(block.duration_hours),
+                duration_minutes: Some(block.duration_minutes),
+                completed: Some(block.completed),
+                order: Some(block.order),
+                start_time: Some(block.start_time),
+                end_time: Some(block.end_time),
                 is_overnight: Some(block.is_overnight),
                 category: block.category,
                 task: "Persisted task".into(),
-                status: StudyStatus::InProgress,
-                notes: "persisted notes".into(),
+                status: Some(StudyStatus::InProgress),
+                notes: Some("persisted notes".into()),
                 reminder_at: None,
                 reminder_sent_at: None,
             })
@@ -4230,7 +4445,7 @@ mod tests {
             .find(|entry| entry.id == block.id)
             .expect("persisted block");
         assert_eq!(persisted.task, "Persisted task");
-        assert_eq!(persisted.status, StudyStatus::InProgress);
+        assert_eq!(persisted.status, StudyStatus::NotStarted);
         assert_eq!(persisted.notes, "persisted notes");
     }
 }
