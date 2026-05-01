@@ -160,6 +160,15 @@ export interface ExamTimer {
   showHrMin?: boolean;
 }
 
+export interface NotebookPage {
+  id: string;
+  title: string;
+  contentHtml: string;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ScoreTrendOptions {
   showConnectionLine: boolean;
   showBestFitLine: boolean;
@@ -180,6 +189,7 @@ export interface Preferences {
   resourceLinks: ResourceLink[];
   examTimers: ExamTimer[];
   notesHtml: string;
+  notebookPages: NotebookPage[];
   scoreTrendOptions: ScoreTrendOptions;
 }
 

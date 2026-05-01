@@ -15,6 +15,7 @@ import type {
   PracticeTest,
   PracticeTestInput,
   Preferences,
+  NotebookPage,
   StudyBlock,
   StudyBlockInput,
   StudyTaskCategory,
@@ -107,6 +108,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   resourceLinks: [],
   examTimers: [],
   notesHtml: "",
+  notebookPages: [],
   scoreTrendOptions: {
     showConnectionLine: false,
     showBestFitLine: true,
@@ -720,6 +722,48 @@ export function getEmptyPracticeTestDraft(): PracticeTestInput {
   };
 }
 
+function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbackId?: string): NotebookPage {
+  const timestamp = nowIso();
+  const safeCreatedAt = sanitizeText(input?.createdAt) || timestamp;
+  const safeUpdatedAt = sanitizeText(input?.updatedAt) || timestamp;
+  return {
+    id: sanitizeText(input?.id) || fallbackId || createId("nb-page"),
+    title: sanitizeText(input?.title) || "Untitled",
+    contentHtml: typeof input?.contentHtml === "string" ? input.contentHtml : "",
+    order: Math.trunc(sanitizeNumber(input?.order, 0)),
+    createdAt: safeCreatedAt,
+    updatedAt: safeUpdatedAt,
+  };
+}
+
+function normalizeNotebookPages(raw: unknown): NotebookPage[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((page) => normalizeNotebookPage(page))
+    .sort((left, right) => left.order - right.order);
+}
+
+function seedNotebookPagesFromNotesHtml(notesHtml: string): NotebookPage[] {
+  if (!notesHtml.trim()) {
+    return [];
+  }
+
+  const timestamp = nowIso();
+  return [
+    {
+      id: createId("nb-page"),
+      title: "Study Notes",
+      contentHtml: notesHtml,
+      order: 0,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    },
+  ];
+}
+
 function normalizePreferences(value: Partial<Preferences> | undefined) {
   const todayKey = getTodayKey();
   const lastActiveDate = sanitizeText(value?.lastActiveDate) || todayKey;
@@ -733,6 +777,11 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
   const plannerMode = value?.plannerMode === "month" || value?.plannerMode === "week"
     ? value.plannerMode
     : DEFAULT_PREFERENCES.plannerMode;
+  const notesHtml = typeof value?.notesHtml === "string" ? value.notesHtml : "";
+  const notebookPages =
+    Array.isArray(value?.notebookPages) && value.notebookPages.length > 0
+      ? normalizeNotebookPages(value.notebookPages)
+      : seedNotebookPagesFromNotesHtml(notesHtml);
 
   const enhancedThemeIds = Array.isArray(value?.enhancedThemeIds)
     ? value.enhancedThemeIds.filter((id): id is string => typeof id === "string" && id.length > 0)
@@ -792,7 +841,8 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
           }))
           .filter((t) => t.examDate.length > 0 && t.label.length > 0)
       : [],
-    notesHtml: typeof value?.notesHtml === "string" ? value.notesHtml : "",
+    notesHtml,
+    notebookPages,
     scoreTrendOptions: {
       showConnectionLine: !!value?.scoreTrendOptions?.showConnectionLine,
       showBestFitLine:

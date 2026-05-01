@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 const APP_ID: &str = "step2-command-center";
 const APP_STATE_VERSION: u32 = 6;
-const DB_SCHEMA_VERSION: i32 = 8;
+const DB_SCHEMA_VERSION: i32 = 9;
 const LIVE_DB_FILE: &str = "command-center.sqlite3";
 const MAX_BACKUPS: usize = 20;
 const SAFE_CHECKPOINT_INTERVAL_HOURS: i64 = 6;
@@ -386,6 +386,8 @@ pub struct Preferences {
     pub exam_timers: Vec<ExamTimer>,
     #[serde(default)]
     pub notes_html: String,
+    #[serde(default)]
+    pub notebook_pages: Vec<NotebookPage>,
     #[serde(default = "default_score_trend_options")]
     pub score_trend_options: ScoreTrendOptions,
 }
@@ -448,6 +450,21 @@ pub struct ExamTimer {
     pub exam_time: String,
     #[serde(default = "default_display_mode")]
     pub display_mode: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NotebookPage {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub content_html: String,
+    #[serde(default)]
+    pub order: i64,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub updated_at: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1312,6 +1329,9 @@ impl StorageService {
         if current_version < 8 {
             self.ensure_study_block_import_source_columns(&transaction)?;
         }
+        if current_version < 9 {
+            self.ensure_preferences_columns(&transaction)?;
+        }
         transaction.pragma_update(None, "user_version", DB_SCHEMA_VERSION)?;
         self.set_metadata_tx(&transaction, "app_version", &self.app_version)?;
         self.log_event(
@@ -1356,6 +1376,7 @@ impl StorageService {
               resource_links_json TEXT NOT NULL DEFAULT '[]',
               exam_timers_json TEXT NOT NULL DEFAULT '[]',
               notes_html TEXT NOT NULL DEFAULT '',
+              notebook_pages_json TEXT NOT NULL DEFAULT '[]',
               score_trend_options_json TEXT NOT NULL DEFAULT '{\"showConnectionLine\":false,\"showBestFitLine\":true,\"showBestFitRSquared\":false}',
               updated_at TEXT NOT NULL
             );
@@ -1553,6 +1574,12 @@ impl StorageService {
         if !columns.contains(&"notes_html".to_string()) {
             transaction.execute(
                 "ALTER TABLE preferences ADD COLUMN notes_html TEXT NOT NULL DEFAULT ''",
+                [],
+            )?;
+        }
+        if !columns.contains(&"notebook_pages_json".to_string()) {
+            transaction.execute(
+                "ALTER TABLE preferences ADD COLUMN notebook_pages_json TEXT NOT NULL DEFAULT '[]'",
                 [],
             )?;
         }
@@ -2176,6 +2203,7 @@ impl StorageService {
                   resource_links_json,
                   exam_timers_json,
                   notes_html,
+                  notebook_pages_json,
                   score_trend_options_json
                 FROM preferences
                 WHERE id = 1
@@ -2203,7 +2231,16 @@ impl StorageService {
                             )
                         })?;
                     let notes_html: String = row.get(17)?;
-                    let score_trend_raw = row.get::<_, String>(18)?;
+                    let notebook_pages_raw = row.get::<_, String>(18)?;
+                    let notebook_pages: Vec<NotebookPage> =
+                        serde_json::from_str(&notebook_pages_raw).map_err(|error| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                notebook_pages_raw.len(),
+                                Type::Text,
+                                Box::new(error),
+                            )
+                        })?;
+                    let score_trend_raw = row.get::<_, String>(19)?;
                     let score_trend_options: ScoreTrendOptions =
                         serde_json::from_str(&score_trend_raw)
                             .unwrap_or_else(|_| default_score_trend_options());
@@ -2230,6 +2267,7 @@ impl StorageService {
                         resource_links,
                         exam_timers,
                         notes_html,
+                        notebook_pages,
                         score_trend_options,
                     })
                 },
@@ -2532,6 +2570,7 @@ impl StorageService {
         let custom_categories_json = serde_json::to_string(&preferences.custom_categories)?;
         let resource_links_json = serde_json::to_string(&preferences.resource_links)?;
         let exam_timers_json = serde_json::to_string(&preferences.exam_timers)?;
+        let notebook_pages_json = serde_json::to_string(&preferences.notebook_pages)?;
         let score_trend_options_json = serde_json::to_string(&preferences.score_trend_options)?;
         transaction.execute(
             "
@@ -2541,9 +2580,9 @@ impl StorageService {
               planner_filter_from_date, planner_filter_to_date,
               planner_sort_field, planner_sort_direction, planner_mode,
               planner_focus_date, enhanced_theme_ids_json, custom_categories_json,
-              resource_links_json, exam_timers_json, notes_html, score_trend_options_json, updated_at
+              resource_links_json, exam_timers_json, notes_html, notebook_pages_json, score_trend_options_json, updated_at
             )
-            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
+            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
             ON CONFLICT(id) DO UPDATE SET
               active_section = excluded.active_section,
               last_active_date = excluded.last_active_date,
@@ -2563,6 +2602,7 @@ impl StorageService {
               resource_links_json = excluded.resource_links_json,
               exam_timers_json = excluded.exam_timers_json,
               notes_html = excluded.notes_html,
+              notebook_pages_json = excluded.notebook_pages_json,
               score_trend_options_json = excluded.score_trend_options_json,
               updated_at = excluded.updated_at
             ",
@@ -2585,6 +2625,7 @@ impl StorageService {
                 resource_links_json,
                 exam_timers_json,
                 preferences.notes_html,
+                notebook_pages_json,
                 score_trend_options_json,
                 now_iso(),
             ],
@@ -3914,6 +3955,7 @@ fn default_preferences() -> Preferences {
         resource_links: Vec::new(),
         exam_timers: Vec::new(),
         notes_html: String::new(),
+        notebook_pages: Vec::new(),
         score_trend_options: default_score_trend_options(),
     }
 }
