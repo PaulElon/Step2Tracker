@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  BookOpen,
   Briefcase,
   CalendarDays,
   ClipboardCheck,
@@ -20,11 +21,12 @@ import { listen } from "@tauri-apps/api/event";
 import { ModalShell } from "./components/modal-shell";
 import { MobileNav, NavigationButton } from "./components/ui";
 import { DashboardView } from "./features/dashboard-view";
-import { TimeFolioView } from "./features/timefolio-view";
 import { ErrorLogView } from "./features/error-log-view";
+import { NotebookView } from "./features/notebook-view";
 import { PlannerView } from "./features/planner-view";
 import { PracticeTestsView } from "./features/practice-tests-view";
 import { SettingsView } from "./features/settings-view";
+import { TimeFolioView } from "./features/timefolio-view";
 import { WeakTopicsView } from "./features/weak-topics-view";
 import { getDateRange, sumStudyMinutes } from "./lib/analytics";
 import { daysBetween, formatHoursValue, formatLongDate, formatSavedAt } from "./lib/datetime";
@@ -83,6 +85,9 @@ const navigationItems = [
   ...(FF.timefolio
     ? [{ id: "timefolio" as const, label: "TimeFolio", icon: Briefcase }]
     : []),
+  ...(FF.notebook
+    ? [{ id: "notebook" as const, label: "Notebook", icon: BookOpen }]
+    : []),
 ];
 
 const sectionCopy: Record<SectionId, { title: string }> = {
@@ -93,6 +98,7 @@ const sectionCopy: Record<SectionId, { title: string }> = {
   errorLog: { title: "Exam Error Log" },
   settings: { title: "Settings" },
   timefolio: { title: "TimeFolio" },
+  notebook: { title: "Notebook" },
 };
 
 function formatCountsLine(counts: BackupMetadata["counts"]) {
@@ -517,7 +523,12 @@ export default function App() {
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
   const reminderDispatchRef = useRef(new Set<string>());
   const activeSection = state.preferences.activeSection;
-  const resolvedSection = !FF.timefolio && activeSection === "timefolio" ? "dashboard" : activeSection;
+  const resolvedSection =
+    !FF.timefolio && activeSection === "timefolio"
+      ? "dashboard"
+      : !FF.notebook && activeSection === "notebook"
+        ? "dashboard"
+        : activeSection;
   const sectionMeta = sectionCopy[resolvedSection];
   const totalMinutes = sumStudyMinutes(state.studyBlocks);
   const dateRange = getDateRange(state.studyBlocks);
@@ -549,6 +560,12 @@ export default function App() {
 
   useEffect(() => {
     if (!FF.timefolio && activeSection === "timefolio") {
+      void setActiveSection("dashboard");
+    }
+  }, [activeSection, setActiveSection]);
+
+  useEffect(() => {
+    if (!FF.notebook && activeSection === "notebook") {
       void setActiveSection("dashboard");
     }
   }, [activeSection, setActiveSection]);
@@ -821,6 +838,9 @@ export default function App() {
       break;
     case "timefolio":
       sectionContent = <TimeFolioView />;
+      break;
+    case "notebook":
+      sectionContent = <NotebookView />;
       break;
     default:
       sectionContent = null;
