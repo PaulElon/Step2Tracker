@@ -910,6 +910,10 @@ button {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
+.tiptap-editor__group--view {
+  margin-left: auto;
+}
+
 .tiptap-editor__group-label {
   display: inline-flex;
   align-items: center;
@@ -925,7 +929,7 @@ button {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
-  overflow-y: auto;
+  overflow: auto;
   overscroll-behavior: contain;
 }
 
@@ -1022,6 +1026,136 @@ button {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.tiptap-editor--pageless {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.7), rgba(15, 23, 42, 0.58));
+}
+
+.tiptap-editor--pageless .tiptap-editor__content {
+  background: transparent;
+}
+
+.tiptap-editor--pageless .tiptap {
+  align-items: stretch;
+}
+
+.tiptap-editor--pageless .ProseMirror {
+  width: 100%;
+  max-width: none;
+  padding: 0.75rem 0.9rem 1rem;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.tiptap-editor--page {
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.98), rgba(15, 23, 42, 0.94));
+}
+
+.tiptap-editor--page .tiptap-editor__content {
+  padding: clamp(1rem, 2vw, 1.5rem);
+  background:
+    radial-gradient(circle at top, rgba(56, 189, 248, 0.08), transparent 52%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.9), rgba(15, 23, 42, 0.84));
+}
+
+.tiptap-editor--page .tiptap {
+  align-items: center;
+}
+
+.tiptap-editor--page .ProseMirror {
+  width: min(100%, 816px);
+  max-width: 816px;
+  margin-inline: auto;
+  padding: clamp(2.5rem, 4.5vw, 4.5rem);
+  background: rgba(248, 250, 252, 0.985);
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 1.1rem;
+  box-shadow: 0 28px 90px rgba(2, 6, 23, 0.34);
+  color: #0f172a;
+}
+
+.tiptap-editor--page .ProseMirror p {
+  color: #0f172a;
+}
+
+.tiptap-editor--page .ProseMirror h1,
+.tiptap-editor--page .ProseMirror h2,
+.tiptap-editor--page .ProseMirror h3 {
+  color: #0f172a;
+}
+
+.tiptap-editor--page .ProseMirror a,
+.tiptap-editor--page .ProseMirror a:visited {
+  color: #0f766e;
+  text-decoration-color: rgba(13, 148, 136, 0.42);
+}
+
+.tiptap-editor--page .ProseMirror a:hover {
+  color: #115e59;
+  text-decoration-color: rgba(17, 94, 89, 0.68);
+}
+
+.tiptap-editor--page .ProseMirror a:focus-visible {
+  background: rgba(14, 165, 233, 0.08);
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.18);
+}
+
+.tiptap-editor--page .ProseMirror blockquote {
+  border-left-color: rgba(15, 118, 110, 0.34);
+  color: #334155;
+}
+
+.tiptap-editor--page .ProseMirror :not(pre) > code {
+  background: rgba(226, 232, 240, 0.84);
+  color: #0f172a;
+}
+
+.tiptap-editor--page .ProseMirror pre {
+  border-color: rgba(148, 163, 184, 0.32);
+  background: rgba(241, 245, 249, 0.98);
+}
+
+.tiptap-editor--page .ProseMirror pre code {
+  color: #0f172a;
+}
+
+.tiptap-editor--page .ProseMirror hr {
+  border-top-color: rgba(148, 163, 184, 0.52);
+}
+
+.tiptap-editor--page .ProseMirror ul,
+.tiptap-editor--page .ProseMirror ol {
+  color: #0f172a;
+}
+
+.tiptap-editor--page .ProseMirror li[data-type="taskItem"] > label input[type="checkbox"] {
+  accent-color: rgba(14, 165, 233, 0.9);
+}
+
+.tiptap-editor--page .ProseMirror table td,
+.tiptap-editor--page .ProseMirror table th {
+  border-color: rgba(148, 163, 184, 0.34);
+}
+
+.tiptap-editor--page .ProseMirror table td {
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.tiptap-editor--page .ProseMirror table th {
+  background: rgba(241, 245, 249, 0.98);
+  color: #0f172a;
+}
+
+.tiptap-editor--page .ProseMirror table .selectedCell {
+  background: rgba(14, 165, 233, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.34);
+}
+
+.tiptap-editor--page .ProseMirror .column-resize-handle {
+  background: rgba(14, 165, 233, 0.52);
 }
 
 .tiptap-editor .ProseMirror p {
@@ -1198,6 +1332,49 @@ button {
 .tiptap-editor .ProseMirror li[data-type="taskItem"] > div {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.tiptap-editor .ProseMirror table {
+  width: max-content;
+  min-width: 100%;
+  margin: 0.85rem 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.tiptap-editor .ProseMirror table td,
+.tiptap-editor .ProseMirror table th {
+  position: relative;
+  min-width: 3.5rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.tiptap-editor .ProseMirror table td {
+  background: rgba(15, 23, 42, 0.32);
+}
+
+.tiptap-editor .ProseMirror table th {
+  background: rgba(30, 41, 59, 0.9);
+  color: rgba(248, 250, 252, 0.98);
+  font-weight: 700;
+}
+
+.tiptap-editor .ProseMirror table .selectedCell {
+  background: rgba(34, 211, 238, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.42);
+}
+
+.tiptap-editor .ProseMirror .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  width: 4px;
+  height: 100%;
+  background: rgba(56, 189, 248, 0.45);
+  pointer-events: none;
 }
 
 /* Same styling for read-only render of the rich text */

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Extension, type Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
@@ -7,6 +7,10 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
 import TextAlign from "@tiptap/extension-text-align";
+import { Table } from "@tiptap/extension-table";
+import { TableCell } from "@tiptap/extension-table-cell";
+import { TableHeader } from "@tiptap/extension-table-header";
+import { TableRow } from "@tiptap/extension-table-row";
 import Underline from "@tiptap/extension-underline";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
@@ -38,10 +42,18 @@ const TabIndentationExtension = Extension.create({
   addKeyboardShortcuts() {
     return {
       Tab: ({ editor }) => {
+        if (editor.isActive("table")) {
+          return false;
+        }
+
         handleListIndent(editor, "indent");
         return true;
       },
       "Shift-Tab": ({ editor }) => {
+        if (editor.isActive("table")) {
+          return false;
+        }
+
         handleListIndent(editor, "outdent");
         return true;
       },
@@ -88,6 +100,10 @@ function handleListIndent(editor: Editor, direction: "indent" | "outdent", focus
   return true;
 }
 
+function isInsideTable(editor: Editor) {
+  return editor.isActive("table");
+}
+
 function canHandleListIndent(editor: Editor, direction: "indent" | "outdent") {
   const listItemType = getActiveListItemType(editor);
 
@@ -124,11 +140,12 @@ type ToolbarButtonProps = {
 type ToolbarGroupProps = {
   children: ReactNode;
   label: string;
+  className?: string;
 };
 
-function ToolbarGroup({ children, label }: ToolbarGroupProps) {
+function ToolbarGroup({ children, label, className }: ToolbarGroupProps) {
   return (
-    <div className="tiptap-editor__group" role="group" aria-label={label}>
+    <div className={`tiptap-editor__group${className ? ` ${className}` : ""}`} role="group" aria-label={label}>
       {children}
     </div>
   );
@@ -168,6 +185,7 @@ export function TiptapEditor({
   const valueRef = useRef(value || "");
   const lastAppliedEditorKeyRef = useRef<string | null>(null);
   const isApplyingExternalContentRef = useRef(false);
+  const [viewMode, setViewMode] = useState<"pageless" | "page">("pageless");
 
   onChangeRef.current = onChange;
   valueRef.current = value || "";
@@ -183,6 +201,13 @@ export function TiptapEditor({
       Highlight.configure({
         multicolor: true,
       }),
+      Table.configure({
+        resizable: true,
+        allowTableNodeSelection: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
       Underline,
       TaskItem.configure({
         nested: true,
@@ -252,6 +277,7 @@ export function TiptapEditor({
   const minHeight = `${Math.max(1, minLines) * 1.5}em`;
   const wrapperClassName = [
     "tiptap-editor w-full h-full min-h-0 flex flex-col rounded-xl border border-white/10 bg-slate-900/60 text-sm text-white focus-within:outline-none focus-within:ring-2 focus-within:ring-cyan-400/40",
+    viewMode === "page" ? "tiptap-editor--page" : "tiptap-editor--pageless",
     scrollable ? "overflow-y-auto scrollbar-subtle" : "",
     className ?? "",
   ]
@@ -273,6 +299,7 @@ export function TiptapEditor({
   const isBulletList = editor ? editor.isActive("bulletList") : false;
   const isOrderedList = editor ? editor.isActive("orderedList") : false;
   const isTaskList = editor ? editor.isActive("taskList") : false;
+  const isTable = editor ? isInsideTable(editor) : false;
   const isLink = editor ? editor.isActive("link") : false;
   const isAlignLeft = editor ? editor.isActive({ textAlign: "left" }) : false;
   const isAlignCenter = editor ? editor.isActive({ textAlign: "center" }) : false;
@@ -282,6 +309,12 @@ export function TiptapEditor({
   const canIndent = editor ? canHandleListIndent(editor, "indent") : false;
   const canOutdent = editor ? canHandleListIndent(editor, "outdent") : false;
   const canToggleChecklist = editor ? editor.can().chain().toggleTaskList().run() : false;
+  const canAddRow = editor ? isTable && editor.can().chain().focus().addRowAfter().run() : false;
+  const canDeleteRow = editor ? isTable && editor.can().chain().focus().deleteRow().run() : false;
+  const canAddColumn = editor ? isTable && editor.can().chain().focus().addColumnAfter().run() : false;
+  const canDeleteColumn = editor ? isTable && editor.can().chain().focus().deleteColumn().run() : false;
+  const canToggleHeaderRow = editor ? isTable && editor.can().chain().focus().toggleHeaderRow().run() : false;
+  const canDeleteTable = editor ? isTable && editor.can().chain().focus().deleteTable().run() : false;
 
   const setLink = () => {
     if (!editor) return;
@@ -321,6 +354,34 @@ export function TiptapEditor({
     }
 
     chain.unsetHighlight().run();
+  };
+
+  const insertTable = () => {
+    editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  };
+
+  const addTableRowAfter = () => {
+    editor?.chain().focus().addRowAfter().run();
+  };
+
+  const deleteTableRow = () => {
+    editor?.chain().focus().deleteRow().run();
+  };
+
+  const addTableColumnAfter = () => {
+    editor?.chain().focus().addColumnAfter().run();
+  };
+
+  const deleteTableColumn = () => {
+    editor?.chain().focus().deleteColumn().run();
+  };
+
+  const toggleTableHeaderRow = () => {
+    editor?.chain().focus().toggleHeaderRow().run();
+  };
+
+  const deleteTable = () => {
+    editor?.chain().focus().deleteTable().run();
   };
 
   const toolbar = (
@@ -445,6 +506,34 @@ export function TiptapEditor({
           Outdent
         </ToolbarButton>
       </ToolbarGroup>
+      <ToolbarGroup label="Table controls">
+        <ToolbarButton title="Insert 3x3 table with header row" disabled={!isEditorReady} onClick={insertTable}>
+          Table
+        </ToolbarButton>
+        <ToolbarButton title="Add row after" disabled={!isEditorReady || !canAddRow} onClick={addTableRowAfter}>
+          Row+
+        </ToolbarButton>
+        <ToolbarButton title="Delete row" disabled={!isEditorReady || !canDeleteRow} onClick={deleteTableRow}>
+          Row-
+        </ToolbarButton>
+        <ToolbarButton title="Add column after" disabled={!isEditorReady || !canAddColumn} onClick={addTableColumnAfter}>
+          Col+
+        </ToolbarButton>
+        <ToolbarButton title="Delete column" disabled={!isEditorReady || !canDeleteColumn} onClick={deleteTableColumn}>
+          Col-
+        </ToolbarButton>
+        <ToolbarButton
+          title="Toggle header row"
+          active={isTable && editor?.isActive("tableHeader")}
+          disabled={!isEditorReady || !canToggleHeaderRow}
+          onClick={toggleTableHeaderRow}
+        >
+          Header
+        </ToolbarButton>
+        <ToolbarButton title="Delete table" disabled={!isEditorReady || !canDeleteTable} onClick={deleteTable}>
+          Del Table
+        </ToolbarButton>
+      </ToolbarGroup>
       <ToolbarGroup label="Block formatting">
         <ToolbarButton
           title="Blockquote"
@@ -511,6 +600,18 @@ export function TiptapEditor({
           onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()}
         >
           Clear
+        </ToolbarButton>
+      </ToolbarGroup>
+      <ToolbarGroup label="View mode" className="tiptap-editor__group--view">
+        <ToolbarButton
+          title="Pageless view"
+          active={viewMode === "pageless"}
+          onClick={() => setViewMode("pageless")}
+        >
+          Pageless
+        </ToolbarButton>
+        <ToolbarButton title="Page view" active={viewMode === "page"} onClick={() => setViewMode("page")}>
+          Page
         </ToolbarButton>
       </ToolbarGroup>
     </div>
