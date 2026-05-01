@@ -97,6 +97,7 @@ test("normalizePreferences applies safe defaults for missing notebook page field
   assert.ok(page?.id);
   assert.ok(page?.createdAt);
   assert.ok(page?.updatedAt);
+  assert.equal(page?.folderId, undefined);
 });
 
 test("normalizePreferences preserves favorited true on notebook pages", () => {
@@ -141,4 +142,120 @@ test("normalizePreferences coerces non-boolean notebook page favorited to false"
 
 test("DEFAULT_PREFERENCES initializes notebookPages to an empty array", () => {
   assert.deepEqual(DEFAULT_PREFERENCES.notebookPages, []);
+});
+
+test("DEFAULT_PREFERENCES initializes notebookFolders to an empty array", () => {
+  assert.deepEqual(DEFAULT_PREFERENCES.notebookFolders, []);
+});
+
+test("normalizePreferences preserves notebookFolders and sorts by ascending order", () => {
+  const normalized = normalizeAppState({
+    preferences: {
+      notebookFolders: [
+        {
+          id: "late-folder",
+          name: "Late Folder",
+          order: 5,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          id: "early-folder",
+          name: "Early Folder",
+          order: 1,
+          createdAt: "2026-01-02T00:00:00.000Z",
+          updatedAt: "2026-01-02T00:00:00.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(
+    normalized.preferences.notebookFolders.map((folder) => folder.id),
+    ["early-folder", "late-folder"],
+  );
+  assert.equal(normalized.preferences.notebookFolders[0]?.name, "Early Folder");
+});
+
+test("normalizePreferences coerces missing or malformed notebookFolders to []", () => {
+  const missing = normalizeAppState({
+    preferences: {},
+  });
+  assert.deepEqual(missing.preferences.notebookFolders, []);
+
+  const malformed = normalizeAppState({
+    preferences: {
+      notebookFolders: { nope: true },
+    },
+  });
+  assert.deepEqual(malformed.preferences.notebookFolders, []);
+});
+
+test("normalizePreferences preserves valid notebook page folderId values", () => {
+  const normalized = normalizeAppState({
+    preferences: {
+      notebookPages: [
+        {
+          id: "page-in-folder",
+          title: "Has Folder",
+          contentHtml: "<p>content</p>",
+          folderId: "folder-1",
+          order: 0,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.equal(normalized.preferences.notebookPages[0]?.folderId, "folder-1");
+});
+
+test("normalizePreferences drops missing, null, non-string, or empty notebook page folderId", () => {
+  const normalized = normalizeAppState({
+    preferences: {
+      notebookPages: [
+        {
+          id: "missing-folder",
+          title: "Missing",
+          contentHtml: "",
+          order: 0,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          id: "null-folder",
+          title: "Null",
+          contentHtml: "",
+          folderId: null as unknown as string,
+          order: 1,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          id: "number-folder",
+          title: "Number",
+          contentHtml: "",
+          folderId: 123 as unknown as string,
+          order: 2,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          id: "empty-folder",
+          title: "Empty",
+          contentHtml: "",
+          folderId: "   ",
+          order: 3,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.equal(normalized.preferences.notebookPages[0]?.folderId, undefined);
+  assert.equal(normalized.preferences.notebookPages[1]?.folderId, undefined);
+  assert.equal(normalized.preferences.notebookPages[2]?.folderId, undefined);
+  assert.equal(normalized.preferences.notebookPages[3]?.folderId, undefined);
 });

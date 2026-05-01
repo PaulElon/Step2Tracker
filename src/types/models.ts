@@ -160,11 +160,20 @@ export interface ExamTimer {
   showHrMin?: boolean;
 }
 
+export interface NotebookFolder {
+  id: string;
+  name: string;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface NotebookPage {
   id: string;
   title: string;
   contentHtml: string;
   favorited?: boolean;
+  folderId?: string;
   order: number;
   createdAt: string;
   updatedAt: string;
@@ -190,6 +199,7 @@ export interface Preferences {
   resourceLinks: ResourceLink[];
   examTimers: ExamTimer[];
   notesHtml: string;
+  notebookFolders: NotebookFolder[];
   notebookPages: NotebookPage[];
   scoreTrendOptions: ScoreTrendOptions;
 }

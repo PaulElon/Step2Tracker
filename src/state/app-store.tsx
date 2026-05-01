@@ -32,6 +32,7 @@ import type {
   BackupMetadata,
   ErrorLogInput,
   ImportMode,
+  NotebookFolder,
   NotebookPage,
   PersistenceSummary,
   PlannerFilters,
@@ -69,6 +70,7 @@ interface AppStoreValue {
   setResourceLinks: (links: ResourceLink[]) => Promise<boolean>;
   setExamTimers: (timers: import("../types/models").ExamTimer[]) => Promise<boolean>;
   setNotesHtml: (html: string) => Promise<boolean>;
+  setNotebookFolders: (folders: NotebookFolder[]) => Promise<boolean>;
   setNotebookPages: (pages: NotebookPage[]) => Promise<boolean>;
   setScoreTrendOptions: (options: import("../types/models").ScoreTrendOptions) => Promise<boolean>;
   upsertStudyBlock: (block: StudyBlockInput & { id?: string }) => Promise<boolean>;
@@ -288,6 +290,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       savePreferences({
         ...stateRef.current.preferences,
         notesHtml,
+      }),
+    setNotebookFolders: (notebookFolders) =>
+      savePreferences({
+        ...stateRef.current.preferences,
+        notebookFolders,
       }),
     setNotebookPages: (notebookPages) =>
       savePreferences({
