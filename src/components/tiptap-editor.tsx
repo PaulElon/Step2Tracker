@@ -1,15 +1,37 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
+import { TextStyle } from "@tiptap/extension-text-style";
+import Color from "@tiptap/extension-color";
+import Highlight from "@tiptap/extension-highlight";
 import TextAlign from "@tiptap/extension-text-align";
 import Underline from "@tiptap/extension-underline";
 import type { NotebookEditorProps } from "./notebook-editor-adapter";
 
+const TEXT_COLOR_OPTIONS = [
+  { label: "Default", title: "Default text color", color: null, buttonText: "A", buttonStyle: undefined },
+  { label: "White", title: "White text color", color: "#ffffff", buttonText: "A", buttonStyle: { backgroundColor: "#ffffff", color: "#0f172a" } },
+  { label: "Red", title: "Red text color", color: "#ef4444", buttonText: "A", buttonStyle: { backgroundColor: "#ef4444", color: "#ffffff" } },
+  { label: "Yellow", title: "Yellow text color", color: "#f59e0b", buttonText: "A", buttonStyle: { backgroundColor: "#f59e0b", color: "#0f172a" } },
+  { label: "Green", title: "Green text color", color: "#22c55e", buttonText: "A", buttonStyle: { backgroundColor: "#22c55e", color: "#0f172a" } },
+  { label: "Blue", title: "Blue text color", color: "#3b82f6", buttonText: "A", buttonStyle: { backgroundColor: "#3b82f6", color: "#ffffff" } },
+] as const;
+
+const HIGHLIGHT_OPTIONS = [
+  { label: "None", title: "No highlight", color: null, buttonText: "H", buttonStyle: undefined },
+  { label: "Yellow", title: "Yellow highlight", color: "#fef08a", buttonText: "H", buttonStyle: { backgroundColor: "#fef08a", color: "#0f172a" } },
+  { label: "Green", title: "Green highlight", color: "#bbf7d0", buttonText: "H", buttonStyle: { backgroundColor: "#bbf7d0", color: "#0f172a" } },
+  { label: "Blue", title: "Blue highlight", color: "#bfdbfe", buttonText: "H", buttonStyle: { backgroundColor: "#bfdbfe", color: "#0f172a" } },
+  { label: "Red", title: "Red highlight", color: "#fecaca", buttonText: "H", buttonStyle: { backgroundColor: "#fecaca", color: "#0f172a" } },
+] as const;
+
 type ToolbarButtonProps = {
-  children: string;
+  children: ReactNode;
   active?: boolean;
   disabled?: boolean;
+  className?: string;
+  style?: CSSProperties;
   title: string;
   onClick?: () => void;
 };
@@ -27,18 +49,19 @@ function ToolbarGroup({ children, label }: ToolbarGroupProps) {
   );
 }
 
-function ToolbarButton({ children, active = false, disabled = false, title, onClick }: ToolbarButtonProps) {
+function ToolbarButton({ children, active = false, disabled = false, className, style, title, onClick }: ToolbarButtonProps) {
   return (
     <button
       type="button"
       title={title}
       aria-pressed={active}
       disabled={disabled}
+      style={style}
       onMouseDown={(event) => {
         event.preventDefault();
       }}
       onClick={onClick}
-      className={`tiptap-editor__button${active ? " tiptap-editor__button--active" : ""}`}
+      className={`tiptap-editor__button${active ? " tiptap-editor__button--active" : ""}${className ? ` ${className}` : ""}`}
     >
       {children}
     </button>
@@ -52,13 +75,28 @@ export function TiptapEditor({
   className,
   minLines = 1,
   scrollable = false,
+  editorKey,
 }: NotebookEditorProps) {
-  const lastEmittedHtmlRef = useRef(value || "");
+  const normalizedEditorKey = editorKey ?? "__default__";
+  const initialValueRef = useRef(value || "");
+  const onChangeRef = useRef(onChange);
+  const valueRef = useRef(value || "");
+  const lastAppliedEditorKeyRef = useRef<string | null>(null);
+  const isApplyingExternalContentRef = useRef(false);
 
-  const editor = useEditor({
-    content: value || "",
-    extensions: [
+  onChangeRef.current = onChange;
+  valueRef.current = value || "";
+
+  const extensions = useMemo(
+    () => [
       StarterKit,
+      TextStyle,
+      Color.configure({
+        types: ["textStyle"],
+      }),
+      Highlight.configure({
+        multicolor: true,
+      }),
       Underline,
       Link.configure({
         openOnClick: false,
@@ -72,30 +110,52 @@ export function TiptapEditor({
         types: ["heading", "paragraph"],
       }),
     ],
-    editorProps: {
+    [],
+  );
+
+  const editorProps = useMemo(
+    () => ({
       attributes: {
         class: "notebook-tiptap-prosemirror",
       },
+    }),
+    [],
+  );
+
+  const editor = useEditor(
+    {
+      content: initialValueRef.current,
+      extensions,
+      editorProps,
+      onUpdate: ({ editor: nextEditor }) => {
+        if (isApplyingExternalContentRef.current) return;
+
+        const html = nextEditor.getHTML();
+        onChangeRef.current(html);
+      },
     },
-    onUpdate: ({ editor: nextEditor }) => {
-      const html = nextEditor.getHTML();
-      lastEmittedHtmlRef.current = html;
-      onChange(html);
-    },
-  });
+    [],
+  );
 
   useEffect(() => {
     if (!editor) return;
 
-    const currentHtml = editor.getHTML();
-    const nextHtml = value || "";
+    // Only sync external HTML when the page/document identity changes.
+    // Same-key value churn must stay inside the editor so typing remains stable.
+    if (lastAppliedEditorKeyRef.current === normalizedEditorKey) {
+      return;
+    }
 
-    if (nextHtml === lastEmittedHtmlRef.current) return;
-    if (currentHtml === nextHtml) return;
+    const nextHtml = valueRef.current;
+    isApplyingExternalContentRef.current = true;
+    try {
+      editor.commands.setContent(nextHtml, false as never);
+    } finally {
+      isApplyingExternalContentRef.current = false;
+    }
 
-    lastEmittedHtmlRef.current = nextHtml;
-    editor.commands.setContent(nextHtml, { emitUpdate: false });
-  }, [editor, value]);
+    lastAppliedEditorKeyRef.current = normalizedEditorKey;
+  }, [editor, normalizedEditorKey]);
 
   const minHeight = `${Math.max(1, minLines) * 1.5}em`;
   const wrapperClassName = [
@@ -124,6 +184,8 @@ export function TiptapEditor({
   const isAlignLeft = editor ? editor.isActive({ textAlign: "left" }) : false;
   const isAlignCenter = editor ? editor.isActive({ textAlign: "center" }) : false;
   const isAlignRight = editor ? editor.isActive({ textAlign: "right" }) : false;
+  const textColor = editor ? editor.getAttributes("textStyle").color ?? "" : "";
+  const highlightColor = editor ? editor.getAttributes("highlight").color ?? "" : "";
 
   const setLink = () => {
     if (!editor) return;
@@ -139,6 +201,30 @@ export function TiptapEditor({
     const normalizedHref = /^https?:\/\//i.test(trimmedHref) ? trimmedHref : `https://${trimmedHref}`;
 
     editor.chain().focus().extendMarkRange("link").setLink({ href: normalizedHref }).run();
+  };
+
+  const setTextColor = (color: string | null) => {
+    if (!editor) return;
+
+    const chain = editor.chain().focus();
+    if (color) {
+      chain.setColor(color).run();
+      return;
+    }
+
+    chain.unsetColor().run();
+  };
+
+  const setHighlightColor = (color: string | null) => {
+    if (!editor) return;
+
+    const chain = editor.chain().focus();
+    if (color) {
+      chain.setHighlight({ color }).run();
+      return;
+    }
+
+    chain.unsetHighlight().run();
   };
 
   const toolbar = (
@@ -190,6 +276,46 @@ export function TiptapEditor({
         <ToolbarButton title="Underline" active={isUnderline} disabled={!isEditorReady} onClick={() => editor?.chain().focus().toggleUnderline().run()}>
           U
         </ToolbarButton>
+      </ToolbarGroup>
+      <ToolbarGroup label="Text color controls">
+        <span className="tiptap-editor__group-label">Text</span>
+        {TEXT_COLOR_OPTIONS.map((option) => {
+          const isActive = option.color ? textColor === option.color : textColor === "";
+
+          return (
+            <ToolbarButton
+              key={option.label}
+              title={option.title}
+              active={isActive}
+              disabled={!isEditorReady}
+              onClick={() => setTextColor(option.color)}
+              className="tiptap-editor__button--swatch"
+              style={option.buttonStyle as CSSProperties | undefined}
+            >
+              {option.buttonText}
+            </ToolbarButton>
+          );
+        })}
+      </ToolbarGroup>
+      <ToolbarGroup label="Highlight controls">
+        <span className="tiptap-editor__group-label">Highlight</span>
+        {HIGHLIGHT_OPTIONS.map((option) => {
+          const isActive = option.color ? highlightColor === option.color : highlightColor === "";
+
+          return (
+            <ToolbarButton
+              key={option.label}
+              title={option.title}
+              active={isActive}
+              disabled={!isEditorReady}
+              onClick={() => setHighlightColor(option.color)}
+              className="tiptap-editor__button--swatch"
+              style={option.buttonStyle as CSSProperties | undefined}
+            >
+              {option.buttonText}
+            </ToolbarButton>
+          );
+        })}
       </ToolbarGroup>
       <ToolbarGroup label="Lists">
         <ToolbarButton title="Bullet list" active={isBulletList} disabled={!isEditorReady} onClick={() => editor?.chain().focus().toggleBulletList().run()}>

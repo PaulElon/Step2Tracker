@@ -9,11 +9,12 @@ export interface NotebookEditorProps {
   className?: string;
   minLines?: number;
   scrollable?: boolean;
+  editorKey?: string;
 }
 
-export function NotebookEditorAdapter(props: NotebookEditorProps) {
+export function NotebookEditorAdapter({ editorKey, ...props }: NotebookEditorProps) {
   if (FF.tiptapEditor) {
-    return <TiptapEditor {...props} />;
+    return <TiptapEditor editorKey={editorKey} {...props} />;
   }
 
   return <RichTextEditor {...props} />;

@@ -1280,6 +1280,7 @@ export function NotebookView() {
                                   updatedAt: nowIso(),
                                 }))
                               }
+                              editorKey={activePage.id}
                               placeholder="Write inside this document. Each page stays nested under the current document."
                               className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle"
                             />
