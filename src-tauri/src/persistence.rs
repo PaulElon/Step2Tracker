@@ -460,6 +460,8 @@ pub struct NotebookPage {
     #[serde(default)]
     pub content_html: String,
     #[serde(default)]
+    pub favorited: bool,
+    #[serde(default)]
     pub order: i64,
     #[serde(default)]
     pub created_at: String,
