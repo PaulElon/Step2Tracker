@@ -650,21 +650,23 @@ export function PlannerView() {
   }
 
   async function handleBulkTrash() {
-    if (!selectedVisibleTasks.length || isBulkPending) {
+    const tasksToTrash = selectedDateTasks.filter((task) => selectedTaskIds.includes(task.id));
+
+    if (!tasksToTrash.length || isBulkPending) {
       return;
     }
 
-    const taskLabel = selectedVisibleTasks.length === 1 ? "task" : "tasks";
-    if (!window.confirm(`Trash ${selectedVisibleTasks.length} selected ${taskLabel}?`)) {
+    const taskLabel = tasksToTrash.length === 1 ? "task" : "tasks";
+    if (!window.confirm(`Trash ${tasksToTrash.length} selected ${taskLabel}?`)) {
       return;
     }
 
     setIsBulkPending(true);
     try {
-      for (const task of selectedVisibleTasks) {
+      for (const task of tasksToTrash) {
         await trashStudyBlock(task.id);
       }
-      clearBulkSelection();
+      exitSelectionMode();
     } finally {
       setIsBulkPending(false);
     }
@@ -944,21 +946,27 @@ export function PlannerView() {
               <h3 className="mt-1 text-base font-semibold text-white">{formatLongDate(selectedDate)}</h3>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <button
-                type="button"
-                className={compactPlannerButtonClassName}
-                onClick={() => {
-                  if (isSelectionMode) {
-                    exitSelectionMode();
-                    return;
-                  }
-
-                  setIsSelectionMode(true);
-                  clearBulkSelection();
-                }}
-              >
-                {isSelectionMode ? "Cancel" : "Select"}
-              </button>
+              {isSelectionMode ? (
+                <>
+                  <button type="button" className={compactPlannerButtonClassName} onClick={exitSelectionMode}>
+                    Cancel
+                  </button>
+                  <button type="button" className={primaryButtonClassName} onClick={exitSelectionMode}>
+                    Done
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className={compactPlannerButtonClassName}
+                  onClick={() => {
+                    setIsSelectionMode(true);
+                    clearBulkSelection();
+                  }}
+                >
+                  Select
+                </button>
+              )}
               <button type="button" className={primaryButtonClassName} onClick={() => openNewTask(selectedDate)}>
                 <Plus className="h-4 w-4" />
                 Add task
