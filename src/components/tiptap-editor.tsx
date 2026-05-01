@@ -12,6 +12,10 @@ type ToolbarButtonProps = {
   onClick?: () => void;
 };
 
+function ToolbarDivider() {
+  return <span aria-hidden="true" className="tiptap-editor__divider" />;
+}
+
 function ToolbarButton({ children, active = false, disabled = false, title, onClick }: ToolbarButtonProps) {
   return (
     <button
@@ -73,38 +77,120 @@ export function TiptapEditor({
 
   const canUndo = editor ? editor.can().chain().focus().undo().run() : false;
   const canRedo = editor ? editor.can().chain().focus().redo().run() : false;
+  const isEditorReady = Boolean(editor);
   const isBold = editor ? editor.isActive("bold") : false;
   const isItalic = editor ? editor.isActive("italic") : false;
   const isUnderline = editor ? editor.isActive("underline") : false;
+  const isParagraph = editor ? editor.isActive("paragraph") : false;
+  const isHeading1 = editor ? editor.isActive("heading", { level: 1 }) : false;
+  const isHeading2 = editor ? editor.isActive("heading", { level: 2 }) : false;
+  const isHeading3 = editor ? editor.isActive("heading", { level: 3 }) : false;
+  const isBlockquote = editor ? editor.isActive("blockquote") : false;
+  const isCodeBlock = editor ? editor.isActive("codeBlock") : false;
   const isBulletList = editor ? editor.isActive("bulletList") : false;
   const isOrderedList = editor ? editor.isActive("orderedList") : false;
+
+  const toolbar = (
+    <div className="tiptap-editor__toolbar" role="toolbar" aria-label="Text formatting">
+      <ToolbarButton title="Undo" disabled={!isEditorReady || !canUndo} onClick={() => editor?.chain().focus().undo().run()}>
+        Undo
+      </ToolbarButton>
+      <ToolbarButton title="Redo" disabled={!isEditorReady || !canRedo} onClick={() => editor?.chain().focus().redo().run()}>
+        Redo
+      </ToolbarButton>
+      <ToolbarDivider />
+      <ToolbarButton title="Bold" active={isBold} disabled={!isEditorReady} onClick={() => editor?.chain().focus().toggleBold().run()}>
+        B
+      </ToolbarButton>
+      <ToolbarButton title="Italic" active={isItalic} disabled={!isEditorReady} onClick={() => editor?.chain().focus().toggleItalic().run()}>
+        I
+      </ToolbarButton>
+      <ToolbarButton title="Underline" active={isUnderline} disabled={!isEditorReady} onClick={() => editor?.chain().focus().toggleUnderline().run()}>
+        U
+      </ToolbarButton>
+      <ToolbarDivider />
+      <ToolbarButton title="Paragraph" active={isParagraph} disabled={!isEditorReady} onClick={() => editor?.chain().focus().setParagraph().run()}>
+        P
+      </ToolbarButton>
+      <ToolbarButton
+        title="Heading 1"
+        active={isHeading1}
+        disabled={!isEditorReady}
+        onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
+      >
+        H1
+      </ToolbarButton>
+      <ToolbarButton
+        title="Heading 2"
+        active={isHeading2}
+        disabled={!isEditorReady}
+        onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+      >
+        H2
+      </ToolbarButton>
+      <ToolbarButton
+        title="Heading 3"
+        active={isHeading3}
+        disabled={!isEditorReady}
+        onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
+      >
+        H3
+      </ToolbarButton>
+      <ToolbarDivider />
+      <ToolbarButton
+        title="Blockquote"
+        active={isBlockquote}
+        disabled={!isEditorReady}
+        onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+      >
+        Q
+      </ToolbarButton>
+      <ToolbarButton
+        title="Code block"
+        active={isCodeBlock}
+        disabled={!isEditorReady}
+        onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+      >
+        Code
+      </ToolbarButton>
+      <ToolbarButton
+        title="Horizontal rule"
+        disabled={!isEditorReady}
+        onClick={() => editor?.chain().focus().setHorizontalRule().run()}
+      >
+        HR
+      </ToolbarButton>
+      <ToolbarButton
+        title="Clear formatting"
+        disabled={!isEditorReady}
+        onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()}
+      >
+        Clear
+      </ToolbarButton>
+      <ToolbarDivider />
+      <ToolbarButton
+        title="Bullet list"
+        active={isBulletList}
+        disabled={!isEditorReady}
+        onClick={() => editor?.chain().focus().toggleBulletList().run()}
+      >
+        •
+      </ToolbarButton>
+      <ToolbarButton
+        title="Numbered list"
+        active={isOrderedList}
+        disabled={!isEditorReady}
+        onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+      >
+        1.
+      </ToolbarButton>
+    </div>
+  );
 
   if (!editor) {
     return (
       <div className={wrapperClassName} style={{ minHeight, maxHeight: scrollable ? "180px" : undefined }}>
-        <div className="tiptap-editor__toolbar" role="toolbar" aria-label="Text formatting">
-          <ToolbarButton title="Undo" disabled>
-            Undo
-          </ToolbarButton>
-          <ToolbarButton title="Redo" disabled>
-            Redo
-          </ToolbarButton>
-          <ToolbarButton title="Bold" disabled>
-            B
-          </ToolbarButton>
-          <ToolbarButton title="Italic" disabled>
-            I
-          </ToolbarButton>
-          <ToolbarButton title="Underline" disabled>
-            U
-          </ToolbarButton>
-          <ToolbarButton title="Bullet list" disabled>
-            •
-          </ToolbarButton>
-          <ToolbarButton title="Numbered list" disabled>
-            1.
-          </ToolbarButton>
-        </div>
+        {toolbar}
         <div className="flex min-h-0 flex-1 items-center px-2 py-2 text-slate-500">{placeholder ?? "Loading editor..."}</div>
       </div>
     );
@@ -112,29 +198,7 @@ export function TiptapEditor({
 
   return (
     <div className={wrapperClassName} style={{ minHeight, maxHeight: scrollable ? "180px" : undefined }}>
-      <div className="tiptap-editor__toolbar" role="toolbar" aria-label="Text formatting">
-        <ToolbarButton title="Undo" disabled={!canUndo} onClick={() => editor.chain().focus().undo().run()}>
-          Undo
-        </ToolbarButton>
-        <ToolbarButton title="Redo" disabled={!canRedo} onClick={() => editor.chain().focus().redo().run()}>
-          Redo
-        </ToolbarButton>
-        <ToolbarButton title="Bold" active={isBold} onClick={() => editor.chain().focus().toggleBold().run()}>
-          B
-        </ToolbarButton>
-        <ToolbarButton title="Italic" active={isItalic} onClick={() => editor.chain().focus().toggleItalic().run()}>
-          I
-        </ToolbarButton>
-        <ToolbarButton title="Underline" active={isUnderline} onClick={() => editor.chain().focus().toggleUnderline().run()}>
-          U
-        </ToolbarButton>
-        <ToolbarButton title="Bullet list" active={isBulletList} onClick={() => editor.chain().focus().toggleBulletList().run()}>
-          •
-        </ToolbarButton>
-        <ToolbarButton title="Numbered list" active={isOrderedList} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
-          1.
-        </ToolbarButton>
-      </div>
+      {toolbar}
       <EditorContent editor={editor} className="tiptap-editor__content flex min-h-0 flex-1" />
     </div>
   );
