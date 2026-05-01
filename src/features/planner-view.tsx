@@ -447,18 +447,68 @@ function IcsImportDialog({
   );
 }
 
-const categoryDotPalette = [
-  "bg-cyan-400",
-  "bg-blue-400",
-  "bg-violet-400",
-  "bg-pink-400",
-  "bg-amber-400",
-  "bg-emerald-400",
-];
+type MonthCategoryTone = {
+  accentClassName: string;
+  dotClassName: string;
+  labelClassName: string;
+};
 
-function getCategoryDotColor(category: string): string {
-  const hash = [...category].reduce((total, char) => total + char.charCodeAt(0), 0);
-  return categoryDotPalette[hash % categoryDotPalette.length];
+function getMonthCategoryTone(category: string): MonthCategoryTone {
+  const normalized = category.trim().toLowerCase();
+
+  if (normalized.includes("uworld")) {
+    return {
+      accentClassName: "border-blue-400/40 bg-blue-400/10",
+      dotClassName: "bg-blue-400",
+      labelClassName: "text-slate-100",
+    };
+  }
+
+  if (normalized.includes("practice exam") || normalized.includes("nbme") || normalized.includes("comsae")) {
+    return {
+      accentClassName: "border-rose-400/40 bg-rose-400/10",
+      dotClassName: "bg-rose-400",
+      labelClassName: "text-slate-100",
+    };
+  }
+
+  if (normalized.includes("break") || normalized.includes("meal")) {
+    return {
+      accentClassName: "border-emerald-400/40 bg-emerald-400/10",
+      dotClassName: "bg-emerald-400",
+      labelClassName: "text-slate-100",
+    };
+  }
+
+  if (normalized.includes("work") || normalized.includes("gym")) {
+    return {
+      accentClassName: "border-teal-400/40 bg-teal-400/10",
+      dotClassName: "bg-teal-400",
+      labelClassName: "text-slate-100",
+    };
+  }
+
+  if (normalized.includes("anki")) {
+    return {
+      accentClassName: "border-amber-400/40 bg-amber-400/10",
+      dotClassName: "bg-amber-400",
+      labelClassName: "text-slate-100",
+    };
+  }
+
+  if (normalized.includes("review")) {
+    return {
+      accentClassName: "border-violet-400/40 bg-violet-400/10",
+      dotClassName: "bg-violet-400",
+      labelClassName: "text-slate-100",
+    };
+  }
+
+  return {
+    accentClassName: "border-slate-500/40 bg-white/[0.02]",
+    dotClassName: "bg-slate-500",
+    labelClassName: "text-slate-300",
+  };
 }
 
 export function PlannerView() {
@@ -498,6 +548,18 @@ export function PlannerView() {
   });
   const plannedMinutes = allSelectedDateTasks.reduce((total, task) => total + getStudyBlockMinutes(task), 0);
   const completedCount = allSelectedDateTasks.filter((task) => task.completed).length;
+  const todayKey = getTodayKey();
+  const selectedMonthKey = selectedDate.slice(0, 7);
+  const tasksByDate = new Map<string, StudyBlock[]>();
+
+  for (const task of state.studyBlocks) {
+    const existing = tasksByDate.get(task.date);
+    if (existing) {
+      existing.push(task);
+    } else {
+      tasksByDate.set(task.date, [task]);
+    }
+  }
 
   function openNewTask(seedDate = selectedDate) {
     setEditorTask(undefined);
@@ -649,114 +711,121 @@ export function PlannerView() {
           }
         >
           <div className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle">
-          {plannerMode === "week" ? (
-            <div className="space-y-2">
-              {periodDates.map((date) => {
-                const dayTasks = state.studyBlocks.filter((task) => task.date === date);
-                const dayCompleted = dayTasks.filter((task) => task.completed).length;
-                const isSelected = date === selectedDate;
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle">
+              {plannerMode === "week" ? (
+                <div className="space-y-2">
+                  {periodDates.map((date) => {
+                    const dayTasks = tasksByDate.get(date) ?? [];
+                    const dayCompleted = dayTasks.filter((task) => task.completed).length;
+                    const isSelected = date === selectedDate;
 
-                return (
-                  <button
-                    key={date}
-                    type="button"
-                    onClick={() => {
-                      void setPlannerFocusDate(date);
-                    }}
-                    className={`w-full rounded-[20px] border px-4 py-4 text-left transition ${
-                      isSelected
-                        ? "border-cyan-300/30 bg-cyan-300/10"
-                        : "border-white/10 bg-slate-900/55 hover:border-white/15"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{getDayName(date)}</p>
-                        <p className="mt-1 text-lg font-semibold text-white">{formatShortDate(date)}</p>
-                      </div>
-                      <div className="text-right text-xs text-slate-400">
-                        <div>{dayTasks.length} tasks</div>
-                        <div>
-                          {dayCompleted}/{dayTasks.length || 0} done
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div>
-              <div className="mb-1 grid grid-cols-7 text-center">
-                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-                  <div key={day} className="py-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">
-                    {day}
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 gap-px overflow-hidden rounded-[12px]">
-                {periodDates.map((date) => {
-                  const dayTasks = state.studyBlocks.filter((task) => task.date === date);
-                  const isToday = date === getTodayKey();
-                  const isSelected = date === selectedDate;
-                  const isCurrentMonth = date.slice(0, 7) === selectedDate.slice(0, 7);
-                  const visibleTasks = dayTasks.slice(0, 3);
-                  const hiddenCount = dayTasks.length - visibleTasks.length;
-                  const todayKey = getTodayKey();
-                  const isPast = date < todayKey;
-                  const overdueCount = isPast ? dayTasks.filter((task) => !task.completed).length : 0;
-                  const isOverdue = overdueCount > 0;
-
-                  return (
-                    <button
-                      key={date}
-                      type="button"
-                      onClick={() => void setPlannerFocusDate(date)}
-                      className={[
-                        "flex min-h-[72px] flex-col p-1.5 text-left transition",
-                        isSelected
-                          ? "bg-cyan-300/15 ring-1 ring-inset ring-cyan-300/30"
-                          : isToday
-                          ? "bg-white/[0.07] ring-1 ring-inset ring-cyan-300/20"
-                          : isOverdue
-                          ? "bg-rose-500/15 hover:bg-rose-500/20"
-                          : "bg-slate-900/55 hover:bg-white/5",
-                        !isCurrentMonth ? "opacity-40" : "",
-                      ].join(" ")}
-                    >
-                      <div className="mb-1 flex items-start justify-between gap-0.5">
-                        <span className="text-[11px] font-medium leading-none text-slate-400">
-                          {Number(date.slice(8))}
-                        </span>
-                        {isOverdue ? (
-                          <span className="flex items-center gap-0.5 text-[9px] leading-none text-rose-400">
-                            <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
-                            {overdueCount}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="flex-1 space-y-0.5 overflow-hidden">
-                        {visibleTasks.map((task) => (
-                          <div key={task.id} className="flex min-w-0 items-center gap-1">
-                            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${getCategoryDotColor(task.category)}`} />
-                            <span className="truncate text-[9px] leading-tight text-slate-300">
-                              {task.task}
-                            </span>
+                    return (
+                      <button
+                        key={date}
+                        type="button"
+                        onClick={() => {
+                          void setPlannerFocusDate(date);
+                        }}
+                        className={`w-full rounded-[20px] border px-4 py-4 text-left transition ${
+                          isSelected
+                            ? "border-cyan-300/30 bg-cyan-300/10"
+                            : "border-white/10 bg-slate-900/55 hover:border-white/15"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{getDayName(date)}</p>
+                            <p className="mt-1 text-lg font-semibold text-white">{formatShortDate(date)}</p>
                           </div>
-                        ))}
-                        {hiddenCount > 0 && (
-                          <div className="text-[9px] leading-tight text-slate-500">+{hiddenCount}</div>
-                        )}
+                          <div className="text-right text-xs text-slate-400">
+                            <div>{dayTasks.length} tasks</div>
+                            <div>
+                              {dayCompleted}/{dayTasks.length || 0} done
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex h-full min-h-0 flex-col gap-2">
+                  <div className="grid grid-cols-7 text-center">
+                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+                      <div key={day} className="py-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">
+                        {day}
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                    ))}
+                  </div>
+                  <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px overflow-hidden rounded-[16px]">
+                    {periodDates.map((date) => {
+                      const dayTasks = tasksByDate.get(date) ?? [];
+                      const isSelected = date === selectedDate;
+                      const isCurrentMonth = date.slice(0, 7) === selectedMonthKey;
+                      const isToday = date === todayKey;
+                      const visibleTasks = dayTasks.slice(0, 4);
+                      const hiddenCount = Math.max(dayTasks.length - visibleTasks.length, 0);
+                      const isPast = date < todayKey;
+                      const overdueCount = isPast ? dayTasks.filter((task) => !task.completed).length : 0;
+                      const isOverdue = overdueCount > 0;
 
-          </div>
+                      return (
+                        <button
+                          key={date}
+                          type="button"
+                          onClick={() => void setPlannerFocusDate(date)}
+                          className={[
+                            "flex h-full min-h-0 flex-col overflow-hidden p-1.5 text-left transition",
+                            isSelected
+                              ? "bg-cyan-300/15 ring-1 ring-inset ring-cyan-300/30"
+                              : isToday
+                              ? "bg-white/[0.07] ring-1 ring-inset ring-cyan-300/20"
+                              : isOverdue
+                              ? "bg-rose-500/12 hover:bg-rose-500/16"
+                              : "bg-slate-900/55 hover:bg-white/5",
+                            !isCurrentMonth ? "opacity-40" : "",
+                          ].join(" ")}
+                        >
+                          <div className="flex items-start justify-between gap-1">
+                            <span className="text-[11px] font-medium leading-none text-slate-300">
+                              {Number(date.slice(8))}
+                            </span>
+                            {isOverdue ? (
+                              <span className="flex items-center gap-0.5 text-[9px] leading-none text-rose-300">
+                                <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                                {overdueCount}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="mt-1 min-h-0 flex-1 overflow-hidden">
+                            <div className="flex h-full min-h-0 flex-col gap-0.5 overflow-hidden">
+                              {visibleTasks.map((task) => {
+                                const tone = getMonthCategoryTone(task.category);
+
+                                return (
+                                  <div
+                                    key={task.id}
+                                    className={`flex min-w-0 items-center gap-1 overflow-hidden border-l-2 pl-1 ${tone.accentClassName}`}
+                                  >
+                                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone.dotClassName}`} />
+                                    <span className={`min-w-0 truncate text-[10px] leading-4 ${tone.labelClassName}`}>
+                                      {task.task}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                              {hiddenCount > 0 ? (
+                                <div className="mt-auto text-[10px] leading-none text-slate-500">+{hiddenCount} more</div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <button
