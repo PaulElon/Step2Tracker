@@ -830,7 +830,7 @@ export function NotebookView() {
     "max-w-[20rem] rounded-[20px] border border-dashed border-white/10 bg-slate-950/18 px-5 py-6 text-left";
   const editorFieldClass =
     "h-9 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-400/25";
-  const editorTitleFieldClass = `${editorFieldClass} font-semibold tracking-[-0.02em]`;
+  const editorTitleFieldClass = `${editorFieldClass} min-w-0 truncate font-semibold tracking-[-0.02em]`;
   const editorActionButtonClass =
     "inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3.5 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]";
   const editorDangerButtonClass =
@@ -848,7 +848,7 @@ export function NotebookView() {
   const editorTabStripClass =
     "flex min-w-0 items-center gap-1 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.02] p-0.5 scrollbar-subtle";
   const editorTabButtonClass =
-    "inline-flex h-8 shrink-0 items-center rounded-lg border px-3 text-sm font-medium transition";
+    "inline-flex h-8 max-w-[12rem] shrink-0 items-center overflow-hidden rounded-lg border px-3 text-sm font-medium transition whitespace-nowrap text-ellipsis";
   const emptyStateMessage = normalizedSearchQuery
     ? `No results for "${searchQuery.trim()}".`
     : currentFolder
@@ -1244,8 +1244,8 @@ export function NotebookView() {
 
                       {activePage ? (
                         <div className="flex min-h-0 flex-1 flex-col gap-2">
-                          <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
-                            <label className="min-w-0 flex-[1.6]">
+                          <div className="flex min-w-0 flex-wrap items-center gap-2 md:flex-nowrap">
+                            <label className="min-w-0 flex-1">
                               <span className="sr-only">Page title</span>
                               <input
                                 type="text"
@@ -1258,7 +1258,7 @@ export function NotebookView() {
                                   }))
                                 }
                                 placeholder="Page title"
-                                className={editorFieldClass}
+                                className={editorTitleFieldClass}
                               />
                             </label>
                             <button
