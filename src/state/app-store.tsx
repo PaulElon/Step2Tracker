@@ -33,6 +33,7 @@ import type {
   ErrorLogInput,
   ImportMode,
   NotebookFolder,
+  NotebookDocument,
   NotebookPage,
   PersistenceSummary,
   PlannerFilters,
@@ -72,6 +73,7 @@ interface AppStoreValue {
   setNotesHtml: (html: string) => Promise<boolean>;
   setNotebookFolders: (folders: NotebookFolder[]) => Promise<boolean>;
   setNotebookPages: (pages: NotebookPage[]) => Promise<boolean>;
+  setNotebookDocuments: (documents: NotebookDocument[]) => Promise<boolean>;
   setScoreTrendOptions: (options: import("../types/models").ScoreTrendOptions) => Promise<boolean>;
   upsertStudyBlock: (block: StudyBlockInput & { id?: string }) => Promise<boolean>;
   duplicateStudyBlock: (id: string, targetDate?: string) => Promise<boolean>;
@@ -300,6 +302,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       savePreferences({
         ...stateRef.current.preferences,
         notebookPages,
+      }),
+    setNotebookDocuments: (notebookDocuments) =>
+      savePreferences({
+        ...stateRef.current.preferences,
+        notebookDocuments,
       }),
     setScoreTrendOptions: (scoreTrendOptions) =>
       savePreferences({

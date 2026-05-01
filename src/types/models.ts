@@ -179,6 +179,17 @@ export interface NotebookPage {
   updatedAt: string;
 }
 
+export interface NotebookDocument {
+  id: string;
+  title: string;
+  folderId?: string;
+  favorited?: boolean;
+  order: number;
+  pages: NotebookPage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ScoreTrendOptions {
   showConnectionLine: boolean;
   showBestFitLine: boolean;
@@ -201,6 +212,7 @@ export interface Preferences {
   notesHtml: string;
   notebookFolders: NotebookFolder[];
   notebookPages: NotebookPage[];
+  notebookDocuments: NotebookDocument[];
   scoreTrendOptions: ScoreTrendOptions;
 }
 

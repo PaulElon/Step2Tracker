@@ -148,6 +148,10 @@ test("DEFAULT_PREFERENCES initializes notebookFolders to an empty array", () => 
   assert.deepEqual(DEFAULT_PREFERENCES.notebookFolders, []);
 });
 
+test("DEFAULT_PREFERENCES initializes notebookDocuments to an empty array", () => {
+  assert.deepEqual(DEFAULT_PREFERENCES.notebookDocuments, []);
+});
+
 test("normalizePreferences preserves notebookFolders and sorts by ascending order", () => {
   const normalized = normalizeAppState({
     preferences: {
@@ -258,4 +262,232 @@ test("normalizePreferences drops missing, null, non-string, or empty notebook pa
   assert.equal(normalized.preferences.notebookPages[1]?.folderId, undefined);
   assert.equal(normalized.preferences.notebookPages[2]?.folderId, undefined);
   assert.equal(normalized.preferences.notebookPages[3]?.folderId, undefined);
+});
+
+test("normalizePreferences preserves notebookDocuments and sorts by ascending order", () => {
+  const normalized = normalizeAppState({
+    preferences: {
+      notebookDocuments: [
+        {
+          id: "late-doc",
+          title: "Late",
+          order: 4,
+          pages: [
+            {
+              id: "late-page",
+              title: "Page",
+              contentHtml: "<p>late</p>",
+              order: 0,
+              createdAt: "2026-01-02T00:00:00.000Z",
+              updatedAt: "2026-01-02T00:00:00.000Z",
+            },
+          ],
+          createdAt: "2026-01-02T00:00:00.000Z",
+          updatedAt: "2026-01-02T00:00:00.000Z",
+        },
+        {
+          id: "early-doc",
+          title: "Early",
+          order: 1,
+          pages: [
+            {
+              id: "early-page",
+              title: "Page",
+              contentHtml: "<p>early</p>",
+              order: 0,
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(
+    normalized.preferences.notebookDocuments.map((document) => document.id),
+    ["early-doc", "late-doc"],
+  );
+  assert.equal(normalized.preferences.notebookDocuments[0]?.title, "Early");
+});
+
+test("normalizePreferences coerces missing or malformed notebookDocuments to []", () => {
+  const missing = normalizeAppState({
+    preferences: {
+      notebookPages: [],
+    },
+  });
+  assert.deepEqual(missing.preferences.notebookDocuments, []);
+
+  const malformed = normalizeAppState({
+    preferences: {
+      notebookPages: [],
+      notebookDocuments: { nope: true } as unknown as [],
+    },
+  });
+  assert.deepEqual(malformed.preferences.notebookDocuments, []);
+});
+
+test("normalizePreferences migrates notebookPages to one notebookDocument per page", () => {
+  const normalized = normalizeAppState({
+    preferences: {
+      notebookPages: [
+        {
+          id: "page-2",
+          title: "Second",
+          contentHtml: "<p>2</p>",
+          order: 2,
+          createdAt: "2026-01-02T00:00:00.000Z",
+          updatedAt: "2026-01-02T00:00:00.000Z",
+        },
+        {
+          id: "page-1",
+          title: "First",
+          contentHtml: "<p>1</p>",
+          order: 1,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.equal(normalized.preferences.notebookDocuments.length, 2);
+  assert.deepEqual(
+    normalized.preferences.notebookDocuments.map((document) => document.title),
+    ["First", "Second"],
+  );
+});
+
+test("normalizePreferences migration copies notebook page title/content/folder/favorite/order", () => {
+  const normalized = normalizeAppState({
+    preferences: {
+      notebookPages: [
+        {
+          id: "legacy-page",
+          title: "Legacy Title",
+          contentHtml: "<p>legacy</p>",
+          folderId: "folder-1",
+          favorited: true,
+          order: 7,
+          createdAt: "2026-01-07T00:00:00.000Z",
+          updatedAt: "2026-01-08T00:00:00.000Z",
+        },
+      ],
+    },
+  });
+
+  const [document] = normalized.preferences.notebookDocuments;
+  assert.ok(document);
+  assert.equal(document?.title, "Legacy Title");
+  assert.equal(document?.folderId, "folder-1");
+  assert.equal(document?.favorited, true);
+  assert.equal(document?.order, 7);
+  assert.equal(document?.createdAt, "2026-01-07T00:00:00.000Z");
+  assert.equal(document?.updatedAt, "2026-01-08T00:00:00.000Z");
+  assert.equal(document?.pages.length, 1);
+  assert.equal(document?.pages[0]?.id, "legacy-page");
+  assert.equal(document?.pages[0]?.title, "Legacy Title");
+  assert.equal(document?.pages[0]?.contentHtml, "<p>legacy</p>");
+  assert.equal(document?.pages[0]?.order, 0);
+  assert.equal(document?.pages[0]?.createdAt, "2026-01-07T00:00:00.000Z");
+  assert.equal(document?.pages[0]?.updatedAt, "2026-01-08T00:00:00.000Z");
+});
+
+test("normalizePreferences migration does not clear notebookPages", () => {
+  const normalized = normalizeAppState({
+    preferences: {
+      notebookPages: [
+        {
+          id: "page-keep",
+          title: "Keep",
+          contentHtml: "<p>keep</p>",
+          order: 0,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.equal(normalized.preferences.notebookPages.length, 1);
+  assert.equal(normalized.preferences.notebookPages[0]?.id, "page-keep");
+  assert.equal(normalized.preferences.notebookDocuments.length, 1);
+});
+
+test("normalizePreferences keeps existing notebookDocuments instead of reseeding from notebookPages", () => {
+  const normalized = normalizeAppState({
+    preferences: {
+      notebookDocuments: [
+        {
+          id: "doc-existing",
+          title: "Existing Doc",
+          order: 0,
+          pages: [
+            {
+              id: "doc-page",
+              title: "Doc Page",
+              contentHtml: "<p>doc</p>",
+              order: 0,
+              createdAt: "2026-01-03T00:00:00.000Z",
+              updatedAt: "2026-01-03T00:00:00.000Z",
+            },
+          ],
+          createdAt: "2026-01-03T00:00:00.000Z",
+          updatedAt: "2026-01-03T00:00:00.000Z",
+        },
+      ],
+      notebookPages: [
+        {
+          id: "legacy-page",
+          title: "Legacy Page",
+          contentHtml: "<p>legacy</p>",
+          order: 4,
+          createdAt: "2026-01-04T00:00:00.000Z",
+          updatedAt: "2026-01-04T00:00:00.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.equal(normalized.preferences.notebookDocuments.length, 1);
+  assert.equal(normalized.preferences.notebookDocuments[0]?.id, "doc-existing");
+  assert.equal(normalized.preferences.notebookDocuments[0]?.title, "Existing Doc");
+});
+
+test("normalizePreferences notebookDocument fallback creates a default Page 1 when pages are empty or missing", () => {
+  const normalized = normalizeAppState({
+    preferences: {
+      notebookDocuments: [
+        {
+          id: "doc-empty-pages",
+          title: "Doc",
+          pages: [],
+          order: 0,
+          createdAt: "2026-01-10T00:00:00.000Z",
+          updatedAt: "2026-01-11T00:00:00.000Z",
+        },
+        {
+          id: "doc-missing-pages",
+          title: "Doc 2",
+          order: 1,
+          createdAt: "2026-01-12T00:00:00.000Z",
+          updatedAt: "2026-01-13T00:00:00.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.equal(normalized.preferences.notebookDocuments.length, 2);
+  const [emptyPagesDoc, missingPagesDoc] = normalized.preferences.notebookDocuments;
+  assert.ok(emptyPagesDoc);
+  assert.ok(missingPagesDoc);
+  assert.equal(emptyPagesDoc?.pages.length, 1);
+  assert.equal(emptyPagesDoc?.pages[0]?.title, "Page 1");
+  assert.equal(emptyPagesDoc?.pages[0]?.contentHtml, "");
+  assert.equal(emptyPagesDoc?.pages[0]?.order, 0);
+  assert.equal(missingPagesDoc?.pages.length, 1);
+  assert.equal(missingPagesDoc?.pages[0]?.title, "Page 1");
 });

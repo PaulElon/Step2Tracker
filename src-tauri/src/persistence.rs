@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 const APP_ID: &str = "step2-command-center";
 const APP_STATE_VERSION: u32 = 6;
-const DB_SCHEMA_VERSION: i32 = 10;
+const DB_SCHEMA_VERSION: i32 = 11;
 const LIVE_DB_FILE: &str = "command-center.sqlite3";
 const MAX_BACKUPS: usize = 20;
 const SAFE_CHECKPOINT_INTERVAL_HOURS: i64 = 6;
@@ -390,6 +390,8 @@ pub struct Preferences {
     pub notebook_folders: Vec<NotebookFolder>,
     #[serde(default)]
     pub notebook_pages: Vec<NotebookPage>,
+    #[serde(default)]
+    pub notebook_documents: Vec<NotebookDocument>,
     #[serde(default = "default_score_trend_options")]
     pub score_trend_options: ScoreTrendOptions,
 }
@@ -480,6 +482,25 @@ pub struct NotebookPage {
     pub folder_id: Option<String>,
     #[serde(default)]
     pub order: i64,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NotebookDocument {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub folder_id: Option<String>,
+    #[serde(default)]
+    pub favorited: bool,
+    #[serde(default)]
+    pub order: i64,
+    #[serde(default)]
+    pub pages: Vec<NotebookPage>,
     #[serde(default)]
     pub created_at: String,
     #[serde(default)]
@@ -1354,6 +1375,9 @@ impl StorageService {
         if current_version < 10 {
             self.ensure_preferences_columns(&transaction)?;
         }
+        if current_version < 11 {
+            self.ensure_preferences_columns(&transaction)?;
+        }
         transaction.pragma_update(None, "user_version", DB_SCHEMA_VERSION)?;
         self.set_metadata_tx(&transaction, "app_version", &self.app_version)?;
         self.log_event(
@@ -1400,6 +1424,7 @@ impl StorageService {
               notes_html TEXT NOT NULL DEFAULT '',
               notebook_folders_json TEXT NOT NULL DEFAULT '[]',
               notebook_pages_json TEXT NOT NULL DEFAULT '[]',
+              notebook_documents_json TEXT NOT NULL DEFAULT '[]',
               score_trend_options_json TEXT NOT NULL DEFAULT '{\"showConnectionLine\":false,\"showBestFitLine\":true,\"showBestFitRSquared\":false}',
               updated_at TEXT NOT NULL
             );
@@ -1609,6 +1634,12 @@ impl StorageService {
         if !columns.contains(&"notebook_folders_json".to_string()) {
             transaction.execute(
                 "ALTER TABLE preferences ADD COLUMN notebook_folders_json TEXT NOT NULL DEFAULT '[]'",
+                [],
+            )?;
+        }
+        if !columns.contains(&"notebook_documents_json".to_string()) {
+            transaction.execute(
+                "ALTER TABLE preferences ADD COLUMN notebook_documents_json TEXT NOT NULL DEFAULT '[]'",
                 [],
             )?;
         }
@@ -2234,6 +2265,7 @@ impl StorageService {
                   notes_html,
                   notebook_folders_json,
                   notebook_pages_json,
+                  notebook_documents_json,
                   score_trend_options_json
                 FROM preferences
                 WHERE id = 1
@@ -2279,7 +2311,16 @@ impl StorageService {
                                 Box::new(error),
                             )
                         })?;
-                    let score_trend_raw = row.get::<_, String>(20)?;
+                    let notebook_documents_raw = row.get::<_, String>(20)?;
+                    let notebook_documents: Vec<NotebookDocument> =
+                        serde_json::from_str(&notebook_documents_raw).map_err(|error| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                notebook_documents_raw.len(),
+                                Type::Text,
+                                Box::new(error),
+                            )
+                        })?;
+                    let score_trend_raw = row.get::<_, String>(21)?;
                     let score_trend_options: ScoreTrendOptions =
                         serde_json::from_str(&score_trend_raw)
                             .unwrap_or_else(|_| default_score_trend_options());
@@ -2308,6 +2349,7 @@ impl StorageService {
                         notes_html,
                         notebook_folders,
                         notebook_pages,
+                        notebook_documents,
                         score_trend_options,
                     })
                 },
@@ -2612,6 +2654,7 @@ impl StorageService {
         let exam_timers_json = serde_json::to_string(&preferences.exam_timers)?;
         let notebook_folders_json = serde_json::to_string(&preferences.notebook_folders)?;
         let notebook_pages_json = serde_json::to_string(&preferences.notebook_pages)?;
+        let notebook_documents_json = serde_json::to_string(&preferences.notebook_documents)?;
         let score_trend_options_json = serde_json::to_string(&preferences.score_trend_options)?;
         transaction.execute(
             "
@@ -2621,9 +2664,9 @@ impl StorageService {
               planner_filter_from_date, planner_filter_to_date,
               planner_sort_field, planner_sort_direction, planner_mode,
               planner_focus_date, enhanced_theme_ids_json, custom_categories_json,
-              resource_links_json, exam_timers_json, notes_html, notebook_folders_json, notebook_pages_json, score_trend_options_json, updated_at
+              resource_links_json, exam_timers_json, notes_html, notebook_folders_json, notebook_pages_json, notebook_documents_json, score_trend_options_json, updated_at
             )
-            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)
+            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
             ON CONFLICT(id) DO UPDATE SET
               active_section = excluded.active_section,
               last_active_date = excluded.last_active_date,
@@ -2645,6 +2688,7 @@ impl StorageService {
               notes_html = excluded.notes_html,
               notebook_folders_json = excluded.notebook_folders_json,
               notebook_pages_json = excluded.notebook_pages_json,
+              notebook_documents_json = excluded.notebook_documents_json,
               score_trend_options_json = excluded.score_trend_options_json,
               updated_at = excluded.updated_at
             ",
@@ -2669,6 +2713,7 @@ impl StorageService {
                 preferences.notes_html,
                 notebook_folders_json,
                 notebook_pages_json,
+                notebook_documents_json,
                 score_trend_options_json,
                 now_iso(),
             ],
@@ -4000,6 +4045,7 @@ fn default_preferences() -> Preferences {
         notes_html: String::new(),
         notebook_folders: Vec::new(),
         notebook_pages: Vec::new(),
+        notebook_documents: Vec::new(),
         score_trend_options: default_score_trend_options(),
     }
 }
