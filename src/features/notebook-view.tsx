@@ -773,7 +773,6 @@ export function NotebookView() {
     promptState?.kind === "create-folder"
       ? {
           title: "New Folder",
-          description: currentFolder ? "Create a folder inside the current folder." : "",
           label: "Folder name",
           confirmLabel: "Create Folder",
           placeholder: "Folder name",
@@ -781,9 +780,6 @@ export function NotebookView() {
       : promptState?.kind === "create-document"
         ? {
             title: "New Document",
-            description: currentFolder
-              ? "Create a document inside the current folder."
-              : "Create a document in the notebook library.",
             label: "Document title",
             confirmLabel: "Create Document",
             placeholder: "Untitled Document",
@@ -791,7 +787,6 @@ export function NotebookView() {
         : promptState?.kind === "rename-folder"
           ? {
               title: "Rename Folder",
-              description: "Update this folder name.",
               label: "Folder name",
               confirmLabel: "Save Folder",
               placeholder: "Folder name",
@@ -799,7 +794,6 @@ export function NotebookView() {
           : promptState?.kind === "rename-document"
             ? {
                 title: "Rename Document",
-                description: "Update this document title.",
                 label: "Document title",
                 confirmLabel: "Save Document",
                 placeholder: "Document title",
@@ -810,78 +804,128 @@ export function NotebookView() {
   const hasLibraryResults = visibleFolders.length > 0 || visibleDocuments.length > 0;
   const statusClass =
     status?.kind === "error"
-      ? "border-rose-400/25 bg-rose-500/10 text-rose-100"
-      : "border-cyan-300/25 bg-cyan-400/10 text-cyan-50";
+      ? "border-rose-400/20 bg-rose-500/8 text-rose-100"
+      : "border-cyan-300/20 bg-cyan-400/8 text-cyan-50";
+  const compactStatusClass = "inline-flex max-w-full rounded-lg border px-2.5 py-1 text-xs font-medium leading-4";
+  const toolbarButtonClass =
+    "inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3.5 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]";
+  const libraryToolbarButtonClass =
+    "inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.02] px-3.5 text-sm text-slate-200 transition hover:border-white/15 hover:bg-white/[0.05]";
+  const libraryToolbarPrimaryButtonClass =
+    "inline-flex h-9 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-3.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/20";
+  const libraryToolbarSearchClass =
+    "h-9 w-full max-w-[22rem] min-w-[14rem] rounded-xl border border-white/10 bg-slate-950/35 px-3 text-sm text-white outline-none transition focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-400/25";
+  const libraryBreadcrumbPillClass =
+    "inline-flex h-8 items-center rounded-full border border-white/10 bg-white/[0.025] px-3 text-xs font-medium text-slate-200";
+  const libraryBreadcrumbCurrentClass =
+    "inline-flex h-8 max-w-[14rem] items-center rounded-full border border-white/10 bg-white/[0.03] px-3 text-xs font-medium text-slate-100";
+  const libraryGridClass = "grid grid-cols-[repeat(auto-fill,minmax(156px,176px))] justify-start gap-6 pb-2 pt-2";
+  const libraryTileButtonClass =
+    "relative z-0 flex w-full flex-col items-center gap-2 rounded-[20px] border border-transparent bg-transparent px-2.5 py-2.5 text-center shadow-none transition duration-200 ease-out hover:border-white/10 hover:bg-white/[0.025] hover:shadow-[0_8px_20px_rgba(15,23,42,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/25";
+  const libraryFolderIconClass = "relative h-16 w-20";
+  const libraryDocumentIconClass =
+    "relative flex h-16 w-16 items-center justify-center rounded-[18px] border border-slate-200/35 bg-gradient-to-br from-slate-100/92 via-slate-200/86 to-slate-300/72 shadow-[0_10px_24px_rgba(148,163,184,0.1)]";
+  const libraryEmptyStateClass =
+    "max-w-[20rem] rounded-[20px] border border-dashed border-white/10 bg-slate-950/18 px-5 py-6 text-left";
+  const editorFieldClass =
+    "h-9 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-400/25";
+  const editorTitleFieldClass = `${editorFieldClass} font-semibold tracking-[-0.02em]`;
+  const editorActionButtonClass =
+    "inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3.5 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]";
+  const editorDangerButtonClass =
+    "inline-flex h-9 items-center justify-center rounded-xl border border-rose-300/18 bg-rose-400/6 px-3.5 text-sm text-rose-100 transition hover:border-rose-300/30 hover:bg-rose-400/12";
+  const modalActionButtonClass =
+    "inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:ring-offset-0";
+  const modalPrimaryActionButtonClass =
+    "inline-flex h-10 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:ring-offset-0";
+  const compactMenuClass =
+    "absolute right-0 top-1.5 z-20 w-36 origin-bottom-right -translate-y-[calc(100%+0.5rem)] rounded-2xl border border-white/10 bg-slate-950/96 p-1.5 shadow-[0_18px_40px_rgba(2,6,23,0.45)] backdrop-blur";
+  const compactMenuItemClass =
+    "flex min-h-8 w-full items-center rounded-lg px-2.5 py-1.5 text-left text-sm font-medium leading-5 text-slate-100 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:ring-offset-0";
+  const compactMenuDangerItemClass =
+    "flex min-h-8 w-full items-center rounded-lg px-2.5 py-1.5 text-left text-sm font-medium leading-5 text-rose-100 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:ring-offset-0";
+  const editorTabStripClass =
+    "flex min-w-0 items-center gap-1 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.02] p-0.5 scrollbar-subtle";
+  const editorTabButtonClass =
+    "inline-flex h-8 shrink-0 items-center rounded-lg border px-3 text-sm font-medium transition";
+  const emptyStateMessage = normalizedSearchQuery
+    ? `No results for "${searchQuery.trim()}".`
+    : currentFolder
+      ? "This folder is empty."
+      : "No documents yet.";
 
   return (
     <>
-      <div className="flex h-full flex-col gap-3 overflow-hidden px-4 pb-4 pt-1">
-      <section className="glass-panel flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4">
-        {isLibraryMode ? (
-          <>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2 text-sm text-slate-300">
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">Library</span>
+      <div className="flex h-full flex-col gap-2 overflow-hidden px-3 pb-3 pt-1.5">
+        <section className="glass-panel flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden p-3.5">
+          {isLibraryMode ? (
+            <div className="mx-auto flex min-h-0 w-full max-w-[1480px] flex-1 flex-col gap-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
                   {currentFolder ? (
-                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">{currentFolder.name.trim() || "Untitled Folder"}</span>
+                    <button type="button" onClick={goBackToParentFolder} className={libraryToolbarButtonClass}>
+                      Back
+                    </button>
                   ) : null}
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className={libraryBreadcrumbPillClass}>
+                      Library
+                    </span>
+                    {currentFolder ? (
+                      <>
+                        <span aria-hidden="true" className="text-[10px] text-slate-500">
+                          &gt;
+                        </span>
+                        <span className={libraryBreadcrumbCurrentClass}>
+                          <span className="truncate">{currentFolder.name.trim() || "Untitled Folder"}</span>
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatus(null);
+                      setPromptState({
+                        kind: "create-folder",
+                        value: "",
+                      });
+                    }}
+                    className={libraryToolbarButtonClass}
+                  >
+                    New Folder
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatus(null);
+                      setPromptState({
+                        kind: "create-document",
+                        value: "Untitled Document",
+                      });
+                    }}
+                    className={libraryToolbarPrimaryButtonClass}
+                  >
+                    New Document
+                  </button>
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder={currentFolder ? "Search this folder" : "Search library"}
+                    className={libraryToolbarSearchClass}
+                  />
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                {currentFolder ? (
-                  <button
-                    type="button"
-                    onClick={goBackToParentFolder}
-                    className="inline-flex h-10 items-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]"
-                  >
-                    Back
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStatus(null);
-                    setPromptState({
-                      kind: "create-folder",
-                      value: "",
-                    });
-                  }}
-                  className="inline-flex h-10 items-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]"
-                >
-                  New Folder
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStatus(null);
-                    setPromptState({
-                      kind: "create-document",
-                      value: "Untitled Document",
-                    });
-                  }}
-                  className="inline-flex h-10 items-center rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/20"
-                >
-                  New Document
-                </button>
-                <input
-                  type="search"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder={currentFolder ? "Search this folder" : "Search library"}
-                  className="h-10 w-[15rem] rounded-xl border border-white/10 bg-slate-950/40 px-3 text-sm text-white outline-none transition focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-400/30"
-                />
-              </div>
-            </div>
+              {status ? <div className={`${compactStatusClass} ${statusClass}`}>{status.message}</div> : null}
 
-            {status ? (
-              <div className={`rounded-2xl border px-4 py-3 text-sm ${statusClass}`}>{status.message}</div>
-            ) : null}
-
-            <div className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-subtle">
-              {hasLibraryResults ? (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(148px,1fr))] gap-x-5 gap-y-7 pb-2">
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-subtle">
+                {hasLibraryResults ? (
+                  <div className={libraryGridClass}>
                   {visibleFolders.map((folder) => (
                     <div
                       key={folder.id}
@@ -895,18 +939,18 @@ export function NotebookView() {
                           setSearchQuery("");
                           setStatus(null);
                         }}
-                        className="relative z-0 flex w-full flex-col items-center gap-3 rounded-[28px] border border-transparent px-3 py-4 text-center transition hover:border-white/10 hover:bg-white/[0.04]"
+                        className={libraryTileButtonClass}
                       >
-                        <div className="relative h-20 w-24">
-                          <div className="absolute left-3 top-2 h-4 w-11 rounded-t-2xl bg-amber-200/85" />
-                          <div className="absolute inset-x-0 bottom-0 top-5 rounded-[22px] border border-amber-100/10 bg-gradient-to-br from-amber-200/95 via-amber-300/85 to-orange-300/70 shadow-[0_18px_40px_rgba(251,191,36,0.16)]" />
+                        <div className={libraryFolderIconClass}>
+                          <div className="absolute left-3 top-2 h-3.5 w-9 rounded-t-2xl bg-gradient-to-r from-amber-100/90 to-amber-200/75" />
+                          <div className="absolute inset-x-0 bottom-0 top-[18px] rounded-[20px] border border-amber-50/10 bg-gradient-to-br from-amber-100/90 via-amber-200/78 to-amber-300/58 shadow-[0_14px_30px_rgba(180,128,16,0.14)]" />
                         </div>
-                        <div className="flex w-full min-w-0 items-center justify-center gap-1">
-                          <span className="min-w-0 truncate text-sm font-medium text-slate-100">
+                        <div className="flex w-full min-w-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap">
+                          <span className="min-w-0 truncate text-[13px] font-medium leading-5 tracking-[0.01em] text-slate-100">
                             {folder.name.trim() || "Untitled Folder"}
                           </span>
                           {folder.favorited === true ? (
-                            <span aria-hidden="true" className="shrink-0 text-[0.7rem] leading-none text-rose-400">
+                            <span aria-hidden="true" className="shrink-0 translate-y-[-0.5px] text-[0.7rem] leading-none text-rose-400">
                               ★
                             </span>
                           ) : null}
@@ -923,13 +967,13 @@ export function NotebookView() {
                             current?.kind === "folder" && current.folderId === folder.id ? null : { kind: "folder", folderId: folder.id },
                           );
                         }}
-                        className="absolute right-2 top-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-none border-0 bg-transparent p-0 text-base leading-none text-slate-300 opacity-80 shadow-none transition hover:text-slate-100 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30"
+                        className="absolute right-1.5 top-1.5 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full border border-transparent bg-slate-950/35 p-0 text-base leading-none text-slate-400 opacity-80 shadow-none transition hover:bg-white/[0.08] hover:text-slate-100 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30"
                       >
                         ⋯
                       </button>
                       {tileActionMenu?.kind === "folder" && tileActionMenu.folderId === folder.id ? (
                         <div
-                          className="absolute right-2 top-12 z-20 w-40 rounded-2xl border border-white/10 bg-slate-950/95 p-1 shadow-[0_18px_40px_rgba(2,6,23,0.45)] backdrop-blur"
+                          className={compactMenuClass}
                           onClick={(event) => event.stopPropagation()}
                         >
                           <button
@@ -939,7 +983,7 @@ export function NotebookView() {
                               closeTileActionMenu();
                               handleRenameFolder(folder);
                             }}
-                            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-white/10"
+                            className={compactMenuItemClass}
                           >
                             Rename
                           </button>
@@ -950,7 +994,7 @@ export function NotebookView() {
                               closeTileActionMenu();
                               void handleToggleFolderFavorite(folder.id);
                             }}
-                            className={`flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition ${
+                            className={`${compactMenuItemClass} ${
                               folder.favorited === true ? "text-rose-100 hover:bg-rose-500/10" : "text-slate-100 hover:bg-white/10"
                             }`}
                           >
@@ -963,7 +1007,7 @@ export function NotebookView() {
                               closeTileActionMenu();
                               handleDeleteFolder(folder);
                             }}
-                            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-rose-100 transition hover:bg-rose-500/10"
+                            className={`${compactMenuDangerItemClass} hover:bg-rose-500/10`}
                           >
                             Delete
                           </button>
@@ -983,21 +1027,21 @@ export function NotebookView() {
                         onClick={() => {
                           void openDocument(document);
                         }}
-                        className="relative z-0 flex w-full flex-col items-center gap-3 rounded-[28px] border border-transparent px-3 py-4 text-center transition hover:border-white/10 hover:bg-white/[0.04]"
+                        className={libraryTileButtonClass}
                       >
-                        <div className="relative flex h-20 w-20 items-center justify-center rounded-[24px] border border-white/10 bg-gradient-to-br from-slate-100/95 via-slate-200/90 to-slate-300/75 shadow-[0_18px_40px_rgba(148,163,184,0.16)]">
-                          <div className="space-y-2">
-                            <div className="h-[2px] w-8 rounded-full bg-slate-600/70" />
-                            <div className="h-[2px] w-8 rounded-full bg-slate-600/45" />
-                            <div className="h-[2px] w-6 rounded-full bg-slate-600/30" />
+                        <div className={libraryDocumentIconClass}>
+                          <div className="space-y-1.5">
+                            <div className="h-[1.5px] w-7 rounded-full bg-slate-600/68" />
+                            <div className="h-[1.5px] w-7 rounded-full bg-slate-600/42" />
+                            <div className="h-[1.5px] w-5 rounded-full bg-slate-600/28" />
                           </div>
                         </div>
-                        <div className="flex w-full min-w-0 items-center justify-center gap-1">
-                          <span className="min-w-0 truncate text-sm font-medium text-slate-100">
+                        <div className="flex w-full min-w-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap">
+                          <span className="min-w-0 truncate text-[13px] font-medium leading-5 tracking-[0.01em] text-slate-100">
                             {document.title.trim() || "Untitled Document"}
                           </span>
                           {document.favorited === true ? (
-                            <span aria-hidden="true" className="shrink-0 text-[0.7rem] leading-none text-rose-400">
+                            <span aria-hidden="true" className="shrink-0 translate-y-[-0.5px] text-[0.7rem] leading-none text-rose-400">
                               ★
                             </span>
                           ) : null}
@@ -1016,13 +1060,13 @@ export function NotebookView() {
                               : { kind: "document", documentId: document.id },
                           );
                         }}
-                        className="absolute right-2 top-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-none border-0 bg-transparent p-0 text-base leading-none text-slate-300 opacity-80 shadow-none transition hover:text-slate-100 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30"
+                        className="absolute right-1.5 top-1.5 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full border border-transparent bg-slate-950/35 p-0 text-base leading-none text-slate-400 opacity-80 shadow-none transition hover:bg-white/[0.08] hover:text-slate-100 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30"
                       >
                         ⋯
                       </button>
                       {tileActionMenu?.kind === "document" && tileActionMenu.documentId === document.id ? (
                         <div
-                          className="absolute right-2 top-12 z-20 w-40 rounded-2xl border border-white/10 bg-slate-950/95 p-1 shadow-[0_18px_40px_rgba(2,6,23,0.45)] backdrop-blur"
+                          className={compactMenuClass}
                           onClick={(event) => event.stopPropagation()}
                         >
                           <button
@@ -1032,7 +1076,7 @@ export function NotebookView() {
                               closeTileActionMenu();
                               handleRenameDocument(document);
                             }}
-                            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-white/10"
+                            className={compactMenuItemClass}
                           >
                             Rename
                           </button>
@@ -1043,7 +1087,7 @@ export function NotebookView() {
                               closeTileActionMenu();
                               void handleToggleDocumentFavorite(document.id);
                             }}
-                            className={`flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition ${
+                            className={`${compactMenuItemClass} ${
                               document.favorited ? "text-rose-100 hover:bg-rose-500/10" : "text-slate-100 hover:bg-white/10"
                             }`}
                           >
@@ -1056,7 +1100,7 @@ export function NotebookView() {
                               closeTileActionMenu();
                               handleDeleteDocument(document);
                             }}
-                            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-rose-100 transition hover:bg-rose-500/10"
+                            className={`${compactMenuDangerItemClass} hover:bg-rose-500/10`}
                           >
                             Delete
                           </button>
@@ -1064,228 +1108,206 @@ export function NotebookView() {
                       ) : null}
                     </div>
                   ))}
-                </div>
-              ) : (
-                <div className="flex h-full min-h-[18rem] flex-col items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-slate-950/20 px-6 text-center">
-                  <p className="text-base font-medium text-slate-100">
-                    {normalizedSearchQuery ? "No folders or documents match this search." : "This folder is empty."}
-                  </p>
-                  <p className="mt-2 max-w-md text-sm text-slate-300">
-                    {normalizedSearchQuery
-                      ? "Search only checks the current folder. Clear the query or open a different folder."
-                      : "Create a folder or document to start building your notebook library."}
-                  </p>
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={goBackToLibrary}
-                  className="inline-flex h-10 items-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]"
-                >
-                  Back to Library
-                </button>
-                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-sm text-slate-300">
-                  {activeDocument?.folderId ? folderById.get(activeDocument.folderId)?.name ?? "Library" : "Library"}
-                </span>
-                </div>
-              {status ? (
-                <div className={`rounded-2xl border px-4 py-3 text-sm ${statusClass}`}>{status.message}</div>
-              ) : null}
-            </div>
-
-            {activeDocument ? (
-              <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-                <div className="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_auto_auto_auto_auto]">
-                  <label className="flex min-w-0 flex-col gap-1">
-                    <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Document title</span>
-                    <input
-                      type="text"
-                      value={activeDocument.title}
-                      onChange={(event) => updateActiveDocumentTitle(event.target.value)}
-                      placeholder="Untitled Document"
-                      className="h-11 rounded-xl border border-white/10 bg-slate-950/45 px-4 text-sm text-white outline-none transition focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-400/30"
-                    />
-                  </label>
-                  <label className="flex min-w-[11rem] flex-col gap-1">
-                    <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Folder</span>
-                    <select
-                      value={activeDocument.folderId ?? ""}
-                      onChange={(event) => updateActiveDocumentFolder(event.target.value)}
-                      className="h-11 rounded-xl border border-white/10 bg-slate-950/45 px-4 text-sm text-white outline-none transition focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-400/30"
-                    >
-                      <option value="">Library</option>
-                      {folderOptions.map((folder) => (
-                        <option key={folder.id} value={folder.id}>
-                          {folder.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleDocumentFavorite(activeDocument.id)}
-                    className={`mt-auto inline-flex h-11 items-center justify-center rounded-xl border px-4 text-sm transition ${
-                      activeDocument.favorited
-                        ? "border-amber-300/35 bg-amber-400/15 text-amber-50 hover:bg-amber-400/25"
-                        : "border-white/10 bg-white/[0.03] text-slate-100 hover:border-amber-300/30 hover:bg-amber-300/10"
-                    }`}
-                  >
-                    {activeDocument.favorited ? "Favorited" : "Favorite"}
-                  </button>
-                  <div ref={exportMenuRef} className="relative mt-auto">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStatus(null);
-                        setIsExportMenuOpen((current) => !current);
-                      }}
-                      className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]"
-                    >
-                      Export
-                    </button>
-                    {isExportMenuOpen ? (
-                      <div className="absolute right-0 z-20 mt-2 flex w-36 flex-col gap-1 rounded-2xl border border-white/15 bg-slate-950/95 p-2 shadow-lg backdrop-blur">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void exportActivePage("txt");
-                          }}
-                          className="rounded-xl px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-white/10"
-                        >
-                          TXT
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void exportActivePage("html");
-                          }}
-                          className="rounded-xl px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-white/10"
-                        >
-                          HTML
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void exportActivePage("markdown");
-                          }}
-                          className="rounded-xl px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-white/10"
-                        >
-                          Markdown
-                        </button>
-                      </div>
-                    ) : null}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteDocument(activeDocument)}
-                    className="mt-auto inline-flex h-11 items-center justify-center rounded-xl border border-rose-300/30 bg-rose-400/10 px-4 text-sm text-rose-100 transition hover:bg-rose-400/20"
-                  >
-                    Delete Document
-                  </button>
-                </div>
-
-                {activePages.length > 0 ? (
-                  <>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 scrollbar-subtle">
-                        {activePages.map((page) => {
-                          const isActive = page.id === activePage?.id;
-                          return (
-                            <button
-                              key={page.id}
-                              type="button"
-                              onClick={() => setActivePageId(page.id)}
-                              className={`shrink-0 rounded-xl border px-4 py-2 text-sm transition ${
-                                isActive
-                                  ? "border-cyan-300/35 bg-cyan-400/15 text-cyan-50"
-                                  : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
-                              }`}
-                            >
-                              {page.title.trim() || "Untitled Page"}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => addPageToDocument(activeDocument)}
-                        className="inline-flex h-10 items-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]"
-                      >
-                        Add Page
-                      </button>
-                    </div>
-
-                    {activePage ? (
-                      <>
-                        <div className="flex flex-wrap items-end gap-3">
-                          <label className="flex min-w-[16rem] flex-1 flex-col gap-1">
-                            <span className="text-xs uppercase tracking-[0.16em] text-slate-500">Page title</span>
-                            <input
-                              type="text"
-                              value={activePage.title}
-                              onChange={(event) =>
-                                updateActivePage((page) => ({
-                                  ...page,
-                                  title: event.target.value,
-                                  updatedAt: nowIso(),
-                                }))
-                              }
-                              placeholder="Page title"
-                              className="h-11 rounded-xl border border-white/10 bg-slate-950/45 px-4 text-sm text-white outline-none transition focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-400/30"
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={deleteActivePage}
-                            className="inline-flex h-11 items-center rounded-xl border border-rose-300/30 bg-rose-400/10 px-4 text-sm text-rose-100 transition hover:bg-rose-400/20"
-                          >
-                            Delete Page
-                          </button>
-                        </div>
-
-                        <RichTextEditor
-                          value={activePage.contentHtml}
-                          onChange={(html) =>
-                            updateActivePage((page) => ({
-                              ...page,
-                              contentHtml: html,
-                              updatedAt: nowIso(),
-                            }))
-                          }
-                          placeholder="Write inside this document. Each page stays nested under the current document."
-                          className="min-h-[320px] flex-1 overflow-y-auto scrollbar-subtle"
-                        />
-                      </>
-                    ) : null}
-                  </>
                 ) : (
-                  <div className="flex flex-1 flex-col items-start justify-center rounded-[28px] border border-dashed border-white/10 bg-slate-950/20 p-6">
-                    <p className="text-base font-medium text-slate-100">This document has no pages.</p>
-                    <p className="mt-2 max-w-md text-sm text-slate-300">Existing data stays untouched until you explicitly create a new page.</p>
-                    <button
-                      type="button"
-                      onClick={() => addPageToDocument(activeDocument)}
-                      className="mt-4 inline-flex h-10 items-center rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/20"
-                    >
-                      Create First Page
-                    </button>
+                  <div className="flex min-h-[9rem] items-start justify-start px-1 py-2">
+                    <div className={libraryEmptyStateClass}>
+                      <p className="text-sm font-medium leading-6 text-slate-100">{emptyStateMessage}</p>
+                    </div>
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="flex flex-1 items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-slate-950/20 text-sm text-slate-300">
-                This document is no longer available.
-              </div>
-            )}
-          </>
-        )}
-      </section>
+            </div>
+          ) : (
+            <>
+              {activeDocument ? (
+                <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+                  <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
+                    <button type="button" onClick={goBackToLibrary} className={toolbarButtonClass}>
+                      Back to Library
+                    </button>
+                    <label className="min-w-0 flex-[2]">
+                      <span className="sr-only">Document title</span>
+                      <input
+                        type="text"
+                        value={activeDocument.title}
+                        onChange={(event) => updateActiveDocumentTitle(event.target.value)}
+                        placeholder="Untitled Document"
+                        className={editorTitleFieldClass}
+                      />
+                    </label>
+                    <label className="min-w-[11rem] flex-[0.95]">
+                      <span className="sr-only">Folder</span>
+                      <select
+                        value={activeDocument.folderId ?? ""}
+                        onChange={(event) => updateActiveDocumentFolder(event.target.value)}
+                        className={editorFieldClass}
+                      >
+                        <option value="">Library</option>
+                        {folderOptions.map((folder) => (
+                          <option key={folder.id} value={folder.id}>
+                            {folder.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleDocumentFavorite(activeDocument.id)}
+                        className={`${editorActionButtonClass} ${activeDocument.favorited ? "border-amber-300/30 bg-amber-400/12 text-amber-50 hover:bg-amber-400/22" : ""}`}
+                      >
+                        {activeDocument.favorited ? "Favorited" : "Favorite"}
+                      </button>
+                      <div ref={exportMenuRef} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStatus(null);
+                            setIsExportMenuOpen((current) => !current);
+                          }}
+                          className={editorActionButtonClass}
+                        >
+                          Export
+                        </button>
+                        {isExportMenuOpen ? (
+                          <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 flex w-36 flex-col gap-1 rounded-2xl border border-white/10 bg-slate-950/96 p-1.5 shadow-[0_18px_40px_rgba(2,6,23,0.45)] backdrop-blur">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void exportActivePage("txt");
+                              }}
+                              className={compactMenuItemClass}
+                            >
+                              TXT
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void exportActivePage("html");
+                              }}
+                              className={compactMenuItemClass}
+                            >
+                              HTML
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void exportActivePage("markdown");
+                              }}
+                              className={compactMenuItemClass}
+                            >
+                              Markdown
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                      <button type="button" onClick={() => handleDeleteDocument(activeDocument)} className={editorDangerButtonClass}>
+                        Delete Document
+                      </button>
+                    </div>
+                  </div>
+
+                  {status ? <div className={`self-start ${compactStatusClass} ${statusClass}`}>{status.message}</div> : null}
+
+                  {activePages.length > 0 ? (
+                    <>
+                      <div className={editorTabStripClass}>
+                        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-subtle">
+                          {activePages.map((page) => {
+                            const isActive = page.id === activePage?.id;
+                            return (
+                              <button
+                                key={page.id}
+                                type="button"
+                                onClick={() => setActivePageId(page.id)}
+                                className={`${editorTabButtonClass} ${
+                                  isActive
+                                    ? "border-cyan-300/25 bg-cyan-400/12 text-cyan-50 shadow-[0_1px_0_rgba(255,255,255,0.04)]"
+                                    : "border-transparent bg-transparent text-slate-400 hover:border-white/10 hover:bg-white/[0.05] hover:text-slate-200"
+                                }`}
+                              >
+                                {page.title.trim() || "Untitled Page"}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => addPageToDocument(activeDocument)}
+                          className={`${editorTabButtonClass} border-dashed border-white/12 bg-transparent px-3.5 text-slate-300 hover:border-white/18 hover:bg-white/[0.04] hover:text-slate-100`}
+                        >
+                          Add Page
+                        </button>
+                      </div>
+
+                      {activePage ? (
+                        <div className="flex min-h-0 flex-1 flex-col gap-2">
+                          <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
+                            <label className="min-w-0 flex-[1.6]">
+                              <span className="sr-only">Page title</span>
+                              <input
+                                type="text"
+                                value={activePage.title}
+                                onChange={(event) =>
+                                  updateActivePage((page) => ({
+                                    ...page,
+                                    title: event.target.value,
+                                    updatedAt: nowIso(),
+                                  }))
+                                }
+                                placeholder="Page title"
+                                className={editorFieldClass}
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={deleteActivePage}
+                              className="ml-auto inline-flex h-8 shrink-0 items-center justify-center rounded-full border border-transparent bg-transparent px-2 text-xs font-medium text-rose-300 transition hover:border-rose-300/15 hover:bg-rose-400/8 hover:text-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300/20 focus-visible:ring-offset-0"
+                            >
+                              Delete Page
+                            </button>
+                          </div>
+
+                          <div className="flex min-h-0 flex-1">
+                            <RichTextEditor
+                              value={activePage.contentHtml}
+                              onChange={(html) =>
+                                updateActivePage((page) => ({
+                                  ...page,
+                                  contentHtml: html,
+                                  updatedAt: nowIso(),
+                                }))
+                              }
+                              placeholder="Write inside this document. Each page stays nested under the current document."
+                              className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle"
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <div className="flex flex-1 flex-col items-start justify-center rounded-[28px] border border-dashed border-white/10 bg-slate-950/20 p-6">
+                      <p className="text-base font-medium text-slate-100">This document has no pages.</p>
+                      <p className="mt-2 max-w-md text-sm text-slate-300">Existing data stays untouched until you explicitly create a new page.</p>
+                      <button
+                        type="button"
+                        onClick={() => addPageToDocument(activeDocument)}
+                        className="mt-4 inline-flex h-10 items-center rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/20"
+                      >
+                        Create First Page
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-1 items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-slate-950/20 text-sm text-slate-300">
+                  This document is no longer available.
+                </div>
+              )}
+            </>
+          )}
+        </section>
       </div>
 
       {promptState && promptCopy ? (
@@ -1293,31 +1315,17 @@ export function NotebookView() {
           onClose={() => setPromptState(null)}
           position="center"
           titleId="notebook-library-prompt-title"
-          descriptionId="notebook-library-prompt-description"
           initialFocusRef={promptInputRef}
+          contentClassName="max-w-[460px] p-5 sm:p-6"
         >
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h3 id="notebook-library-prompt-title" className="mt-2 text-2xl font-semibold text-white">
-                {promptCopy.title}
-              </h3>
-              {promptCopy.description ? (
-                <p id="notebook-library-prompt-description" className="mt-2 text-sm text-slate-400">
-                  {promptCopy.description}
-                </p>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              onClick={() => setPromptState(null)}
-              className="inline-flex h-10 items-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]"
-            >
-              Cancel
-            </button>
+          <div className="space-y-1">
+            <h3 id="notebook-library-prompt-title" className="text-xl font-semibold tracking-[-0.02em] text-white">
+              {promptCopy.title}
+            </h3>
           </div>
 
           <form
-            className="mt-6 space-y-4"
+            className="mt-5 space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
               void submitPrompt();
@@ -1331,7 +1339,7 @@ export function NotebookView() {
                 value={promptState.value}
                 onChange={(event) => setPromptState((current) => (current ? { ...current, value: event.target.value } : current))}
                 placeholder={promptCopy.placeholder}
-                className="h-11 rounded-xl border border-white/10 bg-slate-950/45 px-4 text-sm text-white outline-none transition focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-400/30"
+                className="h-10 rounded-xl border border-white/10 bg-slate-950/45 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-400/30"
               />
             </label>
 
@@ -1339,13 +1347,13 @@ export function NotebookView() {
               <button
                 type="button"
                 onClick={() => setPromptState(null)}
-                className="inline-flex h-10 items-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]"
+                className={modalActionButtonClass}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="inline-flex h-10 items-center rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/20"
+                className={modalPrimaryActionButtonClass}
               >
                 {promptCopy.confirmLabel}
               </button>
