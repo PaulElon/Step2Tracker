@@ -25,6 +25,7 @@ export function NotebookView() {
   const [activePageId, setActivePageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useState<"order" | "updatedAt">("order");
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const notebookPages = state.preferences.notebookPages;
   const sortedPages = useMemo(() => sortNotebookPages(notebookPages), [notebookPages]);
   const displayedPages = useMemo(() => {
@@ -34,17 +35,18 @@ export function NotebookView() {
             (a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id),
           )
         : sortNotebookPages(notebookPages);
+    const pagesAfterFavoriteFilter = showFavoritesOnly ? basePages.filter((page) => page.favorited === true) : basePages;
     const query = searchQuery.trim().toLowerCase();
     if (!query) {
-      return basePages;
+      return pagesAfterFavoriteFilter;
     }
-    return basePages.filter((page) => {
+    return pagesAfterFavoriteFilter.filter((page) => {
       if (page.title.toLowerCase().includes(query)) {
         return true;
       }
       return richTextToPlain(page.contentHtml).toLowerCase().includes(query);
     });
-  }, [notebookPages, searchQuery, sortMode]);
+  }, [notebookPages, searchQuery, showFavoritesOnly, sortMode]);
 
   useEffect(() => {
     if (sortedPages.length === 0) {
@@ -94,6 +96,14 @@ export function NotebookView() {
     }));
   }
 
+  function togglePageFavorite(pageId: string) {
+    updatePageById(pageId, (page) => ({
+      ...page,
+      favorited: page.favorited !== true,
+      updatedAt: new Date().toISOString(),
+    }));
+  }
+
   function deleteActivePage() {
     if (!activePage) {
       return;
@@ -113,18 +123,8 @@ export function NotebookView() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-4 overflow-hidden p-4">
-      <section className="glass-panel overflow-hidden">
-        <div className="rounded-[24px] border border-cyan-300/15 bg-gradient-to-br from-cyan-300/10 to-blue-400/5 p-6">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Notebook</p>
-          <h3 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white">Notebook</h3>
-          <p className="mt-2 text-base text-slate-300">
-            Organize study notes across pages while keeping Notebook edits scoped to this feature.
-          </p>
-        </div>
-      </section>
-
-      <section className="glass-panel flex min-h-0 flex-1 flex-col gap-4 p-4">
+    <div className="flex h-full flex-col gap-3 overflow-hidden px-4 pb-4 pt-2">
+      <section className="glass-panel flex min-h-0 flex-1 flex-col gap-3 p-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Study Notes</p>
@@ -197,18 +197,31 @@ export function NotebookView() {
                     Last edited
                   </button>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setShowFavoritesOnly((current) => !current)}
+                  className={`w-full rounded-lg border px-2 py-1 text-xs transition ${
+                    showFavoritesOnly
+                      ? "border-amber-300/40 bg-amber-400/15 text-amber-50"
+                      : "border-white/10 bg-slate-900/50 text-slate-300 hover:border-white/20 hover:bg-slate-900/70"
+                  }`}
+                >
+                  {showFavoritesOnly ? "Favorites only: on" : "Favorites only: off"}
+                </button>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-subtle">
                 {displayedPages.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-white/10 bg-slate-950/20 p-3 text-xs text-slate-300">
-                    <p>{`No pages match "${trimmedSearchQuery}".`}</p>
-                    <button
-                      type="button"
-                      onClick={() => setSearchQuery("")}
-                      className="mt-2 rounded-lg border border-white/15 bg-slate-900/60 px-2 py-1 text-xs text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80"
-                    >
-                      Clear search
-                    </button>
+                    {showFavoritesOnly && !trimmedSearchQuery ? <p>No favorited pages yet.</p> : <p>{`No pages match "${trimmedSearchQuery}".`}</p>}
+                    {trimmedSearchQuery ? (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery("")}
+                        className="mt-2 rounded-lg border border-white/15 bg-slate-900/60 px-2 py-1 text-xs text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80"
+                      >
+                        Clear search
+                      </button>
+                    ) : null}
                   </div>
                 ) : (
                   <ul className="space-y-2">
@@ -217,17 +230,35 @@ export function NotebookView() {
                       const displayTitle = page.title.trim() || "Untitled";
                       return (
                         <li key={page.id}>
-                          <button
-                            type="button"
-                            onClick={() => setActivePageId(page.id)}
-                            className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition ${
-                              isActive
-                                ? "border-cyan-300/40 bg-cyan-400/15 text-cyan-50"
-                                : "border-white/10 bg-slate-900/50 text-slate-300 hover:border-white/20 hover:bg-slate-900/70"
-                            }`}
-                          >
-                            {displayTitle}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setActivePageId(page.id)}
+                              className={`flex-1 rounded-lg border px-3 py-2 text-left text-sm transition ${
+                                isActive
+                                  ? "border-cyan-300/40 bg-cyan-400/15 text-cyan-50"
+                                  : "border-white/10 bg-slate-900/50 text-slate-300 hover:border-white/20 hover:bg-slate-900/70"
+                              }`}
+                            >
+                              {displayTitle}
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={page.favorited ? "Unfavorite page" : "Favorite page"}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                togglePageFavorite(page.id);
+                              }}
+                              className={`rounded-lg border px-2 py-1 text-sm transition ${
+                                page.favorited
+                                  ? "border-amber-300/35 bg-amber-400/15 text-amber-50 hover:bg-amber-400/25"
+                                  : "border-white/10 bg-slate-900/50 text-amber-100/90 hover:border-amber-300/30 hover:bg-amber-300/15 hover:text-amber-50"
+                              }`}
+                            >
+                              {page.favorited ? "★" : "☆"}
+                            </button>
+                          </div>
                         </li>
                       );
                     })}
@@ -239,16 +270,29 @@ export function NotebookView() {
             <div className="flex min-h-0 flex-1 flex-col gap-3">
               {activePage ? (
                 <>
-                  {trimmedSearchQuery && !activePageShownInList ? (
+                  {!activePageShownInList ? (
                     <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-white/15 bg-slate-950/30 px-3 py-2 text-xs text-slate-300">
-                      <p>This page is hidden by your search filter.</p>
-                      <button
-                        type="button"
-                        onClick={() => setSearchQuery("")}
-                        className="rounded-lg border border-white/15 bg-slate-900/60 px-2 py-1 text-xs text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80"
-                      >
-                        Clear search
-                      </button>
+                      <p>This page is hidden by your current filters.</p>
+                      <div className="flex items-center gap-2">
+                        {trimmedSearchQuery ? (
+                          <button
+                            type="button"
+                            onClick={() => setSearchQuery("")}
+                            className="rounded-lg border border-white/15 bg-slate-900/60 px-2 py-1 text-xs text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80"
+                          >
+                            Clear search
+                          </button>
+                        ) : null}
+                        {showFavoritesOnly ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowFavoritesOnly(false)}
+                            className="rounded-lg border border-white/15 bg-slate-900/60 px-2 py-1 text-xs text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80"
+                          >
+                            Show all pages
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   ) : null}
                   <div className="flex flex-wrap items-center gap-3">
