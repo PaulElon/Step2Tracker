@@ -4,6 +4,67 @@ import { formatSavedAt } from "../lib/datetime";
 import { useAppStore } from "../state/app-store";
 import type { NotebookPage } from "../types/models";
 
+const NOTEBOOK_FAVORITES_STORAGE_KEY = "step2-command-center:notebook-favorites:v1";
+
+function loadNotebookFavoriteMap() {
+  if (typeof window === "undefined") {
+    return {} as Record<string, true>;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(NOTEBOOK_FAVORITES_STORAGE_KEY);
+    if (!raw) {
+      return {} as Record<string, true>;
+    }
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object") {
+      return {} as Record<string, true>;
+    }
+    const next: Record<string, true> = {};
+    for (const [id, favorited] of Object.entries(parsed)) {
+      if (typeof id === "string" && favorited === true) {
+        next[id] = true;
+      }
+    }
+    return next;
+  } catch {
+    return {} as Record<string, true>;
+  }
+}
+
+function saveNotebookFavoriteMap(value: Record<string, true>) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (Object.keys(value).length === 0) {
+      window.localStorage.removeItem(NOTEBOOK_FAVORITES_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(NOTEBOOK_FAVORITES_STORAGE_KEY, JSON.stringify(value));
+  } catch {
+    // no-op: localStorage write failures should not block notebook edits
+  }
+}
+
+function mapFavoritesFromPages(pages: NotebookPage[]) {
+  const next: Record<string, true> = {};
+  for (const page of pages) {
+    if (page.favorited === true) {
+      next[page.id] = true;
+    }
+  }
+  return next;
+}
+
+function mergePageFavorites(pages: NotebookPage[], favorites: Record<string, true>) {
+  return pages.map((page) => ({
+    ...page,
+    favorited: favorites[page.id] === true || page.favorited === true,
+  }));
+}
+
 function sortNotebookPages(pages: NotebookPage[]) {
   return [...pages].sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 }
@@ -26,7 +87,11 @@ export function NotebookView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useState<"order" | "updatedAt">("order");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const notebookPages = state.preferences.notebookPages;
+  const [favoriteMap, setFavoriteMap] = useState<Record<string, true>>(() => loadNotebookFavoriteMap());
+  const notebookPages = useMemo(
+    () => mergePageFavorites(state.preferences.notebookPages, favoriteMap),
+    [favoriteMap, state.preferences.notebookPages],
+  );
   const sortedPages = useMemo(() => sortNotebookPages(notebookPages), [notebookPages]);
   const displayedPages = useMemo(() => {
     const basePages =
@@ -47,6 +112,26 @@ export function NotebookView() {
       return richTextToPlain(page.contentHtml).toLowerCase().includes(query);
     });
   }, [notebookPages, searchQuery, showFavoritesOnly, sortMode]);
+
+  useEffect(() => {
+    const pageIds = new Set(state.preferences.notebookPages.map((page) => page.id));
+    const favoritesFromPages = mapFavoritesFromPages(state.preferences.notebookPages);
+    setFavoriteMap((current) => {
+      const next: Record<string, true> = { ...favoritesFromPages };
+      for (const pageId of Object.keys(current)) {
+        if (pageIds.has(pageId)) {
+          next[pageId] = true;
+        }
+      }
+      const currentKeys = Object.keys(current);
+      const nextKeys = Object.keys(next);
+      if (currentKeys.length === nextKeys.length && currentKeys.every((key) => next[key] === true)) {
+        return current;
+      }
+      saveNotebookFavoriteMap(next);
+      return next;
+    });
+  }, [state.preferences.notebookPages]);
 
   useEffect(() => {
     if (sortedPages.length === 0) {
@@ -97,9 +182,24 @@ export function NotebookView() {
   }
 
   function togglePageFavorite(pageId: string) {
+    const page = notebookPages.find((entry) => entry.id === pageId);
+    if (!page) {
+      return;
+    }
+    const nextFavorited = page.favorited !== true;
+    setFavoriteMap((current) => {
+      const next = { ...current };
+      if (nextFavorited) {
+        next[pageId] = true;
+      } else {
+        delete next[pageId];
+      }
+      saveNotebookFavoriteMap(next);
+      return next;
+    });
     updatePageById(pageId, (page) => ({
       ...page,
-      favorited: page.favorited !== true,
+      favorited: nextFavorited,
       updatedAt: new Date().toISOString(),
     }));
   }
@@ -123,12 +223,11 @@ export function NotebookView() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-hidden px-4 pb-4 pt-2">
-      <section className="glass-panel flex min-h-0 flex-1 flex-col gap-3 p-3">
+    <div className="flex h-full flex-col gap-3 overflow-hidden px-4 pb-4 pt-1">
+      <section className="glass-panel flex min-h-0 flex-1 flex-col gap-2 p-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Study Notes</p>
-            <p className="mt-1 text-sm text-slate-300">Use formatting shortcuts to capture details quickly.</p>
           </div>
           <p className="text-xs text-slate-400">{saveCopy}</p>
         </div>

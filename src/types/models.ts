@@ -164,6 +164,7 @@ export interface NotebookPage {
   id: string;
   title: string;
   contentHtml: string;
+  favorited?: boolean;
   order: number;
   createdAt: string;
   updatedAt: string;

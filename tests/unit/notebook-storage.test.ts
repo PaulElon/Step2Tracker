@@ -92,10 +92,51 @@ test("normalizePreferences applies safe defaults for missing notebook page field
   assert.ok(page);
   assert.equal(page?.title, "Untitled");
   assert.equal(page?.contentHtml, "");
+  assert.equal(page?.favorited, false);
   assert.equal(page?.order, 0);
   assert.ok(page?.id);
   assert.ok(page?.createdAt);
   assert.ok(page?.updatedAt);
+});
+
+test("normalizePreferences preserves favorited true on notebook pages", () => {
+  const normalized = normalizeAppState({
+    preferences: {
+      notebookPages: [
+        {
+          id: "fav-1",
+          title: "Favorited",
+          contentHtml: "",
+          favorited: true,
+          order: 0,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.equal(normalized.preferences.notebookPages[0]?.favorited, true);
+});
+
+test("normalizePreferences coerces non-boolean notebook page favorited to false", () => {
+  const normalized = normalizeAppState({
+    preferences: {
+      notebookPages: [
+        {
+          id: "fav-2",
+          title: "Invalid Favorite",
+          contentHtml: "",
+          favorited: "true" as unknown as boolean,
+          order: 0,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.equal(normalized.preferences.notebookPages[0]?.favorited, false);
 });
 
 test("DEFAULT_PREFERENCES initializes notebookPages to an empty array", () => {

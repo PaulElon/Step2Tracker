@@ -730,6 +730,7 @@ function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbac
     id: sanitizeText(input?.id) || fallbackId || createId("nb-page"),
     title: sanitizeText(input?.title) || "Untitled",
     contentHtml: typeof input?.contentHtml === "string" ? input.contentHtml : "",
+    favorited: input?.favorited === true,
     order: Math.trunc(sanitizeNumber(input?.order, 0)),
     createdAt: safeCreatedAt,
     updatedAt: safeUpdatedAt,
