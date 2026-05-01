@@ -1003,6 +1003,32 @@ button {
   font-size: 1.1rem;
 }
 
+.tiptap-editor .ProseMirror a,
+.tiptap-editor .ProseMirror a:visited {
+  color: rgba(103, 232, 249, 0.96);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: rgba(103, 232, 249, 0.56);
+  text-underline-offset: 0.14em;
+  transition:
+    color 120ms ease,
+    text-decoration-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.tiptap-editor .ProseMirror a:hover {
+  color: rgba(165, 243, 252, 1);
+  text-decoration-color: rgba(165, 243, 252, 0.88);
+}
+
+.tiptap-editor .ProseMirror a:focus-visible {
+  outline: none;
+  border-radius: 0.2rem;
+  background: rgba(34, 211, 238, 0.08);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.28);
+}
+
 .tiptap-editor .ProseMirror blockquote {
   margin: 0.75rem 0;
   padding: 0.1rem 0 0.1rem 0.85rem;

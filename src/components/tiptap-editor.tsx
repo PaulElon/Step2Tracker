@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import Link from "@tiptap/extension-link";
+import TextAlign from "@tiptap/extension-text-align";
 import Underline from "@tiptap/extension-underline";
 import type { NotebookEditorProps } from "./notebook-editor-adapter";
 
@@ -44,7 +46,21 @@ export function TiptapEditor({
 }: NotebookEditorProps) {
   const editor = useEditor({
     content: value || "",
-    extensions: [StarterKit, Underline],
+    extensions: [
+      StarterKit,
+      Underline,
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+        linkOnPaste: true,
+        HTMLAttributes: {
+          class: "tiptap-editor__link",
+        },
+      }),
+      TextAlign.configure({
+        types: ["heading", "paragraph"],
+      }),
+    ],
     editorProps: {
       attributes: {
         class: "notebook-tiptap-prosemirror",
@@ -89,6 +105,26 @@ export function TiptapEditor({
   const isCodeBlock = editor ? editor.isActive("codeBlock") : false;
   const isBulletList = editor ? editor.isActive("bulletList") : false;
   const isOrderedList = editor ? editor.isActive("orderedList") : false;
+  const isLink = editor ? editor.isActive("link") : false;
+  const isAlignLeft = editor ? editor.isActive({ textAlign: "left" }) : false;
+  const isAlignCenter = editor ? editor.isActive({ textAlign: "center" }) : false;
+  const isAlignRight = editor ? editor.isActive({ textAlign: "right" }) : false;
+
+  const setLink = () => {
+    if (!editor) return;
+
+    const currentHref = editor.getAttributes("link").href;
+    const nextHref = window.prompt("Enter link URL", typeof currentHref === "string" ? currentHref : "");
+
+    if (nextHref == null) return;
+
+    const trimmedHref = nextHref.trim();
+    if (!trimmedHref) return;
+
+    const normalizedHref = /^https?:\/\//i.test(trimmedHref) ? trimmedHref : `https://${trimmedHref}`;
+
+    editor.chain().focus().extendMarkRange("link").setLink({ href: normalizedHref }).run();
+  };
 
   const toolbar = (
     <div className="tiptap-editor__toolbar" role="toolbar" aria-label="Text formatting">
@@ -107,6 +143,13 @@ export function TiptapEditor({
       </ToolbarButton>
       <ToolbarButton title="Underline" active={isUnderline} disabled={!isEditorReady} onClick={() => editor?.chain().focus().toggleUnderline().run()}>
         U
+      </ToolbarButton>
+      <ToolbarDivider />
+      <ToolbarButton title="Link" active={isLink} disabled={!isEditorReady} onClick={setLink}>
+        Link
+      </ToolbarButton>
+      <ToolbarButton title="Unlink" disabled={!isEditorReady} onClick={() => editor?.chain().focus().unsetLink().run()}>
+        Unlink
       </ToolbarButton>
       <ToolbarDivider />
       <ToolbarButton title="Paragraph" active={isParagraph} disabled={!isEditorReady} onClick={() => editor?.chain().focus().setParagraph().run()}>
@@ -166,6 +209,31 @@ export function TiptapEditor({
         onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()}
       >
         Clear
+      </ToolbarButton>
+      <ToolbarDivider />
+      <ToolbarButton
+        title="Align left"
+        active={isAlignLeft}
+        disabled={!isEditorReady}
+        onClick={() => editor?.chain().focus().setTextAlign("left").run()}
+      >
+        L
+      </ToolbarButton>
+      <ToolbarButton
+        title="Align center"
+        active={isAlignCenter}
+        disabled={!isEditorReady}
+        onClick={() => editor?.chain().focus().setTextAlign("center").run()}
+      >
+        C
+      </ToolbarButton>
+      <ToolbarButton
+        title="Align right"
+        active={isAlignRight}
+        disabled={!isEditorReady}
+        onClick={() => editor?.chain().focus().setTextAlign("right").run()}
+      >
+        R
       </ToolbarButton>
       <ToolbarDivider />
       <ToolbarButton
