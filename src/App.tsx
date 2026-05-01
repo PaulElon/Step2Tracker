@@ -767,7 +767,7 @@ export default function App() {
   let sectionContent: JSX.Element | null;
   switch (resolvedSection) {
     case "dashboard":
-      sectionContent = <DashboardView />;
+      sectionContent = <DashboardView onOpenNotebook={() => void setActiveSection("notebook")} />;
       break;
     case "planner":
       sectionContent = <PlannerView />;

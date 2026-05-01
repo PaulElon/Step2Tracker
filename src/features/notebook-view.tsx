@@ -31,6 +31,7 @@ export function NotebookView() {
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Study Notes</p>
             <p className="mt-1 text-sm text-slate-300">Use formatting shortcuts to capture details quickly.</p>
+            <p className="mt-1 text-xs text-slate-400">MVP note: Notebook and Dashboard currently share the same saved notes.</p>
           </div>
           <p className="text-xs text-slate-400">{saveCopy}</p>
         </div>
