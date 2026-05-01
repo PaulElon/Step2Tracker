@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { RichTextEditor, richTextToPlain } from "../components/rich-text-editor";
 import { formatSavedAt } from "../lib/datetime";
 import { useAppStore } from "../state/app-store";
@@ -82,6 +83,7 @@ function createUntitledPage(order: number): NotebookPage {
 }
 
 type NotebookExportFormat = "txt" | "html" | "markdown";
+type ExportStatus = null | { kind: "success" | "error"; message: string };
 
 function escapeHtml(value: string) {
   return value
@@ -140,19 +142,6 @@ function createHtmlExport(page: NotebookPage) {
   ].join("\n");
 }
 
-function downloadNotebookExport(fileName: string, content: string, mimeType: string) {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.rel = "noreferrer";
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
 export function NotebookView() {
   const { state, persistenceStatus, lastSavedAt, setNotebookPages } = useAppStore();
   const [activePageId, setActivePageId] = useState<string | null>(null);
@@ -160,6 +149,9 @@ export function NotebookView() {
   const [sortMode, setSortMode] = useState<"order" | "updatedAt">("order");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [favoriteMap, setFavoriteMap] = useState<Record<string, true>>(() => loadNotebookFavoriteMap());
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [exportStatus, setExportStatus] = useState<ExportStatus>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
   const notebookPages = useMemo(
     () => mergePageFavorites(state.preferences.notebookPages, favoriteMap),
     [favoriteMap, state.preferences.notebookPages],
@@ -217,10 +209,37 @@ export function NotebookView() {
     }
   }, [activePageId, sortedPages]);
 
+  useEffect(() => {
+    function handleOutsideClick(event: MouseEvent) {
+      if (!exportMenuRef.current?.contains(event.target as Node)) {
+        setIsExportMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsExportMenuOpen(false);
+      }
+    }
+
+    if (isExportMenuOpen) {
+      window.addEventListener("mousedown", handleOutsideClick);
+      window.addEventListener("keydown", handleEscape);
+      return () => {
+        window.removeEventListener("mousedown", handleOutsideClick);
+        window.removeEventListener("keydown", handleEscape);
+      };
+    }
+
+    return undefined;
+  }, [isExportMenuOpen]);
+
   const activePage = sortedPages.find((page) => page.id === activePageId) ?? sortedPages[0] ?? null;
   const trimmedSearchQuery = searchQuery.trim();
   const activePageShownInList = !!activePage && displayedPages.some((page) => page.id === activePage.id);
   const hasActiveContent = !!activePage && !!richTextToPlain(activePage.contentHtml).trim();
+  const pageActionButtonClass =
+    "inline-flex h-8 min-w-[6.25rem] items-center justify-center rounded-lg border px-3 text-xs font-medium transition";
   const saveCopy =
     persistenceStatus === "booting"
       ? "Opening local store…"
@@ -240,6 +259,7 @@ export function NotebookView() {
     const page = createUntitledPage(nextOrder);
     void setNotebookPages([...notebookPages, page]);
     setActivePageId(page.id);
+    setExportStatus(null);
   }
 
   function renameActivePage(title: string) {
@@ -285,6 +305,7 @@ export function NotebookView() {
       const replacement = createUntitledPage(0);
       void setNotebookPages([replacement]);
       setActivePageId(replacement.id);
+      setExportStatus(null);
       return;
     }
 
@@ -292,23 +313,59 @@ export function NotebookView() {
     const nextSortedPages = sortNotebookPages(remainingPages);
     void setNotebookPages(remainingPages);
     setActivePageId(nextSortedPages[0]?.id ?? null);
+    setExportStatus(null);
   }
 
-  function exportActivePage(format: NotebookExportFormat) {
+  async function exportActivePage(format: NotebookExportFormat) {
+    setIsExportMenuOpen(false);
+
     if (!activePage) {
+      setExportStatus({ kind: "error", message: "Select a page to export." });
       return;
     }
 
-    const baseName = sanitizeFileNameSegment(activePage.title || "Untitled");
-    if (format === "txt") {
-      downloadNotebookExport(`${baseName}.txt`, createTxtExport(activePage), "text/plain;charset=utf-8");
-      return;
+    try {
+      const baseName = sanitizeFileNameSegment(activePage.title || "Untitled");
+      const payload =
+        format === "txt"
+          ? {
+              fileName: `${baseName}.txt`,
+              content: createTxtExport(activePage),
+              label: "TXT",
+            }
+          : format === "html"
+            ? {
+                fileName: `${baseName}.html`,
+                content: createHtmlExport(activePage),
+                label: "HTML",
+              }
+            : {
+                fileName: `${baseName}.md`,
+                content: createMarkdownExport(activePage),
+                label: "Markdown",
+              };
+
+      const savedPath = await invoke<string>("export_notebook_page", {
+        suggestedFileName: payload.fileName,
+        contents: payload.content,
+      });
+
+      setExportStatus({
+        kind: "success",
+        message: `${payload.label} export saved to ${savedPath}.`,
+      });
+    } catch (error) {
+      const message =
+        typeof error === "string"
+          ? error
+          : error instanceof Error && error.message
+            ? error.message
+            : "Unable to export this notebook page.";
+      setExportStatus({
+        kind: "error",
+        message,
+      });
     }
-    if (format === "html") {
-      downloadNotebookExport(`${baseName}.html`, createHtmlExport(activePage), "text/html;charset=utf-8");
-      return;
-    }
-    downloadNotebookExport(`${baseName}.md`, createMarkdownExport(activePage), "text/markdown;charset=utf-8");
   }
 
   return (
@@ -483,7 +540,7 @@ export function NotebookView() {
                       </div>
                     </div>
                   ) : null}
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap items-end gap-3">
                     <label className="flex min-w-[14rem] flex-1 flex-col gap-1">
                       <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Page title</span>
                       <input
@@ -491,46 +548,63 @@ export function NotebookView() {
                         value={activePage.title}
                         onChange={(event) => renameActivePage(event.target.value)}
                         placeholder="Untitled"
-                        className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-400/30"
+                        className="h-8 rounded-lg border border-white/10 bg-slate-900/60 px-3 text-xs text-white outline-none transition focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-400/30"
                       />
                     </label>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Export</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => exportActivePage("txt")}
-                          disabled={!activePage}
-                          className="rounded-lg border border-white/15 bg-slate-900/60 px-2 py-2 text-xs text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          TXT
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => exportActivePage("html")}
-                          disabled={!activePage}
-                          className="rounded-lg border border-white/15 bg-slate-900/60 px-2 py-2 text-xs text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          HTML
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => exportActivePage("markdown")}
-                          disabled={!activePage}
-                          className="rounded-lg border border-white/15 bg-slate-900/60 px-2 py-2 text-xs text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Markdown
-                        </button>
-                      </div>
+                    <div ref={exportMenuRef} className={`relative ${!activePage ? "pointer-events-none opacity-50" : ""}`}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExportStatus(null);
+                          setIsExportMenuOpen((current) => !current);
+                        }}
+                        className={`${pageActionButtonClass} border-white/15 bg-slate-900/60 text-slate-200 hover:border-white/30 hover:bg-slate-900/80`}
+                      >
+                        Export
+                      </button>
+                      {isExportMenuOpen ? (
+                        <div className="absolute right-0 z-20 mt-1 flex w-[7.5rem] flex-col gap-1 rounded-lg border border-white/15 bg-slate-950/95 p-1 shadow-lg backdrop-blur select-none">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void exportActivePage("txt");
+                            }}
+                            className="rounded-md px-2 py-1 text-left text-xs text-slate-200 transition hover:bg-white/10"
+                          >
+                            TXT
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void exportActivePage("html");
+                            }}
+                            className="rounded-md px-2 py-1 text-left text-xs text-slate-200 transition hover:bg-white/10"
+                          >
+                            HTML
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void exportActivePage("markdown");
+                            }}
+                            className="rounded-md px-2 py-1 text-left text-xs text-slate-200 transition hover:bg-white/10"
+                          >
+                            Markdown
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                     <button
                       type="button"
                       onClick={deleteActivePage}
-                      className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm font-medium text-rose-100 transition hover:bg-rose-400/20"
+                      className={`${pageActionButtonClass} border-rose-300/30 bg-rose-400/10 text-rose-100 hover:bg-rose-400/20`}
                     >
                       Delete page
                     </button>
                   </div>
+                  {exportStatus ? (
+                    <p className={`text-xs ${exportStatus.kind === "error" ? "text-rose-200" : "text-cyan-100"}`}>{exportStatus.message}</p>
+                  ) : null}
 
                   <RichTextEditor
                     value={activePage.contentHtml}
