@@ -25,6 +25,7 @@ import {
   createBootstrapState,
   getLegacyBrowserMigrationPayload,
   matchesBootstrapSeed,
+  normalizeAppState,
 } from "../lib/storage";
 import type {
   AppState,
@@ -181,7 +182,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        startTransition(() => applySnapshot(snapshot));
+        const normalizedSnapshot = {
+          ...snapshot,
+          state: normalizeAppState(snapshot.state),
+        };
+
+        startTransition(() => applySnapshot(normalizedSnapshot));
 
         const legacyPayload = await getLegacyBrowserMigrationPayload();
         if (
