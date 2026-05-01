@@ -30,6 +30,13 @@ import {
 import type { ImportMode, StudyBlock, StudyBlockInput, WorkbookImportPreview } from "../types/models";
 import type { IcsImportPreview } from "../lib/ics-import";
 
+const compactPlannerButtonClassName =
+  "inline-flex h-8 items-center justify-center rounded-[12px] border border-white/10 bg-slate-900/70 px-3 text-[11px] font-medium text-slate-200 transition hover:border-cyan-300/25 hover:bg-slate-800/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-45";
+const compactPlannerDangerButtonClassName =
+  "inline-flex h-8 items-center justify-center rounded-[12px] border border-rose-400/20 bg-rose-500/10 px-3 text-[11px] font-medium text-rose-100 transition hover:border-rose-300/35 hover:bg-rose-500/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-45";
+const compactPlannerFieldClassName =
+  "h-8 rounded-[12px] border border-white/10 bg-slate-950/70 px-3 text-[11px] font-medium text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/35";
+
 function matchesSearch(task: StudyBlock, query: string) {
   if (!query) {
     return true;
@@ -526,6 +533,12 @@ export function PlannerView() {
   const [showEditor, setShowEditor] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showIcsImport, setShowIcsImport] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [bulkCategory, setBulkCategory] = useState("");
+  const [bulkDurationHours, setBulkDurationHours] = useState("0");
+  const [bulkDurationMinutes, setBulkDurationMinutes] = useState("0");
+  const [isBulkPending, setIsBulkPending] = useState(false);
 
   const id = useId();
   const deferredSearch = useDeferredValue(state.preferences.plannerFilters.search);
@@ -546,11 +559,29 @@ export function PlannerView() {
     }
     return true;
   });
+  const visibleTaskIds = selectedDateTasks.map((task) => task.id);
+  const visibleTaskIdSet = new Set(visibleTaskIds);
+  const selectedVisibleTaskIds = selectedTaskIds.filter((taskId) => visibleTaskIdSet.has(taskId));
+  const selectedVisibleTaskIdSet = new Set(selectedVisibleTaskIds);
+  const selectedVisibleTasks = selectedDateTasks.filter((task) => selectedVisibleTaskIdSet.has(task.id));
+  const selectedVisibleCount = selectedVisibleTasks.length;
+  const allVisibleSelected = selectedDateTasks.length > 0 && selectedVisibleCount === selectedDateTasks.length;
+  const categoryOptions = [...state.preferences.customCategories];
+  for (const task of allSelectedDateTasks) {
+    if (!categoryOptions.includes(task.category)) {
+      categoryOptions.push(task.category);
+    }
+  }
   const plannedMinutes = allSelectedDateTasks.reduce((total, task) => total + getStudyBlockMinutes(task), 0);
   const completedCount = allSelectedDateTasks.filter((task) => task.completed).length;
   const todayKey = getTodayKey();
   const selectedMonthKey = selectedDate.slice(0, 7);
   const tasksByDate = new Map<string, StudyBlock[]>();
+  const parsedBulkDurationHours =
+    bulkDurationHours.trim() === "" ? null : Number.isInteger(Number(bulkDurationHours)) && Number(bulkDurationHours) >= 0 ? Number(bulkDurationHours) : null;
+  const parsedBulkDurationMinutes =
+    bulkDurationMinutes.trim() === "" ? null : Number.isInteger(Number(bulkDurationMinutes)) && Number(bulkDurationMinutes) >= 0 ? Number(bulkDurationMinutes) : null;
+  const isBulkDurationValid = parsedBulkDurationHours !== null && parsedBulkDurationMinutes !== null;
 
   for (const task of state.studyBlocks) {
     const existing = tasksByDate.get(task.date);
@@ -565,6 +596,15 @@ export function PlannerView() {
     setEditorTask(undefined);
     setEditorSeedDate(seedDate);
     setShowEditor(true);
+  }
+
+  function clearBulkSelection() {
+    setSelectedTaskIds([]);
+  }
+
+  function exitSelectionMode() {
+    setIsSelectionMode(false);
+    clearBulkSelection();
   }
 
   async function toggleTask(task: StudyBlock, completed: boolean) {
@@ -592,6 +632,49 @@ export function PlannerView() {
     });
   }
 
+  async function runBulkUpdate(transform: (task: StudyBlock, updatedAt: string) => StudyBlock) {
+    if (!selectedVisibleTasks.length || isBulkPending) {
+      return;
+    }
+
+    setIsBulkPending(true);
+    const updatedAt = new Date().toISOString();
+
+    try {
+      for (const task of selectedVisibleTasks) {
+        await upsertStudyBlock(transform(task, updatedAt));
+      }
+    } finally {
+      setIsBulkPending(false);
+    }
+  }
+
+  async function handleBulkTrash() {
+    if (!selectedVisibleTasks.length || isBulkPending) {
+      return;
+    }
+
+    const taskLabel = selectedVisibleTasks.length === 1 ? "task" : "tasks";
+    if (!window.confirm(`Trash ${selectedVisibleTasks.length} selected ${taskLabel}?`)) {
+      return;
+    }
+
+    setIsBulkPending(true);
+    try {
+      for (const task of selectedVisibleTasks) {
+        await trashStudyBlock(task.id);
+      }
+      clearBulkSelection();
+    } finally {
+      setIsBulkPending(false);
+    }
+  }
+
+  function handlePlannerFocusDate(date: string) {
+    clearBulkSelection();
+    void setPlannerFocusDate(date);
+  }
+
   const periodDates = plannerMode === "week" ? weekDates : monthDates;
   const periodLabel = plannerMode === "week" ? `Week of ${formatLongDate(weekStart)}` : formatMonthLabel(selectedDate);
   const periodPreviousLabel = plannerMode === "week" ? "Previous week" : "Previous month";
@@ -609,6 +692,7 @@ export function PlannerView() {
             id={searchId}
             value={state.preferences.plannerFilters.search}
             onChange={(event) => {
+              clearBulkSelection();
               void updatePlannerFilters({ search: event.target.value });
             }}
             placeholder="Search task, category, or date"
@@ -620,6 +704,7 @@ export function PlannerView() {
           id={categoryFilterId}
           value={state.preferences.plannerFilters.category}
           onChange={(event) => {
+            clearBulkSelection();
             void updatePlannerFilters({ category: event.target.value });
           }}
           className={fieldClassName}
@@ -699,7 +784,7 @@ export function PlannerView() {
                 type="button"
                 className="h-8 rounded-[14px] border border-white/10 bg-slate-900/55 px-3 text-[11px] font-medium text-slate-300 transition hover:border-cyan-300/25 hover:bg-slate-800/80 hover:text-white"
                 onClick={() => {
-                  void setPlannerFocusDate(getTodayKey());
+                  handlePlannerFocusDate(getTodayKey());
                 }}
               >
                 Today
@@ -708,7 +793,7 @@ export function PlannerView() {
                 type="button"
                 className={iconButtonClassName}
                 onClick={() => {
-                  void setPlannerFocusDate(periodPreviousDate);
+                  handlePlannerFocusDate(periodPreviousDate);
                 }}
                 aria-label={periodPreviousLabel}
               >
@@ -718,7 +803,7 @@ export function PlannerView() {
                 type="button"
                 className={iconButtonClassName}
                 onClick={() => {
-                  void setPlannerFocusDate(periodNextDate);
+                  handlePlannerFocusDate(periodNextDate);
                 }}
                 aria-label={periodNextLabel}
               >
@@ -741,7 +826,7 @@ export function PlannerView() {
                         key={date}
                         type="button"
                         onClick={() => {
-                          void setPlannerFocusDate(date);
+                          handlePlannerFocusDate(date);
                         }}
                         className={`w-full rounded-[18px] border px-4 py-3 text-left transition ${
                           isSelected
@@ -791,7 +876,7 @@ export function PlannerView() {
                       <button
                         key={date}
                         type="button"
-                        onClick={() => void setPlannerFocusDate(date)}
+                        onClick={() => handlePlannerFocusDate(date)}
                         className={[
                           "flex min-h-0 h-full flex-col overflow-hidden bg-slate-950/45 px-2 py-2 text-left transition-colors duration-150",
                           isSelected
@@ -858,10 +943,27 @@ export function PlannerView() {
               <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Selected day</p>
               <h3 className="mt-1 text-base font-semibold text-white">{formatLongDate(selectedDate)}</h3>
             </div>
-            <button type="button" className={primaryButtonClassName} onClick={() => openNewTask(selectedDate)}>
-              <Plus className="h-4 w-4" />
-              Add task
-            </button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                className={compactPlannerButtonClassName}
+                onClick={() => {
+                  if (isSelectionMode) {
+                    exitSelectionMode();
+                    return;
+                  }
+
+                  setIsSelectionMode(true);
+                  clearBulkSelection();
+                }}
+              >
+                {isSelectionMode ? "Cancel" : "Select"}
+              </button>
+              <button type="button" className={primaryButtonClassName} onClick={() => openNewTask(selectedDate)}>
+                <Plus className="h-4 w-4" />
+                Add task
+              </button>
+            </div>
           </div>
 
           <div className="mb-3 grid grid-cols-3 gap-2">
@@ -878,6 +980,141 @@ export function PlannerView() {
               <p className="mt-1 text-sm font-semibold text-white">{formatMinutes(plannedMinutes)}</p>
             </div>
           </div>
+
+          {isSelectionMode ? (
+            <div className="mb-3 rounded-[18px] border border-white/10 bg-slate-950/45 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="mr-1 text-[11px] font-medium text-slate-300">
+                  {selectedVisibleCount} selected
+                </span>
+                <button
+                  type="button"
+                  className={compactPlannerButtonClassName}
+                  disabled={!selectedDateTasks.length || allVisibleSelected || isBulkPending}
+                  onClick={() => {
+                    setSelectedTaskIds(visibleTaskIds);
+                  }}
+                >
+                  Select all visible
+                </button>
+                <button
+                  type="button"
+                  className={compactPlannerButtonClassName}
+                  disabled={!selectedVisibleCount || isBulkPending}
+                  onClick={clearBulkSelection}
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  className={compactPlannerButtonClassName}
+                  disabled={!selectedVisibleCount || isBulkPending}
+                  onClick={() => {
+                    void runBulkUpdate((task, updatedAt) => ({
+                      ...task,
+                      completed: true,
+                      updatedAt,
+                    }));
+                  }}
+                >
+                  Mark complete
+                </button>
+                <button
+                  type="button"
+                  className={compactPlannerButtonClassName}
+                  disabled={!selectedVisibleCount || isBulkPending}
+                  onClick={() => {
+                    void runBulkUpdate((task, updatedAt) => ({
+                      ...task,
+                      completed: false,
+                      updatedAt,
+                    }));
+                  }}
+                >
+                  Mark incomplete
+                </button>
+                <select
+                  value={bulkCategory}
+                  onChange={(event) => setBulkCategory(event.target.value)}
+                  className={`${compactPlannerFieldClassName} min-w-[8.5rem] pr-8`}
+                  aria-label="Bulk category"
+                  disabled={!categoryOptions.length || isBulkPending}
+                >
+                  <option value="">Category</option>
+                  {categoryOptions.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className={compactPlannerButtonClassName}
+                  disabled={!selectedVisibleCount || !bulkCategory || isBulkPending}
+                  onClick={() => {
+                    void runBulkUpdate((task, updatedAt) => ({
+                      ...task,
+                      category: bulkCategory,
+                      updatedAt,
+                    }));
+                  }}
+                >
+                  Change category
+                </button>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={bulkDurationHours}
+                  onChange={(event) => setBulkDurationHours(event.target.value)}
+                  className={`${compactPlannerFieldClassName} w-[4.5rem]`}
+                  aria-label="Bulk duration hours"
+                  placeholder="Hr"
+                  disabled={isBulkPending}
+                />
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={bulkDurationMinutes}
+                  onChange={(event) => setBulkDurationMinutes(event.target.value)}
+                  className={`${compactPlannerFieldClassName} w-[4.75rem]`}
+                  aria-label="Bulk duration minutes"
+                  placeholder="Min"
+                  disabled={isBulkPending}
+                />
+                <button
+                  type="button"
+                  className={compactPlannerButtonClassName}
+                  disabled={!selectedVisibleCount || !isBulkDurationValid || isBulkPending}
+                  onClick={() => {
+                    if (parsedBulkDurationHours === null || parsedBulkDurationMinutes === null) {
+                      return;
+                    }
+
+                    void runBulkUpdate((task, updatedAt) => ({
+                      ...task,
+                      durationHours: parsedBulkDurationHours,
+                      durationMinutes: parsedBulkDurationMinutes,
+                      updatedAt,
+                    }));
+                  }}
+                >
+                  Change duration
+                </button>
+                <button
+                  type="button"
+                  className={compactPlannerDangerButtonClassName}
+                  disabled={!selectedVisibleCount || isBulkPending}
+                  onClick={() => {
+                    void handleBulkTrash();
+                  }}
+                >
+                  Trash
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle pr-1">
             {selectedDateTasks.length ? (
@@ -896,15 +1133,34 @@ export function PlannerView() {
                     >
                       <span className={`absolute inset-y-3 left-0 w-[3px] rounded-r-full ${tone.dotClassName}`} aria-hidden="true" />
                       <div className="flex items-start gap-3">
-                        <input
-                          type="checkbox"
-                          checked={task.completed}
-                          onChange={(event) => {
-                            void toggleTask(task, event.target.checked);
-                          }}
-                          aria-label={`Mark ${task.task} complete`}
-                          className="mt-0.5 h-5 w-5 rounded border-white/15 bg-slate-950 text-cyan-300"
-                        />
+                        {isSelectionMode ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedVisibleTaskIdSet.has(task.id)}
+                            onChange={(event) => {
+                              setSelectedTaskIds((current) =>
+                                event.target.checked
+                                  ? current.includes(task.id)
+                                    ? current
+                                    : [...current, task.id]
+                                  : current.filter((taskId) => taskId !== task.id),
+                              );
+                            }}
+                            aria-label={`Select ${task.task}`}
+                            className="mt-0.5 h-5 w-5 rounded border-white/15 bg-slate-950 text-cyan-300"
+                            disabled={isBulkPending}
+                          />
+                        ) : (
+                          <input
+                            type="checkbox"
+                            checked={task.completed}
+                            onChange={(event) => {
+                              void toggleTask(task, event.target.checked);
+                            }}
+                            aria-label={`Mark ${task.task} complete`}
+                            className="mt-0.5 h-5 w-5 rounded border-white/15 bg-slate-950 text-cyan-300"
+                          />
+                        )}
 
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
@@ -1018,6 +1274,7 @@ export function PlannerView() {
                     : maxOrderForDate + 1,
               });
               if (saved) {
+                clearBulkSelection();
                 void setPlannerFocusDate(draft.date);
                 setShowEditor(false);
               }
