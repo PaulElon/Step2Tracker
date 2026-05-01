@@ -749,15 +749,15 @@ export function PlannerView() {
                   })}
                 </div>
               ) : (
-                <div className="flex h-full min-h-0 flex-col gap-1.5">
+                <div className="flex h-full min-h-0 flex-col gap-1">
                   <div className="grid grid-cols-7 text-center">
                     {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-                      <div key={day} className="py-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">
+                      <div key={day} className="py-0.5 text-[10px] uppercase tracking-[0.12em] text-slate-500">
                         {day}
                       </div>
                     ))}
                   </div>
-                  <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px overflow-hidden rounded-[16px]">
+                  <div className="grid min-h-[31rem] flex-1 grid-cols-7 grid-rows-6 gap-px overflow-hidden rounded-[16px] xl:min-h-[34rem]">
                     {periodDates.map((date) => {
                       const dayTasks = tasksByDate.get(date) ?? [];
                       const isSelected = date === selectedDate;
@@ -787,7 +787,7 @@ export function PlannerView() {
                           ].join(" ")}
                         >
                           <div className="flex items-start justify-between gap-1">
-                            <span className="text-[12px] font-semibold leading-none text-slate-200">
+                            <span className="text-[12px] font-semibold leading-none text-slate-100">
                               {Number(date.slice(8))}
                             </span>
                             {isOverdue ? (
@@ -805,17 +805,17 @@ export function PlannerView() {
                                 return (
                                   <div
                                     key={task.id}
-                                    className={`flex min-w-0 items-center gap-1 overflow-hidden border-l-2 pl-1 ${tone.accentClassName}`}
+                                    className={`flex min-w-0 items-center gap-1 overflow-hidden rounded-[6px] border-l-2 px-1 py-0.5 ${tone.accentClassName}`}
                                   >
-                                    <span className={`h-2 w-2 shrink-0 rounded-full ring-1 ring-white/10 ${tone.dotClassName}`} />
-                                    <span className={`min-w-0 truncate text-[11px] font-medium leading-[1.15] ${tone.labelClassName}`}>
+                                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-white/10 ${tone.dotClassName}`} />
+                                    <span className={`min-w-0 truncate text-[12px] font-medium leading-[1.15] ${tone.labelClassName}`}>
                                       {task.task}
                                     </span>
                                   </div>
                                 );
                               })}
                               {hiddenCount > 0 ? (
-                                <div className="mt-auto text-[10px] font-medium leading-none text-slate-400">+{hiddenCount} more</div>
+                                <div className="mt-auto text-[10px] font-medium leading-none text-slate-300">+{hiddenCount} more</div>
                               ) : null}
                             </div>
                           </div>
