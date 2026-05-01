@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ModalShell } from "../components/modal-shell";
-import { RichTextEditor, richTextToPlain } from "../components/rich-text-editor";
+import { NotebookEditorAdapter } from "../components/notebook-editor-adapter";
+import { richTextToPlain } from "../components/rich-text-editor";
 import { useAppStore } from "../state/app-store";
 import type { NotebookDocument, NotebookFolder, NotebookPage } from "../types/models";
 
@@ -1270,7 +1271,7 @@ export function NotebookView() {
                           </div>
 
                           <div className="flex min-h-0 flex-1">
-                            <RichTextEditor
+                            <NotebookEditorAdapter
                               value={activePage.contentHtml}
                               onChange={(html) =>
                                 updateActivePage((page) => ({

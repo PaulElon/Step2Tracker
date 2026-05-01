@@ -1,7 +1,4 @@
 // Checked at runtime. Missing env var → false. No existing code is affected.
-// Only the single TimeFolio quarantine flag is introduced here. Internal
-// subfeature flags (sessionLog / analytics / tracker / account) will be added
-// later, once their corresponding subtabs inside the TimeFolio page exist.
 export const FF = {
   timefolio:
     import.meta.env.VITE_FF_TIMEFOLIO === "true" ||
@@ -9,4 +6,7 @@ export const FF = {
   notebook:
     import.meta.env.VITE_FF_NOTEBOOK === "true" ||
     (import.meta.env.DEV && import.meta.env.VITE_FF_NOTEBOOK !== "false"),
+  tiptapEditor:
+    import.meta.env.VITE_FF_TIPTAP_EDITOR === "true" ||
+    (import.meta.env.DEV && import.meta.env.VITE_FF_TIPTAP_EDITOR !== "false"),
 } as const;
