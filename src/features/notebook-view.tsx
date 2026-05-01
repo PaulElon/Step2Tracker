@@ -81,6 +81,78 @@ function createUntitledPage(order: number): NotebookPage {
   };
 }
 
+type NotebookExportFormat = "txt" | "html" | "markdown";
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function sanitizeFileNameSegment(value: string) {
+  const fallback = "notebook-page";
+  const cleaned = value
+    .trim()
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[.-]+|[.-]+$/g, "");
+  return cleaned || fallback;
+}
+
+function normalizeExportText(value: string) {
+  return value.replace(/\r\n/g, "\n").replace(/\u00a0/g, " ").trimEnd();
+}
+
+function createTxtExport(page: NotebookPage) {
+  const title = page.title.trim() || "Untitled";
+  const plainBody = normalizeExportText(richTextToPlain(page.contentHtml));
+  return plainBody ? `${title}\n\n${plainBody}\n` : `${title}\n`;
+}
+
+function createMarkdownExport(page: NotebookPage) {
+  const title = page.title.trim() || "Untitled";
+  const plainBody = normalizeExportText(richTextToPlain(page.contentHtml)).replace(/\n{3,}/g, "\n\n");
+  return plainBody ? `# ${title}\n\n${plainBody}\n` : `# ${title}\n`;
+}
+
+function createHtmlExport(page: NotebookPage) {
+  const title = page.title.trim() || "Untitled";
+  const escapedTitle = escapeHtml(title);
+  const contentHtml = page.contentHtml.trim();
+  const bodyHtml = contentHtml ? contentHtml : "<p></p>";
+  return [
+    "<!doctype html>",
+    "<html lang=\"en\">",
+    "<head>",
+    "  <meta charset=\"utf-8\" />",
+    "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />",
+    `  <title>${escapedTitle}</title>`,
+    "</head>",
+    "<body>",
+    `  <h1>${escapedTitle}</h1>`,
+    `  ${bodyHtml}`,
+    "</body>",
+    "</html>",
+  ].join("\n");
+}
+
+function downloadNotebookExport(fileName: string, content: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.rel = "noreferrer";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export function NotebookView() {
   const { state, persistenceStatus, lastSavedAt, setNotebookPages } = useAppStore();
   const [activePageId, setActivePageId] = useState<string | null>(null);
@@ -220,6 +292,23 @@ export function NotebookView() {
     const nextSortedPages = sortNotebookPages(remainingPages);
     void setNotebookPages(remainingPages);
     setActivePageId(nextSortedPages[0]?.id ?? null);
+  }
+
+  function exportActivePage(format: NotebookExportFormat) {
+    if (!activePage) {
+      return;
+    }
+
+    const baseName = sanitizeFileNameSegment(activePage.title || "Untitled");
+    if (format === "txt") {
+      downloadNotebookExport(`${baseName}.txt`, createTxtExport(activePage), "text/plain;charset=utf-8");
+      return;
+    }
+    if (format === "html") {
+      downloadNotebookExport(`${baseName}.html`, createHtmlExport(activePage), "text/html;charset=utf-8");
+      return;
+    }
+    downloadNotebookExport(`${baseName}.md`, createMarkdownExport(activePage), "text/markdown;charset=utf-8");
   }
 
   return (
@@ -405,6 +494,35 @@ export function NotebookView() {
                         className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-400/30"
                       />
                     </label>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Export</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => exportActivePage("txt")}
+                          disabled={!activePage}
+                          className="rounded-lg border border-white/15 bg-slate-900/60 px-2 py-2 text-xs text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          TXT
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => exportActivePage("html")}
+                          disabled={!activePage}
+                          className="rounded-lg border border-white/15 bg-slate-900/60 px-2 py-2 text-xs text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          HTML
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => exportActivePage("markdown")}
+                          disabled={!activePage}
+                          className="rounded-lg border border-white/15 bg-slate-900/60 px-2 py-2 text-xs text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Markdown
+                        </button>
+                      </div>
+                    </div>
                     <button
                       type="button"
                       onClick={deleteActivePage}
