@@ -458,56 +458,56 @@ function getMonthCategoryTone(category: string): MonthCategoryTone {
 
   if (normalized.includes("uworld")) {
     return {
-      accentClassName: "border-blue-400/40 bg-blue-400/10",
-      dotClassName: "bg-blue-400",
+      accentClassName: "border-blue-400/50 bg-blue-400/12",
+      dotClassName: "bg-blue-300",
       labelClassName: "text-slate-100",
     };
   }
 
   if (normalized.includes("practice exam") || normalized.includes("nbme") || normalized.includes("comsae")) {
     return {
-      accentClassName: "border-rose-400/40 bg-rose-400/10",
-      dotClassName: "bg-rose-400",
+      accentClassName: "border-rose-400/50 bg-rose-400/12",
+      dotClassName: "bg-rose-300",
       labelClassName: "text-slate-100",
     };
   }
 
   if (normalized.includes("break") || normalized.includes("meal")) {
     return {
-      accentClassName: "border-emerald-400/40 bg-emerald-400/10",
-      dotClassName: "bg-emerald-400",
+      accentClassName: "border-emerald-400/50 bg-emerald-400/12",
+      dotClassName: "bg-emerald-300",
       labelClassName: "text-slate-100",
     };
   }
 
   if (normalized.includes("work") || normalized.includes("gym")) {
     return {
-      accentClassName: "border-teal-400/40 bg-teal-400/10",
-      dotClassName: "bg-teal-400",
+      accentClassName: "border-teal-400/50 bg-teal-400/12",
+      dotClassName: "bg-teal-300",
       labelClassName: "text-slate-100",
     };
   }
 
   if (normalized.includes("anki")) {
     return {
-      accentClassName: "border-amber-400/40 bg-amber-400/10",
-      dotClassName: "bg-amber-400",
+      accentClassName: "border-amber-400/50 bg-amber-400/12",
+      dotClassName: "bg-amber-300",
       labelClassName: "text-slate-100",
     };
   }
 
   if (normalized.includes("review")) {
     return {
-      accentClassName: "border-violet-400/40 bg-violet-400/10",
-      dotClassName: "bg-violet-400",
+      accentClassName: "border-violet-400/50 bg-violet-400/12",
+      dotClassName: "bg-violet-300",
       labelClassName: "text-slate-100",
     };
   }
 
   return {
-    accentClassName: "border-slate-500/40 bg-white/[0.02]",
-    dotClassName: "bg-slate-500",
-    labelClassName: "text-slate-300",
+    accentClassName: "border-slate-500/50 bg-white/[0.03]",
+    dotClassName: "bg-slate-400",
+    labelClassName: "text-slate-200",
   };
 }
 
@@ -749,7 +749,7 @@ export function PlannerView() {
                   })}
                 </div>
               ) : (
-                <div className="flex h-full min-h-0 flex-col gap-2">
+                <div className="flex h-full min-h-0 flex-col gap-1.5">
                   <div className="grid grid-cols-7 text-center">
                     {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
                       <div key={day} className="py-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">
@@ -775,7 +775,7 @@ export function PlannerView() {
                           type="button"
                           onClick={() => void setPlannerFocusDate(date)}
                           className={[
-                            "flex h-full min-h-0 flex-col overflow-hidden p-1.5 text-left transition",
+                            "flex h-full min-h-0 flex-col overflow-hidden p-2 text-left transition",
                             isSelected
                               ? "bg-cyan-300/15 ring-1 ring-inset ring-cyan-300/30"
                               : isToday
@@ -787,18 +787,18 @@ export function PlannerView() {
                           ].join(" ")}
                         >
                           <div className="flex items-start justify-between gap-1">
-                            <span className="text-[11px] font-medium leading-none text-slate-300">
+                            <span className="text-[12px] font-semibold leading-none text-slate-200">
                               {Number(date.slice(8))}
                             </span>
                             {isOverdue ? (
-                              <span className="flex items-center gap-0.5 text-[9px] leading-none text-rose-300">
+                              <span className="flex items-center gap-0.5 text-[9px] font-medium leading-none text-rose-200">
                                 <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
                                 {overdueCount}
                               </span>
                             ) : null}
                           </div>
                           <div className="mt-1 min-h-0 flex-1 overflow-hidden">
-                            <div className="flex h-full min-h-0 flex-col gap-0.5 overflow-hidden">
+                            <div className="flex h-full min-h-0 flex-col gap-1 overflow-hidden">
                               {visibleTasks.map((task) => {
                                 const tone = getMonthCategoryTone(task.category);
 
@@ -807,15 +807,15 @@ export function PlannerView() {
                                     key={task.id}
                                     className={`flex min-w-0 items-center gap-1 overflow-hidden border-l-2 pl-1 ${tone.accentClassName}`}
                                   >
-                                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone.dotClassName}`} />
-                                    <span className={`min-w-0 truncate text-[10px] leading-4 ${tone.labelClassName}`}>
+                                    <span className={`h-2 w-2 shrink-0 rounded-full ring-1 ring-white/10 ${tone.dotClassName}`} />
+                                    <span className={`min-w-0 truncate text-[11px] font-medium leading-[1.15] ${tone.labelClassName}`}>
                                       {task.task}
                                     </span>
                                   </div>
                                 );
                               })}
                               {hiddenCount > 0 ? (
-                                <div className="mt-auto text-[10px] leading-none text-slate-500">+{hiddenCount} more</div>
+                                <div className="mt-auto text-[10px] font-medium leading-none text-slate-400">+{hiddenCount} more</div>
                               ) : null}
                             </div>
                           </div>
@@ -830,7 +830,7 @@ export function PlannerView() {
 
           <button
             type="button"
-            className={`${secondaryButtonClassName} mt-4 w-full justify-center shrink-0`}
+            className={`${secondaryButtonClassName} mt-3 w-full justify-center shrink-0`}
             onClick={() => {
               void setPlannerFocusDate(getTodayKey());
             }}
