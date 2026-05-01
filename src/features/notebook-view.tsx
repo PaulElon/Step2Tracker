@@ -23,8 +23,28 @@ function createUntitledPage(order: number): NotebookPage {
 export function NotebookView() {
   const { state, persistenceStatus, lastSavedAt, setNotebookPages } = useAppStore();
   const [activePageId, setActivePageId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortMode, setSortMode] = useState<"order" | "updatedAt">("order");
   const notebookPages = state.preferences.notebookPages;
   const sortedPages = useMemo(() => sortNotebookPages(notebookPages), [notebookPages]);
+  const displayedPages = useMemo(() => {
+    const basePages =
+      sortMode === "updatedAt"
+        ? [...notebookPages].sort(
+            (a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id),
+          )
+        : sortNotebookPages(notebookPages);
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return basePages;
+    }
+    return basePages.filter((page) => {
+      if (page.title.toLowerCase().includes(query)) {
+        return true;
+      }
+      return richTextToPlain(page.contentHtml).toLowerCase().includes(query);
+    });
+  }, [notebookPages, searchQuery, sortMode]);
 
   useEffect(() => {
     if (sortedPages.length === 0) {
@@ -39,6 +59,8 @@ export function NotebookView() {
   }, [activePageId, sortedPages]);
 
   const activePage = sortedPages.find((page) => page.id === activePageId) ?? sortedPages[0] ?? null;
+  const trimmedSearchQuery = searchQuery.trim();
+  const activePageShownInList = !!activePage && displayedPages.some((page) => page.id === activePage.id);
   const hasActiveContent = !!activePage && !!richTextToPlain(activePage.contentHtml).trim();
   const saveCopy =
     persistenceStatus === "booting"
@@ -107,9 +129,6 @@ export function NotebookView() {
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Study Notes</p>
             <p className="mt-1 text-sm text-slate-300">Use formatting shortcuts to capture details quickly.</p>
-            <p className="mt-1 text-xs text-slate-400">
-              MVP note: Dashboard Notes (`notesHtml`) remains a separate legacy/shared field for now.
-            </p>
           </div>
           <p className="text-xs text-slate-400">{saveCopy}</p>
         </div>
@@ -135,34 +154,103 @@ export function NotebookView() {
               >
                 + Create page
               </button>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search pages"
+                    className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-400/30"
+                  />
+                  {trimmedSearchQuery ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="rounded-lg border border-white/15 bg-slate-900/60 px-2 py-2 text-xs text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80"
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSortMode("order")}
+                    className={`rounded-lg border px-2 py-1 text-xs transition ${
+                      sortMode === "order"
+                        ? "border-cyan-300/40 bg-cyan-400/15 text-cyan-50"
+                        : "border-white/10 bg-slate-900/50 text-slate-300 hover:border-white/20 hover:bg-slate-900/70"
+                    }`}
+                  >
+                    By order
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSortMode("updatedAt")}
+                    className={`rounded-lg border px-2 py-1 text-xs transition ${
+                      sortMode === "updatedAt"
+                        ? "border-cyan-300/40 bg-cyan-400/15 text-cyan-50"
+                        : "border-white/10 bg-slate-900/50 text-slate-300 hover:border-white/20 hover:bg-slate-900/70"
+                    }`}
+                  >
+                    Last edited
+                  </button>
+                </div>
+              </div>
               <div className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-subtle">
-                <ul className="space-y-2">
-                  {sortedPages.map((page) => {
-                    const isActive = activePage?.id === page.id;
-                    const displayTitle = page.title.trim() || "Untitled";
-                    return (
-                      <li key={page.id}>
-                        <button
-                          type="button"
-                          onClick={() => setActivePageId(page.id)}
-                          className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition ${
-                            isActive
-                              ? "border-cyan-300/40 bg-cyan-400/15 text-cyan-50"
-                              : "border-white/10 bg-slate-900/50 text-slate-300 hover:border-white/20 hover:bg-slate-900/70"
-                          }`}
-                        >
-                          {displayTitle}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+                {displayedPages.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-white/10 bg-slate-950/20 p-3 text-xs text-slate-300">
+                    <p>{`No pages match "${trimmedSearchQuery}".`}</p>
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="mt-2 rounded-lg border border-white/15 bg-slate-900/60 px-2 py-1 text-xs text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80"
+                    >
+                      Clear search
+                    </button>
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {displayedPages.map((page) => {
+                      const isActive = activePage?.id === page.id;
+                      const displayTitle = page.title.trim() || "Untitled";
+                      return (
+                        <li key={page.id}>
+                          <button
+                            type="button"
+                            onClick={() => setActivePageId(page.id)}
+                            className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition ${
+                              isActive
+                                ? "border-cyan-300/40 bg-cyan-400/15 text-cyan-50"
+                                : "border-white/10 bg-slate-900/50 text-slate-300 hover:border-white/20 hover:bg-slate-900/70"
+                            }`}
+                          >
+                            {displayTitle}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
             </aside>
 
             <div className="flex min-h-0 flex-1 flex-col gap-3">
               {activePage ? (
                 <>
+                  {trimmedSearchQuery && !activePageShownInList ? (
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-white/15 bg-slate-950/30 px-3 py-2 text-xs text-slate-300">
+                      <p>This page is hidden by your search filter.</p>
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery("")}
+                        className="rounded-lg border border-white/15 bg-slate-900/60 px-2 py-1 text-xs text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80"
+                      >
+                        Clear search
+                      </button>
+                    </div>
+                  ) : null}
                   <div className="flex flex-wrap items-center gap-3">
                     <label className="flex min-w-[14rem] flex-1 flex-col gap-1">
                       <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Page title</span>
