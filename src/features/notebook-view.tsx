@@ -157,6 +157,9 @@ export function NotebookView() {
     [favoriteMap, state.preferences.notebookPages],
   );
   const sortedPages = useMemo(() => sortNotebookPages(notebookPages), [notebookPages]);
+  const canonicalIndexById = useMemo(() => {
+    return new Map(sortedPages.map((page, index) => [page.id, index]));
+  }, [sortedPages]);
   const displayedPages = useMemo(() => {
     const basePages =
       sortMode === "updatedAt"
@@ -260,6 +263,36 @@ export function NotebookView() {
     void setNotebookPages([...notebookPages, page]);
     setActivePageId(page.id);
     setExportStatus(null);
+  }
+
+  function movePage(pageId: string, direction: "up" | "down") {
+    const canonicalPages = sortNotebookPages(notebookPages);
+    const fromIndex = canonicalPages.findIndex((page) => page.id === pageId);
+    if (fromIndex === -1) {
+      return;
+    }
+
+    const toIndex = direction === "up" ? fromIndex - 1 : fromIndex + 1;
+    if (toIndex < 0 || toIndex >= canonicalPages.length) {
+      return;
+    }
+
+    const neighborId = canonicalPages[toIndex]?.id;
+    if (!neighborId) {
+      return;
+    }
+
+    const reordered = [...canonicalPages];
+    [reordered[fromIndex], reordered[toIndex]] = [reordered[toIndex], reordered[fromIndex]];
+    const nextOrderById = new Map(reordered.map((page, index) => [page.id, index]));
+    const now = new Date().toISOString();
+
+    const nextPages = notebookPages.map((page) => ({
+      ...page,
+      order: nextOrderById.get(page.id) ?? page.order,
+      updatedAt: page.id === pageId || page.id === neighborId ? now : page.updatedAt,
+    }));
+    void setNotebookPages(nextPages);
   }
 
   function renameActivePage(title: string) {
@@ -473,6 +506,10 @@ export function NotebookView() {
                     {displayedPages.map((page) => {
                       const isActive = activePage?.id === page.id;
                       const displayTitle = page.title.trim() || "Untitled";
+                      const canonicalIndex = canonicalIndexById.get(page.id) ?? -1;
+                      const reorderDisabled = sortMode === "updatedAt";
+                      const disableMoveUp = reorderDisabled || canonicalIndex <= 0;
+                      const disableMoveDown = reorderDisabled || canonicalIndex >= sortedPages.length - 1;
                       return (
                         <li key={page.id}>
                           <div className="flex items-center gap-2">
@@ -487,6 +524,54 @@ export function NotebookView() {
                             >
                               {displayTitle}
                             </button>
+                            <div className="flex flex-col gap-1">
+                              <button
+                                type="button"
+                                aria-label="Move page up"
+                                title={
+                                  reorderDisabled
+                                    ? "Switch to By order to reorder pages."
+                                    : disableMoveUp
+                                      ? "Already first page."
+                                      : "Move page up"
+                                }
+                                disabled={disableMoveUp}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  if (disableMoveUp) {
+                                    return;
+                                  }
+                                  movePage(page.id, "up");
+                                }}
+                                className="h-4 w-5 rounded border border-white/15 bg-slate-900/60 text-[10px] leading-none text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                aria-label="Move page down"
+                                title={
+                                  reorderDisabled
+                                    ? "Switch to By order to reorder pages."
+                                    : disableMoveDown
+                                      ? "Already last page."
+                                      : "Move page down"
+                                }
+                                disabled={disableMoveDown}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  if (disableMoveDown) {
+                                    return;
+                                  }
+                                  movePage(page.id, "down");
+                                }}
+                                className="h-4 w-5 rounded border border-white/15 bg-slate-900/60 text-[10px] leading-none text-slate-200 transition hover:border-white/30 hover:bg-slate-900/80 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                ↓
+                              </button>
+                            </div>
                             <button
                               type="button"
                               aria-label={page.favorited ? "Unfavorite page" : "Favorite page"}
