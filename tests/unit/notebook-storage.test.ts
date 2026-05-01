@@ -166,6 +166,7 @@ test("normalizePreferences preserves notebookFolders and sorts by ascending orde
         {
           id: "early-folder",
           name: "Early Folder",
+          parentFolderId: "root-folder",
           order: 1,
           createdAt: "2026-01-02T00:00:00.000Z",
           updatedAt: "2026-01-02T00:00:00.000Z",
@@ -179,6 +180,7 @@ test("normalizePreferences preserves notebookFolders and sorts by ascending orde
     ["early-folder", "late-folder"],
   );
   assert.equal(normalized.preferences.notebookFolders[0]?.name, "Early Folder");
+  assert.equal(normalized.preferences.notebookFolders[0]?.parentFolderId, "root-folder");
 });
 
 test("normalizePreferences coerces missing or malformed notebookFolders to []", () => {
@@ -193,6 +195,53 @@ test("normalizePreferences coerces missing or malformed notebookFolders to []", 
     },
   });
   assert.deepEqual(malformed.preferences.notebookFolders, []);
+});
+
+test("normalizePreferences drops missing, null, empty, or non-string notebook folder parentFolderId", () => {
+  const normalized = normalizeAppState({
+    preferences: {
+      notebookFolders: [
+        {
+          id: "missing-parent",
+          name: "Missing Parent",
+          order: 0,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          id: "null-parent",
+          name: "Null Parent",
+          parentFolderId: null as unknown as string,
+          order: 1,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          id: "empty-parent",
+          name: "Empty Parent",
+          parentFolderId: "   ",
+          order: 2,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          id: "non-string-parent",
+          name: "Non String Parent",
+          parentFolderId: 42 as unknown as string,
+          order: 3,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(normalized.preferences.notebookFolders.map((folder) => folder.parentFolderId), [
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+  ]);
 });
 
 test("normalizePreferences preserves valid notebook page folderId values", () => {

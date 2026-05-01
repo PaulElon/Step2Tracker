@@ -747,9 +747,11 @@ function normalizeNotebookFolder(input: Partial<NotebookFolder> | undefined, fal
   const timestamp = nowIso();
   const safeCreatedAt = sanitizeText(input?.createdAt) || timestamp;
   const safeUpdatedAt = sanitizeText(input?.updatedAt) || timestamp;
+  const parentFolderId = typeof input?.parentFolderId === "string" ? input.parentFolderId.trim() : "";
   return {
     id: sanitizeText(input?.id) || fallbackId || createId("nb-folder"),
     name: sanitizeText(input?.name) || "Untitled Folder",
+    parentFolderId: parentFolderId || undefined,
     order: Math.trunc(sanitizeNumber(input?.order, 0)),
     createdAt: safeCreatedAt,
     updatedAt: safeUpdatedAt,

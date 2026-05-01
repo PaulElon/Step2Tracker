@@ -163,6 +163,7 @@ export interface ExamTimer {
 export interface NotebookFolder {
   id: string;
   name: string;
+  parentFolderId?: string;
   order: number;
   createdAt: string;
   updatedAt: string;
