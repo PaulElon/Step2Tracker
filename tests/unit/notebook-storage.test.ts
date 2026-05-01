@@ -183,6 +183,65 @@ test("normalizePreferences preserves notebookFolders and sorts by ascending orde
   assert.equal(normalized.preferences.notebookFolders[0]?.parentFolderId, "root-folder");
 });
 
+test("normalizePreferences defaults notebook folder favorited to false when missing", () => {
+  const normalized = normalizeAppState({
+    preferences: {
+      notebookFolders: [
+        {
+          id: "folder-missing-favorite",
+          name: "Missing Favorite",
+          order: 0,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    },
+  });
+
+  const folder = normalized.preferences.notebookFolders[0] as unknown as { favorited?: boolean };
+  assert.equal(folder?.favorited, false);
+});
+
+test("normalizePreferences preserves notebook folder favorited true", () => {
+  const normalized = normalizeAppState({
+    preferences: {
+      notebookFolders: [
+        {
+          id: "folder-favorited",
+          name: "Favorited Folder",
+          favorited: true,
+          order: 0,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        } as unknown as Record<string, unknown>,
+      ],
+    },
+  });
+
+  const folder = normalized.preferences.notebookFolders[0] as unknown as { favorited?: boolean };
+  assert.equal(folder?.favorited, true);
+});
+
+test("normalizePreferences coerces non-boolean notebook folder favorited to false", () => {
+  const normalized = normalizeAppState({
+    preferences: {
+      notebookFolders: [
+        {
+          id: "folder-invalid-favorite",
+          name: "Invalid Favorite",
+          favorited: "true",
+          order: 0,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        } as unknown as Record<string, unknown>,
+      ],
+    },
+  });
+
+  const folder = normalized.preferences.notebookFolders[0] as unknown as { favorited?: boolean };
+  assert.equal(folder?.favorited, false);
+});
+
 test("normalizePreferences coerces missing or malformed notebookFolders to []", () => {
   const missing = normalizeAppState({
     preferences: {},

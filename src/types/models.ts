@@ -164,6 +164,7 @@ export interface NotebookFolder {
   id: string;
   name: string;
   parentFolderId?: string;
+  favorited?: boolean;
   order: number;
   createdAt: string;
   updatedAt: string;

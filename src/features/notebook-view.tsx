@@ -394,6 +394,7 @@ export function NotebookView() {
       id: makeId("nb-folder"),
       name,
       parentFolderId: currentFolderId ?? undefined,
+      favorited: false,
       order: siblingFolders.reduce((maxOrder, folder) => Math.max(maxOrder, folder.order), -1) + 1,
       createdAt: now,
       updatedAt: now,
@@ -403,6 +404,29 @@ export function NotebookView() {
       setStatus({
         kind: "error",
         message: "Unable to create this folder.",
+      });
+      return false;
+    }
+
+    setStatus(null);
+    return true;
+  }
+
+  async function handleToggleFolderFavorite(folderId: string) {
+    const nextFolders = notebookFolders.map((folder) =>
+      folder.id === folderId
+        ? {
+            ...folder,
+            favorited: folder.favorited !== true,
+            updatedAt: nowIso(),
+          }
+        : folder,
+    );
+    const saved = await setNotebookFolders(nextFolders);
+    if (!saved) {
+      setStatus({
+        kind: "error",
+        message: "Unable to update this folder.",
       });
       return false;
     }
@@ -864,69 +888,89 @@ export function NotebookView() {
                       ref={tileActionMenu?.kind === "folder" && tileActionMenu.folderId === folder.id ? tileActionMenuRef : null}
                       className="group relative overflow-visible"
                     >
-	                      <button
-	                        type="button"
-	                        onClick={() => {
-	                          setCurrentFolderId(folder.id);
-	                          setSearchQuery("");
-	                          setStatus(null);
-	                        }}
-	                        className="relative z-0 flex w-full flex-col items-center gap-3 rounded-[28px] border border-transparent px-3 py-4 text-center transition hover:border-white/10 hover:bg-white/[0.04]"
-	                      >
-	                        <div className="relative h-20 w-24">
-	                          <div className="absolute left-3 top-2 h-4 w-11 rounded-t-2xl bg-amber-200/85" />
-	                          <div className="absolute inset-x-0 bottom-0 top-5 rounded-[22px] border border-amber-100/10 bg-gradient-to-br from-amber-200/95 via-amber-300/85 to-orange-300/70 shadow-[0_18px_40px_rgba(251,191,36,0.16)]" />
-	                        </div>
-	                        <span className="w-full min-w-0 line-clamp-2 text-sm font-medium text-slate-100">
-	                          {folder.name.trim() || "Untitled Folder"}
-	                        </span>
-	                      </button>
-	                      <button
-	                        type="button"
-	                        aria-label={`Folder actions for ${folder.name.trim() || "Untitled Folder"}`}
-	                        aria-haspopup="menu"
-	                        aria-expanded={tileActionMenu?.kind === "folder" && tileActionMenu.folderId === folder.id}
-	                        onClick={(event) => {
-	                          event.stopPropagation();
-	                          setTileActionMenu((current) =>
-	                            current?.kind === "folder" && current.folderId === folder.id ? null : { kind: "folder", folderId: folder.id },
-	                          );
-	                        }}
-	                        className="absolute right-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-slate-950/70 text-lg leading-none text-slate-100 opacity-80 shadow-lg shadow-black/25 transition hover:border-white/25 hover:bg-slate-900/90 hover:opacity-100 focus-visible:border-cyan-300/40 focus-visible:bg-slate-900/90 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30"
-	                      >
-	                        ⋯
-	                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentFolderId(folder.id);
+                          setSearchQuery("");
+                          setStatus(null);
+                        }}
+                        className="relative z-0 flex w-full flex-col items-center gap-3 rounded-[28px] border border-transparent px-3 py-4 text-center transition hover:border-white/10 hover:bg-white/[0.04]"
+                      >
+                        <div className="relative h-20 w-24">
+                          <div className="absolute left-3 top-2 h-4 w-11 rounded-t-2xl bg-amber-200/85" />
+                          <div className="absolute inset-x-0 bottom-0 top-5 rounded-[22px] border border-amber-100/10 bg-gradient-to-br from-amber-200/95 via-amber-300/85 to-orange-300/70 shadow-[0_18px_40px_rgba(251,191,36,0.16)]" />
+                        </div>
+                        <div className="flex w-full min-w-0 items-center justify-center gap-1">
+                          <span className="min-w-0 truncate text-sm font-medium text-slate-100">
+                            {folder.name.trim() || "Untitled Folder"}
+                          </span>
+                          {folder.favorited === true ? (
+                            <span aria-hidden="true" className="shrink-0 text-[0.7rem] leading-none text-rose-400">
+                              ★
+                            </span>
+                          ) : null}
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Folder actions for ${folder.name.trim() || "Untitled Folder"}`}
+                        aria-haspopup="menu"
+                        aria-expanded={tileActionMenu?.kind === "folder" && tileActionMenu.folderId === folder.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setTileActionMenu((current) =>
+                            current?.kind === "folder" && current.folderId === folder.id ? null : { kind: "folder", folderId: folder.id },
+                          );
+                        }}
+                        className="absolute right-2 top-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-none border-0 bg-transparent p-0 text-base leading-none text-slate-300 opacity-80 shadow-none transition hover:text-slate-100 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30"
+                      >
+                        ⋯
+                      </button>
                       {tileActionMenu?.kind === "folder" && tileActionMenu.folderId === folder.id ? (
                         <div
                           className="absolute right-2 top-12 z-20 w-40 rounded-2xl border border-white/10 bg-slate-950/95 p-1 shadow-[0_18px_40px_rgba(2,6,23,0.45)] backdrop-blur"
                           onClick={(event) => event.stopPropagation()}
                         >
-	                          <button
-	                            type="button"
-	                            onClick={(event) => {
-	                              event.stopPropagation();
-	                              closeTileActionMenu();
-	                              handleRenameFolder(folder);
-	                            }}
-	                            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-white/10"
-	                          >
-	                            Rename
-	                          </button>
-	                          <button
-	                            type="button"
-	                            onClick={(event) => {
-	                              event.stopPropagation();
-	                              closeTileActionMenu();
-	                              handleDeleteFolder(folder);
-	                            }}
-	                            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-rose-100 transition hover:bg-rose-500/10"
-	                          >
-	                            Delete
-	                          </button>
-	                        </div>
-	                      ) : null}
-	                    </div>
-	                  ))}
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              closeTileActionMenu();
+                              handleRenameFolder(folder);
+                            }}
+                            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-white/10"
+                          >
+                            Rename
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              closeTileActionMenu();
+                              void handleToggleFolderFavorite(folder.id);
+                            }}
+                            className={`flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition ${
+                              folder.favorited === true ? "text-rose-100 hover:bg-rose-500/10" : "text-slate-100 hover:bg-white/10"
+                            }`}
+                          >
+                            {folder.favorited === true ? "Unfavorite" : "Favorite"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              closeTileActionMenu();
+                              handleDeleteFolder(folder);
+                            }}
+                            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-rose-100 transition hover:bg-rose-500/10"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
 
                   {visibleDocuments.map((document) => (
                     <div
@@ -934,86 +978,92 @@ export function NotebookView() {
                       ref={tileActionMenu?.kind === "document" && tileActionMenu.documentId === document.id ? tileActionMenuRef : null}
                       className="group relative overflow-visible"
                     >
-	                      <button
-	                        type="button"
-	                        onClick={() => {
-	                          void openDocument(document);
-	                        }}
-	                        className="relative z-0 flex w-full flex-col items-center gap-3 rounded-[28px] border border-transparent px-3 py-4 text-center transition hover:border-white/10 hover:bg-white/[0.04]"
-	                      >
-	                        <div className="relative flex h-20 w-20 items-center justify-center rounded-[24px] border border-white/10 bg-gradient-to-br from-slate-100/95 via-slate-200/90 to-slate-300/75 shadow-[0_18px_40px_rgba(148,163,184,0.16)]">
-	                          <div className="absolute right-3 top-3 h-4 w-4 rotate-45 rounded-sm bg-slate-500/20" />
-	                          <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void openDocument(document);
+                        }}
+                        className="relative z-0 flex w-full flex-col items-center gap-3 rounded-[28px] border border-transparent px-3 py-4 text-center transition hover:border-white/10 hover:bg-white/[0.04]"
+                      >
+                        <div className="relative flex h-20 w-20 items-center justify-center rounded-[24px] border border-white/10 bg-gradient-to-br from-slate-100/95 via-slate-200/90 to-slate-300/75 shadow-[0_18px_40px_rgba(148,163,184,0.16)]">
+                          <div className="space-y-2">
                             <div className="h-[2px] w-8 rounded-full bg-slate-600/70" />
                             <div className="h-[2px] w-8 rounded-full bg-slate-600/45" />
-	                            <div className="h-[2px] w-6 rounded-full bg-slate-600/30" />
-	                          </div>
-	                        </div>
-	                        <span className="w-full min-w-0 line-clamp-2 text-sm font-medium text-slate-100">
-	                          {document.title.trim() || "Untitled Document"}
-	                        </span>
-	                      </button>
-	                      <button
-	                        type="button"
-	                        aria-label={`Document actions for ${document.title.trim() || "Untitled Document"}`}
-	                        aria-haspopup="menu"
-	                        aria-expanded={tileActionMenu?.kind === "document" && tileActionMenu.documentId === document.id}
-	                        onClick={(event) => {
-	                          event.stopPropagation();
-	                          setTileActionMenu((current) =>
-	                            current?.kind === "document" && current.documentId === document.id
-	                              ? null
-	                              : { kind: "document", documentId: document.id },
-	                          );
-	                        }}
-	                        className="absolute right-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-slate-950/70 text-lg leading-none text-slate-100 opacity-80 shadow-lg shadow-black/25 transition hover:border-white/25 hover:bg-slate-900/90 hover:opacity-100 focus-visible:border-cyan-300/40 focus-visible:bg-slate-900/90 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30"
-	                      >
-	                        ⋯
-	                      </button>
+                            <div className="h-[2px] w-6 rounded-full bg-slate-600/30" />
+                          </div>
+                        </div>
+                        <div className="flex w-full min-w-0 items-center justify-center gap-1">
+                          <span className="min-w-0 truncate text-sm font-medium text-slate-100">
+                            {document.title.trim() || "Untitled Document"}
+                          </span>
+                          {document.favorited === true ? (
+                            <span aria-hidden="true" className="shrink-0 text-[0.7rem] leading-none text-rose-400">
+                              ★
+                            </span>
+                          ) : null}
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Document actions for ${document.title.trim() || "Untitled Document"}`}
+                        aria-haspopup="menu"
+                        aria-expanded={tileActionMenu?.kind === "document" && tileActionMenu.documentId === document.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setTileActionMenu((current) =>
+                            current?.kind === "document" && current.documentId === document.id
+                              ? null
+                              : { kind: "document", documentId: document.id },
+                          );
+                        }}
+                        className="absolute right-2 top-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-none border-0 bg-transparent p-0 text-base leading-none text-slate-300 opacity-80 shadow-none transition hover:text-slate-100 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30"
+                      >
+                        ⋯
+                      </button>
                       {tileActionMenu?.kind === "document" && tileActionMenu.documentId === document.id ? (
                         <div
                           className="absolute right-2 top-12 z-20 w-40 rounded-2xl border border-white/10 bg-slate-950/95 p-1 shadow-[0_18px_40px_rgba(2,6,23,0.45)] backdrop-blur"
                           onClick={(event) => event.stopPropagation()}
                         >
-	                          <button
-	                            type="button"
-	                            onClick={(event) => {
-	                              event.stopPropagation();
-	                              closeTileActionMenu();
-	                              handleRenameDocument(document);
-	                            }}
-	                            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-white/10"
-	                          >
-	                            Rename
-	                          </button>
-	                          <button
-	                            type="button"
-	                            onClick={(event) => {
-	                              event.stopPropagation();
-	                              closeTileActionMenu();
-	                              void handleToggleDocumentFavorite(document.id);
-	                            }}
-	                            className={`flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition ${
-	                              document.favorited ? "text-amber-100 hover:bg-amber-400/10" : "text-slate-100 hover:bg-white/10"
-	                            }`}
-	                          >
-	                            {document.favorited ? "Unfavorite" : "Favorite"}
-	                          </button>
-	                          <button
-	                            type="button"
-	                            onClick={(event) => {
-	                              event.stopPropagation();
-	                              closeTileActionMenu();
-	                              handleDeleteDocument(document);
-	                            }}
-	                            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-rose-100 transition hover:bg-rose-500/10"
-	                          >
-	                            Delete
-	                          </button>
-	                        </div>
-	                      ) : null}
-	                    </div>
-	                  ))}
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              closeTileActionMenu();
+                              handleRenameDocument(document);
+                            }}
+                            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-white/10"
+                          >
+                            Rename
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              closeTileActionMenu();
+                              void handleToggleDocumentFavorite(document.id);
+                            }}
+                            className={`flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition ${
+                              document.favorited ? "text-rose-100 hover:bg-rose-500/10" : "text-slate-100 hover:bg-white/10"
+                            }`}
+                          >
+                            {document.favorited ? "Unfavorite" : "Favorite"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              closeTileActionMenu();
+                              handleDeleteDocument(document);
+                            }}
+                            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-rose-100 transition hover:bg-rose-500/10"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="flex h-full min-h-[18rem] flex-col items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-slate-950/20 px-6 text-center">

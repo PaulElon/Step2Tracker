@@ -752,6 +752,7 @@ function normalizeNotebookFolder(input: Partial<NotebookFolder> | undefined, fal
     id: sanitizeText(input?.id) || fallbackId || createId("nb-folder"),
     name: sanitizeText(input?.name) || "Untitled Folder",
     parentFolderId: parentFolderId || undefined,
+    favorited: input?.favorited === true,
     order: Math.trunc(sanitizeNumber(input?.order, 0)),
     createdAt: safeCreatedAt,
     updatedAt: safeUpdatedAt,
