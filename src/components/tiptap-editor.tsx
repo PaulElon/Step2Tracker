@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -14,8 +14,17 @@ type ToolbarButtonProps = {
   onClick?: () => void;
 };
 
-function ToolbarDivider() {
-  return <span aria-hidden="true" className="tiptap-editor__divider" />;
+type ToolbarGroupProps = {
+  children: ReactNode;
+  label: string;
+};
+
+function ToolbarGroup({ children, label }: ToolbarGroupProps) {
+  return (
+    <div className="tiptap-editor__group" role="group" aria-label={label}>
+      {children}
+    </div>
+  );
 }
 
 function ToolbarButton({ children, active = false, disabled = false, title, onClick }: ToolbarButtonProps) {
@@ -44,6 +53,8 @@ export function TiptapEditor({
   minLines = 1,
   scrollable = false,
 }: NotebookEditorProps) {
+  const lastEmittedHtmlRef = useRef(value || "");
+
   const editor = useEditor({
     content: value || "",
     extensions: [
@@ -67,7 +78,9 @@ export function TiptapEditor({
       },
     },
     onUpdate: ({ editor: nextEditor }) => {
-      onChange(nextEditor.getHTML());
+      const html = nextEditor.getHTML();
+      lastEmittedHtmlRef.current = html;
+      onChange(html);
     },
   });
 
@@ -77,9 +90,11 @@ export function TiptapEditor({
     const currentHtml = editor.getHTML();
     const nextHtml = value || "";
 
-    if (currentHtml !== nextHtml) {
-      editor.commands.setContent(nextHtml, { emitUpdate: false });
-    }
+    if (nextHtml === lastEmittedHtmlRef.current) return;
+    if (currentHtml === nextHtml) return;
+
+    lastEmittedHtmlRef.current = nextHtml;
+    editor.commands.setContent(nextHtml, { emitUpdate: false });
   }, [editor, value]);
 
   const minHeight = `${Math.max(1, minLines) * 1.5}em`;
@@ -128,130 +143,130 @@ export function TiptapEditor({
 
   const toolbar = (
     <div className="tiptap-editor__toolbar" role="toolbar" aria-label="Text formatting">
-      <ToolbarButton title="Undo" disabled={!isEditorReady || !canUndo} onClick={() => editor?.chain().focus().undo().run()}>
-        Undo
-      </ToolbarButton>
-      <ToolbarButton title="Redo" disabled={!isEditorReady || !canRedo} onClick={() => editor?.chain().focus().redo().run()}>
-        Redo
-      </ToolbarButton>
-      <ToolbarDivider />
-      <ToolbarButton title="Bold" active={isBold} disabled={!isEditorReady} onClick={() => editor?.chain().focus().toggleBold().run()}>
-        B
-      </ToolbarButton>
-      <ToolbarButton title="Italic" active={isItalic} disabled={!isEditorReady} onClick={() => editor?.chain().focus().toggleItalic().run()}>
-        I
-      </ToolbarButton>
-      <ToolbarButton title="Underline" active={isUnderline} disabled={!isEditorReady} onClick={() => editor?.chain().focus().toggleUnderline().run()}>
-        U
-      </ToolbarButton>
-      <ToolbarDivider />
-      <ToolbarButton title="Link" active={isLink} disabled={!isEditorReady} onClick={setLink}>
-        Link
-      </ToolbarButton>
-      <ToolbarButton title="Unlink" disabled={!isEditorReady} onClick={() => editor?.chain().focus().unsetLink().run()}>
-        Unlink
-      </ToolbarButton>
-      <ToolbarDivider />
-      <ToolbarButton title="Paragraph" active={isParagraph} disabled={!isEditorReady} onClick={() => editor?.chain().focus().setParagraph().run()}>
-        P
-      </ToolbarButton>
-      <ToolbarButton
-        title="Heading 1"
-        active={isHeading1}
-        disabled={!isEditorReady}
-        onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
-      >
-        H1
-      </ToolbarButton>
-      <ToolbarButton
-        title="Heading 2"
-        active={isHeading2}
-        disabled={!isEditorReady}
-        onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
-      >
-        H2
-      </ToolbarButton>
-      <ToolbarButton
-        title="Heading 3"
-        active={isHeading3}
-        disabled={!isEditorReady}
-        onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
-      >
-        H3
-      </ToolbarButton>
-      <ToolbarDivider />
-      <ToolbarButton
-        title="Blockquote"
-        active={isBlockquote}
-        disabled={!isEditorReady}
-        onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-      >
-        Q
-      </ToolbarButton>
-      <ToolbarButton
-        title="Code block"
-        active={isCodeBlock}
-        disabled={!isEditorReady}
-        onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
-      >
-        Code
-      </ToolbarButton>
-      <ToolbarButton
-        title="Horizontal rule"
-        disabled={!isEditorReady}
-        onClick={() => editor?.chain().focus().setHorizontalRule().run()}
-      >
-        HR
-      </ToolbarButton>
-      <ToolbarButton
-        title="Clear formatting"
-        disabled={!isEditorReady}
-        onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()}
-      >
-        Clear
-      </ToolbarButton>
-      <ToolbarDivider />
-      <ToolbarButton
-        title="Align left"
-        active={isAlignLeft}
-        disabled={!isEditorReady}
-        onClick={() => editor?.chain().focus().setTextAlign("left").run()}
-      >
-        L
-      </ToolbarButton>
-      <ToolbarButton
-        title="Align center"
-        active={isAlignCenter}
-        disabled={!isEditorReady}
-        onClick={() => editor?.chain().focus().setTextAlign("center").run()}
-      >
-        C
-      </ToolbarButton>
-      <ToolbarButton
-        title="Align right"
-        active={isAlignRight}
-        disabled={!isEditorReady}
-        onClick={() => editor?.chain().focus().setTextAlign("right").run()}
-      >
-        R
-      </ToolbarButton>
-      <ToolbarDivider />
-      <ToolbarButton
-        title="Bullet list"
-        active={isBulletList}
-        disabled={!isEditorReady}
-        onClick={() => editor?.chain().focus().toggleBulletList().run()}
-      >
-        •
-      </ToolbarButton>
-      <ToolbarButton
-        title="Numbered list"
-        active={isOrderedList}
-        disabled={!isEditorReady}
-        onClick={() => editor?.chain().focus().toggleOrderedList().run()}
-      >
-        1.
-      </ToolbarButton>
+      <ToolbarGroup label="History controls">
+        <ToolbarButton title="Undo" disabled={!isEditorReady || !canUndo} onClick={() => editor?.chain().focus().undo().run()}>
+          Undo
+        </ToolbarButton>
+        <ToolbarButton title="Redo" disabled={!isEditorReady || !canRedo} onClick={() => editor?.chain().focus().redo().run()}>
+          Redo
+        </ToolbarButton>
+      </ToolbarGroup>
+      <ToolbarGroup label="Text styles">
+        <ToolbarButton title="Paragraph" active={isParagraph} disabled={!isEditorReady} onClick={() => editor?.chain().focus().setParagraph().run()}>
+          P
+        </ToolbarButton>
+        <ToolbarButton
+          title="Heading 1"
+          active={isHeading1}
+          disabled={!isEditorReady}
+          onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
+        >
+          H1
+        </ToolbarButton>
+        <ToolbarButton
+          title="Heading 2"
+          active={isHeading2}
+          disabled={!isEditorReady}
+          onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+        >
+          H2
+        </ToolbarButton>
+        <ToolbarButton
+          title="Heading 3"
+          active={isHeading3}
+          disabled={!isEditorReady}
+          onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
+        >
+          H3
+        </ToolbarButton>
+      </ToolbarGroup>
+      <ToolbarGroup label="Inline formatting">
+        <ToolbarButton title="Bold" active={isBold} disabled={!isEditorReady} onClick={() => editor?.chain().focus().toggleBold().run()}>
+          B
+        </ToolbarButton>
+        <ToolbarButton title="Italic" active={isItalic} disabled={!isEditorReady} onClick={() => editor?.chain().focus().toggleItalic().run()}>
+          I
+        </ToolbarButton>
+        <ToolbarButton title="Underline" active={isUnderline} disabled={!isEditorReady} onClick={() => editor?.chain().focus().toggleUnderline().run()}>
+          U
+        </ToolbarButton>
+      </ToolbarGroup>
+      <ToolbarGroup label="Lists">
+        <ToolbarButton title="Bullet list" active={isBulletList} disabled={!isEditorReady} onClick={() => editor?.chain().focus().toggleBulletList().run()}>
+          Bullet
+        </ToolbarButton>
+        <ToolbarButton title="Numbered list" active={isOrderedList} disabled={!isEditorReady} onClick={() => editor?.chain().focus().toggleOrderedList().run()}>
+          Numbered
+        </ToolbarButton>
+      </ToolbarGroup>
+      <ToolbarGroup label="Block formatting">
+        <ToolbarButton
+          title="Blockquote"
+          active={isBlockquote}
+          disabled={!isEditorReady}
+          onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+        >
+          Quote
+        </ToolbarButton>
+        <ToolbarButton
+          title="Code block"
+          active={isCodeBlock}
+          disabled={!isEditorReady}
+          onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+        >
+          Code
+        </ToolbarButton>
+        <ToolbarButton
+          title="Line"
+          disabled={!isEditorReady}
+          onClick={() => editor?.chain().focus().setHorizontalRule().run()}
+        >
+          Line
+        </ToolbarButton>
+      </ToolbarGroup>
+      <ToolbarGroup label="Link controls">
+        <ToolbarButton title="Link" active={isLink} disabled={!isEditorReady} onClick={setLink}>
+          Link
+        </ToolbarButton>
+        <ToolbarButton title="Unlink" disabled={!isEditorReady} onClick={() => editor?.chain().focus().unsetLink().run()}>
+          Unlink
+        </ToolbarButton>
+      </ToolbarGroup>
+      <ToolbarGroup label="Alignment controls">
+        <ToolbarButton
+          title="Left"
+          active={isAlignLeft}
+          disabled={!isEditorReady}
+          onClick={() => editor?.chain().focus().setTextAlign("left").run()}
+        >
+          Left
+        </ToolbarButton>
+        <ToolbarButton
+          title="Center"
+          active={isAlignCenter}
+          disabled={!isEditorReady}
+          onClick={() => editor?.chain().focus().setTextAlign("center").run()}
+        >
+          Center
+        </ToolbarButton>
+        <ToolbarButton
+          title="Right"
+          active={isAlignRight}
+          disabled={!isEditorReady}
+          onClick={() => editor?.chain().focus().setTextAlign("right").run()}
+        >
+          Right
+        </ToolbarButton>
+      </ToolbarGroup>
+      <ToolbarGroup label="Cleanup">
+        <ToolbarButton
+          title="Clear formatting"
+          disabled={!isEditorReady}
+          onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()}
+        >
+          Clear
+        </ToolbarButton>
+      </ToolbarGroup>
     </div>
   );
 
@@ -267,7 +282,7 @@ export function TiptapEditor({
   return (
     <div className={wrapperClassName} style={{ minHeight, maxHeight: scrollable ? "180px" : undefined }}>
       {toolbar}
-      <EditorContent editor={editor} className="tiptap-editor__content flex min-h-0 flex-1" />
+      <EditorContent editor={editor} className="tiptap-editor__content flex min-h-0 flex-1 scrollbar-subtle" />
     </div>
   );
 }
