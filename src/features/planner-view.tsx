@@ -30,6 +30,13 @@ import {
 import type { ImportMode, StudyBlock, StudyBlockInput, WorkbookImportPreview } from "../types/models";
 import type { IcsImportPreview } from "../lib/ics-import";
 
+const compactPlannerButtonClassName =
+  "inline-flex h-8 items-center justify-center rounded-[12px] border border-white/10 bg-slate-900/70 px-3 text-[11px] font-medium text-slate-200 transition hover:border-cyan-300/25 hover:bg-slate-800/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-45";
+const compactPlannerDangerButtonClassName =
+  "inline-flex h-8 items-center justify-center rounded-[12px] border border-rose-400/20 bg-rose-500/10 px-3 text-[11px] font-medium text-rose-100 transition hover:border-rose-300/35 hover:bg-rose-500/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-45";
+const compactPlannerFieldClassName =
+  "h-8 rounded-[12px] border border-white/10 bg-slate-950/70 px-3 text-[11px] font-medium text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/35";
+
 function matchesSearch(task: StudyBlock, query: string) {
   if (!query) {
     return true;
@@ -447,18 +454,68 @@ function IcsImportDialog({
   );
 }
 
-const categoryDotPalette = [
-  "bg-cyan-400",
-  "bg-blue-400",
-  "bg-violet-400",
-  "bg-pink-400",
-  "bg-amber-400",
-  "bg-emerald-400",
-];
+type MonthCategoryTone = {
+  accentClassName: string;
+  dotClassName: string;
+  labelClassName: string;
+};
 
-function getCategoryDotColor(category: string): string {
-  const hash = [...category].reduce((total, char) => total + char.charCodeAt(0), 0);
-  return categoryDotPalette[hash % categoryDotPalette.length];
+function getMonthCategoryTone(category: string): MonthCategoryTone {
+  const normalized = category.trim().toLowerCase();
+
+  if (normalized.includes("uworld")) {
+    return {
+      accentClassName: "border-blue-400/50 bg-blue-400/12",
+      dotClassName: "bg-blue-300",
+      labelClassName: "text-slate-100",
+    };
+  }
+
+  if (normalized.includes("practice exam") || normalized.includes("nbme") || normalized.includes("comsae")) {
+    return {
+      accentClassName: "border-rose-400/50 bg-rose-400/12",
+      dotClassName: "bg-rose-300",
+      labelClassName: "text-slate-100",
+    };
+  }
+
+  if (normalized.includes("break") || normalized.includes("meal")) {
+    return {
+      accentClassName: "border-emerald-400/50 bg-emerald-400/12",
+      dotClassName: "bg-emerald-300",
+      labelClassName: "text-slate-100",
+    };
+  }
+
+  if (normalized.includes("work") || normalized.includes("gym")) {
+    return {
+      accentClassName: "border-teal-400/50 bg-teal-400/12",
+      dotClassName: "bg-teal-300",
+      labelClassName: "text-slate-100",
+    };
+  }
+
+  if (normalized.includes("anki")) {
+    return {
+      accentClassName: "border-amber-400/50 bg-amber-400/12",
+      dotClassName: "bg-amber-300",
+      labelClassName: "text-slate-100",
+    };
+  }
+
+  if (normalized.includes("review")) {
+    return {
+      accentClassName: "border-violet-400/50 bg-violet-400/12",
+      dotClassName: "bg-violet-300",
+      labelClassName: "text-slate-100",
+    };
+  }
+
+  return {
+    accentClassName: "border-slate-500/50 bg-white/[0.03]",
+    dotClassName: "bg-slate-400",
+    labelClassName: "text-slate-200",
+  };
 }
 
 export function PlannerView() {
@@ -476,6 +533,12 @@ export function PlannerView() {
   const [showEditor, setShowEditor] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showIcsImport, setShowIcsImport] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [bulkCategory, setBulkCategory] = useState("");
+  const [bulkDurationHours, setBulkDurationHours] = useState("0");
+  const [bulkDurationMinutes, setBulkDurationMinutes] = useState("0");
+  const [isBulkPending, setIsBulkPending] = useState(false);
 
   const id = useId();
   const deferredSearch = useDeferredValue(state.preferences.plannerFilters.search);
@@ -496,13 +559,52 @@ export function PlannerView() {
     }
     return true;
   });
+  const visibleTaskIds = selectedDateTasks.map((task) => task.id);
+  const visibleTaskIdSet = new Set(visibleTaskIds);
+  const selectedVisibleTaskIds = selectedTaskIds.filter((taskId) => visibleTaskIdSet.has(taskId));
+  const selectedVisibleTaskIdSet = new Set(selectedVisibleTaskIds);
+  const selectedVisibleTasks = selectedDateTasks.filter((task) => selectedVisibleTaskIdSet.has(task.id));
+  const selectedVisibleCount = selectedVisibleTasks.length;
+  const allVisibleSelected = selectedDateTasks.length > 0 && selectedVisibleCount === selectedDateTasks.length;
+  const categoryOptions = [...state.preferences.customCategories];
+  for (const task of allSelectedDateTasks) {
+    if (!categoryOptions.includes(task.category)) {
+      categoryOptions.push(task.category);
+    }
+  }
   const plannedMinutes = allSelectedDateTasks.reduce((total, task) => total + getStudyBlockMinutes(task), 0);
   const completedCount = allSelectedDateTasks.filter((task) => task.completed).length;
+  const todayKey = getTodayKey();
+  const selectedMonthKey = selectedDate.slice(0, 7);
+  const tasksByDate = new Map<string, StudyBlock[]>();
+  const parsedBulkDurationHours =
+    bulkDurationHours.trim() === "" ? null : Number.isInteger(Number(bulkDurationHours)) && Number(bulkDurationHours) >= 0 ? Number(bulkDurationHours) : null;
+  const parsedBulkDurationMinutes =
+    bulkDurationMinutes.trim() === "" ? null : Number.isInteger(Number(bulkDurationMinutes)) && Number(bulkDurationMinutes) >= 0 ? Number(bulkDurationMinutes) : null;
+  const isBulkDurationValid = parsedBulkDurationHours !== null && parsedBulkDurationMinutes !== null;
+
+  for (const task of state.studyBlocks) {
+    const existing = tasksByDate.get(task.date);
+    if (existing) {
+      existing.push(task);
+    } else {
+      tasksByDate.set(task.date, [task]);
+    }
+  }
 
   function openNewTask(seedDate = selectedDate) {
     setEditorTask(undefined);
     setEditorSeedDate(seedDate);
     setShowEditor(true);
+  }
+
+  function clearBulkSelection() {
+    setSelectedTaskIds([]);
+  }
+
+  function exitSelectionMode() {
+    setIsSelectionMode(false);
+    clearBulkSelection();
   }
 
   async function toggleTask(task: StudyBlock, completed: boolean) {
@@ -530,6 +632,51 @@ export function PlannerView() {
     });
   }
 
+  async function runBulkUpdate(transform: (task: StudyBlock, updatedAt: string) => StudyBlock) {
+    if (!selectedVisibleTasks.length || isBulkPending) {
+      return;
+    }
+
+    setIsBulkPending(true);
+    const updatedAt = new Date().toISOString();
+
+    try {
+      for (const task of selectedVisibleTasks) {
+        await upsertStudyBlock(transform(task, updatedAt));
+      }
+    } finally {
+      setIsBulkPending(false);
+    }
+  }
+
+  async function handleBulkTrash() {
+    const tasksToTrash = selectedDateTasks.filter((task) => selectedTaskIds.includes(task.id));
+
+    if (!tasksToTrash.length || isBulkPending) {
+      return;
+    }
+
+    const taskLabel = tasksToTrash.length === 1 ? "task" : "tasks";
+    if (!window.confirm(`Trash ${tasksToTrash.length} selected ${taskLabel}?`)) {
+      return;
+    }
+
+    setIsBulkPending(true);
+    try {
+      for (const task of tasksToTrash) {
+        await trashStudyBlock(task.id);
+      }
+      exitSelectionMode();
+    } finally {
+      setIsBulkPending(false);
+    }
+  }
+
+  function handlePlannerFocusDate(date: string) {
+    clearBulkSelection();
+    void setPlannerFocusDate(date);
+  }
+
   const periodDates = plannerMode === "week" ? weekDates : monthDates;
   const periodLabel = plannerMode === "week" ? `Week of ${formatLongDate(weekStart)}` : formatMonthLabel(selectedDate);
   const periodPreviousLabel = plannerMode === "week" ? "Previous week" : "Previous month";
@@ -538,82 +685,86 @@ export function PlannerView() {
   const periodNextDate = plannerMode === "week" ? addDays(weekStart, 7) : addMonths(selectedDate, 1);
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      <Panel
-        className="shrink-0"
-        title="Planner"
-        subtitle="Weekly and monthly calendar for scheduled tasks."
-        action={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              className={secondaryButtonClassName}
-              onClick={() => {
-                setShowIcsImport(false);
-                setShowImport(true);
-              }}
-            >
-              <Upload className="h-4 w-4" />
-              Import legacy
-            </button>
-            <button
-              type="button"
-              className={secondaryButtonClassName}
-              onClick={() => {
-                setShowImport(false);
-                setShowIcsImport(true);
-              }}
-            >
-              <Upload className="h-4 w-4" />
-              Import .ics
-            </button>
-          </div>
-        }
-      >
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
-          <label htmlFor={searchId} className="relative block">
-            <span className="sr-only">Search planner tasks</span>
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-            <input
-              id={searchId}
-              value={state.preferences.plannerFilters.search}
-              onChange={(event) => {
-                void updatePlannerFilters({ search: event.target.value });
-              }}
-              placeholder="Search task, category, or date"
-              className={`${fieldClassName} pl-11`}
-            />
-          </label>
-
-          <select
-            id={categoryFilterId}
-            value={state.preferences.plannerFilters.category}
+    <div className="flex h-full flex-col gap-3">
+      <div className="grid shrink-0 gap-3 rounded-[24px] border border-white/10 bg-slate-950/35 p-3 lg:grid-cols-[minmax(0,1.35fr)_220px_auto] lg:items-center">
+        <label htmlFor={searchId} className="relative block min-w-0">
+          <span className="sr-only">Search planner tasks</span>
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input
+            id={searchId}
+            value={state.preferences.plannerFilters.search}
             onChange={(event) => {
-              void updatePlannerFilters({ category: event.target.value });
+              clearBulkSelection();
+              void updatePlannerFilters({ search: event.target.value });
             }}
-            className={fieldClassName}
-          >
-            <option value="All">All categories</option>
-            {state.preferences.customCategories.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
-        </div>
-      </Panel>
+            placeholder="Search task, category, or date"
+            className={`${fieldClassName} pl-11`}
+          />
+        </label>
 
-      <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-2 xl:items-stretch">
-        <Panel
-          className="flex flex-col xl:h-full"
-          title={periodLabel}
-          action={
-            <div className="flex items-center gap-2">
-              <div className="inline-flex rounded-[18px] border border-white/10 bg-slate-900/55 p-1">
+        <select
+          id={categoryFilterId}
+          value={state.preferences.plannerFilters.category}
+          onChange={(event) => {
+            clearBulkSelection();
+            void updatePlannerFilters({ category: event.target.value });
+          }}
+          className={fieldClassName}
+        >
+          <option value="All">All categories</option>
+          {state.preferences.customCategories.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            className={secondaryButtonClassName}
+            onClick={() => {
+              setShowIcsImport(false);
+              setShowImport(true);
+            }}
+          >
+            <Upload className="h-4 w-4" />
+            Import legacy
+          </button>
+          <button
+            type="button"
+            className={secondaryButtonClassName}
+            onClick={() => {
+              setShowImport(false);
+              setShowIcsImport(true);
+            }}
+          >
+            <Upload className="h-4 w-4" />
+            Import .ics
+          </button>
+        </div>
+      </div>
+
+      <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,0.85fr)] xl:items-stretch">
+        <Panel className="flex min-h-0 flex-col xl:h-full">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                {plannerMode === "week" ? "Weekly planner" : "Monthly planner"}
+              </p>
+              <h3 className={`mt-1 font-semibold tracking-[-0.03em] text-white ${plannerMode === "month" ? "text-2xl" : "text-lg"}`}>
+                {periodLabel}
+              </h3>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="inline-flex rounded-[16px] border border-white/10 bg-slate-900/55 p-1">
                 <button
                   type="button"
-                  onClick={() => { void setPlannerMode("week"); }}
-                  className={`rounded-[14px] px-3 py-1.5 text-xs font-medium transition ${
+                  onClick={() => {
+                    void setPlannerMode("week");
+                  }}
+                  className={`rounded-[12px] px-3 py-1.5 text-xs font-medium transition ${
                     plannerMode === "week" ? "bg-cyan-300/15 text-white" : "text-slate-400 hover:text-white"
                   }`}
                 >
@@ -621,8 +772,10 @@ export function PlannerView() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { void setPlannerMode("month"); }}
-                  className={`rounded-[14px] px-3 py-1.5 text-xs font-medium transition ${
+                  onClick={() => {
+                    void setPlannerMode("month");
+                  }}
+                  className={`rounded-[12px] px-3 py-1.5 text-xs font-medium transition ${
                     plannerMode === "month" ? "bg-cyan-300/15 text-white" : "text-slate-400 hover:text-white"
                   }`}
                 >
@@ -631,8 +784,19 @@ export function PlannerView() {
               </div>
               <button
                 type="button"
+                className="h-8 rounded-[14px] border border-white/10 bg-slate-900/55 px-3 text-[11px] font-medium text-slate-300 transition hover:border-cyan-300/25 hover:bg-slate-800/80 hover:text-white"
+                onClick={() => {
+                  handlePlannerFocusDate(getTodayKey());
+                }}
+              >
+                Today
+              </button>
+              <button
+                type="button"
                 className={iconButtonClassName}
-                onClick={() => { void setPlannerFocusDate(periodPreviousDate); }}
+                onClick={() => {
+                  handlePlannerFocusDate(periodPreviousDate);
+                }}
                 aria-label={periodPreviousLabel}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -640,254 +804,454 @@ export function PlannerView() {
               <button
                 type="button"
                 className={iconButtonClassName}
-                onClick={() => { void setPlannerFocusDate(periodNextDate); }}
+                onClick={() => {
+                  handlePlannerFocusDate(periodNextDate);
+                }}
                 aria-label={periodNextLabel}
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
-          }
-        >
+          </div>
+
           <div className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle">
-          {plannerMode === "week" ? (
-            <div className="space-y-2">
-              {periodDates.map((date) => {
-                const dayTasks = state.studyBlocks.filter((task) => task.date === date);
-                const dayCompleted = dayTasks.filter((task) => task.completed).length;
-                const isSelected = date === selectedDate;
+            {plannerMode === "week" ? (
+              <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle">
+                <div className="space-y-2">
+                  {periodDates.map((date) => {
+                    const dayTasks = tasksByDate.get(date) ?? [];
+                    const dayCompleted = dayTasks.filter((task) => task.completed).length;
+                    const isSelected = date === selectedDate;
 
-                return (
-                  <button
-                    key={date}
-                    type="button"
-                    onClick={() => {
-                      void setPlannerFocusDate(date);
-                    }}
-                    className={`w-full rounded-[20px] border px-4 py-4 text-left transition ${
-                      isSelected
-                        ? "border-cyan-300/30 bg-cyan-300/10"
-                        : "border-white/10 bg-slate-900/55 hover:border-white/15"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{getDayName(date)}</p>
-                        <p className="mt-1 text-lg font-semibold text-white">{formatShortDate(date)}</p>
-                      </div>
-                      <div className="text-right text-xs text-slate-400">
-                        <div>{dayTasks.length} tasks</div>
-                        <div>
-                          {dayCompleted}/{dayTasks.length || 0} done
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div>
-              <div className="mb-1 grid grid-cols-7 text-center">
-                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-                  <div key={day} className="py-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">
-                    {day}
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 gap-px overflow-hidden rounded-[12px]">
-                {periodDates.map((date) => {
-                  const dayTasks = state.studyBlocks.filter((task) => task.date === date);
-                  const isToday = date === getTodayKey();
-                  const isSelected = date === selectedDate;
-                  const isCurrentMonth = date.slice(0, 7) === selectedDate.slice(0, 7);
-                  const visibleTasks = dayTasks.slice(0, 3);
-                  const hiddenCount = dayTasks.length - visibleTasks.length;
-                  const todayKey = getTodayKey();
-                  const isPast = date < todayKey;
-                  const overdueCount = isPast ? dayTasks.filter((task) => !task.completed).length : 0;
-                  const isOverdue = overdueCount > 0;
-
-                  return (
-                    <button
-                      key={date}
-                      type="button"
-                      onClick={() => void setPlannerFocusDate(date)}
-                      className={[
-                        "flex min-h-[72px] flex-col p-1.5 text-left transition",
-                        isSelected
-                          ? "bg-cyan-300/15 ring-1 ring-inset ring-cyan-300/30"
-                          : isToday
-                          ? "bg-white/[0.07] ring-1 ring-inset ring-cyan-300/20"
-                          : isOverdue
-                          ? "bg-rose-500/15 hover:bg-rose-500/20"
-                          : "bg-slate-900/55 hover:bg-white/5",
-                        !isCurrentMonth ? "opacity-40" : "",
-                      ].join(" ")}
-                    >
-                      <div className="mb-1 flex items-start justify-between gap-0.5">
-                        <span className="text-[11px] font-medium leading-none text-slate-400">
-                          {Number(date.slice(8))}
-                        </span>
-                        {isOverdue ? (
-                          <span className="flex items-center gap-0.5 text-[9px] leading-none text-rose-400">
-                            <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
-                            {overdueCount}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="flex-1 space-y-0.5 overflow-hidden">
-                        {visibleTasks.map((task) => (
-                          <div key={task.id} className="flex min-w-0 items-center gap-1">
-                            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${getCategoryDotColor(task.category)}`} />
-                            <span className="truncate text-[9px] leading-tight text-slate-300">
-                              {task.task}
-                            </span>
-                          </div>
-                        ))}
-                        {hiddenCount > 0 && (
-                          <div className="text-[9px] leading-tight text-slate-500">+{hiddenCount}</div>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          </div>
-          </div>
-
-          <button
-            type="button"
-            className={`${secondaryButtonClassName} mt-4 w-full justify-center shrink-0`}
-            onClick={() => {
-              void setPlannerFocusDate(getTodayKey());
-            }}
-          >
-            Back to today
-          </button>
-        </Panel>
-
-        <Panel
-          className="flex flex-col xl:h-full"
-          title={formatLongDate(selectedDate)}
-          subtitle={`${allSelectedDateTasks.length} tasks · ${completedCount} done · ${formatMinutes(plannedMinutes)}`}
-          action={
-            <button type="button" className={primaryButtonClassName} onClick={() => openNewTask(selectedDate)}>
-              <Plus className="h-4 w-4" />
-              Add task
-            </button>
-          }
-        >
-          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle">
-          {selectedDateTasks.length ? (
-            <div className="space-y-3">
-              {selectedDateTasks.map((task) => {
-                const index = allSelectedDateTasks.findIndex((entry) => entry.id === task.id);
-                const durationLabel = formatMinutes(getStudyBlockMinutes(task));
-
-                return (
-                  <article
-                    key={task.id}
-                    className={`rounded-[22px] border border-white/10 bg-slate-900/55 p-4 transition ${
-                      task.completed ? "opacity-60" : ""
-                    }`}
-                  >
-                    <div className="flex items-start gap-4">
-                      <input
-                        type="checkbox"
-                        checked={task.completed}
-                        onChange={(event) => {
-                          void toggleTask(task, event.target.checked);
+                    return (
+                      <button
+                        key={date}
+                        type="button"
+                        onClick={() => {
+                          handlePlannerFocusDate(date);
                         }}
-                        aria-label={`Mark ${task.task} complete`}
-                        className="mt-1 h-5 w-5 rounded border-white/15 bg-slate-950 text-cyan-300"
-                      />
+                        className={`w-full rounded-[18px] border px-4 py-3 text-left transition ${
+                          isSelected
+                            ? "border-cyan-300/30 bg-cyan-300/10"
+                            : "border-white/10 bg-slate-900/55 hover:border-white/15"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{getDayName(date)}</p>
+                            <p className="mt-1 text-base font-semibold text-white">{formatShortDate(date)}</p>
+                          </div>
+                          <div className="text-right text-xs text-slate-400">
+                            <div>{dayTasks.length} tasks</div>
+                            <div>
+                              {dayCompleted}/{dayTasks.length || 0} done
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="flex min-h-0 flex-1 flex-col gap-2">
+                <div className="grid grid-cols-7 gap-px text-center">
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+                    <div key={day} className="py-1 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                      {day}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px overflow-hidden rounded-[16px] border border-white/8 bg-white/[0.06]">
+                  {periodDates.map((date) => {
+                    const dayTasks = tasksByDate.get(date) ?? [];
+                    const isSelected = date === selectedDate;
+                    const isCurrentMonth = date.slice(0, 7) === selectedMonthKey;
+                    const isToday = date === todayKey;
+                    const visibleTasks = dayTasks.slice(0, 3);
+                    const hiddenCount = Math.max(dayTasks.length - visibleTasks.length, 0);
+                    const isPast = date < todayKey;
+                    const overdueCount = isPast ? dayTasks.filter((task) => !task.completed).length : 0;
+                    const isOverdue = overdueCount > 0;
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <CategoryBadge category={task.category} />
-                          <span className="inline-flex items-center rounded-full border border-white/10 px-2.5 py-1 text-xs text-slate-300">
-                            {durationLabel}
+                    return (
+                      <button
+                        key={date}
+                        type="button"
+                        onClick={() => handlePlannerFocusDate(date)}
+                        className={[
+                          "flex min-h-0 h-full flex-col overflow-hidden bg-slate-950/45 px-2 py-2 text-left transition-colors duration-150",
+                          isSelected
+                            ? "bg-cyan-300/10 ring-1 ring-inset ring-cyan-300/45"
+                            : isToday
+                            ? "bg-white/[0.07] ring-1 ring-inset ring-cyan-300/18"
+                            : isOverdue
+                            ? "bg-rose-500/10 hover:bg-rose-500/14"
+                            : "hover:bg-white/[0.04]",
+                          !isCurrentMonth ? "text-slate-500" : "text-slate-100",
+                        ].join(" ")}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span
+                            className={`text-[12px] font-semibold leading-none ${
+                              isCurrentMonth ? "text-slate-100" : "text-slate-500"
+                            }`}
+                          >
+                            {Number(date.slice(8))}
                           </span>
-                          {task.reminderAt ? (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs text-cyan-100">
-                              <Bell className="h-3.5 w-3.5" />
-                              {formatDateTimeLabel(task.reminderAt)}
+                          {isOverdue ? (
+                            <span className="flex items-center gap-1 text-[9px] font-medium leading-none text-rose-200">
+                              <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                              {overdueCount}
                             </span>
                           ) : null}
                         </div>
 
-                        <h4
-                          className={`mt-3 text-lg font-semibold text-white ${
-                            task.completed ? "line-through decoration-white/45" : ""
-                          }`}
-                        >
-                          {task.task}
-                        </h4>
-                      </div>
+                        <div className="mt-2 flex min-h-0 flex-1 flex-col gap-1 overflow-hidden">
+                          {visibleTasks.map((task) => {
+                            const tone = getMonthCategoryTone(task.category);
 
-                      <div className="flex flex-col items-end gap-2">
-                        <div className="flex items-center gap-2">
+                            return (
+                              <div key={task.id} className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[11px] leading-4">
+                                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone.dotClassName}`} />
+                                <span
+                                  className={`min-w-0 truncate ${
+                                    isCurrentMonth ? "text-slate-200" : "text-slate-500"
+                                  }`}
+                                >
+                                  {task.task}
+                                </span>
+                              </div>
+                            );
+                          })}
+                          {hiddenCount > 0 ? (
+                            <div className={`mt-auto pl-3 text-[10px] font-medium leading-none ${isCurrentMonth ? "text-slate-400" : "text-slate-500"}`}>
+                              +{hiddenCount} more
+                            </div>
+                          ) : null}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </Panel>
+
+        <Panel className="flex min-h-0 flex-col xl:h-full">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Selected day</p>
+              <h3 className="mt-1 text-base font-semibold text-white">{formatLongDate(selectedDate)}</h3>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {isSelectionMode ? (
+                <>
+                  <button type="button" className={compactPlannerButtonClassName} onClick={exitSelectionMode}>
+                    Cancel
+                  </button>
+                  <button type="button" className={primaryButtonClassName} onClick={exitSelectionMode}>
+                    Done
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className={compactPlannerButtonClassName}
+                  onClick={() => {
+                    setIsSelectionMode(true);
+                    clearBulkSelection();
+                  }}
+                >
+                  Select
+                </button>
+              )}
+              <button type="button" className={primaryButtonClassName} onClick={() => openNewTask(selectedDate)}>
+                <Plus className="h-4 w-4" />
+                Add task
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-3 grid grid-cols-3 gap-2">
+            <div className="rounded-[16px] border border-white/8 bg-slate-900/45 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Tasks</p>
+              <p className="mt-1 text-sm font-semibold text-white">{allSelectedDateTasks.length}</p>
+            </div>
+            <div className="rounded-[16px] border border-white/8 bg-slate-900/45 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Done</p>
+              <p className="mt-1 text-sm font-semibold text-white">{completedCount}</p>
+            </div>
+            <div className="rounded-[16px] border border-white/8 bg-slate-900/45 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Planned</p>
+              <p className="mt-1 text-sm font-semibold text-white">{formatMinutes(plannedMinutes)}</p>
+            </div>
+          </div>
+
+          {isSelectionMode ? (
+            <div className="mb-3 rounded-[18px] border border-white/10 bg-slate-950/45 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="mr-1 text-[11px] font-medium text-slate-300">
+                  {selectedVisibleCount} selected
+                </span>
+                <button
+                  type="button"
+                  className={compactPlannerButtonClassName}
+                  disabled={!selectedDateTasks.length || allVisibleSelected || isBulkPending}
+                  onClick={() => {
+                    setSelectedTaskIds(visibleTaskIds);
+                  }}
+                >
+                  Select all visible
+                </button>
+                <button
+                  type="button"
+                  className={compactPlannerButtonClassName}
+                  disabled={!selectedVisibleCount || isBulkPending}
+                  onClick={clearBulkSelection}
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  className={compactPlannerButtonClassName}
+                  disabled={!selectedVisibleCount || isBulkPending}
+                  onClick={() => {
+                    void runBulkUpdate((task, updatedAt) => ({
+                      ...task,
+                      completed: true,
+                      updatedAt,
+                    }));
+                  }}
+                >
+                  Mark complete
+                </button>
+                <button
+                  type="button"
+                  className={compactPlannerButtonClassName}
+                  disabled={!selectedVisibleCount || isBulkPending}
+                  onClick={() => {
+                    void runBulkUpdate((task, updatedAt) => ({
+                      ...task,
+                      completed: false,
+                      updatedAt,
+                    }));
+                  }}
+                >
+                  Mark incomplete
+                </button>
+                <select
+                  value={bulkCategory}
+                  onChange={(event) => setBulkCategory(event.target.value)}
+                  className={`${compactPlannerFieldClassName} min-w-[8.5rem] pr-8`}
+                  aria-label="Bulk category"
+                  disabled={!categoryOptions.length || isBulkPending}
+                >
+                  <option value="">Category</option>
+                  {categoryOptions.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className={compactPlannerButtonClassName}
+                  disabled={!selectedVisibleCount || !bulkCategory || isBulkPending}
+                  onClick={() => {
+                    void runBulkUpdate((task, updatedAt) => ({
+                      ...task,
+                      category: bulkCategory,
+                      updatedAt,
+                    }));
+                  }}
+                >
+                  Change category
+                </button>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={bulkDurationHours}
+                  onChange={(event) => setBulkDurationHours(event.target.value)}
+                  className={`${compactPlannerFieldClassName} w-[4.5rem]`}
+                  aria-label="Bulk duration hours"
+                  placeholder="Hr"
+                  disabled={isBulkPending}
+                />
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={bulkDurationMinutes}
+                  onChange={(event) => setBulkDurationMinutes(event.target.value)}
+                  className={`${compactPlannerFieldClassName} w-[4.75rem]`}
+                  aria-label="Bulk duration minutes"
+                  placeholder="Min"
+                  disabled={isBulkPending}
+                />
+                <button
+                  type="button"
+                  className={compactPlannerButtonClassName}
+                  disabled={!selectedVisibleCount || !isBulkDurationValid || isBulkPending}
+                  onClick={() => {
+                    if (parsedBulkDurationHours === null || parsedBulkDurationMinutes === null) {
+                      return;
+                    }
+
+                    void runBulkUpdate((task, updatedAt) => ({
+                      ...task,
+                      durationHours: parsedBulkDurationHours,
+                      durationMinutes: parsedBulkDurationMinutes,
+                      updatedAt,
+                    }));
+                  }}
+                >
+                  Change duration
+                </button>
+                <button
+                  type="button"
+                  className={compactPlannerDangerButtonClassName}
+                  disabled={!selectedVisibleCount || isBulkPending}
+                  onClick={() => {
+                    void handleBulkTrash();
+                  }}
+                >
+                  Trash
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle pr-1">
+            {selectedDateTasks.length ? (
+              <div className="space-y-2.5">
+                {selectedDateTasks.map((task) => {
+                  const index = allSelectedDateTasks.findIndex((entry) => entry.id === task.id);
+                  const durationLabel = formatMinutes(getStudyBlockMinutes(task));
+                  const tone = getMonthCategoryTone(task.category);
+
+                  return (
+                    <article
+                      key={task.id}
+                      className={`relative overflow-hidden rounded-[18px] border border-white/10 bg-slate-900/55 p-3 transition ${
+                        task.completed ? "opacity-60" : ""
+                      }`}
+                    >
+                      <span className={`absolute inset-y-3 left-0 w-[3px] rounded-r-full ${tone.dotClassName}`} aria-hidden="true" />
+                      <div className="flex items-start gap-3">
+                        {isSelectionMode ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedVisibleTaskIdSet.has(task.id)}
+                            onChange={(event) => {
+                              setSelectedTaskIds((current) =>
+                                event.target.checked
+                                  ? current.includes(task.id)
+                                    ? current
+                                    : [...current, task.id]
+                                  : current.filter((taskId) => taskId !== task.id),
+                              );
+                            }}
+                            aria-label={`Select ${task.task}`}
+                            className="mt-0.5 h-5 w-5 rounded border-white/15 bg-slate-950 text-cyan-300"
+                            disabled={isBulkPending}
+                          />
+                        ) : (
+                          <input
+                            type="checkbox"
+                            checked={task.completed}
+                            onChange={(event) => {
+                              void toggleTask(task, event.target.checked);
+                            }}
+                            aria-label={`Mark ${task.task} complete`}
+                            className="mt-0.5 h-5 w-5 rounded border-white/15 bg-slate-950 text-cyan-300"
+                          />
+                        )}
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <CategoryBadge category={task.category} />
+                            <span className="inline-flex items-center rounded-full border border-white/10 px-2.5 py-1 text-xs text-slate-300">
+                              {durationLabel}
+                            </span>
+                            {task.reminderAt ? (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs text-cyan-100">
+                                <Bell className="h-3.5 w-3.5" />
+                                {formatDateTimeLabel(task.reminderAt)}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <h4
+                            className={`mt-2 text-base font-semibold text-white ${
+                              task.completed ? "line-through decoration-white/45" : ""
+                            }`}
+                          >
+                            {task.task}
+                          </h4>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-2">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className={iconButtonClassName}
+                              disabled={index <= 0}
+                              onClick={() => {
+                                void moveTask(task, -1);
+                              }}
+                              aria-label={`Move ${task.task} up`}
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              className={iconButtonClassName}
+                              disabled={index === -1 || index >= allSelectedDateTasks.length - 1}
+                              onClick={() => {
+                                void moveTask(task, 1);
+                              }}
+                              aria-label={`Move ${task.task} down`}
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </button>
+                          </div>
                           <button
                             type="button"
                             className={iconButtonClassName}
-                            disabled={index <= 0}
+                            aria-label={`Edit ${task.task}`}
                             onClick={() => {
-                              void moveTask(task, -1);
+                              setEditorTask(task);
+                              setEditorSeedDate(undefined);
+                              setShowEditor(true);
                             }}
-                            aria-label={`Move ${task.task} up`}
                           >
-                            <ArrowUp className="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            className={iconButtonClassName}
-                            disabled={index === -1 || index >= allSelectedDateTasks.length - 1}
-                            onClick={() => {
-                              void moveTask(task, 1);
-                            }}
-                            aria-label={`Move ${task.task} down`}
-                          >
-                            <ArrowDown className="h-4 w-4" />
+                            <Pencil className="h-4 w-4" />
                           </button>
                         </div>
-                        <button
-                          type="button"
-                          className={iconButtonClassName}
-                          aria-label={`Edit ${task.task}`}
-                          onClick={() => {
-                            setEditorTask(task);
-                            setEditorSeedDate(undefined);
-                            setShowEditor(true);
-                          }}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
                       </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          ) : (
-            <EmptyState
-              title="Quiet day"
-              description={
-                state.preferences.plannerFilters.search || state.preferences.plannerFilters.category !== "All"
-                  ? "No tasks match the current filter for this day."
-                  : "Add a task and build the day from a blank list."
-              }
-              action={
-                <button type="button" className={primaryButtonClassName} onClick={() => openNewTask(selectedDate)}>
-                  <Plus className="h-4 w-4" />
-                  Add task
-                </button>
-              }
-            />
-          )}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <EmptyState
+                title="Quiet day"
+                description={
+                  state.preferences.plannerFilters.search || state.preferences.plannerFilters.category !== "All"
+                    ? "No tasks match the current filter for this day."
+                    : "Add a task and build the day from a blank list."
+                }
+                action={
+                  <button type="button" className={primaryButtonClassName} onClick={() => openNewTask(selectedDate)}>
+                    <Plus className="h-4 w-4" />
+                    Add task
+                  </button>
+                }
+              />
+            )}
           </div>
         </Panel>
       </div>
@@ -918,6 +1282,7 @@ export function PlannerView() {
                     : maxOrderForDate + 1,
               });
               if (saved) {
+                clearBulkSelection();
                 void setPlannerFocusDate(draft.date);
                 setShowEditor(false);
               }
