@@ -600,82 +600,84 @@ export function PlannerView() {
   const periodNextDate = plannerMode === "week" ? addDays(weekStart, 7) : addMonths(selectedDate, 1);
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      <Panel
-        className="shrink-0"
-        title="Planner"
-        subtitle="Weekly and monthly calendar for scheduled tasks."
-        action={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              className={secondaryButtonClassName}
-              onClick={() => {
-                setShowIcsImport(false);
-                setShowImport(true);
-              }}
-            >
-              <Upload className="h-4 w-4" />
-              Import legacy
-            </button>
-            <button
-              type="button"
-              className={secondaryButtonClassName}
-              onClick={() => {
-                setShowImport(false);
-                setShowIcsImport(true);
-              }}
-            >
-              <Upload className="h-4 w-4" />
-              Import .ics
-            </button>
-          </div>
-        }
-      >
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
-          <label htmlFor={searchId} className="relative block">
-            <span className="sr-only">Search planner tasks</span>
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-            <input
-              id={searchId}
-              value={state.preferences.plannerFilters.search}
-              onChange={(event) => {
-                void updatePlannerFilters({ search: event.target.value });
-              }}
-              placeholder="Search task, category, or date"
-              className={`${fieldClassName} pl-11`}
-            />
-          </label>
-
-          <select
-            id={categoryFilterId}
-            value={state.preferences.plannerFilters.category}
+    <div className="flex h-full flex-col gap-3">
+      <div className="grid shrink-0 gap-3 rounded-[24px] border border-white/10 bg-slate-950/35 p-3 lg:grid-cols-[minmax(0,1.35fr)_220px_auto] lg:items-center">
+        <label htmlFor={searchId} className="relative block min-w-0">
+          <span className="sr-only">Search planner tasks</span>
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input
+            id={searchId}
+            value={state.preferences.plannerFilters.search}
             onChange={(event) => {
-              void updatePlannerFilters({ category: event.target.value });
+              void updatePlannerFilters({ search: event.target.value });
             }}
-            className={fieldClassName}
-          >
-            <option value="All">All categories</option>
-            {state.preferences.customCategories.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
-        </div>
-      </Panel>
+            placeholder="Search task, category, or date"
+            className={`${fieldClassName} pl-11`}
+          />
+        </label>
 
-      <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-2 xl:items-stretch">
-        <Panel
-          className="flex flex-col xl:h-full"
-          title={periodLabel}
-          action={
-            <div className="flex items-center gap-2">
-              <div className="inline-flex rounded-[18px] border border-white/10 bg-slate-900/55 p-1">
+        <select
+          id={categoryFilterId}
+          value={state.preferences.plannerFilters.category}
+          onChange={(event) => {
+            void updatePlannerFilters({ category: event.target.value });
+          }}
+          className={fieldClassName}
+        >
+          <option value="All">All categories</option>
+          {state.preferences.customCategories.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            className={secondaryButtonClassName}
+            onClick={() => {
+              setShowIcsImport(false);
+              setShowImport(true);
+            }}
+          >
+            <Upload className="h-4 w-4" />
+            Import legacy
+          </button>
+          <button
+            type="button"
+            className={secondaryButtonClassName}
+            onClick={() => {
+              setShowImport(false);
+              setShowIcsImport(true);
+            }}
+          >
+            <Upload className="h-4 w-4" />
+            Import .ics
+          </button>
+        </div>
+      </div>
+
+      <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,0.85fr)] xl:items-stretch">
+        <Panel className="flex min-h-0 flex-col xl:h-full">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                {plannerMode === "week" ? "Weekly planner" : "Monthly planner"}
+              </p>
+              <h3 className={`mt-1 font-semibold tracking-[-0.03em] text-white ${plannerMode === "month" ? "text-2xl" : "text-lg"}`}>
+                {periodLabel}
+              </h3>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="inline-flex rounded-[16px] border border-white/10 bg-slate-900/55 p-1">
                 <button
                   type="button"
-                  onClick={() => { void setPlannerMode("week"); }}
-                  className={`rounded-[14px] px-3 py-1.5 text-xs font-medium transition ${
+                  onClick={() => {
+                    void setPlannerMode("week");
+                  }}
+                  className={`rounded-[12px] px-3 py-1.5 text-xs font-medium transition ${
                     plannerMode === "week" ? "bg-cyan-300/15 text-white" : "text-slate-400 hover:text-white"
                   }`}
                 >
@@ -683,17 +685,19 @@ export function PlannerView() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { void setPlannerMode("month"); }}
-                  className={`rounded-[14px] px-3 py-1.5 text-xs font-medium transition ${
+                  onClick={() => {
+                    void setPlannerMode("month");
+                  }}
+                  className={`rounded-[12px] px-3 py-1.5 text-xs font-medium transition ${
                     plannerMode === "month" ? "bg-cyan-300/15 text-white" : "text-slate-400 hover:text-white"
                   }`}
-                  >
+                >
                   Month
                 </button>
               </div>
               <button
                 type="button"
-                className="h-8 rounded-full border border-white/10 bg-slate-900/55 px-3 text-[11px] font-medium text-slate-300 transition hover:border-cyan-300/25 hover:bg-slate-800/80 hover:text-white"
+                className="h-8 rounded-[14px] border border-white/10 bg-slate-900/55 px-3 text-[11px] font-medium text-slate-300 transition hover:border-cyan-300/25 hover:bg-slate-800/80 hover:text-white"
                 onClick={() => {
                   void setPlannerFocusDate(getTodayKey());
                 }}
@@ -703,7 +707,9 @@ export function PlannerView() {
               <button
                 type="button"
                 className={iconButtonClassName}
-                onClick={() => { void setPlannerFocusDate(periodPreviousDate); }}
+                onClick={() => {
+                  void setPlannerFocusDate(periodPreviousDate);
+                }}
                 aria-label={periodPreviousLabel}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -711,14 +717,16 @@ export function PlannerView() {
               <button
                 type="button"
                 className={iconButtonClassName}
-                onClick={() => { void setPlannerFocusDate(periodNextDate); }}
+                onClick={() => {
+                  void setPlannerFocusDate(periodNextDate);
+                }}
                 aria-label={periodNextLabel}
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
-          }
-        >
+          </div>
+
           <div className="flex min-h-0 flex-1 flex-col">
             {plannerMode === "week" ? (
               <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle">
@@ -735,7 +743,7 @@ export function PlannerView() {
                         onClick={() => {
                           void setPlannerFocusDate(date);
                         }}
-                        className={`w-full rounded-[20px] border px-4 py-4 text-left transition ${
+                        className={`w-full rounded-[18px] border px-4 py-3 text-left transition ${
                           isSelected
                             ? "border-cyan-300/30 bg-cyan-300/10"
                             : "border-white/10 bg-slate-900/55 hover:border-white/15"
@@ -744,7 +752,7 @@ export function PlannerView() {
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{getDayName(date)}</p>
-                            <p className="mt-1 text-lg font-semibold text-white">{formatShortDate(date)}</p>
+                            <p className="mt-1 text-base font-semibold text-white">{formatShortDate(date)}</p>
                           </div>
                           <div className="text-right text-xs text-slate-400">
                             <div>{dayTasks.length} tasks</div>
@@ -760,14 +768,14 @@ export function PlannerView() {
               </div>
             ) : (
               <div className="flex min-h-0 flex-1 flex-col gap-2">
-                <div className="grid grid-cols-7 text-center">
+                <div className="grid grid-cols-7 gap-px text-center">
                   {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-                    <div key={day} className="py-0.5 text-[10px] uppercase tracking-[0.12em] text-slate-500">
+                    <div key={day} className="py-1 text-[10px] uppercase tracking-[0.14em] text-slate-500">
                       {day}
                     </div>
                   ))}
                 </div>
-                <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px overflow-hidden rounded-[18px] border border-white/8 bg-slate-950/20 p-1">
+                <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px overflow-hidden rounded-[16px] border border-white/8 bg-white/[0.06]">
                   {periodDates.map((date) => {
                     const dayTasks = tasksByDate.get(date) ?? [];
                     const isSelected = date === selectedDate;
@@ -785,53 +793,55 @@ export function PlannerView() {
                         type="button"
                         onClick={() => void setPlannerFocusDate(date)}
                         className={[
-                          "flex h-full min-h-0 flex-col overflow-hidden rounded-[16px] border p-2.5 text-left transition-colors duration-150",
+                          "flex min-h-0 h-full flex-col overflow-hidden bg-slate-950/45 px-2 py-2 text-left transition-colors duration-150",
                           isSelected
-                            ? "border-cyan-300/25 bg-cyan-300/12 ring-1 ring-inset ring-cyan-300/35 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]"
+                            ? "bg-cyan-300/10 ring-1 ring-inset ring-cyan-300/45"
                             : isToday
-                            ? "border-cyan-300/18 bg-white/[0.06] ring-1 ring-inset ring-cyan-300/18"
+                            ? "bg-white/[0.07] ring-1 ring-inset ring-cyan-300/18"
                             : isOverdue
-                            ? "border-rose-500/18 bg-rose-500/10 hover:bg-rose-500/14"
-                            : "border-white/8 bg-slate-900/55 hover:border-white/12 hover:bg-white/[0.04]",
-                          !isCurrentMonth ? "text-slate-400" : "text-slate-100",
+                            ? "bg-rose-500/10 hover:bg-rose-500/14"
+                            : "hover:bg-white/[0.04]",
+                          !isCurrentMonth ? "text-slate-500" : "text-slate-100",
                         ].join(" ")}
                       >
-                        <div className="flex items-start justify-between gap-1.5">
+                        <div className="flex items-start justify-between gap-2">
                           <span
                             className={`text-[12px] font-semibold leading-none ${
-                              isCurrentMonth ? "text-slate-100" : "text-slate-400"
+                              isCurrentMonth ? "text-slate-100" : "text-slate-500"
                             }`}
                           >
                             {Number(date.slice(8))}
                           </span>
                           {isOverdue ? (
-                            <span className="flex items-center gap-0.5 rounded-full border border-rose-400/20 bg-rose-500/10 px-1.5 py-0.5 text-[8.5px] font-medium leading-none text-rose-200">
+                            <span className="flex items-center gap-1 text-[9px] font-medium leading-none text-rose-200">
                               <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
                               {overdueCount}
                             </span>
                           ) : null}
                         </div>
-                        <div className="mt-1.5 min-h-0 flex-1 overflow-hidden">
-                          <div className="flex h-full min-h-0 flex-col gap-1 overflow-hidden">
-                            {visibleTasks.map((task) => {
-                              const tone = getMonthCategoryTone(task.category);
 
-                              return (
-                                <div
-                                  key={task.id}
-                                  className={`flex min-w-0 items-center gap-1 overflow-hidden rounded-[6px] border-l-2 px-1 py-0.5 ${tone.accentClassName}`}
+                        <div className="mt-2 flex min-h-0 flex-1 flex-col gap-1 overflow-hidden">
+                          {visibleTasks.map((task) => {
+                            const tone = getMonthCategoryTone(task.category);
+
+                            return (
+                              <div key={task.id} className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[11px] leading-4">
+                                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone.dotClassName}`} />
+                                <span
+                                  className={`min-w-0 truncate ${
+                                    isCurrentMonth ? "text-slate-200" : "text-slate-500"
+                                  }`}
                                 >
-                                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-white/10 ${tone.dotClassName}`} />
-                                  <span className={`min-w-0 truncate text-[12px] font-medium leading-[1.15] ${tone.labelClassName}`}>
-                                    {task.task}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                            {hiddenCount > 0 ? (
-                              <div className="mt-auto text-[10px] font-medium leading-none text-slate-400">+{hiddenCount} more</div>
-                            ) : null}
-                          </div>
+                                  {task.task}
+                                </span>
+                              </div>
+                            );
+                          })}
+                          {hiddenCount > 0 ? (
+                            <div className={`mt-auto pl-3 text-[10px] font-medium leading-none ${isCurrentMonth ? "text-slate-400" : "text-slate-500"}`}>
+                              +{hiddenCount} more
+                            </div>
+                          ) : null}
                         </div>
                       </button>
                     );
@@ -839,127 +849,145 @@ export function PlannerView() {
                 </div>
               </div>
             )}
-            </div>
+          </div>
         </Panel>
 
-        <Panel
-          className="flex flex-col xl:h-full"
-          title={formatLongDate(selectedDate)}
-          subtitle={`${allSelectedDateTasks.length} tasks · ${completedCount} done · ${formatMinutes(plannedMinutes)}`}
-          action={
+        <Panel className="flex min-h-0 flex-col xl:h-full">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Selected day</p>
+              <h3 className="mt-1 text-base font-semibold text-white">{formatLongDate(selectedDate)}</h3>
+            </div>
             <button type="button" className={primaryButtonClassName} onClick={() => openNewTask(selectedDate)}>
               <Plus className="h-4 w-4" />
               Add task
             </button>
-          }
-        >
-          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle">
-          {selectedDateTasks.length ? (
-            <div className="space-y-3">
-              {selectedDateTasks.map((task) => {
-                const index = allSelectedDateTasks.findIndex((entry) => entry.id === task.id);
-                const durationLabel = formatMinutes(getStudyBlockMinutes(task));
+          </div>
 
-                return (
-                  <article
-                    key={task.id}
-                    className={`rounded-[22px] border border-white/10 bg-slate-900/55 p-4 transition ${
-                      task.completed ? "opacity-60" : ""
-                    }`}
-                  >
-                    <div className="flex items-start gap-4">
-                      <input
-                        type="checkbox"
-                        checked={task.completed}
-                        onChange={(event) => {
-                          void toggleTask(task, event.target.checked);
-                        }}
-                        aria-label={`Mark ${task.task} complete`}
-                        className="mt-1 h-5 w-5 rounded border-white/15 bg-slate-950 text-cyan-300"
-                      />
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <CategoryBadge category={task.category} />
-                          <span className="inline-flex items-center rounded-full border border-white/10 px-2.5 py-1 text-xs text-slate-300">
-                            {durationLabel}
-                          </span>
-                          {task.reminderAt ? (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs text-cyan-100">
-                              <Bell className="h-3.5 w-3.5" />
-                              {formatDateTimeLabel(task.reminderAt)}
-                            </span>
-                          ) : null}
-                        </div>
-
-                        <h4
-                          className={`mt-3 text-lg font-semibold text-white ${
-                            task.completed ? "line-through decoration-white/45" : ""
-                          }`}
-                        >
-                          {task.task}
-                        </h4>
-                      </div>
-
-                      <div className="flex flex-col items-end gap-2">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            className={iconButtonClassName}
-                            disabled={index <= 0}
-                            onClick={() => {
-                              void moveTask(task, -1);
-                            }}
-                            aria-label={`Move ${task.task} up`}
-                          >
-                            <ArrowUp className="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            className={iconButtonClassName}
-                            disabled={index === -1 || index >= allSelectedDateTasks.length - 1}
-                            onClick={() => {
-                              void moveTask(task, 1);
-                            }}
-                            aria-label={`Move ${task.task} down`}
-                          >
-                            <ArrowDown className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <button
-                          type="button"
-                          className={iconButtonClassName}
-                          aria-label={`Edit ${task.task}`}
-                          onClick={() => {
-                            setEditorTask(task);
-                            setEditorSeedDate(undefined);
-                            setShowEditor(true);
-                          }}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+          <div className="mb-3 grid grid-cols-3 gap-2">
+            <div className="rounded-[16px] border border-white/8 bg-slate-900/45 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Tasks</p>
+              <p className="mt-1 text-sm font-semibold text-white">{allSelectedDateTasks.length}</p>
             </div>
-          ) : (
-            <EmptyState
-              title="Quiet day"
-              description={
-                state.preferences.plannerFilters.search || state.preferences.plannerFilters.category !== "All"
-                  ? "No tasks match the current filter for this day."
-                  : "Add a task and build the day from a blank list."
-              }
-              action={
-                <button type="button" className={primaryButtonClassName} onClick={() => openNewTask(selectedDate)}>
-                  <Plus className="h-4 w-4" />
-                  Add task
-                </button>
-              }
-            />
-          )}
+            <div className="rounded-[16px] border border-white/8 bg-slate-900/45 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Done</p>
+              <p className="mt-1 text-sm font-semibold text-white">{completedCount}</p>
+            </div>
+            <div className="rounded-[16px] border border-white/8 bg-slate-900/45 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Planned</p>
+              <p className="mt-1 text-sm font-semibold text-white">{formatMinutes(plannedMinutes)}</p>
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle pr-1">
+            {selectedDateTasks.length ? (
+              <div className="space-y-2.5">
+                {selectedDateTasks.map((task) => {
+                  const index = allSelectedDateTasks.findIndex((entry) => entry.id === task.id);
+                  const durationLabel = formatMinutes(getStudyBlockMinutes(task));
+                  const tone = getMonthCategoryTone(task.category);
+
+                  return (
+                    <article
+                      key={task.id}
+                      className={`relative overflow-hidden rounded-[18px] border border-white/10 bg-slate-900/55 p-3 transition ${
+                        task.completed ? "opacity-60" : ""
+                      }`}
+                    >
+                      <span className={`absolute inset-y-3 left-0 w-[3px] rounded-r-full ${tone.dotClassName}`} aria-hidden="true" />
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={task.completed}
+                          onChange={(event) => {
+                            void toggleTask(task, event.target.checked);
+                          }}
+                          aria-label={`Mark ${task.task} complete`}
+                          className="mt-0.5 h-5 w-5 rounded border-white/15 bg-slate-950 text-cyan-300"
+                        />
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <CategoryBadge category={task.category} />
+                            <span className="inline-flex items-center rounded-full border border-white/10 px-2.5 py-1 text-xs text-slate-300">
+                              {durationLabel}
+                            </span>
+                            {task.reminderAt ? (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs text-cyan-100">
+                                <Bell className="h-3.5 w-3.5" />
+                                {formatDateTimeLabel(task.reminderAt)}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <h4
+                            className={`mt-2 text-base font-semibold text-white ${
+                              task.completed ? "line-through decoration-white/45" : ""
+                            }`}
+                          >
+                            {task.task}
+                          </h4>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-2">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className={iconButtonClassName}
+                              disabled={index <= 0}
+                              onClick={() => {
+                                void moveTask(task, -1);
+                              }}
+                              aria-label={`Move ${task.task} up`}
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              className={iconButtonClassName}
+                              disabled={index === -1 || index >= allSelectedDateTasks.length - 1}
+                              onClick={() => {
+                                void moveTask(task, 1);
+                              }}
+                              aria-label={`Move ${task.task} down`}
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            className={iconButtonClassName}
+                            aria-label={`Edit ${task.task}`}
+                            onClick={() => {
+                              setEditorTask(task);
+                              setEditorSeedDate(undefined);
+                              setShowEditor(true);
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <EmptyState
+                title="Quiet day"
+                description={
+                  state.preferences.plannerFilters.search || state.preferences.plannerFilters.category !== "All"
+                    ? "No tasks match the current filter for this day."
+                    : "Add a task and build the day from a blank list."
+                }
+                action={
+                  <button type="button" className={primaryButtonClassName} onClick={() => openNewTask(selectedDate)}>
+                    <Plus className="h-4 w-4" />
+                    Add task
+                  </button>
+                }
+              />
+            )}
           </div>
         </Panel>
       </div>
