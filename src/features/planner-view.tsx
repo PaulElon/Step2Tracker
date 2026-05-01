@@ -511,16 +511,6 @@ function getMonthCategoryTone(category: string): MonthCategoryTone {
   };
 }
 
-const MONTH_LEGEND = [
-  "UWorld",
-  "Anki",
-  "Review",
-  "Practice Exam / NBME / COMSAE",
-  "Break / Meal",
-  "Work / Gym",
-  "Other",
-] as const;
-
 export function PlannerView() {
   const {
     state,
@@ -730,8 +720,8 @@ export function PlannerView() {
           }
         >
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle">
-              {plannerMode === "week" ? (
+            {plannerMode === "week" ? (
+              <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle">
                 <div className="space-y-2">
                   {periodDates.map((date) => {
                     const dayTasks = tasksByDate.get(date) ?? [];
@@ -767,101 +757,89 @@ export function PlannerView() {
                     );
                   })}
                 </div>
-              ) : (
-                <div className="flex h-full min-h-0 flex-col gap-3">
-                  <div className="grid grid-cols-7 text-center">
-                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-                      <div key={day} className="py-1 text-[10px] uppercase tracking-[0.15em] text-slate-500">
-                        {day}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid min-h-[38rem] flex-1 grid-cols-7 grid-rows-6 gap-1 overflow-hidden rounded-[24px] border border-white/8 bg-slate-950/20 p-1.5 xl:min-h-[44rem]">
-                    {periodDates.map((date) => {
-                      const dayTasks = tasksByDate.get(date) ?? [];
-                      const isSelected = date === selectedDate;
-                      const isCurrentMonth = date.slice(0, 7) === selectedMonthKey;
-                      const isToday = date === todayKey;
-                      const visibleTasks = dayTasks.slice(0, 4);
-                      const hiddenCount = Math.max(dayTasks.length - visibleTasks.length, 0);
-                      const isPast = date < todayKey;
-                      const overdueCount = isPast ? dayTasks.filter((task) => !task.completed).length : 0;
-                      const isOverdue = overdueCount > 0;
+              </div>
+            ) : (
+              <div className="flex min-h-0 flex-1 flex-col gap-2">
+                <div className="grid grid-cols-7 text-center">
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+                    <div key={day} className="py-0.5 text-[10px] uppercase tracking-[0.12em] text-slate-500">
+                      {day}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px overflow-hidden rounded-[18px] border border-white/8 bg-slate-950/20 p-1">
+                  {periodDates.map((date) => {
+                    const dayTasks = tasksByDate.get(date) ?? [];
+                    const isSelected = date === selectedDate;
+                    const isCurrentMonth = date.slice(0, 7) === selectedMonthKey;
+                    const isToday = date === todayKey;
+                    const visibleTasks = dayTasks.slice(0, 3);
+                    const hiddenCount = Math.max(dayTasks.length - visibleTasks.length, 0);
+                    const isPast = date < todayKey;
+                    const overdueCount = isPast ? dayTasks.filter((task) => !task.completed).length : 0;
+                    const isOverdue = overdueCount > 0;
 
-                      return (
-                        <button
-                          key={date}
-                          type="button"
-                          onClick={() => void setPlannerFocusDate(date)}
-                          className={[
-                            "flex h-full min-h-0 flex-col overflow-hidden rounded-[18px] border p-3 text-left transition-colors duration-150",
-                            isSelected
-                              ? "border-cyan-300/25 bg-cyan-300/12 ring-1 ring-inset ring-cyan-300/35 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]"
-                              : isToday
-                              ? "border-cyan-300/18 bg-white/[0.06] ring-1 ring-inset ring-cyan-300/18"
-                              : isOverdue
-                              ? "border-rose-500/18 bg-rose-500/10 hover:bg-rose-500/14"
-                              : "border-white/8 bg-slate-900/55 hover:border-white/12 hover:bg-white/[0.04]",
-                            !isCurrentMonth ? "text-slate-400" : "text-slate-100",
-                          ].join(" ")}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <span
-                              className={`text-[13px] font-semibold leading-none ${
-                                isCurrentMonth ? "text-slate-100" : "text-slate-400"
-                              }`}
-                            >
-                              {Number(date.slice(8))}
+                    return (
+                      <button
+                        key={date}
+                        type="button"
+                        onClick={() => void setPlannerFocusDate(date)}
+                        className={[
+                          "flex h-full min-h-0 flex-col overflow-hidden rounded-[16px] border p-2.5 text-left transition-colors duration-150",
+                          isSelected
+                            ? "border-cyan-300/25 bg-cyan-300/12 ring-1 ring-inset ring-cyan-300/35 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]"
+                            : isToday
+                            ? "border-cyan-300/18 bg-white/[0.06] ring-1 ring-inset ring-cyan-300/18"
+                            : isOverdue
+                            ? "border-rose-500/18 bg-rose-500/10 hover:bg-rose-500/14"
+                            : "border-white/8 bg-slate-900/55 hover:border-white/12 hover:bg-white/[0.04]",
+                          !isCurrentMonth ? "text-slate-400" : "text-slate-100",
+                        ].join(" ")}
+                      >
+                        <div className="flex items-start justify-between gap-1.5">
+                          <span
+                            className={`text-[12px] font-semibold leading-none ${
+                              isCurrentMonth ? "text-slate-100" : "text-slate-400"
+                            }`}
+                          >
+                            {Number(date.slice(8))}
+                          </span>
+                          {isOverdue ? (
+                            <span className="flex items-center gap-0.5 rounded-full border border-rose-400/20 bg-rose-500/10 px-1.5 py-0.5 text-[8.5px] font-medium leading-none text-rose-200">
+                              <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                              {overdueCount}
                             </span>
-                            {isOverdue ? (
-                              <span className="flex items-center gap-1 rounded-full border border-rose-400/20 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-medium leading-none text-rose-200">
-                                <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
-                                {overdueCount}
-                              </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-1.5 min-h-0 flex-1 overflow-hidden">
+                          <div className="flex h-full min-h-0 flex-col gap-1 overflow-hidden">
+                            {visibleTasks.map((task) => {
+                              const tone = getMonthCategoryTone(task.category);
+
+                              return (
+                                <div
+                                  key={task.id}
+                                  className={`flex min-w-0 items-center gap-1 overflow-hidden rounded-[6px] border-l-2 px-1 py-0.5 ${tone.accentClassName}`}
+                                >
+                                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-white/10 ${tone.dotClassName}`} />
+                                  <span className={`min-w-0 truncate text-[12px] font-medium leading-[1.15] ${tone.labelClassName}`}>
+                                    {task.task}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                            {hiddenCount > 0 ? (
+                              <div className="mt-auto text-[10px] font-medium leading-none text-slate-400">+{hiddenCount} more</div>
                             ) : null}
                           </div>
-                          <div className="mt-2 min-h-0 flex-1 overflow-hidden">
-                            <div className="flex h-full min-h-0 flex-col gap-1.5 overflow-hidden">
-                              {visibleTasks.map((task) => {
-                                const tone = getMonthCategoryTone(task.category);
-
-                                return (
-                                  <div
-                                    key={task.id}
-                                    className={`flex min-w-0 items-center gap-1.5 overflow-hidden rounded-[8px] border px-2 py-1 ${tone.accentClassName}`}
-                                  >
-                                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-white/10 ${tone.dotClassName}`} />
-                                    <span className={`min-w-0 truncate text-[12.5px] font-medium leading-[1.15] ${tone.labelClassName}`}>
-                                      {task.task}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                              {hiddenCount > 0 ? (
-                                <div className="mt-auto text-[10px] font-medium leading-none text-slate-400">+{hiddenCount} more</div>
-                              ) : null}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 text-[10px] font-medium text-slate-500">
-                    {MONTH_LEGEND.map((label) => {
-                      const tone = getMonthCategoryTone(label);
-
-                      return (
-                        <div key={label} className="flex items-center gap-1.5">
-                          <span className={`h-2 w-2 rounded-full ${tone.dotClassName}`} />
-                          <span>{label}</span>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+            )}
             </div>
-          </div>
         </Panel>
 
         <Panel
