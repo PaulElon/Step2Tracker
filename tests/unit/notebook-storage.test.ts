@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DEFAULT_PREFERENCES, normalizeAppState } from "../../src/lib/storage.ts";
+import {
+  DEFAULT_PREFERENCES,
+  createBootstrapState,
+  exportBackupPayload,
+  normalizeAppState,
+  parseBackupPayload,
+} from "../../src/lib/storage.ts";
 
 test("normalizePreferences seeds one notebook page from notesHtml when notebookPages is undefined", () => {
   const normalized = normalizeAppState({
@@ -598,4 +604,113 @@ test("normalizePreferences notebookDocument fallback creates a default Page 1 wh
   assert.equal(emptyPagesDoc?.pages[0]?.order, 0);
   assert.equal(missingPagesDoc?.pages.length, 1);
   assert.equal(missingPagesDoc?.pages[0]?.title, "Page 1");
+});
+
+test("backup payload round-trips notebook folders, documents, and legacy pages", () => {
+  const state = createBootstrapState();
+  const backup = exportBackupPayload({
+    ...state,
+    preferences: {
+      ...state.preferences,
+      notebookFolders: [
+        {
+          id: "folder-1",
+          name: "Folder 1",
+          parentFolderId: "root-folder",
+          favorited: true,
+          order: 0,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-02T00:00:00.000Z",
+        },
+      ],
+      notebookDocuments: [
+        {
+          id: "doc-1",
+          title: "Document 1",
+          folderId: "folder-1",
+          favorited: true,
+          order: 0,
+          createdAt: "2026-01-03T00:00:00.000Z",
+          updatedAt: "2026-01-04T00:00:00.000Z",
+          pages: [
+            {
+              id: "doc-1-page-1",
+              title: "Document Page 1",
+              contentHtml: "<p>first</p>",
+              order: 0,
+              createdAt: "2026-01-03T00:00:00.000Z",
+              updatedAt: "2026-01-04T00:00:00.000Z",
+            },
+            {
+              id: "doc-1-page-2",
+              title: "Document Page 2",
+              contentHtml: "<p>second</p>",
+              order: 1,
+              createdAt: "2026-01-03T00:00:00.000Z",
+              updatedAt: "2026-01-04T00:00:00.000Z",
+            },
+          ],
+        },
+      ],
+      notebookPages: [
+        {
+          id: "legacy-page-1",
+          title: "Legacy Notebook Page",
+          contentHtml: "<p>legacy</p>",
+          folderId: "folder-1",
+          favorited: true,
+          order: 5,
+          createdAt: "2026-01-05T00:00:00.000Z",
+          updatedAt: "2026-01-06T00:00:00.000Z",
+        },
+      ],
+    },
+  });
+
+  const restored = parseBackupPayload(backup);
+
+  assert.equal(restored.preferences.notebookFolders.length, 1);
+  const [folder] = restored.preferences.notebookFolders;
+  assert.ok(folder);
+  assert.equal(folder.id, "folder-1");
+  assert.equal(folder.parentFolderId, "root-folder");
+  assert.equal(folder.favorited, true);
+
+  assert.equal(restored.preferences.notebookDocuments.length, 1);
+  const [document] = restored.preferences.notebookDocuments;
+  assert.ok(document);
+  assert.equal(document.id, "doc-1");
+  assert.equal(document.folderId, "folder-1");
+  assert.equal(document.favorited, true);
+  assert.deepEqual(
+    document.pages.map((page) => ({
+      id: page.id,
+      title: page.title,
+      contentHtml: page.contentHtml,
+      order: page.order,
+    })),
+    [
+      {
+        id: "doc-1-page-1",
+        title: "Document Page 1",
+        contentHtml: "<p>first</p>",
+        order: 0,
+      },
+      {
+        id: "doc-1-page-2",
+        title: "Document Page 2",
+        contentHtml: "<p>second</p>",
+        order: 1,
+      },
+    ],
+  );
+
+  assert.equal(restored.preferences.notebookPages.length, 1);
+  const [legacyPage] = restored.preferences.notebookPages;
+  assert.ok(legacyPage);
+  assert.equal(legacyPage.id, "legacy-page-1");
+  assert.equal(legacyPage.folderId, "folder-1");
+  assert.equal(legacyPage.favorited, true);
+  assert.equal(legacyPage.title, "Legacy Notebook Page");
+  assert.equal(legacyPage.contentHtml, "<p>legacy</p>");
 });
