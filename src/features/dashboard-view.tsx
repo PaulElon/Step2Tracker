@@ -239,19 +239,19 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
           </Panel>
 
           {FF.notebook ? (
-            <Panel title="Notebook" className="flex min-h-0 flex-1 flex-col">
-              <div className="panel-subtle flex min-h-0 flex-1 flex-col gap-3 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Primary notes workspace</p>
+            <Panel title="Notes" className="flex flex-col">
+              <div className="panel-subtle flex flex-col gap-3 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Notebook is now primary</p>
                 <p className="text-sm text-slate-300">
-                  Full note editing now lives in Notebook. This panel shows a quick preview of those same notes.
+                  Use Notebook for multi-page notes and editing. Dashboard keeps a quick preview of legacy notes.
                 </p>
-                <div className="min-h-0 flex-1 overflow-y-auto rounded-[18px] border border-white/10 bg-slate-950/45 p-3">
+                <div className="max-h-40 overflow-y-auto rounded-[18px] border border-white/10 bg-slate-950/45 p-3">
                   {hasNotesPreview ? (
                     <div className="rich-text-render text-sm text-slate-200 [&_p]:my-0 [&_li]:my-0.5 [&_ul]:my-1 [&_ol]:my-1">
                       <RichTextRender html={state.preferences.notesHtml} />
                     </div>
                   ) : (
-                    <p className="text-sm text-slate-400">No notes yet. Open Notebook to start writing.</p>
+                    <p className="text-sm text-slate-400">No legacy dashboard notes yet. Open Notebook to start writing.</p>
                   )}
                 </div>
                 {onOpenNotebook ? (
