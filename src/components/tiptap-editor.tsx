@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
+import { Extension, type Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -7,6 +8,8 @@ import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
 import TextAlign from "@tiptap/extension-text-align";
 import Underline from "@tiptap/extension-underline";
+import TaskItem from "@tiptap/extension-task-item";
+import TaskList from "@tiptap/extension-task-list";
 import type { NotebookEditorProps } from "./notebook-editor-adapter";
 
 const TEXT_COLOR_OPTIONS = [
@@ -25,6 +28,88 @@ const HIGHLIGHT_OPTIONS = [
   { label: "Blue", title: "Blue highlight", color: "#bfdbfe", buttonText: "H", buttonStyle: { backgroundColor: "#bfdbfe", color: "#0f172a" } },
   { label: "Red", title: "Red highlight", color: "#fecaca", buttonText: "H", buttonStyle: { backgroundColor: "#fecaca", color: "#0f172a" } },
 ] as const;
+
+type ListItemType = "listItem" | "taskItem";
+
+const TabIndentationExtension = Extension.create({
+  name: "tabIndentation",
+  priority: 1000,
+
+  addKeyboardShortcuts() {
+    return {
+      Tab: ({ editor }) => {
+        handleListIndent(editor, "indent");
+        return true;
+      },
+      "Shift-Tab": ({ editor }) => {
+        handleListIndent(editor, "outdent");
+        return true;
+      },
+    };
+  },
+});
+
+function getActiveListItemType(editor: Editor): ListItemType | null {
+  const { $from } = editor.state.selection;
+
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth);
+
+    if (node.type.name === "taskItem") {
+      return "taskItem";
+    }
+
+    if (node.type.name === "listItem") {
+      return "listItem";
+    }
+  }
+
+  return null;
+}
+
+function handleListIndent(editor: Editor, direction: "indent" | "outdent", focus = false) {
+  const listItemType = getActiveListItemType(editor);
+
+  if (!listItemType) {
+    return false;
+  }
+
+  const chain = editor.chain();
+  if (focus) {
+    chain.focus();
+  }
+
+  if (direction === "indent") {
+    chain.sinkListItem(listItemType).run();
+  } else {
+    chain.liftListItem(listItemType).run();
+  }
+
+  return true;
+}
+
+function canHandleListIndent(editor: Editor, direction: "indent" | "outdent") {
+  const listItemType = getActiveListItemType(editor);
+
+  if (!listItemType) {
+    return false;
+  }
+
+  if (direction === "indent") {
+    return editor.can().chain().sinkListItem(listItemType).run();
+  }
+
+  return editor.can().chain().liftListItem(listItemType).run();
+}
+
+function toggleChecklist(editor: Editor, focus = false) {
+  const chain = editor.chain();
+  if (focus) {
+    chain.focus();
+  }
+
+  chain.toggleTaskList().run();
+}
 
 type ToolbarButtonProps = {
   children: ReactNode;
@@ -90,6 +175,7 @@ export function TiptapEditor({
   const extensions = useMemo(
     () => [
       StarterKit,
+      TabIndentationExtension,
       TextStyle,
       Color.configure({
         types: ["textStyle"],
@@ -98,6 +184,12 @@ export function TiptapEditor({
         multicolor: true,
       }),
       Underline,
+      TaskItem.configure({
+        nested: true,
+      }),
+      TaskList.configure({
+        itemTypeName: "taskItem",
+      }),
       Link.configure({
         openOnClick: false,
         autolink: true,
@@ -180,12 +272,16 @@ export function TiptapEditor({
   const isCodeBlock = editor ? editor.isActive("codeBlock") : false;
   const isBulletList = editor ? editor.isActive("bulletList") : false;
   const isOrderedList = editor ? editor.isActive("orderedList") : false;
+  const isTaskList = editor ? editor.isActive("taskList") : false;
   const isLink = editor ? editor.isActive("link") : false;
   const isAlignLeft = editor ? editor.isActive({ textAlign: "left" }) : false;
   const isAlignCenter = editor ? editor.isActive({ textAlign: "center" }) : false;
   const isAlignRight = editor ? editor.isActive({ textAlign: "right" }) : false;
   const textColor = editor ? editor.getAttributes("textStyle").color ?? "" : "";
   const highlightColor = editor ? editor.getAttributes("highlight").color ?? "" : "";
+  const canIndent = editor ? canHandleListIndent(editor, "indent") : false;
+  const canOutdent = editor ? canHandleListIndent(editor, "outdent") : false;
+  const canToggleChecklist = editor ? editor.can().chain().toggleTaskList().run() : false;
 
   const setLink = () => {
     if (!editor) return;
@@ -323,6 +419,30 @@ export function TiptapEditor({
         </ToolbarButton>
         <ToolbarButton title="Numbered list" active={isOrderedList} disabled={!isEditorReady} onClick={() => editor?.chain().focus().toggleOrderedList().run()}>
           Numbered
+        </ToolbarButton>
+        <ToolbarButton
+          title="Checklist"
+          active={isTaskList}
+          disabled={!isEditorReady || !canToggleChecklist}
+          onClick={() => editor && toggleChecklist(editor, true)}
+        >
+          Checklist
+        </ToolbarButton>
+      </ToolbarGroup>
+      <ToolbarGroup label="Indentation">
+        <ToolbarButton
+          title="Indent"
+          disabled={!isEditorReady || !canIndent}
+          onClick={() => editor && handleListIndent(editor, "indent", true)}
+        >
+          Indent
+        </ToolbarButton>
+        <ToolbarButton
+          title="Outdent"
+          disabled={!isEditorReady || !canOutdent}
+          onClick={() => editor && handleListIndent(editor, "outdent", true)}
+        >
+          Outdent
         </ToolbarButton>
       </ToolbarGroup>
       <ToolbarGroup label="Block formatting">
