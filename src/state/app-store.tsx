@@ -45,6 +45,7 @@ import type {
   SectionId,
   StudyBlockInput,
   ThemeId,
+  ThemeVariant,
   TrashEntityType,
   TrashItem,
   WeakTopicInput,
@@ -68,6 +69,7 @@ interface AppStoreValue {
   setPlannerFocusDate: (date: string) => Promise<boolean>;
   setDailyGoalMinutes: (dailyGoalMinutes: number) => Promise<boolean>;
   toggleThemeEnhanced: (themeId: ThemeId) => Promise<boolean>;
+  toggleThemeVariant: (themeId: ThemeId) => Promise<boolean>;
   setCustomCategories: (categories: string[]) => Promise<boolean>;
   setResourceLinks: (links: ResourceLink[]) => Promise<boolean>;
   setExamTimers: (timers: import("../types/models").ExamTimer[]) => Promise<boolean>;
@@ -278,6 +280,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         ? current.filter((id) => id !== themeId)
         : [...current, themeId];
       return savePreferences({ ...stateRef.current.preferences, enhancedThemeIds: next });
+    },
+    toggleThemeVariant: (themeId) => {
+      const current = stateRef.current.preferences.themeVariants;
+      const defaults: Record<ThemeId, ThemeVariant> = { light: "light", dark: "dark", maggiepink: "light", paulblue: "dark" };
+      const currentVariant = current[themeId] ?? defaults[themeId];
+      const nextVariant: ThemeVariant = currentVariant === "light" ? "dark" : "light";
+      return savePreferences({
+        ...stateRef.current.preferences,
+        themeVariants: { ...current, [themeId]: nextVariant },
+      });
     },
     setCustomCategories: (categories) =>
       savePreferences({

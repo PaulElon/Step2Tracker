@@ -1,9 +1,9 @@
-import { Bell, Check, Database, Download, ExternalLink, Globe, Monitor, Palette, Pencil, Plus, RotateCcw, Trash2, X, Zap } from "lucide-react";
+import { Bell, Check, Database, Download, ExternalLink, Globe, Monitor, Moon, Palette, Pencil, Plus, RotateCcw, Sun, Trash2, X, Zap } from "lucide-react";
 import { useState, type ChangeEvent } from "react";
 import { Panel } from "../components/ui";
 import { themeList } from "../lib/themes";
 import { fieldClassName, secondaryButtonClassName } from "../lib/ui";
-import type { BackupArtifactPreview, PersistenceSummary, ResourceLink, ThemeId } from "../types/models";
+import type { BackupArtifactPreview, PersistenceSummary, ResourceLink, ThemeId, ThemeVariant } from "../types/models";
 
 function generateId(prefix: string) {
   return globalThis.crypto?.randomUUID?.() ?? `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -451,10 +451,12 @@ export function SettingsView({
   persistenceCopy,
   persistenceSummary: _persistenceSummary,
   enhancedThemeIds,
+  themeVariants,
   customCategories,
   resourceLinks,
   onThemeChange,
   onToggleThemeEnhanced,
+  onToggleThemeVariant,
   onDailyGoalMinutesChange,
   onEnableNotifications,
   onSendTestAlert,
@@ -472,10 +474,12 @@ export function SettingsView({
   persistenceCopy: string;
   persistenceSummary: PersistenceSummary | null;
   enhancedThemeIds: string[];
+  themeVariants: Partial<Record<ThemeId, ThemeVariant>>;
   customCategories: string[];
   resourceLinks: ResourceLink[];
   onThemeChange: (themeId: ThemeId) => void;
   onToggleThemeEnhanced: (themeId: ThemeId) => void;
+  onToggleThemeVariant: (themeId: ThemeId) => void;
   onDailyGoalMinutesChange: (hours: number) => void;
   onEnableNotifications: () => void;
   onSendTestAlert: () => void;
@@ -619,6 +623,10 @@ export function SettingsView({
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {themeList.map((theme) => {
                 const isEnhanced = enhancedThemeIds.includes(theme.id);
+                const hasVariant = theme.id === "maggiepink" || theme.id === "paulblue";
+                const defaults: Record<ThemeId, ThemeVariant> = { light: "light", dark: "dark", maggiepink: "light", paulblue: "dark" };
+                const currentVariant = themeVariants[theme.id] ?? defaults[theme.id];
+                const isDarkVariant = currentVariant === "dark";
                 return (
                   <div
                     key={theme.id}
@@ -638,22 +646,37 @@ export function SettingsView({
                         <span className="h-3 w-3 rounded-full" style={{ backgroundColor: theme.chart.secondary }} />
                         <span className="h-3 w-3 rounded-full" style={{ backgroundColor: theme.chart.tertiary }} />
                       </div>
-                      <button
-                        type="button"
-                        aria-label={isEnhanced ? `Disable enhanced ${theme.label}` : `Enhance ${theme.label}`}
-                        aria-pressed={isEnhanced}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onToggleThemeEnhanced(theme.id);
-                        }}
-                        className={`rounded-full border p-1.5 transition ${
-                          isEnhanced
-                            ? "border-yellow-300/50 bg-yellow-300/15 text-yellow-300"
-                            : "border-white/10 text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        <Zap className={`h-3.5 w-3.5 ${isEnhanced ? "fill-yellow-300" : ""}`} />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        {hasVariant && (
+                          <button
+                            type="button"
+                            aria-label={isDarkVariant ? `Switch ${theme.label} to light` : `Switch ${theme.label} to dark`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onToggleThemeVariant(theme.id);
+                            }}
+                            className="rounded-full border border-white/10 p-1.5 text-slate-400 transition hover:text-white"
+                          >
+                            {isDarkVariant ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          aria-label={isEnhanced ? `Disable enhanced ${theme.label}` : `Enhance ${theme.label}`}
+                          aria-pressed={isEnhanced}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onToggleThemeEnhanced(theme.id);
+                          }}
+                          className={`rounded-full border p-1.5 transition ${
+                            isEnhanced
+                              ? "border-yellow-300/50 bg-yellow-300/15 text-yellow-300"
+                              : "border-white/10 text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          <Zap className={`h-3.5 w-3.5 ${isEnhanced ? "fill-yellow-300" : ""}`} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

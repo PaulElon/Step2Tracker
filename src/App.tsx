@@ -506,6 +506,7 @@ export default function App() {
     setDailyGoalMinutes,
     setThemeId,
     toggleThemeEnhanced,
+    toggleThemeVariant,
     setCustomCategories,
     setResourceLinks,
     exportBackup,
@@ -546,17 +547,21 @@ export default function App() {
       : "Add or import tasks.";
 
   useEffect(() => {
-    document.documentElement.dataset.theme = state.preferences.themeId;
-    document.documentElement.classList.toggle(
-      "theme-light",
-      state.preferences.themeId === "maggiepink",
-    );
-    document.documentElement.dataset.themeEnhanced = state.preferences.enhancedThemeIds.includes(
-      state.preferences.themeId,
-    )
-      ? "true"
-      : "";
-  }, [state.preferences.themeId, state.preferences.enhancedThemeIds]);
+    const { themeId, themeVariants, enhancedThemeIds } = state.preferences;
+    document.documentElement.dataset.theme = themeId;
+    const variant = themeVariants[themeId];
+    if (variant) {
+      document.documentElement.dataset.themeVariant = variant;
+    } else {
+      delete document.documentElement.dataset.themeVariant;
+    }
+    const isLightMode =
+      themeId === "light" ||
+      (themeId === "maggiepink" && variant !== "dark") ||
+      (themeId === "paulblue" && variant === "light");
+    document.documentElement.classList.toggle("theme-light", isLightMode);
+    document.documentElement.dataset.themeEnhanced = enhancedThemeIds.includes(themeId) ? "true" : "";
+  }, [state.preferences.themeId, state.preferences.themeVariants, state.preferences.enhancedThemeIds]);
 
   useEffect(() => {
     if (!FF.timefolio && activeSection === "timefolio") {
@@ -815,6 +820,7 @@ export default function App() {
           persistenceCopy={persistenceCopy}
           persistenceSummary={persistenceSummary}
           enhancedThemeIds={state.preferences.enhancedThemeIds}
+          themeVariants={state.preferences.themeVariants}
           customCategories={state.preferences.customCategories}
           resourceLinks={state.preferences.resourceLinks}
           onThemeChange={(themeId) => {
@@ -825,6 +831,11 @@ export default function App() {
           onToggleThemeEnhanced={(themeId) => {
             startTransition(() => {
               void toggleThemeEnhanced(themeId);
+            });
+          }}
+          onToggleThemeVariant={(themeId) => {
+            startTransition(() => {
+              void toggleThemeVariant(themeId);
             });
           }}
           onDailyGoalMinutesChange={(hours) => {

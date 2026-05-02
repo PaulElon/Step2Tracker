@@ -13,17 +13,8 @@ export type PlannerSortField = "date" | "order" | "category" | "task";
 export type SortDirection = "asc" | "desc";
 export type ImportMode = "merge" | "replace";
 export type PlannerMode = "week" | "month";
-export type ThemeId =
-  | "aurora"
-  | "ember"
-  | "tide"
-  | "bubblegum"
-  | "signal"
-  | "prism"
-  | "maggiepink"
-  | "light"
-  | "paulblue"
-  | "teslared";
+export type ThemeId = "light" | "dark" | "maggiepink" | "paulblue";
+export type ThemeVariant = "light" | "dark";
 export type WeakTopicPriority = "High" | "Medium" | "Low";
 export type WeakTopicStatus = "Active" | "Improving" | "Resolved";
 export type WeakTopicEntryType = "manual" | "practice-test";
@@ -208,6 +199,7 @@ export interface Preferences {
   plannerMode: PlannerMode;
   plannerFocusDate: string;
   enhancedThemeIds: string[];
+  themeVariants: Partial<Record<ThemeId, ThemeVariant>>;
   customCategories: string[];
   resourceLinks: ResourceLink[];
   examTimers: ExamTimer[];

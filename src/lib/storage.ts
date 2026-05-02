@@ -47,18 +47,7 @@ export const STATUS_VALUES: StudyStatus[] = [
 export const STUDY_TASK_CATEGORY_VALUES: StudyTaskCategory[] = ["Test", "Review", "Anki", "Notes"];
 export const DEFAULT_STUDY_CATEGORIES = ["Test", "Review", "Anki", "Notes"] as const;
 
-export const THEME_VALUES: ThemeId[] = [
-  "aurora",
-  "ember",
-  "tide",
-  "bubblegum",
-  "signal",
-  "prism",
-  "maggiepink",
-  "light",
-  "paulblue",
-  "teslared",
-];
+export const THEME_VALUES: ThemeId[] = ["light", "dark", "maggiepink", "paulblue"];
 export const WEAK_TOPIC_PRIORITY_VALUES: WeakTopicPriority[] = ["High", "Medium", "Low"];
 export const WEAK_TOPIC_STATUS_VALUES: WeakTopicStatus[] = [
   "Active",
@@ -96,7 +85,7 @@ const defaultPlannerFilters: PlannerFilters = {
 export const DEFAULT_PREFERENCES: Preferences = {
   activeSection: "dashboard",
   lastActiveDate: getTodayKey(),
-  themeId: "aurora",
+  themeId: "light",
   dailyGoalMinutes: 8 * 60,
   plannerFilters: defaultPlannerFilters,
   plannerSort: {
@@ -106,6 +95,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   plannerMode: "week",
   plannerFocusDate: getTodayKey(),
   enhancedThemeIds: [],
+  themeVariants: { maggiepink: "light" as const, paulblue: "dark" as const },
   customCategories: [...DEFAULT_STUDY_CATEGORIES],
   resourceLinks: [],
   examTimers: [],
@@ -980,6 +970,10 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
       showBestFitLine:
         value?.scoreTrendOptions?.showBestFitLine === false ? false : true,
       showBestFitRSquared: !!value?.scoreTrendOptions?.showBestFitRSquared,
+    },
+    themeVariants: {
+      maggiepink: (value as { themeVariants?: { maggiepink?: string } })?.themeVariants?.maggiepink === "dark" ? "dark" : "light",
+      paulblue: (value as { themeVariants?: { paulblue?: string } })?.themeVariants?.paulblue === "light" ? "light" : "dark",
     },
   } satisfies Preferences;
 }
