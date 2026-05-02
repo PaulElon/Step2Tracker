@@ -11,551 +11,575 @@
   --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
 }
 
-/* ============================================================
-   BASE / DEFAULT = LIGHT THEME
-   ============================================================ */
 :root {
-  color-scheme: light;
-  --app-bg-1: #F7F7F8;
-  --panel-bg: rgba(255, 255, 255, 0.97);
-  --panel-border: rgba(0, 0, 0, 0.13);
-  --panel-shadow: rgba(0, 0, 0, 0.10);
-  --panel-highlight: rgba(0, 0, 0, 0);
-  --panel-support-bg: rgba(249, 250, 251, 0.97);
-  --panel-support-border: rgba(0, 0, 0, 0.09);
-  --panel-support-shadow: rgba(0, 0, 0, 0.06);
-  --surface-muted: rgba(243, 244, 246, 0.95);
-  --field-bg: #FFFFFF;
-  --field-focus: rgba(37, 99, 235, 0.12);
-  --field-border-strong: rgba(37, 99, 235, 0.55);
-  --focus-ring-inner: rgba(37, 99, 235, 0.12);
-  --focus-ring-outer: rgba(37, 99, 235, 0.35);
-  --primary-start: #2563EB;
-  --primary-end: #2563EB;
-  --primary-border: #2563EB;
-  --selection: rgba(37, 99, 235, 0.15);
-  --rich-text: #111827;
-  --rich-text-muted: #4B5563;
-  --lane-review-start: rgba(99, 102, 241, 0.10);
-  --lane-review-end: rgba(139, 92, 246, 0.06);
-  --lane-review-border: rgba(99, 102, 241, 0.22);
-  --lane-content-start: rgba(37, 99, 235, 0.10);
-  --lane-content-end: rgba(6, 182, 212, 0.06);
-  --lane-content-border: rgba(37, 99, 235, 0.22);
-  --lane-assessment-start: rgba(245, 158, 11, 0.12);
-  --lane-assessment-end: rgba(239, 68, 68, 0.07);
-  --lane-assessment-border: rgba(245, 158, 11, 0.28);
-  --lane-recovery-start: rgba(156, 163, 175, 0.12);
-  --lane-recovery-end: rgba(209, 213, 219, 0.07);
-  --lane-recovery-border: rgba(156, 163, 175, 0.25);
-  --lane-admin-start: rgba(16, 185, 129, 0.10);
-  --lane-admin-end: rgba(37, 99, 235, 0.06);
-  --lane-admin-border: rgba(16, 185, 129, 0.24);
-  /* Editor toolbar variables */
-  --editor-toolbar-bg: #FFFFFF;
-  --editor-toolbar-border: rgba(0, 0, 0, 0.09);
-  --editor-btn-color: #374151;
-  --editor-btn-hover-bg: rgba(37, 99, 235, 0.08);
-  --editor-btn-hover-color: #1D4ED8;
-  --editor-btn-active-bg: rgba(37, 99, 235, 0.12);
-  --editor-btn-active-color: #1D4ED8;
-  --editor-sep-color: rgba(0, 0, 0, 0.10);
-  --editor-dd-bg: #FFFFFF;
-  --editor-dd-border: rgba(0, 0, 0, 0.10);
-  --editor-dd-text: #374151;
-  --editor-dd-hover-bg: rgba(37, 99, 235, 0.08);
-  --editor-dd-hover-color: #1D4ED8;
-  --editor-dd-active-color: #1D4ED8;
-  --editor-dd-check-color: #1D4ED8;
-  --editor-fontsize-border: rgba(0, 0, 0, 0.10);
-  --editor-fontsize-color: #374151;
-  --editor-fontsize-hover-bg: rgba(37, 99, 235, 0.08);
-  --editor-fontsize-hover-color: #1D4ED8;
-  --editor-workspace-bg: #EAECF0;
-  --editor-table-td: rgba(249, 250, 251, 0.90);
-  --editor-table-th: rgba(219, 234, 254, 0.95);
-  --editor-table-th-color: #1E3A5F;
-  --editor-table-border: rgba(0, 0, 0, 0.14);
-  --editor-selected-cell: rgba(37, 99, 235, 0.12);
-  --editor-selected-cell-ring: rgba(37, 99, 235, 0.32);
-  --editor-resize-handle: rgba(37, 99, 235, 0.45);
-  --editor-placeholder-color: rgba(107, 114, 128, 0.7);
-  --editor-heading-color: #111827;
-  --editor-link-color: #2563EB;
-  --editor-link-hover-color: #1D4ED8;
-  --editor-blockquote-border: rgba(37, 99, 235, 0.35);
-  --editor-blockquote-color: #4B5563;
-  --editor-code-bg: rgba(243, 244, 246, 0.90);
-  --editor-code-color: #111827;
-  --editor-pre-bg: rgba(249, 250, 251, 0.98);
-  --editor-pre-border: rgba(0, 0, 0, 0.12);
-  --editor-hr-color: rgba(0, 0, 0, 0.18);
-  --editor-hr-hover-color: rgba(37, 99, 235, 0.45);
-  --editor-hr-selected-color: rgba(37, 99, 235, 0.75);
-  --editor-checkbox-color: #2563EB;
-}
-
-/* ============================================================
-   LIGHT THEME (explicit, same as :root)
-   ============================================================ */
-:root[data-theme="light"] {
-  color-scheme: light;
-  --app-bg-1: #F7F7F8;
-  --panel-bg: rgba(255, 255, 255, 0.97);
-  --panel-border: rgba(0, 0, 0, 0.13);
-  --panel-shadow: rgba(0, 0, 0, 0.10);
-  --panel-highlight: rgba(0, 0, 0, 0);
-  --panel-support-bg: rgba(249, 250, 251, 0.97);
-  --panel-support-border: rgba(0, 0, 0, 0.09);
-  --panel-support-shadow: rgba(0, 0, 0, 0.06);
-  --surface-muted: rgba(243, 244, 246, 0.95);
-  --field-bg: #FFFFFF;
-  --field-focus: rgba(37, 99, 235, 0.12);
-  --field-border-strong: rgba(37, 99, 235, 0.55);
-  --focus-ring-inner: rgba(37, 99, 235, 0.12);
-  --focus-ring-outer: rgba(37, 99, 235, 0.35);
-  --primary-start: #2563EB;
-  --primary-end: #2563EB;
-  --primary-border: #2563EB;
-  --selection: rgba(37, 99, 235, 0.15);
-  --rich-text: #111827;
-  --rich-text-muted: #4B5563;
-  --lane-review-start: rgba(99, 102, 241, 0.10);
-  --lane-review-end: rgba(139, 92, 246, 0.06);
-  --lane-review-border: rgba(99, 102, 241, 0.22);
-  --lane-content-start: rgba(37, 99, 235, 0.10);
-  --lane-content-end: rgba(6, 182, 212, 0.06);
-  --lane-content-border: rgba(37, 99, 235, 0.22);
-  --lane-assessment-start: rgba(245, 158, 11, 0.12);
-  --lane-assessment-end: rgba(239, 68, 68, 0.07);
-  --lane-assessment-border: rgba(245, 158, 11, 0.28);
-  --lane-recovery-start: rgba(156, 163, 175, 0.12);
-  --lane-recovery-end: rgba(209, 213, 219, 0.07);
-  --lane-recovery-border: rgba(156, 163, 175, 0.25);
-  --lane-admin-start: rgba(16, 185, 129, 0.10);
-  --lane-admin-end: rgba(37, 99, 235, 0.06);
-  --lane-admin-border: rgba(16, 185, 129, 0.24);
-}
-
-/* ============================================================
-   DARK THEME
-   ============================================================ */
-:root[data-theme="dark"] {
   color-scheme: dark;
-  --app-bg-1: #1A1A1A;
-  --panel-bg: rgba(28, 28, 28, 0.99);
-  --panel-border: rgba(255, 255, 255, 0.09);
-  --panel-shadow: rgba(0, 0, 0, 0.30);
-  --panel-highlight: rgba(255, 255, 255, 0.04);
-  --panel-support-bg: rgba(36, 36, 36, 0.99);
-  --panel-support-border: rgba(255, 255, 255, 0.06);
-  --panel-support-shadow: rgba(0, 0, 0, 0.20);
-  --surface-muted: rgba(42, 42, 42, 0.95);
-  --field-bg: rgba(24, 24, 24, 0.99);
-  --field-focus: rgba(59, 130, 246, 0.12);
-  --field-border-strong: rgba(59, 130, 246, 0.50);
-  --focus-ring-inner: rgba(59, 130, 246, 0.15);
-  --focus-ring-outer: rgba(59, 130, 246, 0.40);
-  --primary-start: #3B82F6;
-  --primary-end: #3B82F6;
-  --primary-border: #3B82F6;
-  --selection: rgba(59, 130, 246, 0.20);
-  --rich-text: #F9FAFB;
-  --rich-text-muted: #9CA3AF;
-  --lane-review-start: rgba(99, 102, 241, 0.18);
-  --lane-review-end: rgba(139, 92, 246, 0.10);
-  --lane-review-border: rgba(99, 102, 241, 0.28);
-  --lane-content-start: rgba(59, 130, 246, 0.18);
-  --lane-content-end: rgba(6, 182, 212, 0.10);
-  --lane-content-border: rgba(59, 130, 246, 0.28);
-  --lane-assessment-start: rgba(245, 158, 11, 0.20);
-  --lane-assessment-end: rgba(239, 68, 68, 0.12);
-  --lane-assessment-border: rgba(245, 158, 11, 0.30);
-  --lane-recovery-start: rgba(107, 114, 128, 0.22);
-  --lane-recovery-end: rgba(156, 163, 175, 0.10);
-  --lane-recovery-border: rgba(107, 114, 128, 0.28);
-  --lane-admin-start: rgba(16, 185, 129, 0.18);
-  --lane-admin-end: rgba(59, 130, 246, 0.10);
-  --lane-admin-border: rgba(16, 185, 129, 0.28);
-  /* Editor — dark defaults (shared with dark Maggie Pink and dark Paul Blue) */
-  --editor-toolbar-bg: rgba(18, 22, 38, 0.99);
-  --editor-toolbar-border: rgba(255, 255, 255, 0.08);
-  --editor-btn-color: rgba(203, 213, 225, 0.82);
-  --editor-btn-hover-bg: rgba(56, 189, 248, 0.10);
-  --editor-btn-hover-color: rgba(236, 254, 255, 0.98);
-  --editor-btn-active-bg: rgba(34, 211, 238, 0.12);
-  --editor-btn-active-color: rgba(164, 245, 253, 0.98);
-  --editor-sep-color: rgba(148, 163, 184, 0.14);
-  --editor-dd-bg: rgba(14, 18, 34, 0.99);
-  --editor-dd-border: rgba(148, 163, 184, 0.14);
-  --editor-dd-text: rgba(203, 213, 225, 0.88);
-  --editor-dd-hover-bg: rgba(56, 189, 248, 0.10);
-  --editor-dd-hover-color: rgba(236, 254, 255, 0.98);
-  --editor-dd-active-color: rgba(34, 211, 238, 0.98);
-  --editor-dd-check-color: rgba(34, 211, 238, 0.90);
-  --editor-fontsize-border: rgba(148, 163, 184, 0.14);
-  --editor-fontsize-color: rgba(203, 213, 225, 0.75);
-  --editor-fontsize-hover-bg: rgba(56, 189, 248, 0.12);
-  --editor-fontsize-hover-color: rgba(236, 254, 255, 0.98);
-  --editor-workspace-bg: rgba(7, 11, 24, 0.98);
-  --editor-table-td: rgba(15, 23, 42, 0.32);
-  --editor-table-th: rgba(30, 41, 59, 0.90);
-  --editor-table-th-color: rgba(248, 250, 252, 0.98);
-  --editor-table-border: rgba(148, 163, 184, 0.20);
-  --editor-selected-cell: rgba(34, 211, 238, 0.16);
-  --editor-selected-cell-ring: rgba(34, 211, 238, 0.42);
-  --editor-resize-handle: rgba(56, 189, 248, 0.45);
-  --editor-placeholder-color: rgba(148, 163, 184, 0.70);
-  --editor-heading-color: rgba(248, 250, 252, 0.98);
-  --editor-link-color: rgba(103, 232, 249, 0.96);
-  --editor-link-hover-color: rgba(165, 243, 252, 1);
-  --editor-blockquote-border: rgba(125, 211, 252, 0.42);
-  --editor-blockquote-color: rgba(226, 232, 240, 0.92);
-  --editor-code-bg: rgba(15, 23, 42, 0.90);
-  --editor-code-color: rgba(236, 254, 255, 0.98);
-  --editor-pre-bg: rgba(2, 6, 23, 0.92);
-  --editor-pre-border: rgba(148, 163, 184, 0.18);
-  --editor-hr-color: rgba(148, 163, 184, 0.35);
-  --editor-hr-hover-color: rgba(56, 189, 248, 0.65);
-  --editor-hr-selected-color: rgba(34, 211, 238, 0.90);
-  --editor-checkbox-color: rgba(34, 211, 238, 0.95);
+  --app-bg-1: #030712;
+  --app-bg-2: #07101a;
+  --app-bg-3: #091523;
+  --app-glow-1: rgba(84, 180, 255, 0.18);
+  --app-glow-2: rgba(24, 214, 176, 0.12);
+  --panel-bg: rgba(2, 8, 18, 0.58);
+  --panel-border: rgba(255, 255, 255, 0.1);
+  --panel-shadow: rgba(2, 8, 18, 0.62);
+  --panel-support-bg: rgba(12, 19, 33, 0.7);
+  --panel-support-border: rgba(255, 255, 255, 0.07);
+  --panel-support-shadow: rgba(2, 8, 18, 0.4);
+  --surface-muted: rgba(15, 23, 42, 0.55);
+  --field-bg: rgba(15, 23, 42, 0.7);
+  --field-focus: rgba(96, 243, 223, 0.22);
+  --field-border-strong: rgba(123, 184, 255, 0.42);
+  --focus-ring-inner: rgba(96, 243, 223, 0.22);
+  --focus-ring-outer: rgba(123, 184, 255, 0.55);
+  --primary-start: rgba(96, 243, 223, 0.18);
+  --primary-end: rgba(122, 184, 255, 0.18);
+  --primary-border: rgba(96, 243, 223, 0.32);
+  --selection: rgba(96, 243, 223, 0.24);
+  --lane-review-start: rgba(215, 164, 255, 0.22);
+  --lane-review-end: rgba(255, 182, 213, 0.12);
+  --lane-review-border: rgba(215, 164, 255, 0.22);
+  --lane-content-start: rgba(96, 243, 223, 0.2);
+  --lane-content-end: rgba(122, 184, 255, 0.12);
+  --lane-content-border: rgba(96, 243, 223, 0.2);
+  --lane-assessment-start: rgba(255, 195, 122, 0.22);
+  --lane-assessment-end: rgba(255, 143, 158, 0.14);
+  --lane-assessment-border: rgba(255, 195, 122, 0.22);
+  --lane-recovery-start: rgba(148, 168, 190, 0.18);
+  --lane-recovery-end: rgba(195, 209, 223, 0.08);
+  --lane-recovery-border: rgba(148, 168, 190, 0.22);
+  --lane-admin-start: rgba(127, 242, 180, 0.18);
+  --lane-admin-end: rgba(96, 243, 223, 0.12);
+  --lane-admin-border: rgba(127, 242, 180, 0.2);
 }
 
-/* ============================================================
-   MAGGIE PINK — default = light variant
-   ============================================================ */
+:root[data-theme="ember"] {
+  --app-bg-1: #12090a;
+  --app-bg-2: #1b1113;
+  --app-bg-3: #251817;
+  --app-glow-1: rgba(255, 180, 84, 0.14);
+  --app-glow-2: rgba(255, 126, 107, 0.12);
+  --panel-bg: rgba(20, 11, 12, 0.62);
+  --panel-border: rgba(255, 238, 214, 0.08);
+  --panel-shadow: rgba(12, 6, 6, 0.58);
+  --panel-support-bg: rgba(34, 19, 18, 0.72);
+  --panel-support-border: rgba(255, 238, 214, 0.08);
+  --panel-support-shadow: rgba(12, 6, 6, 0.34);
+  --surface-muted: rgba(45, 28, 26, 0.52);
+  --field-bg: rgba(39, 23, 22, 0.78);
+  --field-focus: rgba(255, 180, 84, 0.18);
+  --field-border-strong: rgba(255, 126, 107, 0.4);
+  --focus-ring-inner: rgba(255, 180, 84, 0.18);
+  --focus-ring-outer: rgba(255, 126, 107, 0.5);
+  --primary-start: rgba(255, 212, 128, 0.18);
+  --primary-end: rgba(255, 126, 107, 0.18);
+  --primary-border: rgba(255, 180, 84, 0.28);
+  --selection: rgba(255, 180, 84, 0.22);
+  --lane-review-start: rgba(247, 198, 161, 0.22);
+  --lane-review-end: rgba(255, 154, 118, 0.12);
+  --lane-review-border: rgba(247, 198, 161, 0.22);
+  --lane-content-start: rgba(255, 212, 128, 0.2);
+  --lane-content-end: rgba(255, 180, 84, 0.12);
+  --lane-content-border: rgba(255, 180, 84, 0.2);
+  --lane-assessment-start: rgba(255, 126, 107, 0.22);
+  --lane-assessment-end: rgba(255, 179, 162, 0.14);
+  --lane-assessment-border: rgba(255, 126, 107, 0.22);
+  --lane-recovery-start: rgba(159, 139, 125, 0.18);
+  --lane-recovery-end: rgba(212, 192, 178, 0.08);
+  --lane-recovery-border: rgba(159, 139, 125, 0.22);
+  --lane-admin-start: rgba(155, 228, 162, 0.18);
+  --lane-admin-end: rgba(106, 208, 181, 0.12);
+  --lane-admin-border: rgba(155, 228, 162, 0.2);
+}
+
+:root[data-theme="tide"] {
+  --app-bg-1: #04101a;
+  --app-bg-2: #071a24;
+  --app-bg-3: #0b2432;
+  --app-glow-1: rgba(106, 216, 255, 0.18);
+  --app-glow-2: rgba(98, 241, 196, 0.12);
+  --panel-bg: rgba(6, 18, 31, 0.6);
+  --panel-border: rgba(222, 236, 248, 0.08);
+  --panel-shadow: rgba(4, 12, 21, 0.6);
+  --panel-support-bg: rgba(10, 26, 40, 0.72);
+  --panel-support-border: rgba(222, 236, 248, 0.08);
+  --panel-support-shadow: rgba(4, 12, 21, 0.36);
+  --surface-muted: rgba(15, 34, 48, 0.54);
+  --field-bg: rgba(9, 27, 40, 0.76);
+  --field-focus: rgba(106, 216, 255, 0.18);
+  --field-border-strong: rgba(98, 241, 196, 0.42);
+  --focus-ring-inner: rgba(106, 216, 255, 0.18);
+  --focus-ring-outer: rgba(98, 241, 196, 0.5);
+  --primary-start: rgba(106, 216, 255, 0.18);
+  --primary-end: rgba(98, 241, 196, 0.18);
+  --primary-border: rgba(106, 216, 255, 0.28);
+  --selection: rgba(106, 216, 255, 0.22);
+  --lane-review-start: rgba(158, 176, 255, 0.22);
+  --lane-review-end: rgba(226, 176, 255, 0.12);
+  --lane-review-border: rgba(158, 176, 255, 0.22);
+  --lane-content-start: rgba(106, 216, 255, 0.2);
+  --lane-content-end: rgba(98, 241, 196, 0.12);
+  --lane-content-border: rgba(106, 216, 255, 0.2);
+  --lane-assessment-start: rgba(255, 208, 138, 0.22);
+  --lane-assessment-end: rgba(255, 151, 183, 0.14);
+  --lane-assessment-border: rgba(255, 208, 138, 0.22);
+  --lane-recovery-start: rgba(126, 147, 170, 0.18);
+  --lane-recovery-end: rgba(190, 208, 227, 0.08);
+  --lane-recovery-border: rgba(126, 147, 170, 0.22);
+  --lane-admin-start: rgba(126, 240, 181, 0.18);
+  --lane-admin-end: rgba(106, 216, 255, 0.12);
+  --lane-admin-border: rgba(126, 240, 181, 0.2);
+}
+
+:root[data-theme="bubblegum"] {
+  --app-bg-1: #1a0713;
+  --app-bg-2: #210a18;
+  --app-bg-3: #311124;
+  --app-glow-1: rgba(255, 105, 199, 0.18);
+  --app-glow-2: rgba(255, 154, 213, 0.14);
+  --panel-bg: rgba(28, 10, 20, 0.62);
+  --panel-border: rgba(255, 241, 246, 0.1);
+  --panel-shadow: rgba(18, 4, 13, 0.62);
+  --panel-support-bg: rgba(44, 15, 28, 0.72);
+  --panel-support-border: rgba(255, 241, 246, 0.08);
+  --panel-support-shadow: rgba(18, 4, 13, 0.36);
+  --surface-muted: rgba(55, 20, 39, 0.56);
+  --field-bg: rgba(43, 16, 30, 0.78);
+  --field-focus: rgba(255, 105, 199, 0.18);
+  --field-border-strong: rgba(255, 154, 213, 0.42);
+  --focus-ring-inner: rgba(255, 105, 199, 0.2);
+  --focus-ring-outer: rgba(255, 154, 213, 0.55);
+  --primary-start: rgba(255, 105, 199, 0.18);
+  --primary-end: rgba(255, 184, 107, 0.18);
+  --primary-border: rgba(255, 105, 199, 0.3);
+  --selection: rgba(255, 105, 199, 0.24);
+  --lane-review-start: rgba(255, 154, 213, 0.22);
+  --lane-review-end: rgba(255, 192, 234, 0.12);
+  --lane-review-border: rgba(255, 154, 213, 0.22);
+  --lane-content-start: rgba(255, 105, 199, 0.2);
+  --lane-content-end: rgba(255, 154, 213, 0.12);
+  --lane-content-border: rgba(255, 105, 199, 0.2);
+  --lane-assessment-start: rgba(255, 184, 107, 0.22);
+  --lane-assessment-end: rgba(255, 138, 176, 0.14);
+  --lane-assessment-border: rgba(255, 184, 107, 0.22);
+  --lane-recovery-start: rgba(199, 138, 166, 0.18);
+  --lane-recovery-end: rgba(242, 191, 216, 0.08);
+  --lane-recovery-border: rgba(199, 138, 166, 0.22);
+  --lane-admin-start: rgba(142, 240, 203, 0.18);
+  --lane-admin-end: rgba(124, 231, 255, 0.12);
+  --lane-admin-border: rgba(142, 240, 203, 0.2);
+}
+
+:root[data-theme="signal"] {
+  --app-bg-1: #02110f;
+  --app-bg-2: #071915;
+  --app-bg-3: #0c2320;
+  --app-glow-1: rgba(77, 246, 212, 0.18);
+  --app-glow-2: rgba(140, 251, 110, 0.12);
+  --panel-bg: rgba(5, 20, 18, 0.62);
+  --panel-border: rgba(230, 255, 249, 0.1);
+  --panel-shadow: rgba(1, 9, 8, 0.62);
+  --panel-support-bg: rgba(10, 28, 25, 0.74);
+  --panel-support-border: rgba(230, 255, 249, 0.08);
+  --panel-support-shadow: rgba(1, 9, 8, 0.36);
+  --surface-muted: rgba(14, 37, 34, 0.56);
+  --field-bg: rgba(8, 30, 27, 0.78);
+  --field-focus: rgba(77, 246, 212, 0.18);
+  --field-border-strong: rgba(140, 251, 110, 0.4);
+  --focus-ring-inner: rgba(77, 246, 212, 0.2);
+  --focus-ring-outer: rgba(140, 251, 110, 0.52);
+  --primary-start: rgba(77, 246, 212, 0.18);
+  --primary-end: rgba(140, 251, 110, 0.18);
+  --primary-border: rgba(77, 246, 212, 0.3);
+  --selection: rgba(77, 246, 212, 0.24);
+  --lane-review-start: rgba(110, 168, 255, 0.22);
+  --lane-review-end: rgba(176, 140, 255, 0.12);
+  --lane-review-border: rgba(110, 168, 255, 0.22);
+  --lane-content-start: rgba(77, 246, 212, 0.2);
+  --lane-content-end: rgba(140, 251, 110, 0.12);
+  --lane-content-border: rgba(77, 246, 212, 0.2);
+  --lane-assessment-start: rgba(255, 224, 122, 0.22);
+  --lane-assessment-end: rgba(255, 125, 159, 0.14);
+  --lane-assessment-border: rgba(255, 224, 122, 0.22);
+  --lane-recovery-start: rgba(136, 185, 176, 0.18);
+  --lane-recovery-end: rgba(196, 236, 228, 0.08);
+  --lane-recovery-border: rgba(136, 185, 176, 0.22);
+  --lane-admin-start: rgba(140, 251, 110, 0.18);
+  --lane-admin-end: rgba(77, 246, 212, 0.12);
+  --lane-admin-border: rgba(140, 251, 110, 0.2);
+}
+
 :root[data-theme="maggiepink"] {
   color-scheme: light;
-  --app-bg-1: #FFF0F5;
-  --panel-bg: rgba(255, 255, 255, 0.96);
-  --panel-border: rgba(219, 39, 119, 0.18);
-  --panel-shadow: rgba(157, 23, 77, 0.08);
-  --panel-highlight: rgba(0, 0, 0, 0);
-  --panel-support-bg: rgba(255, 241, 249, 0.96);
-  --panel-support-border: rgba(219, 39, 119, 0.12);
-  --panel-support-shadow: rgba(157, 23, 77, 0.05);
-  --surface-muted: rgba(253, 232, 243, 0.92);
-  --field-bg: #FFFFFF;
-  --field-focus: rgba(219, 39, 119, 0.10);
-  --field-border-strong: rgba(190, 24, 93, 0.50);
-  --focus-ring-inner: rgba(219, 39, 119, 0.12);
-  --focus-ring-outer: rgba(219, 39, 119, 0.35);
-  --primary-start: #BE185D;
-  --primary-end: #BE185D;
-  --primary-border: #BE185D;
-  --selection: rgba(219, 39, 119, 0.15);
-  --rich-text: #1A0414;
-  --rich-text-muted: #9D4E72;
-  --lane-review-start: rgba(219, 39, 119, 0.12);
-  --lane-review-end: rgba(236, 72, 153, 0.07);
-  --lane-review-border: rgba(219, 39, 119, 0.24);
-  --lane-content-start: rgba(251, 113, 133, 0.14);
-  --lane-content-end: rgba(253, 164, 175, 0.08);
-  --lane-content-border: rgba(251, 113, 133, 0.26);
-  --lane-assessment-start: rgba(249, 115, 22, 0.12);
-  --lane-assessment-end: rgba(253, 186, 116, 0.07);
-  --lane-assessment-border: rgba(249, 115, 22, 0.24);
-  --lane-recovery-start: rgba(216, 180, 254, 0.18);
-  --lane-recovery-end: rgba(233, 213, 255, 0.10);
-  --lane-recovery-border: rgba(216, 180, 254, 0.28);
-  --lane-admin-start: rgba(5, 150, 105, 0.10);
-  --lane-admin-end: rgba(52, 211, 153, 0.06);
-  --lane-admin-border: rgba(5, 150, 105, 0.22);
-  /* Editor — light pink */
-  --editor-toolbar-bg: #FFFFFF;
-  --editor-toolbar-border: rgba(219, 39, 119, 0.12);
-  --editor-btn-color: #1A0414;
-  --editor-btn-hover-bg: rgba(190, 24, 93, 0.08);
-  --editor-btn-hover-color: #9D174D;
-  --editor-btn-active-bg: rgba(190, 24, 93, 0.12);
-  --editor-btn-active-color: #9D174D;
-  --editor-sep-color: rgba(219, 39, 119, 0.15);
-  --editor-dd-bg: #FFFFFF;
-  --editor-dd-border: rgba(219, 39, 119, 0.12);
-  --editor-dd-text: #1A0414;
-  --editor-dd-hover-bg: rgba(190, 24, 93, 0.08);
-  --editor-dd-hover-color: #9D174D;
-  --editor-dd-active-color: #9D174D;
-  --editor-dd-check-color: #BE185D;
-  --editor-fontsize-border: rgba(219, 39, 119, 0.15);
-  --editor-fontsize-color: #1A0414;
-  --editor-fontsize-hover-bg: rgba(190, 24, 93, 0.08);
-  --editor-fontsize-hover-color: #9D174D;
-  --editor-workspace-bg: #F9E4EE;
-  --editor-table-td: rgba(255, 255, 255, 0.90);
-  --editor-table-th: rgba(253, 232, 243, 0.95);
-  --editor-table-th-color: #1A0414;
-  --editor-table-border: rgba(219, 39, 119, 0.18);
-  --editor-selected-cell: rgba(219, 39, 119, 0.10);
-  --editor-selected-cell-ring: rgba(219, 39, 119, 0.30);
-  --editor-resize-handle: rgba(190, 24, 93, 0.45);
-  --editor-placeholder-color: rgba(157, 78, 114, 0.55);
-  --editor-heading-color: #1A0414;
-  --editor-link-color: #BE185D;
-  --editor-link-hover-color: #9D174D;
-  --editor-blockquote-border: rgba(219, 39, 119, 0.35);
-  --editor-blockquote-color: #4A1C30;
-  --editor-code-bg: rgba(253, 232, 243, 0.85);
-  --editor-code-color: #9D174D;
-  --editor-pre-bg: rgba(255, 241, 249, 0.98);
-  --editor-pre-border: rgba(219, 39, 119, 0.18);
-  --editor-hr-color: rgba(219, 39, 119, 0.22);
-  --editor-hr-hover-color: rgba(190, 24, 93, 0.45);
-  --editor-hr-selected-color: rgba(190, 24, 93, 0.75);
-  --editor-checkbox-color: #BE185D;
+  --app-bg-1: #fdf0f5;
+  --app-bg-2: #f9e4ee;
+  --app-bg-3: #f5d4e4;
+  --app-glow-1: rgba(194, 0, 101, 0.12);
+  --app-glow-2: rgba(255, 95, 163, 0.08);
+  --panel-bg: rgba(255, 240, 248, 0.85);
+  --panel-border: rgba(194, 0, 101, 0.15);
+  --panel-shadow: rgba(100, 0, 50, 0.08);
+  --panel-support-bg: rgba(255, 230, 242, 0.9);
+  --panel-support-border: rgba(194, 0, 101, 0.1);
+  --panel-support-shadow: rgba(100, 0, 50, 0.05);
+  --surface-muted: rgba(255, 232, 242, 0.7);
+  --field-bg: rgba(255, 245, 250, 0.95);
+  --field-focus: rgba(194, 0, 101, 0.12);
+  --field-border-strong: rgba(194, 0, 101, 0.35);
+  --focus-ring-inner: rgba(194, 0, 101, 0.14);
+  --focus-ring-outer: rgba(194, 0, 101, 0.3);
+  --primary-start: rgba(194, 0, 101, 0.12);
+  --primary-end: rgba(255, 95, 163, 0.1);
+  --primary-border: rgba(194, 0, 101, 0.28);
+  --selection: rgba(194, 0, 101, 0.18);
+  --lane-review-start: rgba(194, 0, 101, 0.18);
+  --lane-review-end: rgba(255, 95, 163, 0.1);
+  --lane-review-border: rgba(194, 0, 101, 0.22);
+  --lane-content-start: rgba(255, 130, 170, 0.2);
+  --lane-content-end: rgba(255, 180, 200, 0.1);
+  --lane-content-border: rgba(255, 130, 170, 0.24);
+  --lane-assessment-start: rgba(212, 96, 10, 0.18);
+  --lane-assessment-end: rgba(255, 150, 90, 0.1);
+  --lane-assessment-border: rgba(212, 96, 10, 0.22);
+  --lane-recovery-start: rgba(180, 120, 150, 0.16);
+  --lane-recovery-end: rgba(230, 195, 210, 0.08);
+  --lane-recovery-border: rgba(180, 120, 150, 0.2);
+  --lane-admin-start: rgba(10, 122, 69, 0.14);
+  --lane-admin-end: rgba(120, 200, 160, 0.08);
+  --lane-admin-border: rgba(10, 122, 69, 0.2);
 }
 
-/* Maggie Pink — DARK variant */
-:root[data-theme="maggiepink"][data-theme-variant="dark"] {
-  color-scheme: dark;
-  --app-bg-1: #2A0A1C;
-  --panel-bg: rgba(48, 12, 32, 0.98);
-  --panel-border: rgba(236, 72, 153, 0.22);
-  --panel-shadow: rgba(0, 0, 0, 0.38);
-  --panel-highlight: rgba(255, 255, 255, 0.03);
-  --panel-support-bg: rgba(58, 16, 40, 0.98);
-  --panel-support-border: rgba(236, 72, 153, 0.14);
-  --panel-support-shadow: rgba(0, 0, 0, 0.24);
-  --surface-muted: rgba(64, 18, 44, 0.95);
-  --field-bg: rgba(40, 10, 26, 0.99);
-  --field-focus: rgba(236, 72, 153, 0.14);
-  --field-border-strong: rgba(236, 72, 153, 0.50);
-  --focus-ring-inner: rgba(236, 72, 153, 0.18);
-  --focus-ring-outer: rgba(236, 72, 153, 0.42);
-  --primary-start: #EC4899;
-  --primary-end: #EC4899;
-  --primary-border: #EC4899;
-  --selection: rgba(236, 72, 153, 0.22);
-  --rich-text: #FFE4F0;
-  --rich-text-muted: #F9A8D4;
-  --lane-review-start: rgba(236, 72, 153, 0.28);
-  --lane-review-end: rgba(244, 114, 182, 0.16);
-  --lane-review-border: rgba(236, 72, 153, 0.36);
-  --lane-content-start: rgba(251, 113, 133, 0.24);
-  --lane-content-end: rgba(253, 164, 175, 0.14);
-  --lane-content-border: rgba(251, 113, 133, 0.32);
-  --lane-assessment-start: rgba(249, 115, 22, 0.24);
-  --lane-assessment-end: rgba(253, 186, 116, 0.14);
-  --lane-assessment-border: rgba(249, 115, 22, 0.32);
-  --lane-recovery-start: rgba(167, 139, 250, 0.24);
-  --lane-recovery-end: rgba(196, 181, 253, 0.14);
-  --lane-recovery-border: rgba(167, 139, 250, 0.30);
-  --lane-admin-start: rgba(52, 211, 153, 0.22);
-  --lane-admin-end: rgba(16, 185, 129, 0.12);
-  --lane-admin-border: rgba(52, 211, 153, 0.30);
-  /* Editor — deep rose dark */
-  --editor-toolbar-bg: rgba(38, 8, 26, 0.99);
-  --editor-toolbar-border: rgba(236, 72, 153, 0.18);
-  --editor-btn-color: rgba(255, 228, 240, 0.82);
-  --editor-btn-hover-bg: rgba(236, 72, 153, 0.12);
-  --editor-btn-hover-color: rgba(255, 228, 240, 0.98);
-  --editor-btn-active-bg: rgba(236, 72, 153, 0.18);
-  --editor-btn-active-color: rgba(249, 168, 212, 1);
-  --editor-sep-color: rgba(236, 72, 153, 0.18);
-  --editor-dd-bg: rgba(34, 6, 22, 0.99);
-  --editor-dd-border: rgba(236, 72, 153, 0.18);
-  --editor-dd-text: rgba(255, 228, 240, 0.88);
-  --editor-dd-hover-bg: rgba(236, 72, 153, 0.12);
-  --editor-dd-hover-color: rgba(255, 228, 240, 0.98);
-  --editor-dd-active-color: rgba(249, 168, 212, 1);
-  --editor-dd-check-color: rgba(236, 72, 153, 0.90);
-  --editor-fontsize-border: rgba(236, 72, 153, 0.18);
-  --editor-fontsize-color: rgba(255, 228, 240, 0.75);
-  --editor-fontsize-hover-bg: rgba(236, 72, 153, 0.12);
-  --editor-fontsize-hover-color: rgba(255, 228, 240, 0.98);
-  --editor-workspace-bg: rgba(40, 6, 26, 0.98);
-  --editor-table-td: rgba(58, 10, 38, 0.60);
-  --editor-table-th: rgba(72, 14, 48, 0.90);
-  --editor-table-th-color: rgba(255, 228, 240, 0.98);
-  --editor-table-border: rgba(236, 72, 153, 0.22);
-  --editor-selected-cell: rgba(236, 72, 153, 0.18);
-  --editor-selected-cell-ring: rgba(236, 72, 153, 0.42);
-  --editor-resize-handle: rgba(236, 72, 153, 0.45);
-  --editor-placeholder-color: rgba(249, 168, 212, 0.55);
-  --editor-heading-color: rgba(255, 228, 240, 0.98);
-  --editor-link-color: rgba(249, 168, 212, 0.96);
-  --editor-link-hover-color: rgba(244, 114, 182, 1);
-  --editor-blockquote-border: rgba(236, 72, 153, 0.42);
-  --editor-blockquote-color: rgba(255, 228, 240, 0.88);
-  --editor-code-bg: rgba(48, 10, 32, 0.90);
-  --editor-code-color: rgba(249, 168, 212, 0.98);
-  --editor-pre-bg: rgba(32, 4, 20, 0.95);
-  --editor-pre-border: rgba(236, 72, 153, 0.20);
-  --editor-hr-color: rgba(236, 72, 153, 0.30);
-  --editor-hr-hover-color: rgba(236, 72, 153, 0.60);
-  --editor-hr-selected-color: rgba(236, 72, 153, 0.90);
-  --editor-checkbox-color: rgba(236, 72, 153, 0.95);
+:root[data-theme="prism"] {
+  --app-bg-1: #0b0717;
+  --app-bg-2: #120c22;
+  --app-bg-3: #1c1433;
+  --app-glow-1: rgba(143, 123, 255, 0.18);
+  --app-glow-2: rgba(88, 215, 255, 0.14);
+  --panel-bg: rgba(17, 11, 33, 0.62);
+  --panel-border: rgba(241, 239, 255, 0.1);
+  --panel-shadow: rgba(8, 4, 17, 0.62);
+  --panel-support-bg: rgba(24, 16, 47, 0.74);
+  --panel-support-border: rgba(241, 239, 255, 0.08);
+  --panel-support-shadow: rgba(8, 4, 17, 0.36);
+  --surface-muted: rgba(31, 22, 58, 0.56);
+  --field-bg: rgba(27, 18, 51, 0.78);
+  --field-focus: rgba(143, 123, 255, 0.18);
+  --field-border-strong: rgba(88, 215, 255, 0.4);
+  --focus-ring-inner: rgba(143, 123, 255, 0.2);
+  --focus-ring-outer: rgba(88, 215, 255, 0.52);
+  --primary-start: rgba(143, 123, 255, 0.18);
+  --primary-end: rgba(88, 215, 255, 0.18);
+  --primary-border: rgba(143, 123, 255, 0.3);
+  --selection: rgba(143, 123, 255, 0.24);
+  --lane-review-start: rgba(255, 125, 242, 0.22);
+  --lane-review-end: rgba(194, 124, 255, 0.12);
+  --lane-review-border: rgba(255, 125, 242, 0.22);
+  --lane-content-start: rgba(88, 215, 255, 0.2);
+  --lane-content-end: rgba(143, 123, 255, 0.12);
+  --lane-content-border: rgba(88, 215, 255, 0.2);
+  --lane-assessment-start: rgba(255, 188, 111, 0.22);
+  --lane-assessment-end: rgba(255, 134, 165, 0.14);
+  --lane-assessment-border: rgba(255, 188, 111, 0.22);
+  --lane-recovery-start: rgba(159, 149, 201, 0.18);
+  --lane-recovery-end: rgba(213, 207, 247, 0.08);
+  --lane-recovery-border: rgba(159, 149, 201, 0.22);
+  --lane-admin-start: rgba(116, 240, 195, 0.18);
+  --lane-admin-end: rgba(88, 215, 255, 0.12);
+  --lane-admin-border: rgba(116, 240, 195, 0.2);
 }
 
-/* ============================================================
-   PAUL BLUE — default = dark variant (navy)
-   ============================================================ */
-:root[data-theme="paulblue"] {
-  color-scheme: dark;
-  --app-bg-1: #071523;
-  --panel-bg: rgba(10, 28, 50, 0.98);
-  --panel-border: rgba(59, 130, 246, 0.20);
-  --panel-shadow: rgba(0, 0, 0, 0.38);
-  --panel-highlight: rgba(255, 255, 255, 0.04);
-  --panel-support-bg: rgba(14, 36, 62, 0.98);
-  --panel-support-border: rgba(59, 130, 246, 0.13);
-  --panel-support-shadow: rgba(0, 0, 0, 0.24);
-  --surface-muted: rgba(18, 44, 76, 0.95);
-  --field-bg: rgba(8, 22, 42, 0.99);
-  --field-focus: rgba(59, 130, 246, 0.14);
-  --field-border-strong: rgba(59, 130, 246, 0.55);
-  --focus-ring-inner: rgba(59, 130, 246, 0.18);
-  --focus-ring-outer: rgba(59, 130, 246, 0.45);
-  --primary-start: #2563EB;
-  --primary-end: #2563EB;
-  --primary-border: #2563EB;
-  --selection: rgba(59, 130, 246, 0.22);
-  --rich-text: #EFF6FF;
-  --rich-text-muted: #60A5FA;
-  --lane-review-start: rgba(139, 92, 246, 0.24);
-  --lane-review-end: rgba(167, 139, 250, 0.13);
-  --lane-review-border: rgba(139, 92, 246, 0.32);
-  --lane-content-start: rgba(37, 99, 235, 0.28);
-  --lane-content-end: rgba(59, 130, 246, 0.16);
-  --lane-content-border: rgba(37, 99, 235, 0.35);
-  --lane-assessment-start: rgba(245, 158, 11, 0.24);
-  --lane-assessment-end: rgba(251, 191, 36, 0.13);
-  --lane-assessment-border: rgba(245, 158, 11, 0.32);
-  --lane-recovery-start: rgba(96, 165, 250, 0.18);
-  --lane-recovery-end: rgba(147, 197, 253, 0.10);
-  --lane-recovery-border: rgba(96, 165, 250, 0.26);
-  --lane-admin-start: rgba(52, 211, 153, 0.22);
-  --lane-admin-end: rgba(16, 185, 129, 0.12);
-  --lane-admin-border: rgba(52, 211, 153, 0.30);
-  /* Editor — navy blue dark */
-  --editor-toolbar-bg: rgba(6, 16, 36, 0.99);
-  --editor-toolbar-border: rgba(59, 130, 246, 0.18);
-  --editor-btn-color: rgba(219, 234, 254, 0.82);
-  --editor-btn-hover-bg: rgba(59, 130, 246, 0.14);
-  --editor-btn-hover-color: rgba(239, 246, 255, 0.98);
-  --editor-btn-active-bg: rgba(59, 130, 246, 0.20);
-  --editor-btn-active-color: rgba(147, 197, 253, 1);
-  --editor-sep-color: rgba(59, 130, 246, 0.18);
-  --editor-dd-bg: rgba(4, 12, 28, 0.99);
-  --editor-dd-border: rgba(59, 130, 246, 0.18);
-  --editor-dd-text: rgba(219, 234, 254, 0.88);
-  --editor-dd-hover-bg: rgba(59, 130, 246, 0.12);
-  --editor-dd-hover-color: rgba(239, 246, 255, 0.98);
-  --editor-dd-active-color: rgba(147, 197, 253, 1);
-  --editor-dd-check-color: rgba(59, 130, 246, 0.90);
-  --editor-fontsize-border: rgba(59, 130, 246, 0.18);
-  --editor-fontsize-color: rgba(219, 234, 254, 0.75);
-  --editor-fontsize-hover-bg: rgba(59, 130, 246, 0.12);
-  --editor-fontsize-hover-color: rgba(239, 246, 255, 0.98);
-  --editor-workspace-bg: rgba(4, 10, 22, 0.98);
-  --editor-table-td: rgba(10, 28, 50, 0.60);
-  --editor-table-th: rgba(14, 36, 62, 0.90);
-  --editor-table-th-color: rgba(239, 246, 255, 0.98);
-  --editor-table-border: rgba(59, 130, 246, 0.22);
-  --editor-selected-cell: rgba(59, 130, 246, 0.18);
-  --editor-selected-cell-ring: rgba(59, 130, 246, 0.42);
-  --editor-resize-handle: rgba(59, 130, 246, 0.50);
-  --editor-placeholder-color: rgba(147, 197, 253, 0.55);
-  --editor-heading-color: rgba(239, 246, 255, 0.98);
-  --editor-link-color: rgba(96, 165, 250, 0.96);
-  --editor-link-hover-color: rgba(147, 197, 253, 1);
-  --editor-blockquote-border: rgba(59, 130, 246, 0.42);
-  --editor-blockquote-color: rgba(219, 234, 254, 0.88);
-  --editor-code-bg: rgba(10, 24, 46, 0.90);
-  --editor-code-color: rgba(147, 197, 253, 0.98);
-  --editor-pre-bg: rgba(4, 10, 22, 0.95);
-  --editor-pre-border: rgba(59, 130, 246, 0.20);
-  --editor-hr-color: rgba(59, 130, 246, 0.28);
-  --editor-hr-hover-color: rgba(59, 130, 246, 0.55);
-  --editor-hr-selected-color: rgba(59, 130, 246, 0.85);
-  --editor-checkbox-color: rgba(59, 130, 246, 0.95);
+:root[data-theme="aurora"][data-theme-enhanced="true"] {
+  --app-bg-1: #010510;
+  --app-bg-2: #020c18;
+  --app-bg-3: #04121f;
+  --app-glow-1: rgba(84, 180, 255, 0.32);
+  --app-glow-2: rgba(24, 214, 176, 0.24);
+  --panel-border: rgba(255, 255, 255, 0.18);
+  --panel-support-border: rgba(255, 255, 255, 0.14);
+  --field-focus: rgba(96, 243, 223, 0.34);
+  --field-border-strong: rgba(123, 184, 255, 0.6);
+  --focus-ring-inner: rgba(96, 243, 223, 0.34);
+  --focus-ring-outer: rgba(123, 184, 255, 0.72);
+  --primary-start: rgba(96, 243, 223, 0.3);
+  --primary-end: rgba(122, 184, 255, 0.3);
+  --primary-border: rgba(96, 243, 223, 0.52);
+  --selection: rgba(96, 243, 223, 0.36);
 }
 
-/* Paul Blue — LIGHT variant (sky blue) */
-:root[data-theme="paulblue"][data-theme-variant="light"] {
+:root[data-theme="ember"][data-theme-enhanced="true"] {
+  --app-bg-1: #0b0304;
+  --app-bg-2: #170808;
+  --app-bg-3: #200d0c;
+  --app-glow-1: rgba(255, 180, 84, 0.28);
+  --app-glow-2: rgba(255, 126, 107, 0.24);
+  --panel-border: rgba(255, 238, 214, 0.16);
+  --panel-support-border: rgba(255, 238, 214, 0.14);
+  --field-focus: rgba(255, 180, 84, 0.32);
+  --field-border-strong: rgba(255, 126, 107, 0.6);
+  --focus-ring-inner: rgba(255, 180, 84, 0.32);
+  --focus-ring-outer: rgba(255, 126, 107, 0.7);
+  --primary-start: rgba(255, 212, 128, 0.32);
+  --primary-end: rgba(255, 126, 107, 0.32);
+  --primary-border: rgba(255, 180, 84, 0.5);
+  --selection: rgba(255, 180, 84, 0.36);
+}
+
+:root[data-theme="tide"][data-theme-enhanced="true"] {
+  --app-bg-1: #020810;
+  --app-bg-2: #051320;
+  --app-bg-3: #081c2a;
+  --app-glow-1: rgba(106, 216, 255, 0.3);
+  --app-glow-2: rgba(98, 241, 196, 0.22);
+  --panel-border: rgba(222, 236, 248, 0.16);
+  --panel-support-border: rgba(222, 236, 248, 0.14);
+  --field-focus: rgba(106, 216, 255, 0.32);
+  --field-border-strong: rgba(98, 241, 196, 0.6);
+  --focus-ring-inner: rgba(106, 216, 255, 0.32);
+  --focus-ring-outer: rgba(98, 241, 196, 0.7);
+  --primary-start: rgba(106, 216, 255, 0.3);
+  --primary-end: rgba(98, 241, 196, 0.3);
+  --primary-border: rgba(106, 216, 255, 0.5);
+  --selection: rgba(106, 216, 255, 0.36);
+}
+
+:root[data-theme="bubblegum"][data-theme-enhanced="true"] {
+  --app-bg-1: #12040b;
+  --app-bg-2: #1b0712;
+  --app-bg-3: #27091c;
+  --app-glow-1: rgba(255, 105, 199, 0.32);
+  --app-glow-2: rgba(255, 154, 213, 0.26);
+  --panel-border: rgba(255, 241, 246, 0.18);
+  --panel-support-border: rgba(255, 241, 246, 0.14);
+  --field-focus: rgba(255, 105, 199, 0.32);
+  --field-border-strong: rgba(255, 154, 213, 0.6);
+  --focus-ring-inner: rgba(255, 105, 199, 0.34);
+  --focus-ring-outer: rgba(255, 154, 213, 0.72);
+  --primary-start: rgba(255, 105, 199, 0.32);
+  --primary-end: rgba(255, 184, 107, 0.3);
+  --primary-border: rgba(255, 105, 199, 0.52);
+  --selection: rgba(255, 105, 199, 0.38);
+}
+
+:root[data-theme="signal"][data-theme-enhanced="true"] {
+  --app-bg-1: #010a09;
+  --app-bg-2: #04100e;
+  --app-bg-3: #081a17;
+  --app-glow-1: rgba(77, 246, 212, 0.32);
+  --app-glow-2: rgba(140, 251, 110, 0.24);
+  --panel-border: rgba(230, 255, 249, 0.18);
+  --panel-support-border: rgba(230, 255, 249, 0.14);
+  --field-focus: rgba(77, 246, 212, 0.32);
+  --field-border-strong: rgba(140, 251, 110, 0.6);
+  --focus-ring-inner: rgba(77, 246, 212, 0.34);
+  --focus-ring-outer: rgba(140, 251, 110, 0.7);
+  --primary-start: rgba(77, 246, 212, 0.32);
+  --primary-end: rgba(140, 251, 110, 0.3);
+  --primary-border: rgba(77, 246, 212, 0.52);
+  --selection: rgba(77, 246, 212, 0.38);
+}
+
+:root[data-theme="prism"][data-theme-enhanced="true"] {
+  --app-bg-1: #06030f;
+  --app-bg-2: #0b0618;
+  --app-bg-3: #130a26;
+  --app-glow-1: rgba(143, 123, 255, 0.34);
+  --app-glow-2: rgba(88, 215, 255, 0.26);
+  --panel-border: rgba(241, 239, 255, 0.18);
+  --panel-support-border: rgba(241, 239, 255, 0.14);
+  --field-focus: rgba(143, 123, 255, 0.32);
+  --field-border-strong: rgba(88, 215, 255, 0.6);
+  --focus-ring-inner: rgba(143, 123, 255, 0.34);
+  --focus-ring-outer: rgba(88, 215, 255, 0.7);
+  --primary-start: rgba(143, 123, 255, 0.32);
+  --primary-end: rgba(88, 215, 255, 0.3);
+  --primary-border: rgba(143, 123, 255, 0.5);
+  --selection: rgba(143, 123, 255, 0.38);
+}
+
+:root[data-theme="light"] {
   color-scheme: light;
-  --app-bg-1: #EFF6FF;
-  --panel-bg: rgba(255, 255, 255, 0.97);
-  --panel-border: rgba(37, 99, 235, 0.16);
-  --panel-shadow: rgba(30, 58, 138, 0.08);
-  --panel-highlight: rgba(0, 0, 0, 0);
-  --panel-support-bg: rgba(239, 246, 255, 0.97);
-  --panel-support-border: rgba(37, 99, 235, 0.10);
-  --panel-support-shadow: rgba(30, 58, 138, 0.05);
-  --surface-muted: rgba(219, 234, 254, 0.85);
-  --field-bg: #FFFFFF;
-  --field-focus: rgba(37, 99, 235, 0.10);
-  --field-border-strong: rgba(37, 99, 235, 0.50);
-  --focus-ring-inner: rgba(37, 99, 235, 0.12);
-  --focus-ring-outer: rgba(37, 99, 235, 0.35);
-  --primary-start: #2563EB;
-  --primary-end: #2563EB;
-  --primary-border: #2563EB;
-  --selection: rgba(37, 99, 235, 0.14);
-  --rich-text: #1E3A5F;
-  --rich-text-muted: #4B7DB8;
-  --lane-review-start: rgba(99, 102, 241, 0.12);
-  --lane-review-end: rgba(139, 92, 246, 0.07);
-  --lane-review-border: rgba(99, 102, 241, 0.24);
-  --lane-content-start: rgba(37, 99, 235, 0.12);
-  --lane-content-end: rgba(59, 130, 246, 0.07);
-  --lane-content-border: rgba(37, 99, 235, 0.24);
-  --lane-assessment-start: rgba(245, 158, 11, 0.14);
-  --lane-assessment-end: rgba(239, 68, 68, 0.08);
-  --lane-assessment-border: rgba(245, 158, 11, 0.28);
-  --lane-recovery-start: rgba(96, 165, 250, 0.14);
-  --lane-recovery-end: rgba(147, 197, 253, 0.08);
-  --lane-recovery-border: rgba(96, 165, 250, 0.24);
-  --lane-admin-start: rgba(16, 185, 129, 0.12);
-  --lane-admin-end: rgba(37, 99, 235, 0.07);
-  --lane-admin-border: rgba(16, 185, 129, 0.24);
-  /* Editor — sky blue light */
-  --editor-toolbar-bg: #FFFFFF;
-  --editor-toolbar-border: rgba(37, 99, 235, 0.14);
-  --editor-btn-color: #1E3A5F;
-  --editor-btn-hover-bg: rgba(37, 99, 235, 0.08);
-  --editor-btn-hover-color: #1D4ED8;
-  --editor-btn-active-bg: rgba(37, 99, 235, 0.12);
-  --editor-btn-active-color: #1D4ED8;
-  --editor-sep-color: rgba(37, 99, 235, 0.12);
-  --editor-dd-bg: #FFFFFF;
-  --editor-dd-border: rgba(37, 99, 235, 0.12);
-  --editor-dd-text: #1E3A5F;
-  --editor-dd-hover-bg: rgba(37, 99, 235, 0.08);
-  --editor-dd-hover-color: #1D4ED8;
-  --editor-dd-active-color: #1D4ED8;
-  --editor-dd-check-color: #2563EB;
-  --editor-fontsize-border: rgba(37, 99, 235, 0.14);
-  --editor-fontsize-color: #1E3A5F;
-  --editor-fontsize-hover-bg: rgba(37, 99, 235, 0.08);
-  --editor-fontsize-hover-color: #1D4ED8;
-  --editor-workspace-bg: #DBEAFE;
-  --editor-table-td: rgba(255, 255, 255, 0.90);
-  --editor-table-th: rgba(219, 234, 254, 0.95);
-  --editor-table-th-color: #1E3A5F;
-  --editor-table-border: rgba(37, 99, 235, 0.16);
-  --editor-selected-cell: rgba(37, 99, 235, 0.10);
-  --editor-selected-cell-ring: rgba(37, 99, 235, 0.32);
-  --editor-resize-handle: rgba(37, 99, 235, 0.45);
-  --editor-placeholder-color: rgba(75, 125, 184, 0.55);
-  --editor-heading-color: #1E3A5F;
-  --editor-link-color: #2563EB;
-  --editor-link-hover-color: #1D4ED8;
-  --editor-blockquote-border: rgba(37, 99, 235, 0.35);
-  --editor-blockquote-color: #2D5586;
-  --editor-code-bg: rgba(219, 234, 254, 0.85);
-  --editor-code-color: #1E3A5F;
-  --editor-pre-bg: rgba(239, 246, 255, 0.98);
-  --editor-pre-border: rgba(37, 99, 235, 0.16);
-  --editor-hr-color: rgba(37, 99, 235, 0.22);
-  --editor-hr-hover-color: rgba(37, 99, 235, 0.45);
-  --editor-hr-selected-color: rgba(37, 99, 235, 0.75);
-  --editor-checkbox-color: #2563EB;
+  /* macOS Big Sur / Monterey "Light" palette */
+  --app-bg-1: #ffffff;
+  --app-bg-2: #f5f5f7;
+  --app-bg-3: #ececef;
+  --app-glow-1: rgba(0, 122, 255, 0.06);
+  --app-glow-2: rgba(88, 86, 214, 0.05);
+  --panel-bg: rgba(255, 255, 255, 0.94);
+  --panel-border: rgba(60, 60, 67, 0.18);
+  --panel-shadow: rgba(60, 60, 67, 0.08);
+  --panel-support-bg: rgba(245, 245, 247, 0.94);
+  --panel-support-border: rgba(60, 60, 67, 0.14);
+  --panel-support-shadow: rgba(60, 60, 67, 0.04);
+  --surface-muted: rgba(242, 242, 247, 0.92);
+  --field-bg: rgba(255, 255, 255, 0.98);
+  --field-focus: rgba(0, 122, 255, 0.18);
+  --field-border-strong: rgba(0, 122, 255, 0.55);
+  --focus-ring-inner: rgba(0, 122, 255, 0.18);
+  --focus-ring-outer: rgba(0, 122, 255, 0.45);
+  --primary-start: rgba(0, 122, 255, 0.16);
+  --primary-end: rgba(88, 86, 214, 0.16);
+  --primary-border: rgba(0, 122, 255, 0.45);
+  --selection: rgba(0, 122, 255, 0.25);
+  --lane-review-start: rgba(88, 86, 214, 0.14);
+  --lane-review-end: rgba(175, 82, 222, 0.08);
+  --lane-review-border: rgba(88, 86, 214, 0.30);
+  --lane-content-start: rgba(0, 122, 255, 0.14);
+  --lane-content-end: rgba(50, 173, 230, 0.08);
+  --lane-content-border: rgba(0, 122, 255, 0.30);
+  --lane-assessment-start: rgba(255, 149, 0, 0.16);
+  --lane-assessment-end: rgba(255, 59, 48, 0.10);
+  --lane-assessment-border: rgba(255, 149, 0, 0.32);
+  --lane-recovery-start: rgba(142, 142, 147, 0.14);
+  --lane-recovery-end: rgba(199, 199, 204, 0.08);
+  --lane-recovery-border: rgba(142, 142, 147, 0.28);
+  --lane-admin-start: rgba(52, 199, 89, 0.14);
+  --lane-admin-end: rgba(0, 122, 255, 0.08);
+  --lane-admin-border: rgba(52, 199, 89, 0.30);
 }
 
-/* ============================================================
-   GLOBAL RESETS
-   ============================================================ */
+:root[data-theme="paulblue"] {
+  --app-bg-1: #020c1f;
+  --app-bg-2: #041533;
+  --app-bg-3: #071e47;
+  --app-glow-1: rgba(37, 99, 235, 0.35);
+  --app-glow-2: rgba(96, 165, 250, 0.20);
+  --panel-bg: rgba(4, 15, 40, 0.72);
+  --panel-border: rgba(96, 165, 250, 0.18);
+  --panel-shadow: rgba(2, 8, 20, 0.70);
+  --panel-support-bg: rgba(6, 22, 58, 0.80);
+  --panel-support-border: rgba(96, 165, 250, 0.12);
+  --panel-support-shadow: rgba(2, 8, 20, 0.42);
+  --surface-muted: rgba(8, 28, 72, 0.60);
+  --field-bg: rgba(4, 18, 50, 0.82);
+  --field-focus: rgba(37, 99, 235, 0.28);
+  --field-border-strong: rgba(96, 165, 250, 0.55);
+  --focus-ring-inner: rgba(37, 99, 235, 0.28);
+  --focus-ring-outer: rgba(96, 165, 250, 0.60);
+  --primary-start: rgba(37, 99, 235, 0.28);
+  --primary-end: rgba(96, 165, 250, 0.22);
+  --primary-border: rgba(37, 99, 235, 0.55);
+  --selection: rgba(37, 99, 235, 0.35);
+  --lane-review-start: rgba(167, 139, 250, 0.28);
+  --lane-review-end: rgba(196, 181, 253, 0.16);
+  --lane-review-border: rgba(167, 139, 250, 0.28);
+  --lane-content-start: rgba(37, 99, 235, 0.28);
+  --lane-content-end: rgba(96, 165, 250, 0.16);
+  --lane-content-border: rgba(37, 99, 235, 0.32);
+  --lane-assessment-start: rgba(251, 191, 36, 0.26);
+  --lane-assessment-end: rgba(248, 113, 113, 0.16);
+  --lane-assessment-border: rgba(251, 191, 36, 0.28);
+  --lane-recovery-start: rgba(96, 153, 212, 0.22);
+  --lane-recovery-end: rgba(191, 219, 254, 0.12);
+  --lane-recovery-border: rgba(96, 153, 212, 0.26);
+  --lane-admin-start: rgba(52, 211, 153, 0.22);
+  --lane-admin-end: rgba(37, 99, 235, 0.14);
+  --lane-admin-border: rgba(52, 211, 153, 0.26);
+}
+
+:root[data-theme="paulblue"][data-theme-enhanced="true"] {
+  --app-bg-1: #010a1a;
+  --app-bg-2: #02102a;
+  --app-bg-3: #041a40;
+  --app-glow-1: rgba(37, 99, 235, 0.55);
+  --app-glow-2: rgba(96, 165, 250, 0.32);
+  --panel-bg: rgba(2, 10, 30, 0.82);
+  --panel-border: rgba(96, 165, 250, 0.28);
+  --panel-shadow: rgba(1, 5, 14, 0.80);
+  --panel-support-bg: rgba(4, 15, 48, 0.88);
+  --panel-support-border: rgba(96, 165, 250, 0.20);
+  --field-bg: rgba(2, 12, 36, 0.90);
+  --field-focus: rgba(37, 99, 235, 0.40);
+  --field-border-strong: rgba(96, 165, 250, 0.72);
+  --focus-ring-inner: rgba(37, 99, 235, 0.42);
+  --focus-ring-outer: rgba(96, 165, 250, 0.75);
+  --primary-start: rgba(37, 99, 235, 0.42);
+  --primary-end: rgba(96, 165, 250, 0.32);
+  --primary-border: rgba(37, 99, 235, 0.72);
+  --selection: rgba(37, 99, 235, 0.50);
+}
+
+:root[data-theme="teslared"] {
+  /* Tezla: matte black with vivid crimson accents */
+  --app-bg-1: #0a0000;
+  --app-bg-2: #130000;
+  --app-bg-3: #1c0000;
+  --app-glow-1: rgba(204, 0, 0, 0.40);
+  --app-glow-2: rgba(255, 34, 51, 0.22);
+  --panel-bg: rgba(16, 2, 2, 0.78);
+  --panel-border: rgba(255, 34, 51, 0.22);
+  --panel-shadow: rgba(0, 0, 0, 0.75);
+  --panel-support-bg: rgba(24, 4, 4, 0.80);
+  --panel-support-border: rgba(255, 34, 51, 0.14);
+  --panel-support-shadow: rgba(0, 0, 0, 0.50);
+  --surface-muted: rgba(32, 6, 6, 0.65);
+  --field-bg: rgba(20, 4, 4, 0.88);
+  --field-focus: rgba(204, 0, 0, 0.28);
+  --field-border-strong: rgba(255, 34, 51, 0.65);
+  --focus-ring-inner: rgba(204, 0, 0, 0.28);
+  --focus-ring-outer: rgba(255, 34, 51, 0.62);
+  --primary-start: rgba(204, 0, 0, 0.32);
+  --primary-end: rgba(255, 34, 51, 0.22);
+  --primary-border: rgba(204, 0, 0, 0.65);
+  --selection: rgba(204, 0, 0, 0.38);
+  --lane-review-start: rgba(204, 0, 0, 0.38);
+  --lane-review-end: rgba(255, 34, 51, 0.22);
+  --lane-review-border: rgba(204, 0, 0, 0.42);
+  --lane-content-start: rgba(204, 0, 0, 0.30);
+  --lane-content-end: rgba(255, 112, 136, 0.18);
+  --lane-content-border: rgba(204, 0, 0, 0.34);
+  --lane-assessment-start: rgba(255, 149, 0, 0.28);
+  --lane-assessment-end: rgba(255, 200, 100, 0.16);
+  --lane-assessment-border: rgba(255, 149, 0, 0.30);
+  --lane-recovery-start: rgba(176, 176, 176, 0.20);
+  --lane-recovery-end: rgba(255, 255, 255, 0.10);
+  --lane-recovery-border: rgba(176, 176, 176, 0.24);
+  --lane-admin-start: rgba(74, 222, 128, 0.20);
+  --lane-admin-end: rgba(52, 211, 153, 0.12);
+  --lane-admin-border: rgba(74, 222, 128, 0.24);
+}
+
+:root[data-theme="teslared"][data-theme-enhanced="true"] {
+  --app-bg-1: #080000;
+  --app-bg-2: #0f0000;
+  --app-bg-3: #180000;
+  --app-glow-1: rgba(204, 0, 0, 0.62);
+  --app-glow-2: rgba(255, 34, 51, 0.38);
+  --panel-bg: rgba(12, 0, 0, 0.88);
+  --panel-border: rgba(255, 34, 51, 0.35);
+  --panel-shadow: rgba(0, 0, 0, 0.85);
+  --panel-support-bg: rgba(20, 2, 2, 0.90);
+  --panel-support-border: rgba(255, 34, 51, 0.24);
+  --field-bg: rgba(16, 2, 2, 0.94);
+  --field-focus: rgba(204, 0, 0, 0.42);
+  --field-border-strong: rgba(255, 34, 51, 0.80);
+  --focus-ring-inner: rgba(204, 0, 0, 0.42);
+  --focus-ring-outer: rgba(255, 34, 51, 0.78);
+  --primary-start: rgba(204, 0, 0, 0.48);
+  --primary-end: rgba(255, 34, 51, 0.35);
+  --primary-border: rgba(204, 0, 0, 0.80);
+  --selection: rgba(204, 0, 0, 0.55);
+}
+
+:root[data-theme="maggiepink"][data-theme-enhanced="true"] {
+  --app-bg-1: #fde2ec;
+  --app-bg-2: #fbd0e0;
+  --app-bg-3: #f5b9d0;
+  --app-glow-1: rgba(194, 0, 101, 0.22);
+  --app-glow-2: rgba(255, 95, 163, 0.18);
+  --panel-bg: rgba(255, 228, 240, 0.92);
+  --panel-border: rgba(194, 0, 101, 0.28);
+  --panel-shadow: rgba(100, 0, 50, 0.14);
+  --panel-support-bg: rgba(255, 215, 232, 0.92);
+  --panel-support-border: rgba(194, 0, 101, 0.22);
+  --field-bg: rgba(255, 238, 246, 0.98);
+  --field-focus: rgba(194, 0, 101, 0.24);
+  --field-border-strong: rgba(194, 0, 101, 0.5);
+  --focus-ring-inner: rgba(194, 0, 101, 0.26);
+  --focus-ring-outer: rgba(194, 0, 101, 0.48);
+  --primary-start: rgba(194, 0, 101, 0.24);
+  --primary-end: rgba(255, 95, 163, 0.22);
+  --primary-border: rgba(194, 0, 101, 0.44);
+  --selection: rgba(194, 0, 101, 0.32);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -567,16 +591,28 @@ html {
 body {
   min-height: 100vh;
   margin: 0;
-  /* FLAT background — no radial gradients, no glow */
-  background: var(--app-bg-1);
-  color: var(--rich-text, #eff6ff);
+  background:
+    radial-gradient(circle at top left, var(--app-glow-1), transparent 26%),
+    radial-gradient(circle at bottom right, var(--app-glow-2), transparent 22%),
+    linear-gradient(180deg, var(--app-bg-1) 0%, var(--app-bg-2) 52%, var(--app-bg-3) 100%);
+  color: #eff6ff;
   font-family: var(--font-sans);
-  font-size: 15px;
-  line-height: 1.5;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background 200ms ease, color 200ms ease;
+  transition: background 240ms ease;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(circle at center, black 32%, transparent 84%);
 }
 
 #root {
@@ -585,7 +621,7 @@ body {
 
 ::selection {
   background: var(--selection);
-  color: #ffffff;
+  color: white;
 }
 
 button {
@@ -621,10 +657,9 @@ button {
     @apply rounded-[26px] p-6 backdrop-blur-xl;
     border: 1px solid var(--panel-border);
     background: var(--panel-bg);
-    /* Flat elevation — NOT a glow */
     box-shadow:
-      inset 0 1px 0 var(--panel-highlight),
-      0 1px 4px var(--panel-shadow);
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      0 28px 90px var(--panel-shadow);
   }
 
   .panel-subtle {
@@ -632,32 +667,30 @@ button {
     border-color: var(--panel-support-border);
     background: var(--panel-support-bg);
     box-shadow:
-      inset 0 1px 0 var(--panel-highlight),
-      0 1px 3px var(--panel-support-shadow);
+      inset 0 1px 0 rgba(255, 255, 255, 0.035),
+      0 18px 48px var(--panel-support-shadow);
   }
 
   .field {
-    @apply w-full rounded-[18px] px-4 py-3 text-sm outline-none transition placeholder:text-slate-400;
-    color: var(--rich-text, #f1f5f9);
+    @apply w-full rounded-[18px] px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-400;
     border: 1px solid var(--panel-border);
     background: var(--field-bg);
   }
 
   .field:focus-visible {
     border-color: var(--field-border-strong);
+    background: rgba(0, 0, 0, 0.12);
     box-shadow: 0 0 0 2px var(--field-focus);
   }
 
   .primary-button {
-    @apply inline-flex items-center justify-center gap-2 rounded-[18px] px-4 py-3 text-sm font-semibold transition;
-    color: #FFFFFF;
-    background: var(--primary-start);
+    @apply inline-flex items-center justify-center gap-2 rounded-[18px] px-4 py-3 text-sm font-semibold text-white transition;
     border: 1px solid var(--primary-border);
+    background: linear-gradient(90deg, var(--primary-start), var(--primary-end));
   }
 
   .secondary-button {
-    @apply inline-flex items-center justify-center gap-2 rounded-[18px] px-4 py-3 text-sm font-medium transition;
-    color: var(--rich-text, #e2e8f0);
+    @apply inline-flex items-center justify-center gap-2 rounded-[18px] px-4 py-3 text-sm font-medium text-slate-200 transition hover:text-white;
     border: 1px solid var(--panel-border);
     background: var(--field-bg);
   }
@@ -674,10 +707,9 @@ button {
   }
 
   .launch-button {
-    @apply inline-flex items-center justify-center gap-2 rounded-[18px] px-4 py-3 text-sm font-semibold transition;
-    color: #FFFFFF;
-    background: var(--primary-start);
+    @apply inline-flex items-center justify-center gap-2 rounded-[18px] px-4 py-3 text-sm font-semibold text-white transition;
     border: 1px solid var(--primary-border);
+    background: linear-gradient(90deg, var(--primary-start), var(--primary-end));
   }
 
   .theme-option {
@@ -732,157 +764,99 @@ button {
   }
 
   .lane-pill {
-    @apply inline-flex items-center rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em];
-    color: var(--rich-text, #f1f5f9);
+    @apply inline-flex items-center rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-100;
   }
 }
 
-/* ============================================================
-   GLOBAL LIGHT-MODE TEXT OVERRIDES
-   Tailwind text-slate and text-white classes default to dark-bg.
-   Override for all light-background theme variants.
-   ============================================================ */
-
-/* Which theme combinations are "light mode" */
-:root[data-theme="light"],
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]),
-:root[data-theme="maggiepink"][data-theme-variant="light"],
-:root[data-theme="paulblue"][data-theme-variant="light"] {
-  --is-light-mode: 1;
+/* Fix theme-option label readability on light-background themes */
+:root[data-theme="maggiepink"] .theme-option p,
+:root[data-theme="light"] .theme-option p {
+  color: #1e293b;
 }
+
+/* ----------------------------------------------------------------- */
+/* Light-background theme overrides                                   */
+/* All Tailwind text-slate-* / text-white classes are designed for    */
+/* dark backgrounds. Override globally so text is always readable.    */
+/* ----------------------------------------------------------------- */
 
 :root[data-theme="light"] body,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) body,
-:root[data-theme="maggiepink"][data-theme-variant="light"] body,
-:root[data-theme="paulblue"][data-theme-variant="light"] body {
-  color: var(--rich-text);
+:root[data-theme="maggiepink"] body {
+  color: #1c1c1e;
 }
 
-/* Override Tailwind light/white text classes on light themes */
+:root[data-theme="light"] {
+  --rich-text: #1c1c1e;
+  --rich-text-muted: #4a4a4f;
+}
+
+:root[data-theme="maggiepink"] {
+  --rich-text: #2a0916;
+  --rich-text-muted: #5b2a3e;
+}
+
+/* Force readable text on light themes by overriding common slate/white classes */
 :root[data-theme="light"] .text-white,
 :root[data-theme="light"] .text-slate-100,
 :root[data-theme="light"] .text-slate-200,
 :root[data-theme="light"] .text-slate-300,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .text-white,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .text-slate-100,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .text-slate-200,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .text-slate-300,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .text-white,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .text-slate-100,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .text-slate-200,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .text-slate-300,
-:root[data-theme="paulblue"][data-theme-variant="light"] .text-white,
-:root[data-theme="paulblue"][data-theme-variant="light"] .text-slate-100,
-:root[data-theme="paulblue"][data-theme-variant="light"] .text-slate-200,
-:root[data-theme="paulblue"][data-theme-variant="light"] .text-slate-300 {
+:root[data-theme="maggiepink"] .text-white,
+:root[data-theme="maggiepink"] .text-slate-100,
+:root[data-theme="maggiepink"] .text-slate-200,
+:root[data-theme="maggiepink"] .text-slate-300 {
   color: var(--rich-text) !important;
 }
 
 :root[data-theme="light"] .text-slate-400,
 :root[data-theme="light"] .text-slate-500,
 :root[data-theme="light"] .text-slate-600,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .text-slate-400,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .text-slate-500,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .text-slate-600,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .text-slate-400,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .text-slate-500,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .text-slate-600,
-:root[data-theme="paulblue"][data-theme-variant="light"] .text-slate-400,
-:root[data-theme="paulblue"][data-theme-variant="light"] .text-slate-500,
-:root[data-theme="paulblue"][data-theme-variant="light"] .text-slate-600 {
+:root[data-theme="maggiepink"] .text-slate-400,
+:root[data-theme="maggiepink"] .text-slate-500,
+:root[data-theme="maggiepink"] .text-slate-600 {
   color: var(--rich-text-muted) !important;
 }
 
 :root[data-theme="light"] .placeholder\:text-slate-400::placeholder,
 :root[data-theme="light"] .placeholder\:text-slate-500::placeholder,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .placeholder\:text-slate-400::placeholder,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .placeholder\:text-slate-500::placeholder,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .placeholder\:text-slate-400::placeholder,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .placeholder\:text-slate-500::placeholder,
-:root[data-theme="paulblue"][data-theme-variant="light"] .placeholder\:text-slate-400::placeholder,
-:root[data-theme="paulblue"][data-theme-variant="light"] .placeholder\:text-slate-500::placeholder {
-  color: rgba(0, 0, 0, 0.35) !important;
+:root[data-theme="maggiepink"] .placeholder\:text-slate-400::placeholder,
+:root[data-theme="maggiepink"] .placeholder\:text-slate-500::placeholder {
+  color: rgba(28, 28, 30, 0.45) !important;
 }
 
 /* Field text on light themes */
 :root[data-theme="light"] .field,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .field,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .field,
-:root[data-theme="paulblue"][data-theme-variant="light"] .field {
+:root[data-theme="maggiepink"] .field {
   color: var(--rich-text);
 }
 
-/* Primary button always shows white text (it has a solid colored bg) */
+/* Primary button text on light themes (gradient bg + white text was unreadable) */
 :root[data-theme="light"] .primary-button,
+:root[data-theme="maggiepink"] .primary-button,
 :root[data-theme="light"] .launch-button,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .primary-button,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .launch-button,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .primary-button,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .launch-button,
-:root[data-theme="paulblue"][data-theme-variant="light"] .primary-button,
-:root[data-theme="paulblue"][data-theme-variant="light"] .launch-button {
-  color: #FFFFFF !important;
-}
-
-/* Secondary button on light themes */
-:root[data-theme="light"] .secondary-button,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .secondary-button,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .secondary-button,
-:root[data-theme="paulblue"][data-theme-variant="light"] .secondary-button {
+:root[data-theme="maggiepink"] .launch-button {
   color: var(--rich-text);
 }
 
-/* Task cards on light themes need light base */
-:root[data-theme="light"] .task-card,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .task-card,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .task-card,
-:root[data-theme="paulblue"][data-theme-variant="light"] .task-card {
-  background: linear-gradient(135deg, rgba(255,255,255,0.85), rgba(255,255,255,0.65));
-  box-shadow: none;
+:root[data-theme="light"] .secondary-button,
+:root[data-theme="maggiepink"] .secondary-button {
+  color: var(--rich-text);
 }
 
 /* Selection contrast on light themes */
 :root[data-theme="light"] ::selection,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) ::selection,
-:root[data-theme="maggiepink"][data-theme-variant="light"] ::selection,
-:root[data-theme="paulblue"][data-theme-variant="light"] ::selection {
+:root[data-theme="maggiepink"] ::selection {
   color: #ffffff;
 }
 
-/* Ensure native select/option text is readable on light themes */
+/* Ensure native form controls / select option text is readable on light themes */
 :root[data-theme="light"] select,
 :root[data-theme="light"] option,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) select,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) option,
-:root[data-theme="maggiepink"][data-theme-variant="light"] select,
-:root[data-theme="maggiepink"][data-theme-variant="light"] option,
-:root[data-theme="paulblue"][data-theme-variant="light"] select,
-:root[data-theme="paulblue"][data-theme-variant="light"] option {
-  color: var(--rich-text);
-  background: var(--panel-bg);
-}
-
-/* Theme option label text on light themes */
-:root[data-theme="light"] .theme-option p,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .theme-option p,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .theme-option p,
-:root[data-theme="paulblue"][data-theme-variant="light"] .theme-option p {
+:root[data-theme="maggiepink"] select,
+:root[data-theme="maggiepink"] option {
   color: var(--rich-text);
 }
 
-/* Lane pills on light themes */
-:root[data-theme="light"] .lane-pill,
-:root[data-theme="maggiepink"]:not([data-theme-variant="dark"]) .lane-pill,
-:root[data-theme="maggiepink"][data-theme-variant="light"] .lane-pill,
-:root[data-theme="paulblue"][data-theme-variant="light"] .lane-pill {
-  background: rgba(0, 0, 0, 0.06);
-  border-color: rgba(0, 0, 0, 0.10);
-  color: var(--rich-text);
-}
-
-/* ============================================================
-   RICH TEXT EDITOR (legacy)
-   ============================================================ */
+/* Rich text editor list styling */
 .rich-text-editor ul {
   list-style-type: disc;
   padding-left: 1.5em;
@@ -902,9 +876,7 @@ button {
   margin-left: -1.25em;
 }
 
-/* ============================================================
-   TIPTAP EDITOR — uses CSS variables for theme adaptation
-   ============================================================ */
+/* Notebook Tiptap editor styling */
 .tiptap-editor {
   height: 100%;
   min-height: 0;
@@ -920,9 +892,10 @@ button {
   align-items: center;
   gap: 0.1rem;
   padding: 0.3rem 0.4rem;
-  border-bottom: 1px solid var(--editor-toolbar-border);
-  background: var(--editor-toolbar-bg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 16, 36, 0.98);
   row-gap: 0.2rem;
+  /* overflow: visible so dropdown panels can escape the toolbar bounds */
   overflow: visible;
 }
 
@@ -932,7 +905,7 @@ button {
   height: 1.15rem;
   flex-shrink: 0;
   margin: 0 0.2rem;
-  background: var(--editor-sep-color);
+  background: rgba(148, 163, 184, 0.14);
   align-self: center;
 }
 
@@ -956,13 +929,13 @@ button {
   z-index: 200;
   min-width: 10rem;
   padding: 0.25rem;
-  border: 1px solid var(--editor-dd-border);
+  border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 0.5rem;
-  background: var(--editor-dd-bg);
+  background: rgba(10, 16, 36, 0.98);
   backdrop-filter: blur(10px);
   box-shadow:
-    0 10px 32px rgba(0, 0, 0, 0.28),
-    0 2px 8px rgba(0, 0, 0, 0.14);
+    0 10px 32px rgba(0, 0, 0, 0.52),
+    0 2px 8px rgba(0, 0, 0, 0.28);
 }
 
 /* Dropdown item button */
@@ -974,7 +947,7 @@ button {
   border: none;
   border-radius: 0.3rem;
   background: transparent;
-  color: var(--editor-dd-text);
+  color: rgba(203, 213, 225, 0.88);
   font-size: 0.73rem;
   font-weight: 500;
   text-align: left;
@@ -984,13 +957,13 @@ button {
 }
 
 .tiptap-dd__item:hover {
-  background: var(--editor-dd-hover-bg);
-  color: var(--editor-dd-hover-color);
+  background: rgba(56, 189, 248, 0.1);
+  color: rgba(236, 254, 255, 0.98);
 }
 
 .tiptap-dd__item--active {
-  background: var(--editor-dd-hover-bg);
-  color: var(--editor-dd-active-color);
+  background: rgba(34, 211, 238, 0.1);
+  color: rgba(236, 254, 255, 0.98);
 }
 
 .tiptap-dd__item--active::before {
@@ -999,7 +972,7 @@ button {
   width: 1rem;
   margin-right: 0.15rem;
   font-size: 0.65rem;
-  color: var(--editor-dd-check-color);
+  color: rgba(34, 211, 238, 0.9);
 }
 
 /* Color / highlight swatch grid */
@@ -1013,7 +986,7 @@ button {
 .tiptap-dd__swatch {
   width: 1.5rem;
   height: 1.5rem;
-  border: 1px solid rgba(128, 128, 128, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0.25rem;
   cursor: pointer;
   transition: transform 80ms ease, box-shadow 80ms ease;
@@ -1021,11 +994,11 @@ button {
 
 .tiptap-dd__swatch:hover {
   transform: scale(1.12);
-  border-color: rgba(128, 128, 128, 0.50);
+  border-color: rgba(255, 255, 255, 0.32);
 }
 
 .tiptap-dd__swatch--active {
-  box-shadow: 0 0 0 2px var(--primary-start);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.7);
 }
 
 /* "None" swatch — diagonal stripe to indicate removal */
@@ -1092,9 +1065,9 @@ button {
   display: inline-flex;
   align-items: center;
   height: 1.6rem;
-  border: 1px solid var(--editor-fontsize-border);
+  border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 0.25rem;
-  background: rgba(128, 128, 128, 0.04);
+  background: rgba(255, 255, 255, 0.04);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -1107,7 +1080,7 @@ button {
   height: 100%;
   border: none;
   background: transparent;
-  color: var(--editor-fontsize-color);
+  color: rgba(203, 213, 225, 0.75);
   font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
@@ -1116,8 +1089,8 @@ button {
 }
 
 .tiptap-fontsize__btn:hover:not(:disabled) {
-  background: var(--editor-fontsize-hover-bg);
-  color: var(--editor-fontsize-hover-color);
+  background: rgba(56, 189, 248, 0.12);
+  color: rgba(236, 254, 255, 0.98);
 }
 
 .tiptap-fontsize__btn:disabled {
@@ -1130,10 +1103,10 @@ button {
   height: 100%;
   padding: 0;
   border: none;
-  border-left: 1px solid var(--editor-fontsize-border);
-  border-right: 1px solid var(--editor-fontsize-border);
+  border-left: 1px solid rgba(148, 163, 184, 0.1);
+  border-right: 1px solid rgba(148, 163, 184, 0.1);
   background: transparent;
-  color: var(--editor-fontsize-color);
+  color: rgba(203, 213, 225, 0.9);
   font-size: 0.7rem;
   font-weight: 600;
   text-align: center;
@@ -1195,7 +1168,7 @@ button {
   border: 1px solid transparent;
   border-radius: 0.25rem;
   background: transparent;
-  color: var(--editor-btn-color);
+  color: rgba(203, 213, 225, 0.82);
   font-size: 0.72rem;
   font-weight: 600;
   line-height: 1;
@@ -1209,13 +1182,13 @@ button {
 }
 
 .tiptap-editor__button:hover:not(:disabled) {
-  background: var(--editor-btn-hover-bg);
-  color: var(--editor-btn-hover-color);
+  background: rgba(56, 189, 248, 0.1);
+  color: rgba(236, 254, 255, 0.98);
 }
 
 .tiptap-editor__button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--focus-ring-outer);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.22);
 }
 
 .tiptap-editor__button:disabled {
@@ -1224,8 +1197,8 @@ button {
 }
 
 .tiptap-editor__button--active:not(:disabled) {
-  background: var(--editor-btn-active-bg);
-  color: var(--editor-btn-active-color);
+  background: rgba(34, 211, 238, 0.12);
+  color: rgba(164, 245, 253, 0.98);
 }
 
 .tiptap-editor .tiptap {
@@ -1250,17 +1223,17 @@ button {
 }
 
 .tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
-  color: var(--editor-placeholder-color);
+  color: rgba(148, 163, 184, 0.7);
   content: attr(data-placeholder);
   float: left;
   height: 0;
   pointer-events: none;
 }
 
-/* Pageless and page share the workspace background */
+/* Pageless and page share the same dark workspace background */
 .tiptap-editor--pageless,
 .tiptap-editor--page {
-  background: var(--editor-workspace-bg);
+  background: rgba(7, 11, 24, 0.98);
 }
 
 /* ── Pageless mode ── */
@@ -1301,12 +1274,13 @@ button {
   padding: clamp(2rem, 4vw, 3.5rem);
   border-radius: 0.6rem;
   box-shadow:
-    0 2px 12px rgba(0, 0, 0, 0.18),
-    0 8px 32px rgba(0, 0, 0, 0.14);
+    0 2px 12px rgba(0, 0, 0, 0.38),
+    0 12px 48px rgba(0, 0, 0, 0.28);
+  /* No overflow hidden — page surface expands with content, never clips */
   overflow: visible;
 }
 
-/* ── Page color: Theme (dark surface) ── */
+/* ── Page color: Theme (dark surface, inherits light editor text) ── */
 .tiptap-editor--page.tiptap-editor--pc-theme .ProseMirror {
   background: rgba(15, 23, 42, 0.92);
   border: 1px solid rgba(148, 163, 184, 0.18);
@@ -1486,7 +1460,6 @@ button {
   color: #2a1f0e;
 }
 
-/* ── Content styling — uses CSS variables for theme adaptation ── */
 .tiptap-editor .ProseMirror p {
   margin: 0;
 }
@@ -1495,7 +1468,7 @@ button {
 .tiptap-editor .ProseMirror h2,
 .tiptap-editor .ProseMirror h3 {
   margin: 0.8em 0 0.35em;
-  color: var(--editor-heading-color);
+  color: rgba(248, 250, 252, 0.98);
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -1516,10 +1489,10 @@ button {
 
 .tiptap-editor .ProseMirror a,
 .tiptap-editor .ProseMirror a:visited {
-  color: var(--editor-link-color);
+  color: rgba(103, 232, 249, 0.96);
   text-decoration-line: underline;
   text-decoration-thickness: 1.5px;
-  text-decoration-color: color-mix(in srgb, var(--editor-link-color) 55%, transparent);
+  text-decoration-color: rgba(103, 232, 249, 0.56);
   text-underline-offset: 0.14em;
   transition:
     color 120ms ease,
@@ -1529,27 +1502,29 @@ button {
 }
 
 .tiptap-editor .ProseMirror a:hover {
-  color: var(--editor-link-hover-color);
+  color: rgba(165, 243, 252, 1);
+  text-decoration-color: rgba(165, 243, 252, 0.88);
 }
 
 .tiptap-editor .ProseMirror a:focus-visible {
   outline: none;
   border-radius: 0.2rem;
-  box-shadow: 0 0 0 2px var(--focus-ring-outer);
+  background: rgba(34, 211, 238, 0.08);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.28);
 }
 
 .tiptap-editor .ProseMirror blockquote {
   margin: 0.75rem 0;
   padding: 0.1rem 0 0.1rem 0.85rem;
-  border-left: 2px solid var(--editor-blockquote-border);
-  color: var(--editor-blockquote-color);
+  border-left: 2px solid rgba(125, 211, 252, 0.42);
+  color: rgba(226, 232, 240, 0.92);
 }
 
 .tiptap-editor .ProseMirror :not(pre) > code {
   border-radius: 0.35rem;
   padding: 0.12em 0.35em;
-  background: var(--editor-code-bg);
-  color: var(--editor-code-color);
+  background: rgba(15, 23, 42, 0.9);
+  color: rgba(236, 254, 255, 0.98);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.92em;
 }
@@ -1558,16 +1533,16 @@ button {
   margin: 0.75rem 0;
   padding: 0.8rem 0.9rem;
   overflow-x: auto;
-  border: 1px solid var(--editor-pre-border);
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 0.9rem;
-  background: var(--editor-pre-bg);
+  background: rgba(2, 6, 23, 0.92);
 }
 
 .tiptap-editor .ProseMirror pre code {
   display: block;
   padding: 0;
   background: transparent;
-  color: var(--editor-code-color);
+  color: rgba(226, 232, 240, 0.96);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.9rem;
   line-height: 1.55;
@@ -1577,18 +1552,19 @@ button {
 .tiptap-editor .ProseMirror hr {
   margin: 1rem 0;
   border: 0;
-  border-top: 2px solid var(--editor-hr-color);
+  border-top: 2px solid rgba(148, 163, 184, 0.35);
   cursor: pointer;
   transition: border-color 120ms ease;
 }
 
 .tiptap-editor .ProseMirror hr:hover {
-  border-top-color: var(--editor-hr-hover-color);
+  border-top-color: rgba(56, 189, 248, 0.65);
 }
 
+/* ProseMirror adds this class when an hr is node-selected */
 .tiptap-editor .ProseMirror hr.ProseMirror-selectednode {
-  border-top-color: var(--editor-hr-selected-color);
-  outline: 2px solid color-mix(in srgb, var(--editor-hr-selected-color) 30%, transparent);
+  border-top-color: rgba(34, 211, 238, 0.9);
+  outline: 2px solid rgba(34, 211, 238, 0.28);
   outline-offset: 3px;
   border-radius: 1px;
 }
@@ -1660,7 +1636,7 @@ button {
   width: 1rem;
   height: 1rem;
   margin: 0;
-  accent-color: var(--editor-checkbox-color);
+  accent-color: rgba(34, 211, 238, 0.95);
   cursor: pointer;
   filter: saturate(1.1) brightness(1.03);
 }
@@ -1687,24 +1663,24 @@ button {
   position: relative;
   min-width: 3.5rem;
   padding: 0.45rem 0.6rem;
-  border: 1px solid var(--editor-table-border);
+  border: 1px solid rgba(148, 163, 184, 0.2);
   vertical-align: top;
   overflow-wrap: anywhere;
 }
 
 .tiptap-editor .ProseMirror table td {
-  background: var(--editor-table-td);
+  background: rgba(15, 23, 42, 0.32);
 }
 
 .tiptap-editor .ProseMirror table th {
-  background: var(--editor-table-th);
-  color: var(--editor-table-th-color);
+  background: rgba(30, 41, 59, 0.9);
+  color: rgba(248, 250, 252, 0.98);
   font-weight: 700;
 }
 
 .tiptap-editor .ProseMirror table .selectedCell {
-  background: var(--editor-selected-cell);
-  box-shadow: inset 0 0 0 1px var(--editor-selected-cell-ring);
+  background: rgba(34, 211, 238, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.42);
 }
 
 .tiptap-editor .ProseMirror .column-resize-handle {
@@ -1713,7 +1689,7 @@ button {
   right: -2px;
   width: 4px;
   height: 100%;
-  background: var(--editor-resize-handle);
+  background: rgba(56, 189, 248, 0.45);
   pointer-events: none;
 }
 
@@ -1724,7 +1700,7 @@ button {
   margin: 0.85rem 0;
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 0.9rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.22);
 }
 
 /* Same styling for read-only render of the rich text */
@@ -1754,7 +1730,7 @@ button {
   }
 
   .scrollbar-subtle::-webkit-scrollbar-thumb {
-    background: rgba(128, 128, 128, 0.18);
+    background: rgba(255, 255, 255, 0.12);
     border-radius: 999px;
   }
 
