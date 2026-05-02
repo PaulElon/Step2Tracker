@@ -1004,11 +1004,11 @@ export function NotebookView() {
   const toolbarButtonClass =
     "inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3.5 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]";
   const libraryToolbarButtonClass =
-    "inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.02] px-3.5 text-sm text-slate-200 transition hover:border-white/15 hover:bg-white/[0.05]";
+    "inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-white/10 bg-white/[0.02] px-4 text-sm text-slate-200 transition hover:border-white/15 hover:bg-white/[0.05]";
   const libraryToolbarPrimaryButtonClass =
-    "inline-flex h-9 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-3.5 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/20";
+    "inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/20";
   const libraryToolbarSearchClass =
-    "h-9 w-full max-w-[22rem] min-w-[14rem] rounded-xl border border-white/10 bg-slate-950/35 px-3 text-sm text-white outline-none transition focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-400/25";
+    "h-9 min-w-[18rem] flex-1 rounded-xl border border-white/10 bg-slate-950/35 px-4 text-sm text-white outline-none transition focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-400/25";
   const libraryBreadcrumbPillClass =
     "inline-flex h-8 items-center rounded-full border border-white/10 bg-white/[0.025] px-3 text-xs font-medium text-slate-200";
   const libraryBreadcrumbCurrentClass =
@@ -1078,7 +1078,7 @@ export function NotebookView() {
                   </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex min-w-0 flex-nowrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
