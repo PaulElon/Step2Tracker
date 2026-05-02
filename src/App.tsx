@@ -663,6 +663,31 @@ export default function App() {
   }, [notificationPermission, persistenceStatus, state.studyBlocks, upsertStudyBlock]);
 
   useEffect(() => {
+    const requestUpdateCheck = () => {
+      void invoke("check_for_updates").catch(() => {});
+    };
+
+    requestUpdateCheck();
+
+    const handleFocus = () => {
+      requestUpdateCheck();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        requestUpdateCheck();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
     let unlisten: (() => void) | undefined;
     listen<string>("update-available", (event) => {
       setUpdateAvailable(event.payload);

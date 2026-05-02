@@ -226,6 +226,7 @@ fn main() {
             tf_persistence::tf_reset_state,
             open_notification_settings,
             export_notebook_page,
+            updater::check_for_updates,
             updater::install_update
         ])
         .run(tauri::generate_context!())
