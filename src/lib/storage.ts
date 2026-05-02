@@ -15,6 +15,9 @@ import type {
   PracticeTest,
   PracticeTestInput,
   Preferences,
+  NotebookPage,
+  NotebookFolder,
+  NotebookDocument,
   StudyBlock,
   StudyBlockInput,
   StudyTaskCategory,
@@ -107,6 +110,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
   resourceLinks: [],
   examTimers: [],
   notesHtml: "",
+  notebookFolders: [],
+  notebookPages: [],
+  notebookDocuments: [],
   scoreTrendOptions: {
     showConnectionLine: false,
     showBestFitLine: true,
@@ -720,6 +726,165 @@ export function getEmptyPracticeTestDraft(): PracticeTestInput {
   };
 }
 
+function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbackId?: string): NotebookPage {
+  const timestamp = nowIso();
+  const safeCreatedAt = sanitizeText(input?.createdAt) || timestamp;
+  const safeUpdatedAt = sanitizeText(input?.updatedAt) || timestamp;
+  const folderId = typeof input?.folderId === "string" ? input.folderId.trim() : "";
+  return {
+    id: sanitizeText(input?.id) || fallbackId || createId("nb-page"),
+    title: sanitizeText(input?.title) || "Untitled",
+    contentHtml: typeof input?.contentHtml === "string" ? input.contentHtml : "",
+    favorited: input?.favorited === true,
+    folderId: folderId || undefined,
+    order: Math.trunc(sanitizeNumber(input?.order, 0)),
+    createdAt: safeCreatedAt,
+    updatedAt: safeUpdatedAt,
+  };
+}
+
+function normalizeNotebookFolder(input: Partial<NotebookFolder> | undefined, fallbackId?: string): NotebookFolder {
+  const timestamp = nowIso();
+  const safeCreatedAt = sanitizeText(input?.createdAt) || timestamp;
+  const safeUpdatedAt = sanitizeText(input?.updatedAt) || timestamp;
+  const parentFolderId = typeof input?.parentFolderId === "string" ? input.parentFolderId.trim() : "";
+  return {
+    id: sanitizeText(input?.id) || fallbackId || createId("nb-folder"),
+    name: sanitizeText(input?.name) || "Untitled Folder",
+    parentFolderId: parentFolderId || undefined,
+    favorited: input?.favorited === true,
+    order: Math.trunc(sanitizeNumber(input?.order, 0)),
+    createdAt: safeCreatedAt,
+    updatedAt: safeUpdatedAt,
+  };
+}
+
+function normalizeNotebookDocument(input: Partial<NotebookDocument> | undefined, fallbackId?: string): NotebookDocument {
+  const timestamp = nowIso();
+  const safeCreatedAt = sanitizeText(input?.createdAt) || timestamp;
+  const safeUpdatedAt = sanitizeText(input?.updatedAt) || timestamp;
+  const folderId = typeof input?.folderId === "string" ? input.folderId.trim() : "";
+  const hasPages = Array.isArray(input?.pages) && input.pages.length > 0;
+  const pages = hasPages
+    ? normalizeNotebookPages(input?.pages)
+    : [
+        {
+          id: createId("nb-page"),
+          title: "Page 1",
+          contentHtml: "",
+          order: 0,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+      ];
+  return {
+    id: sanitizeText(input?.id) || fallbackId || createId("nb-doc"),
+    title: sanitizeText(input?.title) || "Untitled Document",
+    folderId: folderId || undefined,
+    favorited: input?.favorited === true,
+    order: Math.trunc(sanitizeNumber(input?.order, 0)),
+    pages,
+    createdAt: safeCreatedAt,
+    updatedAt: safeUpdatedAt,
+  };
+}
+
+function normalizeNotebookPages(raw: unknown): NotebookPage[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((page) => normalizeNotebookPage(page))
+    .sort((left, right) => left.order - right.order);
+}
+
+function normalizeNotebookDocuments(raw: unknown): NotebookDocument[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((document) => normalizeNotebookDocument(document))
+    .sort((left, right) => left.order - right.order);
+}
+
+function normalizeNotebookFolders(raw: unknown): NotebookFolder[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((folder) => normalizeNotebookFolder(folder))
+    .sort((left, right) => left.order - right.order);
+}
+
+type LegacyNotebookPageInput = Partial<NotebookPage> & {
+  id?: unknown;
+  title?: unknown;
+  contentHtml?: unknown;
+  favorited?: unknown;
+  folderId?: unknown;
+  order?: unknown;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
+function migrateNotebookPagesToDocuments(rawPages: unknown): NotebookDocument[] {
+  if (!Array.isArray(rawPages)) {
+    return [];
+  }
+
+  return rawPages
+    .map((rawPage) => {
+      const legacyPage = (rawPage ?? {}) as LegacyNotebookPageInput;
+      const normalizedPage = normalizeNotebookPage(legacyPage);
+      const title = sanitizeText(legacyPage.title) || normalizedPage.title;
+      const createdAt = sanitizeText(legacyPage.createdAt) || normalizedPage.createdAt;
+      const updatedAt = sanitizeText(legacyPage.updatedAt) || normalizedPage.updatedAt;
+      const folderId = typeof legacyPage.folderId === "string" ? legacyPage.folderId.trim() : "";
+      return normalizeNotebookDocument({
+        id: normalizedPage.id,
+        title,
+        folderId: folderId || undefined,
+        favorited: legacyPage.favorited === true,
+        order: Math.trunc(sanitizeNumber(legacyPage.order, normalizedPage.order)),
+        createdAt,
+        updatedAt,
+        pages: [
+          {
+            id: normalizedPage.id,
+            title,
+            contentHtml:
+              typeof legacyPage.contentHtml === "string" ? legacyPage.contentHtml : normalizedPage.contentHtml,
+            order: 0,
+            createdAt,
+            updatedAt,
+          },
+        ],
+      });
+    })
+    .sort((left, right) => left.order - right.order);
+}
+
+function seedNotebookPagesFromNotesHtml(notesHtml: string): NotebookPage[] {
+  if (!notesHtml.trim()) {
+    return [];
+  }
+
+  const timestamp = nowIso();
+  return [
+    {
+      id: createId("nb-page"),
+      title: "Study Notes",
+      contentHtml: notesHtml,
+      order: 0,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    },
+  ];
+}
+
 function normalizePreferences(value: Partial<Preferences> | undefined) {
   const todayKey = getTodayKey();
   const lastActiveDate = sanitizeText(value?.lastActiveDate) || todayKey;
@@ -733,6 +898,20 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
   const plannerMode = value?.plannerMode === "month" || value?.plannerMode === "week"
     ? value.plannerMode
     : DEFAULT_PREFERENCES.plannerMode;
+  const notesHtml = typeof value?.notesHtml === "string" ? value.notesHtml : "";
+  const notebookPages =
+    Array.isArray(value?.notebookPages) && value.notebookPages.length > 0
+      ? normalizeNotebookPages(value.notebookPages)
+      : seedNotebookPagesFromNotesHtml(notesHtml);
+  const notebookDocuments =
+    Array.isArray(value?.notebookDocuments) && value.notebookDocuments.length > 0
+      ? normalizeNotebookDocuments(value.notebookDocuments)
+      : notebookPages.length > 0
+        ? migrateNotebookPagesToDocuments(notebookPages)
+        : [];
+  const notebookFolders = Array.isArray(value?.notebookFolders)
+    ? normalizeNotebookFolders(value.notebookFolders)
+    : [];
 
   const enhancedThemeIds = Array.isArray(value?.enhancedThemeIds)
     ? value.enhancedThemeIds.filter((id): id is string => typeof id === "string" && id.length > 0)
@@ -792,7 +971,10 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
           }))
           .filter((t) => t.examDate.length > 0 && t.label.length > 0)
       : [],
-    notesHtml: typeof value?.notesHtml === "string" ? value.notesHtml : "",
+    notesHtml,
+    notebookFolders,
+    notebookPages,
+    notebookDocuments,
     scoreTrendOptions: {
       showConnectionLine: !!value?.scoreTrendOptions?.showConnectionLine,
       showBestFitLine:

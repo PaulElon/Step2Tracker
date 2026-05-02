@@ -6,12 +6,14 @@ mod tf_persistence;
 mod updater;
 
 use std::process::Command;
+use std::{fs, path::PathBuf};
 
 use persistence::{
     AppState, BackupArtifactPreview, ClientSnapshot, ErrorLogInput, ImportMode, PracticeTestInput, Preferences,
     StorageService, StudyBlockInput, TrashEntityType, WeakTopicInput,
 };
 use tauri::Manager;
+use tauri_plugin_dialog::DialogExt;
 
 fn with_storage<F, T>(app: &tauri::AppHandle, operation: F) -> Result<T, String>
 where
@@ -156,8 +158,42 @@ fn open_notification_settings() -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+async fn export_notebook_page(
+    app: tauri::AppHandle,
+    suggested_file_name: String,
+    contents: String,
+) -> Result<String, String> {
+    let fallback_name = "notebook-page.txt".to_string();
+    let file_name = if suggested_file_name.trim().is_empty() {
+        fallback_name
+    } else {
+        suggested_file_name
+    };
+
+    let (tx, mut rx) = tauri::async_runtime::channel(1);
+    app.dialog().file().set_file_name(file_name).save_file(move |file| {
+        let _ = tx.try_send(file);
+    });
+
+    let selected_file = rx
+        .recv()
+        .await
+        .ok_or_else(|| "Unable to receive export destination.".to_string())?
+        .ok_or_else(|| "Export canceled by user.".to_string())?;
+
+    let path: PathBuf = selected_file
+        .into_path()
+        .map_err(|error| format!("Unable to resolve selected export path: {error}"))?;
+
+    fs::write(&path, contents).map_err(|error| format!("Unable to write notebook export file: {error}"))?;
+
+    Ok(path.to_string_lossy().to_string())
+}
+
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().pubkey(updater::updater_pubkey()).build())
@@ -189,6 +225,7 @@ fn main() {
             tf_persistence::tf_save_state,
             tf_persistence::tf_reset_state,
             open_notification_settings,
+            export_notebook_page,
             updater::install_update
         ])
         .run(tauri::generate_context!())

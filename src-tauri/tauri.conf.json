@@ -15,6 +15,7 @@
         "title": "TimeFolio Study Tracker",
         "width": 1440,
         "height": 960,
+        "maximized": true,
         "minWidth": 1100,
         "minHeight": 760,
         "resizable": true

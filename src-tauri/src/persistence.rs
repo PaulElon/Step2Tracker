@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 const APP_ID: &str = "step2-command-center";
 const APP_STATE_VERSION: u32 = 6;
-const DB_SCHEMA_VERSION: i32 = 8;
+const DB_SCHEMA_VERSION: i32 = 11;
 const LIVE_DB_FILE: &str = "command-center.sqlite3";
 const MAX_BACKUPS: usize = 20;
 const SAFE_CHECKPOINT_INTERVAL_HOURS: i64 = 6;
@@ -386,6 +386,12 @@ pub struct Preferences {
     pub exam_timers: Vec<ExamTimer>,
     #[serde(default)]
     pub notes_html: String,
+    #[serde(default)]
+    pub notebook_folders: Vec<NotebookFolder>,
+    #[serde(default)]
+    pub notebook_pages: Vec<NotebookPage>,
+    #[serde(default)]
+    pub notebook_documents: Vec<NotebookDocument>,
     #[serde(default = "default_score_trend_options")]
     pub score_trend_options: ScoreTrendOptions,
 }
@@ -448,6 +454,61 @@ pub struct ExamTimer {
     pub exam_time: String,
     #[serde(default = "default_display_mode")]
     pub display_mode: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NotebookFolder {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub parent_folder_id: Option<String>,
+    #[serde(default)]
+    pub favorited: bool,
+    #[serde(default)]
+    pub order: i64,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NotebookPage {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub content_html: String,
+    #[serde(default)]
+    pub favorited: bool,
+    #[serde(default)]
+    pub folder_id: Option<String>,
+    #[serde(default)]
+    pub order: i64,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NotebookDocument {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub folder_id: Option<String>,
+    #[serde(default)]
+    pub favorited: bool,
+    #[serde(default)]
+    pub order: i64,
+    #[serde(default)]
+    pub pages: Vec<NotebookPage>,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub updated_at: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -519,6 +580,8 @@ pub enum SectionId {
     ErrorLog,
     #[serde(rename = "timefolio")]
     Timefolio,
+    #[serde(rename = "notebook")]
+    Notebook,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -1310,6 +1373,15 @@ impl StorageService {
         if current_version < 8 {
             self.ensure_study_block_import_source_columns(&transaction)?;
         }
+        if current_version < 9 {
+            self.ensure_preferences_columns(&transaction)?;
+        }
+        if current_version < 10 {
+            self.ensure_preferences_columns(&transaction)?;
+        }
+        if current_version < 11 {
+            self.ensure_preferences_columns(&transaction)?;
+        }
         transaction.pragma_update(None, "user_version", DB_SCHEMA_VERSION)?;
         self.set_metadata_tx(&transaction, "app_version", &self.app_version)?;
         self.log_event(
@@ -1354,6 +1426,9 @@ impl StorageService {
               resource_links_json TEXT NOT NULL DEFAULT '[]',
               exam_timers_json TEXT NOT NULL DEFAULT '[]',
               notes_html TEXT NOT NULL DEFAULT '',
+              notebook_folders_json TEXT NOT NULL DEFAULT '[]',
+              notebook_pages_json TEXT NOT NULL DEFAULT '[]',
+              notebook_documents_json TEXT NOT NULL DEFAULT '[]',
               score_trend_options_json TEXT NOT NULL DEFAULT '{\"showConnectionLine\":false,\"showBestFitLine\":true,\"showBestFitRSquared\":false}',
               updated_at TEXT NOT NULL
             );
@@ -1551,6 +1626,24 @@ impl StorageService {
         if !columns.contains(&"notes_html".to_string()) {
             transaction.execute(
                 "ALTER TABLE preferences ADD COLUMN notes_html TEXT NOT NULL DEFAULT ''",
+                [],
+            )?;
+        }
+        if !columns.contains(&"notebook_pages_json".to_string()) {
+            transaction.execute(
+                "ALTER TABLE preferences ADD COLUMN notebook_pages_json TEXT NOT NULL DEFAULT '[]'",
+                [],
+            )?;
+        }
+        if !columns.contains(&"notebook_folders_json".to_string()) {
+            transaction.execute(
+                "ALTER TABLE preferences ADD COLUMN notebook_folders_json TEXT NOT NULL DEFAULT '[]'",
+                [],
+            )?;
+        }
+        if !columns.contains(&"notebook_documents_json".to_string()) {
+            transaction.execute(
+                "ALTER TABLE preferences ADD COLUMN notebook_documents_json TEXT NOT NULL DEFAULT '[]'",
                 [],
             )?;
         }
@@ -2174,6 +2267,9 @@ impl StorageService {
                   resource_links_json,
                   exam_timers_json,
                   notes_html,
+                  notebook_folders_json,
+                  notebook_pages_json,
+                  notebook_documents_json,
                   score_trend_options_json
                 FROM preferences
                 WHERE id = 1
@@ -2201,7 +2297,34 @@ impl StorageService {
                             )
                         })?;
                     let notes_html: String = row.get(17)?;
-                    let score_trend_raw = row.get::<_, String>(18)?;
+                    let notebook_folders_raw = row.get::<_, String>(18)?;
+                    let notebook_folders: Vec<NotebookFolder> =
+                        serde_json::from_str(&notebook_folders_raw).map_err(|error| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                notebook_folders_raw.len(),
+                                Type::Text,
+                                Box::new(error),
+                            )
+                        })?;
+                    let notebook_pages_raw = row.get::<_, String>(19)?;
+                    let notebook_pages: Vec<NotebookPage> =
+                        serde_json::from_str(&notebook_pages_raw).map_err(|error| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                notebook_pages_raw.len(),
+                                Type::Text,
+                                Box::new(error),
+                            )
+                        })?;
+                    let notebook_documents_raw = row.get::<_, String>(20)?;
+                    let notebook_documents: Vec<NotebookDocument> =
+                        serde_json::from_str(&notebook_documents_raw).map_err(|error| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                notebook_documents_raw.len(),
+                                Type::Text,
+                                Box::new(error),
+                            )
+                        })?;
+                    let score_trend_raw = row.get::<_, String>(21)?;
                     let score_trend_options: ScoreTrendOptions =
                         serde_json::from_str(&score_trend_raw)
                             .unwrap_or_else(|_| default_score_trend_options());
@@ -2228,12 +2351,17 @@ impl StorageService {
                         resource_links,
                         exam_timers,
                         notes_html,
+                        notebook_folders,
+                        notebook_pages,
+                        notebook_documents,
                         score_trend_options,
                     })
                 },
             )
             .optional()?;
-        Ok(preferences.unwrap_or_else(default_preferences))
+        let mut prefs = preferences.unwrap_or_else(default_preferences);
+        materialize_notebook_documents_from_pages(&mut prefs);
+        Ok(prefs)
     }
 
     fn read_study_blocks(&self, connection: &Connection) -> StorageResult<Vec<StudyBlock>> {
@@ -2526,10 +2654,15 @@ impl StorageService {
         transaction: &Transaction<'_>,
         preferences: &Preferences,
     ) -> StorageResult<()> {
+        let mut effective = preferences.clone();
+        materialize_notebook_documents_from_pages(&mut effective);
         let enhanced_theme_ids_json = serde_json::to_string(&preferences.enhanced_theme_ids)?;
         let custom_categories_json = serde_json::to_string(&preferences.custom_categories)?;
         let resource_links_json = serde_json::to_string(&preferences.resource_links)?;
         let exam_timers_json = serde_json::to_string(&preferences.exam_timers)?;
+        let notebook_folders_json = serde_json::to_string(&preferences.notebook_folders)?;
+        let notebook_pages_json = serde_json::to_string(&preferences.notebook_pages)?;
+        let notebook_documents_json = serde_json::to_string(&effective.notebook_documents)?;
         let score_trend_options_json = serde_json::to_string(&preferences.score_trend_options)?;
         transaction.execute(
             "
@@ -2539,9 +2672,9 @@ impl StorageService {
               planner_filter_from_date, planner_filter_to_date,
               planner_sort_field, planner_sort_direction, planner_mode,
               planner_focus_date, enhanced_theme_ids_json, custom_categories_json,
-              resource_links_json, exam_timers_json, notes_html, score_trend_options_json, updated_at
+              resource_links_json, exam_timers_json, notes_html, notebook_folders_json, notebook_pages_json, notebook_documents_json, score_trend_options_json, updated_at
             )
-            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
+            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
             ON CONFLICT(id) DO UPDATE SET
               active_section = excluded.active_section,
               last_active_date = excluded.last_active_date,
@@ -2561,6 +2694,9 @@ impl StorageService {
               resource_links_json = excluded.resource_links_json,
               exam_timers_json = excluded.exam_timers_json,
               notes_html = excluded.notes_html,
+              notebook_folders_json = excluded.notebook_folders_json,
+              notebook_pages_json = excluded.notebook_pages_json,
+              notebook_documents_json = excluded.notebook_documents_json,
               score_trend_options_json = excluded.score_trend_options_json,
               updated_at = excluded.updated_at
             ",
@@ -2583,6 +2719,9 @@ impl StorageService {
                 resource_links_json,
                 exam_timers_json,
                 preferences.notes_html,
+                notebook_folders_json,
+                notebook_pages_json,
+                notebook_documents_json,
                 score_trend_options_json,
                 now_iso(),
             ],
@@ -3882,6 +4021,44 @@ fn weak_topic_status_rank(status: WeakTopicStatus) -> usize {
     }
 }
 
+fn materialize_notebook_documents_from_pages(preferences: &mut Preferences) {
+    if !preferences.notebook_documents.is_empty() {
+        return;
+    }
+    if preferences.notebook_pages.is_empty() {
+        return;
+    }
+    preferences.notebook_documents = preferences
+        .notebook_pages
+        .iter()
+        .map(|page| {
+            let inner_page = NotebookPage {
+                id: page.id.clone(),
+                title: page.title.clone(),
+                content_html: page.content_html.clone(),
+                favorited: false,
+                folder_id: None,
+                order: 0,
+                created_at: page.created_at.clone(),
+                updated_at: page.updated_at.clone(),
+            };
+            NotebookDocument {
+                id: page.id.clone(),
+                title: page.title.clone(),
+                folder_id: page.folder_id.clone(),
+                favorited: page.favorited,
+                order: page.order,
+                pages: vec![inner_page],
+                created_at: page.created_at.clone(),
+                updated_at: page.updated_at.clone(),
+            }
+        })
+        .collect();
+    preferences
+        .notebook_documents
+        .sort_by_key(|doc| doc.order);
+}
+
 fn default_preferences() -> Preferences {
     let today = today_key();
     Preferences {
@@ -3912,6 +4089,9 @@ fn default_preferences() -> Preferences {
         resource_links: Vec::new(),
         exam_timers: Vec::new(),
         notes_html: String::new(),
+        notebook_folders: Vec::new(),
+        notebook_pages: Vec::new(),
+        notebook_documents: Vec::new(),
         score_trend_options: default_score_trend_options(),
     }
 }
@@ -3956,6 +4136,7 @@ fn parse_section_id(value: &str) -> rusqlite::Result<SectionId> {
         "settings" => Ok(SectionId::Settings),
         "errorLog" => Ok(SectionId::ErrorLog),
         "timefolio" => Ok(SectionId::Timefolio),
+        "notebook" => Ok(SectionId::Notebook),
         _ => Err(enum_error("SectionId", value)),
     }
 }
@@ -4072,6 +4253,7 @@ fn serialize_section_id(value: SectionId) -> &'static str {
         SectionId::Settings => "settings",
         SectionId::ErrorLog => "errorLog",
         SectionId::Timefolio => "timefolio",
+        SectionId::Notebook => "notebook",
     }
 }
 
@@ -4564,5 +4746,191 @@ mod tests {
         assert_eq!(imported_blocks.len(), 1);
         assert_eq!(imported_blocks[0].task, "Imported chapter");
         assert_eq!(imported_blocks[0].notes, "source notes");
+    }
+
+    #[test]
+    fn materialize_notebook_documents_from_legacy_pages_preserves_pages() {
+        let mut prefs = default_preferences();
+        prefs.notebook_pages = vec![
+            NotebookPage {
+                id: "page-1".into(),
+                title: "Cardiology".into(),
+                content_html: "<p>notes</p>".into(),
+                favorited: true,
+                folder_id: Some("folder-a".into()),
+                order: 2,
+                created_at: "2026-01-01T00:00:00Z".into(),
+                updated_at: "2026-01-02T00:00:00Z".into(),
+            },
+            NotebookPage {
+                id: "page-2".into(),
+                title: "Renal".into(),
+                content_html: "<p>renal</p>".into(),
+                favorited: false,
+                folder_id: None,
+                order: 1,
+                created_at: "2026-01-03T00:00:00Z".into(),
+                updated_at: "2026-01-04T00:00:00Z".into(),
+            },
+        ];
+
+        materialize_notebook_documents_from_pages(&mut prefs);
+
+        // legacy pages must be preserved
+        assert_eq!(prefs.notebook_pages.len(), 2);
+
+        // documents should be populated
+        assert_eq!(prefs.notebook_documents.len(), 2);
+
+        // sorted by order: Renal(1) then Cardiology(2)
+        let renal = &prefs.notebook_documents[0];
+        assert_eq!(renal.id, "page-2");
+        assert_eq!(renal.title, "Renal");
+        assert_eq!(renal.order, 1);
+        assert!(!renal.favorited);
+        assert_eq!(renal.folder_id, None);
+        assert_eq!(renal.created_at, "2026-01-03T00:00:00Z");
+        assert_eq!(renal.updated_at, "2026-01-04T00:00:00Z");
+        assert_eq!(renal.pages.len(), 1);
+        assert_eq!(renal.pages[0].id, "page-2");
+        assert_eq!(renal.pages[0].title, "Renal");
+        assert_eq!(renal.pages[0].content_html, "<p>renal</p>");
+        assert_eq!(renal.pages[0].order, 0);
+        assert_eq!(renal.pages[0].created_at, "2026-01-03T00:00:00Z");
+        assert_eq!(renal.pages[0].updated_at, "2026-01-04T00:00:00Z");
+
+        let cardio = &prefs.notebook_documents[1];
+        assert_eq!(cardio.id, "page-1");
+        assert_eq!(cardio.title, "Cardiology");
+        assert_eq!(cardio.order, 2);
+        assert!(cardio.favorited);
+        assert_eq!(cardio.folder_id, Some("folder-a".into()));
+        assert_eq!(cardio.created_at, "2026-01-01T00:00:00Z");
+        assert_eq!(cardio.updated_at, "2026-01-02T00:00:00Z");
+        assert_eq!(cardio.pages.len(), 1);
+        assert_eq!(cardio.pages[0].content_html, "<p>notes</p>");
+    }
+
+    #[test]
+    fn materialize_notebook_documents_does_not_overwrite_existing_documents() {
+        let mut prefs = default_preferences();
+        prefs.notebook_pages = vec![NotebookPage {
+            id: "page-1".into(),
+            title: "Old Page".into(),
+            content_html: "<p>old</p>".into(),
+            favorited: false,
+            folder_id: None,
+            order: 0,
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+        }];
+        prefs.notebook_documents = vec![NotebookDocument {
+            id: "doc-existing".into(),
+            title: "Existing Doc".into(),
+            folder_id: None,
+            favorited: false,
+            order: 0,
+            pages: vec![],
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+        }];
+
+        materialize_notebook_documents_from_pages(&mut prefs);
+
+        // existing documents must not be replaced
+        assert_eq!(prefs.notebook_documents.len(), 1);
+        assert_eq!(prefs.notebook_documents[0].id, "doc-existing");
+    }
+
+    #[test]
+    fn read_preferences_materializes_notebook_documents_from_legacy_pages() {
+        let (_temp, service) = test_service();
+        service.load_snapshot().expect("bootstrap");
+
+        // Write preferences with pages but no documents directly into DB
+        let mut connection = service.open_live_connection().expect("live connection");
+        let transaction = connection.transaction().expect("tx");
+        let page = NotebookPage {
+            id: "nb-legacy-1".into(),
+            title: "GI Notes".into(),
+            content_html: "<p>gi content</p>".into(),
+            favorited: true,
+            folder_id: Some("f-1".into()),
+            order: 0,
+            created_at: "2026-03-01T00:00:00Z".into(),
+            updated_at: "2026-03-02T00:00:00Z".into(),
+        };
+        let mut base = default_preferences();
+        base.notebook_pages = vec![page];
+        base.notebook_documents = vec![];
+        service.persist_preferences(&transaction, &base).expect("persist");
+        transaction.commit().expect("commit");
+
+        // Now read back — materialization should occur
+        let conn2 = service.open_live_connection().expect("conn2");
+        // Write raw pages-only state directly (bypass materialize on write path)
+        // by updating notebook_documents_json to empty array in DB
+        conn2.execute(
+            "UPDATE preferences SET notebook_documents_json = '[]' WHERE id = 1",
+            [],
+        ).expect("reset documents");
+
+        let prefs = service.read_preferences(&conn2).expect("read preferences");
+
+        assert_eq!(prefs.notebook_pages.len(), 1, "pages must be preserved");
+        assert_eq!(prefs.notebook_documents.len(), 1, "documents must be materialized");
+        let doc = &prefs.notebook_documents[0];
+        assert_eq!(doc.id, "nb-legacy-1");
+        assert_eq!(doc.title, "GI Notes");
+        assert!(doc.favorited);
+        assert_eq!(doc.folder_id, Some("f-1".into()));
+        assert_eq!(doc.order, 0);
+        assert_eq!(doc.created_at, "2026-03-01T00:00:00Z");
+        assert_eq!(doc.updated_at, "2026-03-02T00:00:00Z");
+        assert_eq!(doc.pages.len(), 1);
+        assert_eq!(doc.pages[0].id, "nb-legacy-1");
+        assert_eq!(doc.pages[0].content_html, "<p>gi content</p>");
+        assert_eq!(doc.pages[0].order, 0);
+    }
+
+    #[test]
+    fn persist_preferences_materializes_notebook_documents_before_write() {
+        let (_temp, service) = test_service();
+        service.load_snapshot().expect("bootstrap");
+
+        let page = NotebookPage {
+            id: "nb-persist-1".into(),
+            title: "Heme Notes".into(),
+            content_html: "<p>heme</p>".into(),
+            favorited: false,
+            folder_id: None,
+            order: 5,
+            created_at: "2026-04-01T00:00:00Z".into(),
+            updated_at: "2026-04-01T00:00:00Z".into(),
+        };
+        let mut prefs = default_preferences();
+        prefs.notebook_pages = vec![page];
+        prefs.notebook_documents = vec![];
+
+        // persist writes materialized documents even though caller has none
+        service.save_preferences(prefs.clone()).expect("save");
+
+        let snapshot = service.load_snapshot().expect("reload");
+        let loaded = &snapshot.state.preferences;
+
+        // pages preserved
+        assert_eq!(loaded.notebook_pages.len(), 1);
+
+        // documents materialized and persisted
+        assert_eq!(loaded.notebook_documents.len(), 1);
+        let doc = &loaded.notebook_documents[0];
+        assert_eq!(doc.id, "nb-persist-1");
+        assert_eq!(doc.title, "Heme Notes");
+        assert_eq!(doc.order, 5);
+        assert_eq!(doc.pages.len(), 1);
+        assert_eq!(doc.pages[0].content_html, "<p>heme</p>");
+
+        // caller's prefs must not have been mutated
+        assert!(prefs.notebook_documents.is_empty());
     }
 }

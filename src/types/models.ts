@@ -1,6 +1,14 @@
 export type StudyStatus = "Not Started" | "In Progress" | "Completed" | "Skipped";
 export type StudyStatusFilter = StudyStatus | "All";
-export type SectionId = "dashboard" | "planner" | "weakTopics" | "tests" | "settings" | "errorLog" | "timefolio";
+export type SectionId =
+  | "dashboard"
+  | "planner"
+  | "weakTopics"
+  | "tests"
+  | "settings"
+  | "errorLog"
+  | "timefolio"
+  | "notebook";
 export type PlannerSortField = "date" | "order" | "category" | "task";
 export type SortDirection = "asc" | "desc";
 export type ImportMode = "merge" | "replace";
@@ -152,6 +160,38 @@ export interface ExamTimer {
   showHrMin?: boolean;
 }
 
+export interface NotebookFolder {
+  id: string;
+  name: string;
+  parentFolderId?: string;
+  favorited?: boolean;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotebookPage {
+  id: string;
+  title: string;
+  contentHtml: string;
+  favorited?: boolean;
+  folderId?: string;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotebookDocument {
+  id: string;
+  title: string;
+  folderId?: string;
+  favorited?: boolean;
+  order: number;
+  pages: NotebookPage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ScoreTrendOptions {
   showConnectionLine: boolean;
   showBestFitLine: boolean;
@@ -172,6 +212,9 @@ export interface Preferences {
   resourceLinks: ResourceLink[];
   examTimers: ExamTimer[];
   notesHtml: string;
+  notebookFolders: NotebookFolder[];
+  notebookPages: NotebookPage[];
+  notebookDocuments: NotebookDocument[];
   scoreTrendOptions: ScoreTrendOptions;
 }
 

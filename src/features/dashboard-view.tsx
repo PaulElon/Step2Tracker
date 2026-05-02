@@ -8,15 +8,15 @@ import {
   getTodayBlocks,
 } from "../lib/analytics";
 import { formatLongDate, formatMinutes, getTodayKey } from "../lib/datetime";
+import { FF } from "../lib/feature-flags";
 import { secondaryButtonClassName } from "../lib/ui";
 import { useAppStore } from "../state/app-store";
 import { StudyTaskCard } from "../components/study-task-card";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { EmptyState, MetricCard, Panel } from "../components/ui";
-import { RichTextEditor } from "../components/rich-text-editor";
+import { RichTextEditor, RichTextRender, richTextToPlain } from "../components/rich-text-editor";
 
-
-export function DashboardView() {
+export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void }) {
   const { state, upsertStudyBlock, setDailyGoalMinutes, setNotesHtml } = useAppStore();
   const [showTaskEditor, setShowTaskEditor] = useState(false);
   const [editingGoal, setEditingGoal] = useState(false);
@@ -37,6 +37,7 @@ export function DashboardView() {
   const practiceMetrics = getPracticeMetrics(state.practiceTests);
   const remediationLinks = getRemediationLinks(state.practiceTests, state.studyBlocks);
   const uncoveredTopicNames = [...new Set(remediationLinks.flatMap((l) => l.uncoveredTopics))];
+  const hasNotesPreview = !!richTextToPlain(state.preferences.notesHtml).trim();
 
   const commitGoalMinutes = () => {
     const parsedMinutes = Number(goalInputValue);
@@ -237,17 +238,41 @@ export function DashboardView() {
             )}
           </Panel>
 
-          {/* Notes — free text rich editor (Cmd+B/I/U, * → bullet, - → dash, 1. → numbered) */}
-          <Panel title="Notes" className="flex flex-col flex-1 min-h-0">
-            <RichTextEditor
-              value={state.preferences.notesHtml}
-              onChange={(html) => {
-                void setNotesHtml(html);
-              }}
-              placeholder="Type freely. Cmd+B/I/U for bold/italic/underline. * → bullet, - → dashed, 1. → numbered."
-              className="flex-1 min-h-0 overflow-y-auto scrollbar-subtle"
-            />
-          </Panel>
+          {FF.notebook ? (
+            <Panel title="Notes" className="flex flex-col">
+              <div className="panel-subtle flex flex-col gap-3 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Notebook is now primary</p>
+                <p className="text-sm text-slate-300">
+                  Use Notebook for multi-page notes and editing. Dashboard keeps a quick preview of legacy notes.
+                </p>
+                <div className="max-h-40 overflow-y-auto rounded-[18px] border border-white/10 bg-slate-950/45 p-3">
+                  {hasNotesPreview ? (
+                    <div className="rich-text-render text-sm text-slate-200 [&_p]:my-0 [&_li]:my-0.5 [&_ul]:my-1 [&_ol]:my-1">
+                      <RichTextRender html={state.preferences.notesHtml} />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400">No legacy dashboard notes yet. Open Notebook to start writing.</p>
+                  )}
+                </div>
+                {onOpenNotebook ? (
+                  <button type="button" className={secondaryButtonClassName} onClick={onOpenNotebook}>
+                    Open Notebook
+                  </button>
+                ) : null}
+              </div>
+            </Panel>
+          ) : (
+            <Panel title="Notes" className="flex flex-col flex-1 min-h-0">
+              <RichTextEditor
+                value={state.preferences.notesHtml}
+                onChange={(html) => {
+                  void setNotesHtml(html);
+                }}
+                placeholder="Type freely. Cmd+B/I/U for bold/italic/underline. * → bullet, - → dashed, 1. → numbered."
+                className="flex-1 min-h-0 overflow-y-auto scrollbar-subtle"
+              />
+            </Panel>
+          )}
         </div>
       </div>
 

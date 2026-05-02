@@ -25,6 +25,7 @@ import {
   createBootstrapState,
   getLegacyBrowserMigrationPayload,
   matchesBootstrapSeed,
+  normalizeAppState,
 } from "../lib/storage";
 import type {
   AppState,
@@ -32,6 +33,9 @@ import type {
   BackupMetadata,
   ErrorLogInput,
   ImportMode,
+  NotebookFolder,
+  NotebookDocument,
+  NotebookPage,
   PersistenceSummary,
   PlannerFilters,
   PlannerMode,
@@ -68,6 +72,9 @@ interface AppStoreValue {
   setResourceLinks: (links: ResourceLink[]) => Promise<boolean>;
   setExamTimers: (timers: import("../types/models").ExamTimer[]) => Promise<boolean>;
   setNotesHtml: (html: string) => Promise<boolean>;
+  setNotebookFolders: (folders: NotebookFolder[]) => Promise<boolean>;
+  setNotebookPages: (pages: NotebookPage[]) => Promise<boolean>;
+  setNotebookDocuments: (documents: NotebookDocument[]) => Promise<boolean>;
   setScoreTrendOptions: (options: import("../types/models").ScoreTrendOptions) => Promise<boolean>;
   upsertStudyBlock: (block: StudyBlockInput & { id?: string }) => Promise<boolean>;
   duplicateStudyBlock: (id: string, targetDate?: string) => Promise<boolean>;
@@ -175,7 +182,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        startTransition(() => applySnapshot(snapshot));
+        const normalizedSnapshot = {
+          ...snapshot,
+          state: normalizeAppState(snapshot.state),
+        };
+
+        startTransition(() => applySnapshot(normalizedSnapshot));
 
         const legacyPayload = await getLegacyBrowserMigrationPayload();
         if (
@@ -286,6 +298,21 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       savePreferences({
         ...stateRef.current.preferences,
         notesHtml,
+      }),
+    setNotebookFolders: (notebookFolders) =>
+      savePreferences({
+        ...stateRef.current.preferences,
+        notebookFolders,
+      }),
+    setNotebookPages: (notebookPages) =>
+      savePreferences({
+        ...stateRef.current.preferences,
+        notebookPages,
+      }),
+    setNotebookDocuments: (notebookDocuments) =>
+      savePreferences({
+        ...stateRef.current.preferences,
+        notebookDocuments,
       }),
     setScoreTrendOptions: (scoreTrendOptions) =>
       savePreferences({
