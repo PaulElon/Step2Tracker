@@ -7,6 +7,7 @@ import { useAppStore } from "../state/app-store";
 import type { NotebookDocument, NotebookFolder, NotebookPage } from "../types/models";
 
 type NotebookExportFormat = "txt" | "html" | "markdown";
+type NotebookSaveStatus = "idle" | "saving" | "saved" | "error";
 type ActionStatus = null | { kind: "success" | "error"; message: string };
 type PromptState =
   | {
@@ -201,28 +202,39 @@ function deriveLegacyDocuments(pages: NotebookPage[]): NotebookDocument[] {
 }
 
 export function NotebookView() {
-  const { state, setNotebookFolders, setNotebookDocuments } = useAppStore();
+  const { state, setNotebookFolders, setNotebookDocuments: saveNotebookDocuments } = useAppStore();
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
   const [activePageId, setActivePageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [status, setStatus] = useState<ActionStatus>(null);
+  const [saveStatus, setSaveStatus] = useState<NotebookSaveStatus>("idle");
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [tileActionMenu, setTileActionMenu] = useState<TileActionMenuState | null>(null);
   const [promptState, setPromptState] = useState<PromptState | null>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const tileActionMenuRef = useRef<HTMLDivElement>(null);
   const promptInputRef = useRef<HTMLInputElement>(null);
+  const pendingDocumentsRef = useRef<NotebookDocument[] | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveRevisionRef = useRef(0);
+  const lastNotebookSaveResultRef = useRef<"idle" | "saved" | "error">("idle");
+  const isMountedRef = useRef(true);
 
   const notebookFolders = state.preferences.notebookFolders;
-  const notebookDocuments = state.preferences.notebookDocuments;
+  const persistedNotebookDocuments = state.preferences.notebookDocuments;
   const notebookPages = state.preferences.notebookPages;
   const derivedLegacyDocuments = useMemo(
-    () => (notebookDocuments.length === 0 ? deriveLegacyDocuments(notebookPages) : []),
-    [notebookDocuments, notebookPages],
+    () => (persistedNotebookDocuments.length === 0 ? deriveLegacyDocuments(notebookPages) : []),
+    [persistedNotebookDocuments, notebookPages],
   );
-  const displayDocuments = notebookDocuments.length > 0 ? notebookDocuments : derivedLegacyDocuments;
-  const isUsingLegacyDocuments = notebookDocuments.length === 0 && derivedLegacyDocuments.length > 0;
+  const isUsingLegacyDocuments = persistedNotebookDocuments.length === 0 && derivedLegacyDocuments.length > 0;
+  const [isLegacyFallbackActive, setIsLegacyFallbackActive] = useState(isUsingLegacyDocuments);
+  const isLegacyFallbackActiveRef = useRef(isUsingLegacyDocuments);
+  const [notebookDocuments, setNotebookDocuments] = useState<NotebookDocument[]>(
+    () => (isUsingLegacyDocuments ? derivedLegacyDocuments : persistedNotebookDocuments),
+  );
+  const displayDocuments = notebookDocuments;
 
   const sortedFolders = useMemo(() => sortByOrder(notebookFolders), [notebookFolders]);
   const sortedDocuments = useMemo(() => sortByOrder(displayDocuments), [displayDocuments]);
@@ -262,7 +274,107 @@ export function NotebookView() {
     () => activePages.find((page) => page.id === activePageId) ?? activePages[0] ?? null,
     [activePageId, activePages],
   );
-  const editableDocuments = notebookDocuments.length > 0 ? notebookDocuments : derivedLegacyDocuments;
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (saveTimerRef.current !== null) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      void flushPendingNotebookSave();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (pendingDocumentsRef.current !== null) {
+      return;
+    }
+
+    const nextDocuments = isLegacyFallbackActive
+      ? persistedNotebookDocuments.length > 0
+        ? persistedNotebookDocuments
+        : derivedLegacyDocuments
+      : persistedNotebookDocuments;
+    setNotebookDocuments(nextDocuments);
+  }, [derivedLegacyDocuments, isLegacyFallbackActive, persistedNotebookDocuments]);
+
+  function setSaveIndicator(next: NotebookSaveStatus) {
+    if (isMountedRef.current) {
+      setSaveStatus(next);
+    }
+  }
+
+  function setLegacyFallbackActive(next: boolean) {
+    isLegacyFallbackActiveRef.current = next;
+    if (isMountedRef.current) {
+      setIsLegacyFallbackActive(next);
+    }
+  }
+
+  function scheduleNotebookDocumentsSave(nextDocuments: NotebookDocument[]) {
+    pendingDocumentsRef.current = nextDocuments;
+    lastNotebookSaveResultRef.current = "idle";
+    saveRevisionRef.current += 1;
+    if (saveTimerRef.current !== null) {
+      clearTimeout(saveTimerRef.current);
+    }
+    setSaveIndicator("saving");
+    const revision = saveRevisionRef.current;
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      void flushPendingNotebookSave(revision);
+    }, 500);
+  }
+
+  async function flushPendingNotebookSave(expectedRevision = saveRevisionRef.current): Promise<void> {
+    if (saveTimerRef.current !== null) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    const docs = pendingDocumentsRef.current;
+    if (!docs) {
+      return;
+    }
+
+    setSaveIndicator("saving");
+    try {
+      const saved = await saveNotebookDocuments(docs);
+      if (expectedRevision !== saveRevisionRef.current) {
+        return;
+      }
+      lastNotebookSaveResultRef.current = saved ? "saved" : "error";
+      if (saved) {
+        pendingDocumentsRef.current = null;
+        if (isLegacyFallbackActiveRef.current) {
+          setLegacyFallbackActive(false);
+        }
+        setSaveIndicator("saved");
+      } else {
+        setSaveIndicator("error");
+      }
+    } catch {
+      if (expectedRevision !== saveRevisionRef.current) {
+        return;
+      }
+      lastNotebookSaveResultRef.current = "error";
+      setSaveIndicator("error");
+    }
+  }
+
+  function replaceNotebookDocuments(nextDocuments: NotebookDocument[]) {
+    setNotebookDocuments(nextDocuments);
+    scheduleNotebookDocumentsSave(nextDocuments);
+  }
+
+  async function persistNotebookDocuments(nextDocuments: NotebookDocument[]) {
+    replaceNotebookDocuments(nextDocuments);
+    await flushPendingNotebookSave();
+    return lastNotebookSaveResultRef.current !== "error";
+  }
 
   useEffect(() => {
     if (currentFolderId && !folderById.has(currentFolderId)) {
@@ -332,16 +444,16 @@ export function NotebookView() {
   }
 
   function updateDocument(documentId: string, updater: (document: NotebookDocument) => NotebookDocument) {
-    const nextDocuments = editableDocuments.map((document) => (document.id === documentId ? updater(document) : document));
-    void setNotebookDocuments(nextDocuments);
+    const nextDocuments = notebookDocuments.map((document) => (document.id === documentId ? updater(document) : document));
+    replaceNotebookDocuments(nextDocuments);
   }
 
   async function ensureLegacyDocumentsMaterialized() {
-    if (!isUsingLegacyDocuments) {
+    if (!isLegacyFallbackActiveRef.current) {
       return true;
     }
 
-    const saved = await setNotebookDocuments(derivedLegacyDocuments);
+    const saved = await persistNotebookDocuments(notebookDocuments);
     if (!saved) {
       setStatus({
         kind: "error",
@@ -354,6 +466,7 @@ export function NotebookView() {
   }
 
   async function openDocument(document: NotebookDocument) {
+    await flushPendingNotebookSave();
     if (!(await ensureLegacyDocumentsMaterialized())) {
       return;
     }
@@ -376,7 +489,8 @@ export function NotebookView() {
     setStatus(null);
   }
 
-  function goBackToLibrary() {
+  async function goBackToLibrary() {
+    await flushPendingNotebookSave();
     setCurrentFolderId(activeDocument?.folderId ?? currentFolderId ?? null);
     setActiveDocumentId(null);
     setActivePageId(null);
@@ -441,7 +555,8 @@ export function NotebookView() {
       return false;
     }
 
-    const sourceDocuments = editableDocuments;
+    await flushPendingNotebookSave();
+    const sourceDocuments = notebookDocuments;
     const now = nowIso();
     const firstPage = createPage("Page 1", 0);
     const nextDocument: NotebookDocument = {
@@ -456,7 +571,7 @@ export function NotebookView() {
       createdAt: now,
       updatedAt: now,
     };
-    const saved = await setNotebookDocuments([...sourceDocuments, nextDocument]);
+    const saved = await persistNotebookDocuments([...sourceDocuments, nextDocument]);
     if (!saved) {
       setStatus({
         kind: "error",
@@ -519,11 +634,24 @@ export function NotebookView() {
       return;
     }
 
-    updateDocument(documentId, (current) => ({
-      ...current,
-      favorited: current.favorited !== true,
-      updatedAt: nowIso(),
-    }));
+    await flushPendingNotebookSave();
+    const nextDocuments = notebookDocuments.map((document) =>
+      document.id === documentId
+        ? {
+            ...document,
+            favorited: document.favorited !== true,
+            updatedAt: nowIso(),
+          }
+        : document,
+    );
+    const saved = await persistNotebookDocuments(nextDocuments);
+    if (!saved) {
+      setStatus({
+        kind: "error",
+        message: "Unable to update this document.",
+      });
+      return;
+    }
     setStatus(null);
   }
 
@@ -536,7 +664,9 @@ export function NotebookView() {
     if (!window.confirm(`Delete document "${document.title}"?`)) {
       return;
     }
-    void setNotebookDocuments(editableDocuments.filter((entry) => entry.id !== document.id));
+    await flushPendingNotebookSave();
+    const nextDocuments = notebookDocuments.filter((entry) => entry.id !== document.id);
+    await persistNotebookDocuments(nextDocuments);
     if (activeDocumentId === document.id) {
       setActiveDocumentId(null);
       setActivePageId(null);
@@ -560,21 +690,50 @@ export function NotebookView() {
     if (!activeDocument) {
       return;
     }
-    updateDocument(activeDocument.id, (current) => ({
-      ...current,
-      folderId: folderId || undefined,
-      updatedAt: nowIso(),
-    }));
+    void (async () => {
+      await flushPendingNotebookSave();
+      const nextDocuments = notebookDocuments.map((document) =>
+        document.id === activeDocument.id
+          ? {
+              ...document,
+              folderId: folderId || undefined,
+              updatedAt: nowIso(),
+            }
+          : document,
+      );
+      const saved = await persistNotebookDocuments(nextDocuments);
+      if (!saved) {
+        setStatus({
+          kind: "error",
+          message: "Unable to update this document.",
+        });
+      } else {
+        setStatus(null);
+      }
+    })();
   }
 
-  function addPageToDocument(document: NotebookDocument) {
+  async function addPageToDocument(document: NotebookDocument) {
+    await flushPendingNotebookSave();
     const nextOrder = document.pages.reduce((maxOrder, page) => Math.max(maxOrder, page.order), -1) + 1;
     const nextPage = createPage(`Page ${nextOrder + 1}`, nextOrder);
-    updateDocument(document.id, (current) => ({
-      ...current,
-      pages: [...current.pages, nextPage],
-      updatedAt: nowIso(),
-    }));
+    const nextDocuments = notebookDocuments.map((current) =>
+      current.id === document.id
+        ? {
+            ...current,
+            pages: [...current.pages, nextPage],
+            updatedAt: nowIso(),
+          }
+        : current,
+    );
+    const saved = await persistNotebookDocuments(nextDocuments);
+    if (!saved) {
+      setStatus({
+        kind: "error",
+        message: "Unable to add a page to this document.",
+      });
+      return;
+    }
     setActivePageId(nextPage.id);
     setStatus(null);
   }
@@ -590,7 +749,7 @@ export function NotebookView() {
     }));
   }
 
-  function deleteActivePage() {
+  async function deleteActivePage() {
     if (!activeDocument || !activePage) {
       return;
     }
@@ -598,13 +757,26 @@ export function NotebookView() {
       return;
     }
 
+    await flushPendingNotebookSave();
     if (activePages.length <= 1) {
       const replacement = createPage("Page 1", 0);
-      updateDocument(activeDocument.id, (current) => ({
-        ...current,
-        pages: [replacement],
-        updatedAt: nowIso(),
-      }));
+      const nextDocuments = notebookDocuments.map((current) =>
+        current.id === activeDocument.id
+          ? {
+              ...current,
+              pages: [replacement],
+              updatedAt: nowIso(),
+            }
+          : current,
+      );
+      const saved = await persistNotebookDocuments(nextDocuments);
+      if (!saved) {
+        setStatus({
+          kind: "error",
+          message: "Unable to delete this page.",
+        });
+        return;
+      }
       setActivePageId(replacement.id);
       setStatus(null);
       return;
@@ -612,11 +784,23 @@ export function NotebookView() {
 
     const remainingPages = activePages.filter((page) => page.id !== activePage.id);
     const nextPage = remainingPages[0] ?? null;
-    updateDocument(activeDocument.id, (current) => ({
-      ...current,
-      pages: current.pages.filter((page) => page.id !== activePage.id),
-      updatedAt: nowIso(),
-    }));
+    const nextDocuments = notebookDocuments.map((current) =>
+      current.id === activeDocument.id
+        ? {
+            ...current,
+            pages: current.pages.filter((page) => page.id !== activePage.id),
+            updatedAt: nowIso(),
+          }
+        : current,
+    );
+    const saved = await persistNotebookDocuments(nextDocuments);
+    if (!saved) {
+      setStatus({
+        kind: "error",
+        message: "Unable to delete this page.",
+      });
+      return;
+    }
     setActivePageId(nextPage?.id ?? null);
     setStatus(null);
   }
@@ -701,16 +885,17 @@ export function NotebookView() {
       return false;
     }
 
-    const nextDocuments = editableDocuments.map((document) =>
+    await flushPendingNotebookSave();
+    const nextDocuments = notebookDocuments.map((document) =>
       document.id === documentId
         ? {
             ...document,
             title,
             updatedAt: nowIso(),
-          }
+        }
         : document,
     );
-    const saved = await setNotebookDocuments(nextDocuments);
+    const saved = await persistNotebookDocuments(nextDocuments);
     if (!saved) {
       setStatus({
         kind: "error",
@@ -803,6 +988,14 @@ export function NotebookView() {
 
   const isLibraryMode = activeDocumentId === null;
   const hasLibraryResults = visibleFolders.length > 0 || visibleDocuments.length > 0;
+  const saveIndicatorClass =
+    saveStatus === "error"
+      ? "border-rose-400/20 bg-rose-500/8 text-rose-100"
+      : saveStatus === "saved"
+        ? "border-emerald-300/20 bg-emerald-400/8 text-emerald-50"
+        : "border-cyan-300/20 bg-cyan-400/8 text-cyan-50";
+  const saveIndicatorLabel =
+    saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : saveStatus === "error" ? "Save failed" : null;
   const statusClass =
     status?.kind === "error"
       ? "border-rose-400/20 bg-rose-500/8 text-rose-100"
@@ -1124,7 +1317,7 @@ export function NotebookView() {
               {activeDocument ? (
                 <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
                   <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
-                    <button type="button" onClick={goBackToLibrary} className={toolbarButtonClass}>
+                    <button type="button" onClick={() => void goBackToLibrary()} className={toolbarButtonClass}>
                       Back to Library
                     </button>
                     <label className="min-w-0 flex-[2]">
@@ -1203,10 +1396,15 @@ export function NotebookView() {
                           </div>
                         ) : null}
                       </div>
-                      <button type="button" onClick={() => handleDeleteDocument(activeDocument)} className={editorDangerButtonClass}>
+                      <button type="button" onClick={() => void handleDeleteDocument(activeDocument)} className={editorDangerButtonClass}>
                         Delete Document
                       </button>
                     </div>
+                    {saveIndicatorLabel ? (
+                      <div className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none ${saveIndicatorClass}`}>
+                        {saveIndicatorLabel}
+                      </div>
+                    ) : null}
                   </div>
 
                   {status ? <div className={`self-start ${compactStatusClass} ${statusClass}`}>{status.message}</div> : null}
@@ -1263,7 +1461,7 @@ export function NotebookView() {
                             </label>
                             <button
                               type="button"
-                              onClick={deleteActivePage}
+                              onClick={() => void deleteActivePage()}
                               className="ml-auto inline-flex h-8 shrink-0 items-center justify-center rounded-full border border-transparent bg-transparent px-2 text-xs font-medium text-rose-300 transition hover:border-rose-300/15 hover:bg-rose-400/8 hover:text-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300/20 focus-visible:ring-offset-0"
                             >
                               Delete Page
