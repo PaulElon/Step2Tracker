@@ -591,28 +591,13 @@ html {
 body {
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(circle at top left, var(--app-glow-1), transparent 26%),
-    radial-gradient(circle at bottom right, var(--app-glow-2), transparent 22%),
-    linear-gradient(180deg, var(--app-bg-1) 0%, var(--app-bg-2) 52%, var(--app-bg-3) 100%);
+  background: linear-gradient(180deg, var(--app-bg-1) 0%, var(--app-bg-2) 52%, var(--app-bg-3) 100%);
   color: #eff6ff;
   font-family: var(--font-sans);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background 240ms ease;
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: radial-gradient(circle at center, black 32%, transparent 84%);
 }
 
 #root {
@@ -1737,4 +1722,160 @@ button {
   .scrollbar-subtle::-webkit-scrollbar-track {
     background: transparent;
   }
+}
+
+/* ----------------------------------------------------------------- */
+/* Light-background theme: Tiptap editor overrides                   */
+/* The core tiptap CSS uses hardcoded dark values; these override     */
+/* them for themes with light backgrounds (light, maggiepink).        */
+/* ----------------------------------------------------------------- */
+
+/* Tiptap workspace background */
+:root[data-theme="light"] .tiptap-editor--pageless,
+:root[data-theme="light"] .tiptap-editor--page,
+:root[data-theme="maggiepink"] .tiptap-editor--pageless,
+:root[data-theme="maggiepink"] .tiptap-editor--page {
+  background: var(--panel-bg);
+}
+
+/* Tiptap toolbar */
+:root[data-theme="light"] .tiptap-editor__toolbar,
+:root[data-theme="maggiepink"] .tiptap-editor__toolbar {
+  background: var(--panel-support-bg);
+  border-bottom-color: var(--panel-support-border);
+}
+
+/* Tiptap toolbar buttons */
+:root[data-theme="light"] .tiptap-editor__button,
+:root[data-theme="maggiepink"] .tiptap-editor__button {
+  color: var(--rich-text);
+}
+
+:root[data-theme="light"] .tiptap-editor__button:hover:not(:disabled),
+:root[data-theme="maggiepink"] .tiptap-editor__button:hover:not(:disabled) {
+  background: var(--primary-start);
+  color: var(--rich-text);
+}
+
+:root[data-theme="light"] .tiptap-editor__button--active:not(:disabled),
+:root[data-theme="maggiepink"] .tiptap-editor__button--active:not(:disabled) {
+  background: var(--primary-start);
+  color: var(--rich-text);
+}
+
+/* Font-size control */
+:root[data-theme="light"] .tiptap-fontsize__btn,
+:root[data-theme="maggiepink"] .tiptap-fontsize__btn {
+  color: var(--rich-text);
+}
+
+:root[data-theme="light"] .tiptap-fontsize__btn:hover:not(:disabled),
+:root[data-theme="maggiepink"] .tiptap-fontsize__btn:hover:not(:disabled) {
+  background: var(--primary-start);
+  color: var(--rich-text);
+}
+
+:root[data-theme="light"] .tiptap-fontsize__display,
+:root[data-theme="maggiepink"] .tiptap-fontsize__display {
+  color: var(--rich-text);
+}
+
+/* Dropdown panels */
+:root[data-theme="light"] .tiptap-dd__panel,
+:root[data-theme="maggiepink"] .tiptap-dd__panel {
+  background: var(--panel-bg);
+  border-color: var(--panel-border);
+  box-shadow: 0 10px 32px var(--panel-shadow), 0 2px 8px var(--panel-shadow);
+}
+
+:root[data-theme="light"] .tiptap-dd__item,
+:root[data-theme="maggiepink"] .tiptap-dd__item {
+  color: var(--rich-text);
+}
+
+:root[data-theme="light"] .tiptap-dd__item:hover,
+:root[data-theme="maggiepink"] .tiptap-dd__item:hover {
+  background: var(--surface-muted);
+  color: var(--rich-text);
+}
+
+:root[data-theme="light"] .tiptap-dd__item--active,
+:root[data-theme="maggiepink"] .tiptap-dd__item--active {
+  background: var(--primary-start);
+  color: var(--rich-text);
+}
+
+:root[data-theme="light"] .tiptap-dd__item--active::before,
+:root[data-theme="maggiepink"] .tiptap-dd__item--active::before {
+  color: var(--rich-text-muted);
+}
+
+/* Headings in the editor content area */
+:root[data-theme="light"] .tiptap-editor .ProseMirror h1,
+:root[data-theme="light"] .tiptap-editor .ProseMirror h2,
+:root[data-theme="light"] .tiptap-editor .ProseMirror h3,
+:root[data-theme="maggiepink"] .tiptap-editor .ProseMirror h1,
+:root[data-theme="maggiepink"] .tiptap-editor .ProseMirror h2,
+:root[data-theme="maggiepink"] .tiptap-editor .ProseMirror h3 {
+  color: var(--rich-text);
+}
+
+/* Links in editor content */
+:root[data-theme="light"] .tiptap-editor .ProseMirror a,
+:root[data-theme="light"] .tiptap-editor .ProseMirror a:visited {
+  color: #0050e6;
+  text-decoration-color: rgba(0, 80, 230, 0.5);
+}
+
+:root[data-theme="light"] .tiptap-editor .ProseMirror a:hover {
+  color: #003ab3;
+  text-decoration-color: rgba(0, 58, 179, 0.7);
+}
+
+:root[data-theme="maggiepink"] .tiptap-editor .ProseMirror a,
+:root[data-theme="maggiepink"] .tiptap-editor .ProseMirror a:visited {
+  color: #9e0052;
+  text-decoration-color: rgba(158, 0, 82, 0.5);
+}
+
+:root[data-theme="maggiepink"] .tiptap-editor .ProseMirror a:hover {
+  color: #700039;
+  text-decoration-color: rgba(112, 0, 57, 0.7);
+}
+
+/* Tables — avoid the dark-gray inherited defaults */
+:root[data-theme="light"] .tiptap-editor .ProseMirror table td,
+:root[data-theme="maggiepink"] .tiptap-editor .ProseMirror table td {
+  background: var(--field-bg);
+  color: var(--rich-text);
+}
+
+:root[data-theme="light"] .tiptap-editor .ProseMirror table th,
+:root[data-theme="maggiepink"] .tiptap-editor .ProseMirror table th {
+  background: var(--surface-muted);
+  color: var(--rich-text);
+}
+
+/* Inline code and code blocks */
+:root[data-theme="light"] .tiptap-editor .ProseMirror :not(pre) > code,
+:root[data-theme="maggiepink"] .tiptap-editor .ProseMirror :not(pre) > code {
+  background: var(--surface-muted);
+  color: var(--rich-text);
+}
+
+:root[data-theme="light"] .tiptap-editor .ProseMirror pre,
+:root[data-theme="maggiepink"] .tiptap-editor .ProseMirror pre {
+  background: var(--surface-muted);
+  border-color: var(--panel-border);
+}
+
+:root[data-theme="light"] .tiptap-editor .ProseMirror pre code,
+:root[data-theme="maggiepink"] .tiptap-editor .ProseMirror pre code {
+  color: var(--rich-text);
+}
+
+/* Scrollbar thumb on light themes */
+:root[data-theme="light"] .scrollbar-subtle::-webkit-scrollbar-thumb,
+:root[data-theme="maggiepink"] .scrollbar-subtle::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.14);
 }
