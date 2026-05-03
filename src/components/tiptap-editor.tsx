@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Extension, type Editor } from "@tiptap/core";
+import { Plugin } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -17,6 +18,7 @@ import Underline from "@tiptap/extension-underline";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import type { NotebookEditorProps } from "./notebook-editor-adapter";
+import { uploadNotebookImage } from "../lib/notebook-images";
 
 type MenuId = "style" | "textColor" | "highlight" | "align" | "list" | "table" | "link";
 type OpenMenu = MenuId | null;
@@ -307,14 +309,30 @@ export function TiptapEditor({
 
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const [fontSizeLocal, setFontSizeLocal] = useState(16);
+  const [isUploading, setIsUploading] = useState(false);
 
   const toolbarRef = useRef<HTMLDivElement>(null);
   const fontSizeInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const setFontSizeLocalRef = useRef(setFontSizeLocal);
+  const uploadHandlerRef = useRef<(file: File) => Promise<void>>(async () => {});
   setFontSizeLocalRef.current = setFontSizeLocal;
 
   onChangeRef.current = onChange;
   valueRef.current = value || "";
+
+  // Always-current upload handler; captured by the ProseMirror plugin via ref.
+  uploadHandlerRef.current = async (file: File) => {
+    setIsUploading(true);
+    try {
+      const src = await uploadNotebookImage(file);
+      editor?.chain().focus().setImage({ src }).run();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const toggleMenu = useCallback((id: MenuId) => {
     setOpenMenu((prev) => (prev === id ? null : id));
@@ -373,6 +391,35 @@ export function TiptapEditor({
       }),
       Image.configure({ inline: false, allowBase64: false }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
+      Extension.create({
+        name: "imageUpload",
+        addProseMirrorPlugins() {
+          return [
+            new Plugin({
+              props: {
+                handlePaste(_view, event) {
+                  const items = Array.from(event.clipboardData?.items ?? []);
+                  const imageItem = items.find((i) => i.type.startsWith("image/"));
+                  if (!imageItem) return false;
+                  const file = imageItem.getAsFile();
+                  if (!file) return false;
+                  event.preventDefault();
+                  void uploadHandlerRef.current(file);
+                  return true;
+                },
+                handleDrop(_view, event) {
+                  const files = Array.from(event.dataTransfer?.files ?? []);
+                  const imageFile = files.find((f) => f.type.startsWith("image/"));
+                  if (!imageFile) return false;
+                  event.preventDefault();
+                  void uploadHandlerRef.current(imageFile);
+                  return true;
+                },
+              },
+            }),
+          ];
+        },
+      }),
     ],
     [],
   );
@@ -446,13 +493,15 @@ export function TiptapEditor({
   }, [editor, closeMenu]);
 
   const insertImage = () => {
-    if (!editor) return;
-    const nextSrc = window.prompt("Enter image URL", "");
-    if (nextSrc == null) return;
-    const trimmedSrc = nextSrc.trim();
-    if (!trimmedSrc) return;
-    const normalizedSrc = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmedSrc) ? trimmedSrc : `https://${trimmedSrc}`;
-    editor.chain().focus().setImage({ src: normalizedSrc }).run();
+    if (!editor || isUploading) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    void uploadHandlerRef.current(file);
   };
 
   const setTextColor = (color: string | null) => {
@@ -766,7 +815,12 @@ export function TiptapEditor({
       </DropdownMenu>
 
       {/* Image — larger picture-frame icon */}
-      <ToolbarButton title="Insert image" active={isImage} disabled={!isEditorReady} onClick={insertImage}>
+      <ToolbarButton
+        title={isUploading ? "Uploading…" : "Insert image"}
+        active={isImage}
+        disabled={!isEditorReady || isUploading}
+        onClick={insertImage}
+      >
         <ImageFrameIcon />
       </ToolbarButton>
 
@@ -845,6 +899,13 @@ export function TiptapEditor({
   return (
     <div className={wrapperClassName} style={{ minHeight, maxHeight: scrollable ? "180px" : undefined }}>
       {toolbar}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        style={{ display: "none" }}
+        onChange={handleFileInputChange}
+      />
       <EditorContent editor={editor} className="tiptap-editor__content flex min-h-0 flex-1 scrollbar-subtle" />
     </div>
   );
