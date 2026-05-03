@@ -14,16 +14,10 @@ export type SortDirection = "asc" | "desc";
 export type ImportMode = "merge" | "replace";
 export type PlannerMode = "week" | "month";
 export type ThemeId =
-  | "aurora"
-  | "ember"
-  | "tide"
-  | "bubblegum"
-  | "signal"
-  | "prism"
-  | "maggiepink"
+  | "dark"
   | "light"
   | "paulblue"
-  | "teslared";
+  | "maggiepink";
 export type WeakTopicPriority = "High" | "Medium" | "Low";
 export type WeakTopicStatus = "Active" | "Improving" | "Resolved";
 export type WeakTopicEntryType = "manual" | "practice-test";

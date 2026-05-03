@@ -51,162 +51,6 @@
   --lane-admin-border: rgba(127, 242, 180, 0.2);
 }
 
-:root[data-theme="ember"] {
-  --app-bg-1: #12090a;
-  --app-bg-2: #1b1113;
-  --app-bg-3: #251817;
-  --app-glow-1: rgba(255, 180, 84, 0.14);
-  --app-glow-2: rgba(255, 126, 107, 0.12);
-  --panel-bg: rgba(20, 11, 12, 0.62);
-  --panel-border: rgba(255, 238, 214, 0.08);
-  --panel-shadow: rgba(12, 6, 6, 0.58);
-  --panel-support-bg: rgba(34, 19, 18, 0.72);
-  --panel-support-border: rgba(255, 238, 214, 0.08);
-  --panel-support-shadow: rgba(12, 6, 6, 0.34);
-  --surface-muted: rgba(45, 28, 26, 0.52);
-  --field-bg: rgba(39, 23, 22, 0.78);
-  --field-focus: rgba(255, 180, 84, 0.18);
-  --field-border-strong: rgba(255, 126, 107, 0.4);
-  --focus-ring-inner: rgba(255, 180, 84, 0.18);
-  --focus-ring-outer: rgba(255, 126, 107, 0.5);
-  --primary-start: rgba(255, 212, 128, 0.18);
-  --primary-end: rgba(255, 126, 107, 0.18);
-  --primary-border: rgba(255, 180, 84, 0.28);
-  --selection: rgba(255, 180, 84, 0.22);
-  --lane-review-start: rgba(247, 198, 161, 0.22);
-  --lane-review-end: rgba(255, 154, 118, 0.12);
-  --lane-review-border: rgba(247, 198, 161, 0.22);
-  --lane-content-start: rgba(255, 212, 128, 0.2);
-  --lane-content-end: rgba(255, 180, 84, 0.12);
-  --lane-content-border: rgba(255, 180, 84, 0.2);
-  --lane-assessment-start: rgba(255, 126, 107, 0.22);
-  --lane-assessment-end: rgba(255, 179, 162, 0.14);
-  --lane-assessment-border: rgba(255, 126, 107, 0.22);
-  --lane-recovery-start: rgba(159, 139, 125, 0.18);
-  --lane-recovery-end: rgba(212, 192, 178, 0.08);
-  --lane-recovery-border: rgba(159, 139, 125, 0.22);
-  --lane-admin-start: rgba(155, 228, 162, 0.18);
-  --lane-admin-end: rgba(106, 208, 181, 0.12);
-  --lane-admin-border: rgba(155, 228, 162, 0.2);
-}
-
-:root[data-theme="tide"] {
-  --app-bg-1: #04101a;
-  --app-bg-2: #071a24;
-  --app-bg-3: #0b2432;
-  --app-glow-1: rgba(106, 216, 255, 0.18);
-  --app-glow-2: rgba(98, 241, 196, 0.12);
-  --panel-bg: rgba(6, 18, 31, 0.6);
-  --panel-border: rgba(222, 236, 248, 0.08);
-  --panel-shadow: rgba(4, 12, 21, 0.6);
-  --panel-support-bg: rgba(10, 26, 40, 0.72);
-  --panel-support-border: rgba(222, 236, 248, 0.08);
-  --panel-support-shadow: rgba(4, 12, 21, 0.36);
-  --surface-muted: rgba(15, 34, 48, 0.54);
-  --field-bg: rgba(9, 27, 40, 0.76);
-  --field-focus: rgba(106, 216, 255, 0.18);
-  --field-border-strong: rgba(98, 241, 196, 0.42);
-  --focus-ring-inner: rgba(106, 216, 255, 0.18);
-  --focus-ring-outer: rgba(98, 241, 196, 0.5);
-  --primary-start: rgba(106, 216, 255, 0.18);
-  --primary-end: rgba(98, 241, 196, 0.18);
-  --primary-border: rgba(106, 216, 255, 0.28);
-  --selection: rgba(106, 216, 255, 0.22);
-  --lane-review-start: rgba(158, 176, 255, 0.22);
-  --lane-review-end: rgba(226, 176, 255, 0.12);
-  --lane-review-border: rgba(158, 176, 255, 0.22);
-  --lane-content-start: rgba(106, 216, 255, 0.2);
-  --lane-content-end: rgba(98, 241, 196, 0.12);
-  --lane-content-border: rgba(106, 216, 255, 0.2);
-  --lane-assessment-start: rgba(255, 208, 138, 0.22);
-  --lane-assessment-end: rgba(255, 151, 183, 0.14);
-  --lane-assessment-border: rgba(255, 208, 138, 0.22);
-  --lane-recovery-start: rgba(126, 147, 170, 0.18);
-  --lane-recovery-end: rgba(190, 208, 227, 0.08);
-  --lane-recovery-border: rgba(126, 147, 170, 0.22);
-  --lane-admin-start: rgba(126, 240, 181, 0.18);
-  --lane-admin-end: rgba(106, 216, 255, 0.12);
-  --lane-admin-border: rgba(126, 240, 181, 0.2);
-}
-
-:root[data-theme="bubblegum"] {
-  --app-bg-1: #1a0713;
-  --app-bg-2: #210a18;
-  --app-bg-3: #311124;
-  --app-glow-1: rgba(255, 105, 199, 0.18);
-  --app-glow-2: rgba(255, 154, 213, 0.14);
-  --panel-bg: rgba(28, 10, 20, 0.62);
-  --panel-border: rgba(255, 241, 246, 0.1);
-  --panel-shadow: rgba(18, 4, 13, 0.62);
-  --panel-support-bg: rgba(44, 15, 28, 0.72);
-  --panel-support-border: rgba(255, 241, 246, 0.08);
-  --panel-support-shadow: rgba(18, 4, 13, 0.36);
-  --surface-muted: rgba(55, 20, 39, 0.56);
-  --field-bg: rgba(43, 16, 30, 0.78);
-  --field-focus: rgba(255, 105, 199, 0.18);
-  --field-border-strong: rgba(255, 154, 213, 0.42);
-  --focus-ring-inner: rgba(255, 105, 199, 0.2);
-  --focus-ring-outer: rgba(255, 154, 213, 0.55);
-  --primary-start: rgba(255, 105, 199, 0.18);
-  --primary-end: rgba(255, 184, 107, 0.18);
-  --primary-border: rgba(255, 105, 199, 0.3);
-  --selection: rgba(255, 105, 199, 0.24);
-  --lane-review-start: rgba(255, 154, 213, 0.22);
-  --lane-review-end: rgba(255, 192, 234, 0.12);
-  --lane-review-border: rgba(255, 154, 213, 0.22);
-  --lane-content-start: rgba(255, 105, 199, 0.2);
-  --lane-content-end: rgba(255, 154, 213, 0.12);
-  --lane-content-border: rgba(255, 105, 199, 0.2);
-  --lane-assessment-start: rgba(255, 184, 107, 0.22);
-  --lane-assessment-end: rgba(255, 138, 176, 0.14);
-  --lane-assessment-border: rgba(255, 184, 107, 0.22);
-  --lane-recovery-start: rgba(199, 138, 166, 0.18);
-  --lane-recovery-end: rgba(242, 191, 216, 0.08);
-  --lane-recovery-border: rgba(199, 138, 166, 0.22);
-  --lane-admin-start: rgba(142, 240, 203, 0.18);
-  --lane-admin-end: rgba(124, 231, 255, 0.12);
-  --lane-admin-border: rgba(142, 240, 203, 0.2);
-}
-
-:root[data-theme="signal"] {
-  --app-bg-1: #02110f;
-  --app-bg-2: #071915;
-  --app-bg-3: #0c2320;
-  --app-glow-1: rgba(77, 246, 212, 0.18);
-  --app-glow-2: rgba(140, 251, 110, 0.12);
-  --panel-bg: rgba(5, 20, 18, 0.62);
-  --panel-border: rgba(230, 255, 249, 0.1);
-  --panel-shadow: rgba(1, 9, 8, 0.62);
-  --panel-support-bg: rgba(10, 28, 25, 0.74);
-  --panel-support-border: rgba(230, 255, 249, 0.08);
-  --panel-support-shadow: rgba(1, 9, 8, 0.36);
-  --surface-muted: rgba(14, 37, 34, 0.56);
-  --field-bg: rgba(8, 30, 27, 0.78);
-  --field-focus: rgba(77, 246, 212, 0.18);
-  --field-border-strong: rgba(140, 251, 110, 0.4);
-  --focus-ring-inner: rgba(77, 246, 212, 0.2);
-  --focus-ring-outer: rgba(140, 251, 110, 0.52);
-  --primary-start: rgba(77, 246, 212, 0.18);
-  --primary-end: rgba(140, 251, 110, 0.18);
-  --primary-border: rgba(77, 246, 212, 0.3);
-  --selection: rgba(77, 246, 212, 0.24);
-  --lane-review-start: rgba(110, 168, 255, 0.22);
-  --lane-review-end: rgba(176, 140, 255, 0.12);
-  --lane-review-border: rgba(110, 168, 255, 0.22);
-  --lane-content-start: rgba(77, 246, 212, 0.2);
-  --lane-content-end: rgba(140, 251, 110, 0.12);
-  --lane-content-border: rgba(77, 246, 212, 0.2);
-  --lane-assessment-start: rgba(255, 224, 122, 0.22);
-  --lane-assessment-end: rgba(255, 125, 159, 0.14);
-  --lane-assessment-border: rgba(255, 224, 122, 0.22);
-  --lane-recovery-start: rgba(136, 185, 176, 0.18);
-  --lane-recovery-end: rgba(196, 236, 228, 0.08);
-  --lane-recovery-border: rgba(136, 185, 176, 0.22);
-  --lane-admin-start: rgba(140, 251, 110, 0.18);
-  --lane-admin-end: rgba(77, 246, 212, 0.12);
-  --lane-admin-border: rgba(140, 251, 110, 0.2);
-}
-
 :root[data-theme="maggiepink"] {
   color-scheme: light;
   --app-bg-1: #fdf0f5;
@@ -247,46 +91,7 @@
   --lane-admin-border: rgba(10, 122, 69, 0.2);
 }
 
-:root[data-theme="prism"] {
-  --app-bg-1: #0b0717;
-  --app-bg-2: #120c22;
-  --app-bg-3: #1c1433;
-  --app-glow-1: rgba(143, 123, 255, 0.18);
-  --app-glow-2: rgba(88, 215, 255, 0.14);
-  --panel-bg: rgba(17, 11, 33, 0.62);
-  --panel-border: rgba(241, 239, 255, 0.1);
-  --panel-shadow: rgba(8, 4, 17, 0.62);
-  --panel-support-bg: rgba(24, 16, 47, 0.74);
-  --panel-support-border: rgba(241, 239, 255, 0.08);
-  --panel-support-shadow: rgba(8, 4, 17, 0.36);
-  --surface-muted: rgba(31, 22, 58, 0.56);
-  --field-bg: rgba(27, 18, 51, 0.78);
-  --field-focus: rgba(143, 123, 255, 0.18);
-  --field-border-strong: rgba(88, 215, 255, 0.4);
-  --focus-ring-inner: rgba(143, 123, 255, 0.2);
-  --focus-ring-outer: rgba(88, 215, 255, 0.52);
-  --primary-start: rgba(143, 123, 255, 0.18);
-  --primary-end: rgba(88, 215, 255, 0.18);
-  --primary-border: rgba(143, 123, 255, 0.3);
-  --selection: rgba(143, 123, 255, 0.24);
-  --lane-review-start: rgba(255, 125, 242, 0.22);
-  --lane-review-end: rgba(194, 124, 255, 0.12);
-  --lane-review-border: rgba(255, 125, 242, 0.22);
-  --lane-content-start: rgba(88, 215, 255, 0.2);
-  --lane-content-end: rgba(143, 123, 255, 0.12);
-  --lane-content-border: rgba(88, 215, 255, 0.2);
-  --lane-assessment-start: rgba(255, 188, 111, 0.22);
-  --lane-assessment-end: rgba(255, 134, 165, 0.14);
-  --lane-assessment-border: rgba(255, 188, 111, 0.22);
-  --lane-recovery-start: rgba(159, 149, 201, 0.18);
-  --lane-recovery-end: rgba(213, 207, 247, 0.08);
-  --lane-recovery-border: rgba(159, 149, 201, 0.22);
-  --lane-admin-start: rgba(116, 240, 195, 0.18);
-  --lane-admin-end: rgba(88, 215, 255, 0.12);
-  --lane-admin-border: rgba(116, 240, 195, 0.2);
-}
-
-:root[data-theme="aurora"][data-theme-enhanced="true"] {
+:root[data-theme="dark"][data-theme-enhanced="true"] {
   --app-bg-1: #010510;
   --app-bg-2: #020c18;
   --app-bg-3: #04121f;
@@ -302,96 +107,6 @@
   --primary-end: rgba(122, 184, 255, 0.3);
   --primary-border: rgba(96, 243, 223, 0.52);
   --selection: rgba(96, 243, 223, 0.36);
-}
-
-:root[data-theme="ember"][data-theme-enhanced="true"] {
-  --app-bg-1: #0b0304;
-  --app-bg-2: #170808;
-  --app-bg-3: #200d0c;
-  --app-glow-1: rgba(255, 180, 84, 0.28);
-  --app-glow-2: rgba(255, 126, 107, 0.24);
-  --panel-border: rgba(255, 238, 214, 0.16);
-  --panel-support-border: rgba(255, 238, 214, 0.14);
-  --field-focus: rgba(255, 180, 84, 0.32);
-  --field-border-strong: rgba(255, 126, 107, 0.6);
-  --focus-ring-inner: rgba(255, 180, 84, 0.32);
-  --focus-ring-outer: rgba(255, 126, 107, 0.7);
-  --primary-start: rgba(255, 212, 128, 0.32);
-  --primary-end: rgba(255, 126, 107, 0.32);
-  --primary-border: rgba(255, 180, 84, 0.5);
-  --selection: rgba(255, 180, 84, 0.36);
-}
-
-:root[data-theme="tide"][data-theme-enhanced="true"] {
-  --app-bg-1: #020810;
-  --app-bg-2: #051320;
-  --app-bg-3: #081c2a;
-  --app-glow-1: rgba(106, 216, 255, 0.3);
-  --app-glow-2: rgba(98, 241, 196, 0.22);
-  --panel-border: rgba(222, 236, 248, 0.16);
-  --panel-support-border: rgba(222, 236, 248, 0.14);
-  --field-focus: rgba(106, 216, 255, 0.32);
-  --field-border-strong: rgba(98, 241, 196, 0.6);
-  --focus-ring-inner: rgba(106, 216, 255, 0.32);
-  --focus-ring-outer: rgba(98, 241, 196, 0.7);
-  --primary-start: rgba(106, 216, 255, 0.3);
-  --primary-end: rgba(98, 241, 196, 0.3);
-  --primary-border: rgba(106, 216, 255, 0.5);
-  --selection: rgba(106, 216, 255, 0.36);
-}
-
-:root[data-theme="bubblegum"][data-theme-enhanced="true"] {
-  --app-bg-1: #12040b;
-  --app-bg-2: #1b0712;
-  --app-bg-3: #27091c;
-  --app-glow-1: rgba(255, 105, 199, 0.32);
-  --app-glow-2: rgba(255, 154, 213, 0.26);
-  --panel-border: rgba(255, 241, 246, 0.18);
-  --panel-support-border: rgba(255, 241, 246, 0.14);
-  --field-focus: rgba(255, 105, 199, 0.32);
-  --field-border-strong: rgba(255, 154, 213, 0.6);
-  --focus-ring-inner: rgba(255, 105, 199, 0.34);
-  --focus-ring-outer: rgba(255, 154, 213, 0.72);
-  --primary-start: rgba(255, 105, 199, 0.32);
-  --primary-end: rgba(255, 184, 107, 0.3);
-  --primary-border: rgba(255, 105, 199, 0.52);
-  --selection: rgba(255, 105, 199, 0.38);
-}
-
-:root[data-theme="signal"][data-theme-enhanced="true"] {
-  --app-bg-1: #010a09;
-  --app-bg-2: #04100e;
-  --app-bg-3: #081a17;
-  --app-glow-1: rgba(77, 246, 212, 0.32);
-  --app-glow-2: rgba(140, 251, 110, 0.24);
-  --panel-border: rgba(230, 255, 249, 0.18);
-  --panel-support-border: rgba(230, 255, 249, 0.14);
-  --field-focus: rgba(77, 246, 212, 0.32);
-  --field-border-strong: rgba(140, 251, 110, 0.6);
-  --focus-ring-inner: rgba(77, 246, 212, 0.34);
-  --focus-ring-outer: rgba(140, 251, 110, 0.7);
-  --primary-start: rgba(77, 246, 212, 0.32);
-  --primary-end: rgba(140, 251, 110, 0.3);
-  --primary-border: rgba(77, 246, 212, 0.52);
-  --selection: rgba(77, 246, 212, 0.38);
-}
-
-:root[data-theme="prism"][data-theme-enhanced="true"] {
-  --app-bg-1: #06030f;
-  --app-bg-2: #0b0618;
-  --app-bg-3: #130a26;
-  --app-glow-1: rgba(143, 123, 255, 0.34);
-  --app-glow-2: rgba(88, 215, 255, 0.26);
-  --panel-border: rgba(241, 239, 255, 0.18);
-  --panel-support-border: rgba(241, 239, 255, 0.14);
-  --field-focus: rgba(143, 123, 255, 0.32);
-  --field-border-strong: rgba(88, 215, 255, 0.6);
-  --focus-ring-inner: rgba(143, 123, 255, 0.34);
-  --focus-ring-outer: rgba(88, 215, 255, 0.7);
-  --primary-start: rgba(143, 123, 255, 0.32);
-  --primary-end: rgba(88, 215, 255, 0.3);
-  --primary-border: rgba(143, 123, 255, 0.5);
-  --selection: rgba(143, 123, 255, 0.38);
 }
 
 :root[data-theme="light"] {
@@ -496,67 +211,7 @@
   --selection: rgba(37, 99, 235, 0.50);
 }
 
-:root[data-theme="teslared"] {
-  /* Tezla: matte black with vivid crimson accents */
-  --app-bg-1: #0a0000;
-  --app-bg-2: #130000;
-  --app-bg-3: #1c0000;
-  --app-glow-1: rgba(204, 0, 0, 0.40);
-  --app-glow-2: rgba(255, 34, 51, 0.22);
-  --panel-bg: rgba(16, 2, 2, 0.78);
-  --panel-border: rgba(255, 34, 51, 0.22);
-  --panel-shadow: rgba(0, 0, 0, 0.75);
-  --panel-support-bg: rgba(24, 4, 4, 0.80);
-  --panel-support-border: rgba(255, 34, 51, 0.14);
-  --panel-support-shadow: rgba(0, 0, 0, 0.50);
-  --surface-muted: rgba(32, 6, 6, 0.65);
-  --field-bg: rgba(20, 4, 4, 0.88);
-  --field-focus: rgba(204, 0, 0, 0.28);
-  --field-border-strong: rgba(255, 34, 51, 0.65);
-  --focus-ring-inner: rgba(204, 0, 0, 0.28);
-  --focus-ring-outer: rgba(255, 34, 51, 0.62);
-  --primary-start: rgba(204, 0, 0, 0.32);
-  --primary-end: rgba(255, 34, 51, 0.22);
-  --primary-border: rgba(204, 0, 0, 0.65);
-  --selection: rgba(204, 0, 0, 0.38);
-  --lane-review-start: rgba(204, 0, 0, 0.38);
-  --lane-review-end: rgba(255, 34, 51, 0.22);
-  --lane-review-border: rgba(204, 0, 0, 0.42);
-  --lane-content-start: rgba(204, 0, 0, 0.30);
-  --lane-content-end: rgba(255, 112, 136, 0.18);
-  --lane-content-border: rgba(204, 0, 0, 0.34);
-  --lane-assessment-start: rgba(255, 149, 0, 0.28);
-  --lane-assessment-end: rgba(255, 200, 100, 0.16);
-  --lane-assessment-border: rgba(255, 149, 0, 0.30);
-  --lane-recovery-start: rgba(176, 176, 176, 0.20);
-  --lane-recovery-end: rgba(255, 255, 255, 0.10);
-  --lane-recovery-border: rgba(176, 176, 176, 0.24);
-  --lane-admin-start: rgba(74, 222, 128, 0.20);
-  --lane-admin-end: rgba(52, 211, 153, 0.12);
-  --lane-admin-border: rgba(74, 222, 128, 0.24);
-}
 
-:root[data-theme="teslared"][data-theme-enhanced="true"] {
-  --app-bg-1: #080000;
-  --app-bg-2: #0f0000;
-  --app-bg-3: #180000;
-  --app-glow-1: rgba(204, 0, 0, 0.62);
-  --app-glow-2: rgba(255, 34, 51, 0.38);
-  --panel-bg: rgba(12, 0, 0, 0.88);
-  --panel-border: rgba(255, 34, 51, 0.35);
-  --panel-shadow: rgba(0, 0, 0, 0.85);
-  --panel-support-bg: rgba(20, 2, 2, 0.90);
-  --panel-support-border: rgba(255, 34, 51, 0.24);
-  --field-bg: rgba(16, 2, 2, 0.94);
-  --field-focus: rgba(204, 0, 0, 0.42);
-  --field-border-strong: rgba(255, 34, 51, 0.80);
-  --focus-ring-inner: rgba(204, 0, 0, 0.42);
-  --focus-ring-outer: rgba(255, 34, 51, 0.78);
-  --primary-start: rgba(204, 0, 0, 0.48);
-  --primary-end: rgba(255, 34, 51, 0.35);
-  --primary-border: rgba(204, 0, 0, 0.80);
-  --selection: rgba(204, 0, 0, 0.55);
-}
 
 :root[data-theme="maggiepink"][data-theme-enhanced="true"] {
   --app-bg-1: #fde2ec;
@@ -2400,80 +2055,80 @@ button {
 /* AURORA (DARK) THEME: surface hierarchy cleanup                     */
 /* bg-slate-* classes use Tailwind hardcoded grays; map to CSS vars   */
 /* so panels have proper depth against the very dark aurora bg.       */
-/* SCOPE: data-theme="aurora" only.                                   */
+/* SCOPE: data-theme="dark" only.                                   */
 /* ================================================================= */
 
 /* — bg-slate-950 variants → deepest panel surface — */
-:root[data-theme="aurora"] .bg-slate-950,
-:root[data-theme="aurora"] .bg-slate-950\/20,
-:root[data-theme="aurora"] .bg-slate-950\/35,
-:root[data-theme="aurora"] .bg-slate-950\/40,
-:root[data-theme="aurora"] .bg-slate-950\/45,
-:root[data-theme="aurora"] .bg-slate-950\/50,
-:root[data-theme="aurora"] .bg-slate-950\/60,
-:root[data-theme="aurora"] .bg-slate-950\/70,
-:root[data-theme="aurora"] .bg-slate-950\/75,
-:root[data-theme="aurora"] .bg-slate-950\/80,
-:root[data-theme="aurora"] .bg-slate-950\/96 {
+:root[data-theme="dark"] .bg-slate-950,
+:root[data-theme="dark"] .bg-slate-950\/20,
+:root[data-theme="dark"] .bg-slate-950\/35,
+:root[data-theme="dark"] .bg-slate-950\/40,
+:root[data-theme="dark"] .bg-slate-950\/45,
+:root[data-theme="dark"] .bg-slate-950\/50,
+:root[data-theme="dark"] .bg-slate-950\/60,
+:root[data-theme="dark"] .bg-slate-950\/70,
+:root[data-theme="dark"] .bg-slate-950\/75,
+:root[data-theme="dark"] .bg-slate-950\/80,
+:root[data-theme="dark"] .bg-slate-950\/96 {
   background-color: var(--panel-bg) !important;
 }
 
 /* — bg-slate-900 variants → support panel surface — */
-:root[data-theme="aurora"] .bg-slate-900,
-:root[data-theme="aurora"] .bg-slate-900\/20,
-:root[data-theme="aurora"] .bg-slate-900\/40,
-:root[data-theme="aurora"] .bg-slate-900\/45,
-:root[data-theme="aurora"] .bg-slate-900\/50,
-:root[data-theme="aurora"] .bg-slate-900\/55,
-:root[data-theme="aurora"] .bg-slate-900\/60,
-:root[data-theme="aurora"] .bg-slate-900\/65,
-:root[data-theme="aurora"] .bg-slate-900\/70,
-:root[data-theme="aurora"] .bg-slate-900\/80,
-:root[data-theme="aurora"] .bg-slate-900\/95 {
+:root[data-theme="dark"] .bg-slate-900,
+:root[data-theme="dark"] .bg-slate-900\/20,
+:root[data-theme="dark"] .bg-slate-900\/40,
+:root[data-theme="dark"] .bg-slate-900\/45,
+:root[data-theme="dark"] .bg-slate-900\/50,
+:root[data-theme="dark"] .bg-slate-900\/55,
+:root[data-theme="dark"] .bg-slate-900\/60,
+:root[data-theme="dark"] .bg-slate-900\/65,
+:root[data-theme="dark"] .bg-slate-900\/70,
+:root[data-theme="dark"] .bg-slate-900\/80,
+:root[data-theme="dark"] .bg-slate-900\/95 {
   background-color: var(--panel-support-bg) !important;
 }
 
 /* — bg-slate-800 / 700 variants → muted surface — */
-:root[data-theme="aurora"] .bg-slate-800,
-:root[data-theme="aurora"] .bg-slate-800\/40,
-:root[data-theme="aurora"] .bg-slate-800\/50,
-:root[data-theme="aurora"] .bg-slate-800\/60,
-:root[data-theme="aurora"] .bg-slate-800\/70,
-:root[data-theme="aurora"] .bg-slate-800\/80,
-:root[data-theme="aurora"] .bg-slate-800\/90,
-:root[data-theme="aurora"] .bg-slate-700,
-:root[data-theme="aurora"] .bg-slate-700\/40,
-:root[data-theme="aurora"] .bg-slate-700\/80 {
+:root[data-theme="dark"] .bg-slate-800,
+:root[data-theme="dark"] .bg-slate-800\/40,
+:root[data-theme="dark"] .bg-slate-800\/50,
+:root[data-theme="dark"] .bg-slate-800\/60,
+:root[data-theme="dark"] .bg-slate-800\/70,
+:root[data-theme="dark"] .bg-slate-800\/80,
+:root[data-theme="dark"] .bg-slate-800\/90,
+:root[data-theme="dark"] .bg-slate-700,
+:root[data-theme="dark"] .bg-slate-700\/40,
+:root[data-theme="dark"] .bg-slate-700\/80 {
   background-color: var(--surface-muted) !important;
 }
 
 /* — bg-slate-600 (progress bar track, inline chips) — */
-:root[data-theme="aurora"] .bg-slate-600 {
+:root[data-theme="dark"] .bg-slate-600 {
   background-color: var(--surface-muted) !important;
 }
 
 /* — Slate borders → theme alpha borders — */
-:root[data-theme="aurora"] .border-slate-700,
-:root[data-theme="aurora"] .border-slate-700\/60,
-:root[data-theme="aurora"] .border-slate-700\/70,
-:root[data-theme="aurora"] .border-slate-700\/80,
-:root[data-theme="aurora"] .border-slate-800,
-:root[data-theme="aurora"] .border-slate-800\/80,
-:root[data-theme="aurora"] .border-slate-600 {
+:root[data-theme="dark"] .border-slate-700,
+:root[data-theme="dark"] .border-slate-700\/60,
+:root[data-theme="dark"] .border-slate-700\/70,
+:root[data-theme="dark"] .border-slate-700\/80,
+:root[data-theme="dark"] .border-slate-800,
+:root[data-theme="dark"] .border-slate-800\/80,
+:root[data-theme="dark"] .border-slate-600 {
   border-color: var(--panel-border) !important;
 }
 
 /* — Gradient strip — */
-:root[data-theme="aurora"] .bg-gradient-to-br.from-slate-900 {
+:root[data-theme="dark"] .bg-gradient-to-br.from-slate-900 {
   background-image: none !important;
   background-color: var(--panel-support-bg) !important;
 }
 
 /* — hover states — */
-:root[data-theme="aurora"] .hover\:bg-slate-900:hover {
+:root[data-theme="dark"] .hover\:bg-slate-900:hover {
   background-color: var(--panel-support-bg) !important;
 }
-:root[data-theme="aurora"] .hover\:bg-slate-800\/80:hover {
+:root[data-theme="dark"] .hover\:bg-slate-800\/80:hover {
   background-color: var(--surface-muted) !important;
 }
 

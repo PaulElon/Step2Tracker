@@ -48,16 +48,10 @@ export const STUDY_TASK_CATEGORY_VALUES: StudyTaskCategory[] = ["Test", "Review"
 export const DEFAULT_STUDY_CATEGORIES = ["Test", "Review", "Anki", "Notes"] as const;
 
 export const THEME_VALUES: ThemeId[] = [
-  "aurora",
-  "ember",
-  "tide",
-  "bubblegum",
-  "signal",
-  "prism",
-  "maggiepink",
+  "dark",
   "light",
   "paulblue",
-  "teslared",
+  "maggiepink",
 ];
 export const WEAK_TOPIC_PRIORITY_VALUES: WeakTopicPriority[] = ["High", "Medium", "Low"];
 export const WEAK_TOPIC_STATUS_VALUES: WeakTopicStatus[] = [
@@ -96,7 +90,7 @@ const defaultPlannerFilters: PlannerFilters = {
 export const DEFAULT_PREFERENCES: Preferences = {
   activeSection: "dashboard",
   lastActiveDate: getTodayKey(),
-  themeId: "aurora",
+  themeId: "dark",
   dailyGoalMinutes: 8 * 60,
   plannerFilters: defaultPlannerFilters,
   plannerSort: {
