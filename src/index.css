@@ -2004,3 +2004,142 @@ button {
   opacity: 0.5 !important;
   color: var(--rich-text-muted) !important;
 }
+
+/* ----------------------------------------------------------------- */
+/* Maggie Pink final contrast/surface cleanup                         */
+/* Covers all remaining dark-slate surfaces, file-input buttons,     */
+/* destructive ghost buttons, and dark-red session-log panels.       */
+/* SCOPE: :root[data-theme="maggiepink"] only — no other themes      */
+/* are affected.                                                      */
+/* ----------------------------------------------------------------- */
+
+/* bg-slate-800/* — overview/allocation/summary/heatmap panel cards */
+:root[data-theme="maggiepink"] .bg-slate-800\/60,
+:root[data-theme="maggiepink"] .bg-slate-800\/50,
+:root[data-theme="maggiepink"] .bg-slate-800\/40 {
+  background-color: var(--surface-muted) !important;
+}
+
+/* bg-slate-900 solid and missing opacity variants                   */
+/* (weak-topics dropdown, tracker-settings, planner icon-btn hover,  */
+/*  error-log toast, account-panel, dashboard field)                 */
+:root[data-theme="maggiepink"] .bg-slate-900,
+:root[data-theme="maggiepink"] .bg-slate-900\/80,
+:root[data-theme="maggiepink"] .bg-slate-900\/20,
+:root[data-theme="maggiepink"] .bg-slate-900\/95 {
+  background-color: var(--panel-support-bg) !important;
+}
+
+/* hover states that pull bg back to dark slate */
+:root[data-theme="maggiepink"] .hover\:bg-slate-900:hover {
+  background-color: var(--panel-support-bg) !important;
+}
+:root[data-theme="maggiepink"] .hover\:bg-slate-800\/80:hover {
+  background-color: var(--surface-muted) !important;
+}
+
+/* bg-slate-950/50, /60, /75 (tracker-settings import box, analytics badge, overlay) */
+:root[data-theme="maggiepink"] .bg-slate-950\/50,
+:root[data-theme="maggiepink"] .bg-slate-950\/60,
+:root[data-theme="maggiepink"] .bg-slate-950\/75 {
+  background-color: rgba(253, 242, 248, 0.96) !important;
+}
+
+/* Hardcoded #081220 dark hex background                             */
+/* Used on: practice-tests table header, modal drawer, filter popup  */
+/* NOTE: Tailwind escapes # as \# in generated class names.          */
+:root[data-theme="maggiepink"] .bg-\[\#081220\]\/95 {
+  background-color: var(--panel-bg) !important;
+}
+
+/* border-slate-700/* opacity variants and border-slate-800          */
+:root[data-theme="maggiepink"] .border-slate-700\/80,
+:root[data-theme="maggiepink"] .border-slate-700\/70,
+:root[data-theme="maggiepink"] .border-slate-700\/60,
+:root[data-theme="maggiepink"] .border-slate-800,
+:root[data-theme="maggiepink"] .border-slate-800\/80 {
+  border-color: var(--panel-border) !important;
+}
+
+/* Very faint white borders (border-white/8 and border-white/[0.08]) */
+:root[data-theme="maggiepink"] .border-white\/8,
+:root[data-theme="maggiepink"] .border-white\/\[0\.08\] {
+  border-color: rgba(194, 0, 101, 0.10) !important;
+}
+
+/* Session-log indigo accent border → soft indigo on light bg */
+:root[data-theme="maggiepink"] .border-indigo-700 {
+  border-color: rgba(99, 102, 241, 0.40) !important;
+}
+
+/* File input "Choose File" button (file:bg-slate-700 / file:text-slate-100) */
+/* Tailwind file: variants target ::file-selector-button pseudo-element.     */
+:root[data-theme="maggiepink"] input[type="file"]::file-selector-button,
+:root[data-theme="maggiepink"] input[type="file"]::-webkit-file-upload-button {
+  background-color: rgba(252, 248, 254, 0.97) !important;
+  color: #2a0718 !important;
+  border-color: rgba(194, 0, 101, 0.25) !important;
+}
+:root[data-theme="maggiepink"] input[type="file"]:hover::file-selector-button,
+:root[data-theme="maggiepink"] input[type="file"]:hover::-webkit-file-upload-button {
+  background-color: rgba(253, 242, 248, 1) !important;
+}
+
+/* Destructive ghost buttons designed for dark themes (rose-300/15, rose-500/10) */
+/* On Maggie Pink these are nearly invisible against the pink app background.    */
+:root[data-theme="maggiepink"] .bg-rose-300\/15,
+:root[data-theme="maggiepink"] .bg-rose-500\/10,
+:root[data-theme="maggiepink"] .bg-rose-950\/20 {
+  background-color: rgba(255, 228, 230, 0.95) !important;
+}
+:root[data-theme="maggiepink"] .hover\:bg-rose-300\/25:hover,
+:root[data-theme="maggiepink"] .hover\:bg-rose-500\/20:hover {
+  background-color: rgba(254, 205, 211, 1) !important;
+}
+:root[data-theme="maggiepink"] .border-rose-300\/30,
+:root[data-theme="maggiepink"] .border-rose-500\/30 {
+  border-color: rgba(225, 29, 72, 0.35) !important;
+}
+
+/* rose-100/90: opacity-modified pale text (used in tracker-settings danger panel) */
+:root[data-theme="maggiepink"] .text-rose-100\/90 {
+  color: rgba(190, 18, 60, 0.9) !important;
+}
+
+/* Session-log dark-red error/warning panels → pale rose surface + dark rose text */
+:root[data-theme="maggiepink"] .bg-red-950\/50,
+:root[data-theme="maggiepink"] .bg-red-900\/60,
+:root[data-theme="maggiepink"] .bg-red-900\/40 {
+  background-color: rgba(255, 228, 230, 0.95) !important;
+}
+:root[data-theme="maggiepink"] .border-red-800\/70 {
+  border-color: rgba(225, 29, 72, 0.30) !important;
+}
+
+/* Session-log "undo delete" solid button → visible dark rose on light theme */
+:root[data-theme="maggiepink"] .bg-red-900\/70 {
+  background-color: #be123c !important;
+}
+:root[data-theme="maggiepink"] .hover\:bg-red-800:hover {
+  background-color: #9f1239 !important;
+}
+
+/* text-red-100: used only on the solid dark-rose undo button; keep white */
+:root[data-theme="maggiepink"] .text-red-100 {
+  color: #ffffff !important;
+}
+
+/* text-red-200 / text-red-300 / text-red-400 on now-pale-rose panels */
+:root[data-theme="maggiepink"] .text-red-200,
+:root[data-theme="maggiepink"] .text-red-300 {
+  color: #be123c !important;
+}
+:root[data-theme="maggiepink"] .text-red-400 {
+  color: #e11d48 !important;
+}
+
+/* Emerald toast text (error-log success notification)                         */
+/* text-emerald-200 is near-white → must be dark emerald on pale panel bg      */
+:root[data-theme="maggiepink"] .text-emerald-200 {
+  color: #065f46 !important;
+}
