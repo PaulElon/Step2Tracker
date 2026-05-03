@@ -214,21 +214,21 @@
   --app-bg-3: #f5d4e4;
   --app-glow-1: rgba(194, 0, 101, 0.12);
   --app-glow-2: rgba(255, 95, 163, 0.08);
-  --panel-bg: rgba(255, 240, 248, 0.85);
+  --panel-bg: rgba(255, 255, 255, 0.97);
   --panel-border: rgba(194, 0, 101, 0.15);
   --panel-shadow: rgba(100, 0, 50, 0.08);
-  --panel-support-bg: rgba(255, 230, 242, 0.9);
+  --panel-support-bg: rgba(252, 248, 254, 0.97);
   --panel-support-border: rgba(194, 0, 101, 0.1);
   --panel-support-shadow: rgba(100, 0, 50, 0.05);
-  --surface-muted: rgba(255, 232, 242, 0.7);
-  --field-bg: rgba(255, 245, 250, 0.95);
+  --surface-muted: rgba(246, 242, 250, 0.90);
+  --field-bg: rgba(255, 255, 255, 0.99);
   --field-focus: rgba(194, 0, 101, 0.12);
   --field-border-strong: rgba(194, 0, 101, 0.35);
   --focus-ring-inner: rgba(194, 0, 101, 0.14);
   --focus-ring-outer: rgba(194, 0, 101, 0.3);
-  --primary-start: rgba(194, 0, 101, 0.12);
-  --primary-end: rgba(255, 95, 163, 0.1);
-  --primary-border: rgba(194, 0, 101, 0.28);
+  --primary-start: rgba(194, 0, 101, 0.18);
+  --primary-end: rgba(255, 95, 163, 0.18);
+  --primary-border: rgba(194, 0, 101, 0.45);
   --selection: rgba(194, 0, 101, 0.18);
   --lane-review-start: rgba(194, 0, 101, 0.18);
   --lane-review-end: rgba(255, 95, 163, 0.1);
@@ -564,10 +564,10 @@
   --app-bg-3: #f5b9d0;
   --app-glow-1: rgba(194, 0, 101, 0.22);
   --app-glow-2: rgba(255, 95, 163, 0.18);
-  --panel-bg: rgba(255, 228, 240, 0.92);
+  --panel-bg: rgba(255, 255, 255, 0.98);
   --panel-border: rgba(194, 0, 101, 0.28);
   --panel-shadow: rgba(100, 0, 50, 0.14);
-  --panel-support-bg: rgba(255, 215, 232, 0.92);
+  --panel-support-bg: rgba(252, 248, 254, 0.98);
   --panel-support-border: rgba(194, 0, 101, 0.22);
   --field-bg: rgba(255, 238, 246, 0.98);
   --field-focus: rgba(194, 0, 101, 0.24);
@@ -1878,4 +1878,34 @@ button {
 :root[data-theme="light"] .scrollbar-subtle::-webkit-scrollbar-thumb,
 :root[data-theme="maggiepink"] .scrollbar-subtle::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.14);
+}
+
+/* Maggie Pink: neutralize hardcoded dark Tailwind surfaces */
+:root[data-theme="maggiepink"] .bg-slate-950\/45,
+:root[data-theme="maggiepink"] .bg-slate-950\/35,
+:root[data-theme="maggiepink"] .bg-slate-950\/20,
+:root[data-theme="maggiepink"] .bg-slate-950\/70,
+:root[data-theme="maggiepink"] .bg-slate-950 {
+  background-color: var(--surface-muted) !important;
+}
+
+:root[data-theme="maggiepink"] .bg-slate-900\/55,
+:root[data-theme="maggiepink"] .bg-slate-900\/70,
+:root[data-theme="maggiepink"] .bg-slate-900\/65,
+:root[data-theme="maggiepink"] .bg-slate-900\/60 {
+  background-color: var(--panel-support-bg) !important;
+}
+
+:root[data-theme="maggiepink"] .bg-slate-800 {
+  background-color: var(--surface-muted) !important;
+}
+
+:root[data-theme="maggiepink"] .border-white\/10,
+:root[data-theme="maggiepink"] .border-white\/15,
+:root[data-theme="maggiepink"] .border-white\/20 {
+  border-color: var(--panel-border) !important;
+}
+
+:root[data-theme="maggiepink"] .border-dashed.border-white\/10 {
+  border-color: rgba(194, 0, 101, 0.20) !important;
 }
