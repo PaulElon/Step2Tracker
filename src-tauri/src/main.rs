@@ -158,6 +158,92 @@ fn open_notification_settings() -> Result<(), String> {
     }
 }
 
+fn nbimg_protocol_handler(
+    app: &tauri::AppHandle,
+    request: tauri::http::Request<Vec<u8>>,
+) -> tauri::http::Response<Vec<u8>> {
+    fn err(status: u16, body: &[u8]) -> tauri::http::Response<Vec<u8>> {
+        tauri::http::Response::builder()
+            .status(status)
+            .header("Content-Type", "text/plain")
+            .body(body.to_vec())
+            .unwrap()
+    }
+
+    let path = request.uri().path();
+    let file_name = path.trim_start_matches('/');
+
+    if file_name.is_empty()
+        || file_name.contains('/')
+        || file_name.contains('\\')
+        || file_name.contains("..")
+    {
+        return err(403, b"Forbidden");
+    }
+
+    let ext = file_name.rsplit('.').next().unwrap_or("").to_lowercase();
+    let mime = match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        _ => return err(403, b"Forbidden"),
+    };
+
+    let data_dir = match app.path().app_data_dir() {
+        Ok(d) => d,
+        Err(_) => return err(500, b"Internal error"),
+    };
+
+    let file_path = data_dir.join("notebook-assets").join(file_name);
+
+    match fs::read(&file_path) {
+        Ok(bytes) => tauri::http::Response::builder()
+            .status(200)
+            .header("Content-Type", mime)
+            .body(bytes)
+            .unwrap(),
+        Err(_) => err(404, b"Not found"),
+    }
+}
+
+#[tauri::command]
+fn save_notebook_image(app: tauri::AppHandle, data_b64: String, ext: String) -> Result<String, String> {
+    use base64::Engine as _;
+
+    let ext = ext.to_lowercase();
+    match ext.as_str() {
+        "png" | "jpg" | "jpeg" | "gif" | "webp" => {}
+        _ => return Err(format!("Unsupported extension: {ext}")),
+    }
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&data_b64)
+        .map_err(|e| format!("Invalid base64 data: {e}"))?;
+
+    const MAX_BYTES: usize = 10 * 1024 * 1024;
+    if bytes.len() > MAX_BYTES {
+        return Err(format!("Image exceeds 10 MB limit ({} bytes)", bytes.len()));
+    }
+
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Unable to resolve app data directory: {e}"))?;
+
+    let assets_dir = data_dir.join("notebook-assets");
+    fs::create_dir_all(&assets_dir)
+        .map_err(|e| format!("Unable to create notebook-assets directory: {e}"))?;
+
+    let file_name = format!("{}.{}", uuid::Uuid::new_v4(), ext);
+    let file_path = assets_dir.join(&file_name);
+
+    fs::write(&file_path, &bytes)
+        .map_err(|e| format!("Unable to write image file: {e}"))?;
+
+    Ok(format!("nbimg://localhost/{file_name}"))
+}
+
 #[tauri::command]
 async fn export_notebook_page(
     app: tauri::AppHandle,
@@ -193,6 +279,7 @@ async fn export_notebook_page(
 
 fn main() {
     tauri::Builder::default()
+        .register_uri_scheme_protocol("nbimg", |ctx, request| nbimg_protocol_handler(ctx.app_handle(), request))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
@@ -226,6 +313,7 @@ fn main() {
             tf_persistence::tf_reset_state,
             open_notification_settings,
             export_notebook_page,
+            save_notebook_image,
             updater::check_for_updates,
             updater::install_update
         ])
