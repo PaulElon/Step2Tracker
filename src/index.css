@@ -1909,3 +1909,98 @@ button {
 :root[data-theme="maggiepink"] .border-dashed.border-white\/10 {
   border-color: rgba(194, 0, 101, 0.20) !important;
 }
+
+/* ----------------------------------------------------------------- */
+/* Maggie Pink: phase-2 contrast patch                               */
+/* Targeted overrides for surfaces/text missed by phase-1            */
+/* ----------------------------------------------------------------- */
+
+/* text-slate-50 (not in phase-1 block) */
+:root[data-theme="maggiepink"] .text-slate-50 {
+  color: var(--rich-text) !important;
+}
+
+/* text-slate-700 (not in phase-1 block) */
+:root[data-theme="maggiepink"] .text-slate-700 {
+  color: var(--rich-text-muted) !important;
+}
+
+/* Pale rose text designed for dark backgrounds → readable dark rose */
+:root[data-theme="maggiepink"] .text-rose-100,
+:root[data-theme="maggiepink"] .text-rose-200,
+:root[data-theme="maggiepink"] .text-rose-300 {
+  color: #be123c !important;
+}
+
+:root[data-theme="maggiepink"] .text-rose-400 {
+  color: #e11d48 !important;
+}
+
+/* Pale amber text → readable dark amber */
+:root[data-theme="maggiepink"] .text-amber-100,
+:root[data-theme="maggiepink"] .text-amber-300 {
+  color: #b45309 !important;
+}
+
+/* Pale cyan text → readable dark teal */
+:root[data-theme="maggiepink"] .text-cyan-50,
+:root[data-theme="maggiepink"] .text-cyan-100,
+:root[data-theme="maggiepink"] .text-cyan-300 {
+  color: #0e7490 !important;
+}
+
+/* Pale emerald text */
+:root[data-theme="maggiepink"] .text-emerald-50 {
+  color: #065f46 !important;
+}
+
+/* Pale violet text (heatmap values) */
+:root[data-theme="maggiepink"] .text-violet-300 {
+  color: #6d28d9 !important;
+}
+
+/* Missing bg-slate-800/* variants */
+:root[data-theme="maggiepink"] .bg-slate-800\/70,
+:root[data-theme="maggiepink"] .bg-slate-800\/80,
+:root[data-theme="maggiepink"] .bg-slate-800\/90 {
+  background-color: var(--surface-muted) !important;
+}
+
+/* bg-slate-700/* variants */
+:root[data-theme="maggiepink"] .bg-slate-700,
+:root[data-theme="maggiepink"] .bg-slate-700\/40,
+:root[data-theme="maggiepink"] .bg-slate-700\/70,
+:root[data-theme="maggiepink"] .bg-slate-700\/80 {
+  background-color: var(--surface-muted) !important;
+}
+
+/* Missing bg-slate-900/* variants */
+:root[data-theme="maggiepink"] .bg-slate-900\/50,
+:root[data-theme="maggiepink"] .bg-slate-900\/45,
+:root[data-theme="maggiepink"] .bg-slate-900\/40 {
+  background-color: var(--panel-support-bg) !important;
+}
+
+/* Missing bg-slate-950/* variants */
+:root[data-theme="maggiepink"] .bg-slate-950\/40,
+:root[data-theme="maggiepink"] .bg-slate-950\/18 {
+  background-color: var(--surface-muted) !important;
+}
+
+:root[data-theme="maggiepink"] .bg-slate-950\/80,
+:root[data-theme="maggiepink"] .bg-slate-950\/96 {
+  background-color: var(--panel-bg) !important;
+}
+
+/* Dark slate borders → theme border */
+:root[data-theme="maggiepink"] .border-slate-700,
+:root[data-theme="maggiepink"] .border-slate-600 {
+  border-color: var(--panel-border) !important;
+}
+
+/* Tiptap: 0.38 opacity on already-dark text is near-invisible on light bg */
+:root[data-theme="maggiepink"] .tiptap-editor__button:disabled,
+:root[data-theme="maggiepink"] .tiptap-fontsize__btn:disabled {
+  opacity: 0.5 !important;
+  color: var(--rich-text-muted) !important;
+}
