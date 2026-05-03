@@ -2143,3 +2143,30 @@ button {
 :root[data-theme="maggiepink"] .text-emerald-200 {
   color: #065f46 !important;
 }
+
+/* CategoryBadge palette: all 6 pastel text slots are near-white (dark-bg design) */
+/* violet-100/blue-100/pink-100/emerald-100 not covered in earlier blocks          */
+:root[data-theme="maggiepink"] .text-violet-100 {
+  color: #5b21b6 !important;
+}
+:root[data-theme="maggiepink"] .text-blue-100 {
+  color: #1e3a8a !important;
+}
+:root[data-theme="maggiepink"] .text-pink-100 {
+  color: #831843 !important;
+}
+:root[data-theme="maggiepink"] .text-emerald-100 {
+  color: #065f46 !important;
+}
+
+/* Tracker Settings header panel uses a gradient, not a plain bg-slate-900/80.   */
+/* bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 → strip gradient, */
+/* apply light surface instead. This combination exists only in this one panel.   */
+:root[data-theme="maggiepink"] .bg-gradient-to-br.from-slate-900 {
+  background-image: none !important;
+  background-color: var(--panel-support-bg) !important;
+}
+/* Fix its indigo border and faint "LOCAL ONLY" badge border */
+:root[data-theme="maggiepink"] .border-indigo-500\/20 {
+  border-color: rgba(194, 0, 101, 0.18) !important;
+}
