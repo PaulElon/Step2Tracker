@@ -616,26 +616,14 @@ pub enum PlannerMode {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub enum ThemeId {
-    #[serde(rename = "aurora")]
-    Aurora,
-    #[serde(rename = "ember")]
-    Ember,
-    #[serde(rename = "tide")]
-    Tide,
-    #[serde(rename = "bubblegum")]
-    Bubblegum,
-    #[serde(rename = "signal")]
-    Signal,
-    #[serde(rename = "prism")]
-    Prism,
-    #[serde(rename = "maggiepink")]
-    MaggiePink,
+    #[serde(rename = "dark")]
+    Dark,
     #[serde(rename = "light")]
     Light,
     #[serde(rename = "paulblue")]
     PaulBlue,
-    #[serde(rename = "teslared")]
-    TeslaRed,
+    #[serde(rename = "maggiepink")]
+    MaggiePink,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -4064,7 +4052,7 @@ fn default_preferences() -> Preferences {
     Preferences {
         active_section: SectionId::Dashboard,
         last_active_date: today.clone(),
-        theme_id: ThemeId::Aurora,
+        theme_id: ThemeId::Dark,
         daily_goal_minutes: 8 * 60,
         planner_filters: PlannerFilters {
             search: String::new(),
@@ -4164,17 +4152,11 @@ fn parse_study_status_filter(value: &str) -> rusqlite::Result<StudyStatusFilter>
 
 fn parse_theme_id(value: &str) -> rusqlite::Result<ThemeId> {
     match value {
-        "aurora" => Ok(ThemeId::Aurora),
-        "ember" => Ok(ThemeId::Ember),
-        "tide" => Ok(ThemeId::Tide),
-        "bubblegum" => Ok(ThemeId::Bubblegum),
-        "signal" => Ok(ThemeId::Signal),
-        "prism" => Ok(ThemeId::Prism),
-        "maggiepink" => Ok(ThemeId::MaggiePink),
+        "dark" | "aurora" => Ok(ThemeId::Dark),
         "light" => Ok(ThemeId::Light),
         "paulblue" => Ok(ThemeId::PaulBlue),
-        "teslared" => Ok(ThemeId::TeslaRed),
-        _ => Err(enum_error("ThemeId", value)),
+        "maggiepink" => Ok(ThemeId::MaggiePink),
+        _ => Ok(ThemeId::Dark),
     }
 }
 
@@ -4278,16 +4260,10 @@ fn serialize_study_status_filter(value: StudyStatusFilter) -> &'static str {
 
 fn serialize_theme_id(value: ThemeId) -> &'static str {
     match value {
-        ThemeId::Aurora => "aurora",
-        ThemeId::Ember => "ember",
-        ThemeId::Tide => "tide",
-        ThemeId::Bubblegum => "bubblegum",
-        ThemeId::Signal => "signal",
-        ThemeId::Prism => "prism",
-        ThemeId::MaggiePink => "maggiepink",
+        ThemeId::Dark => "dark",
         ThemeId::Light => "light",
         ThemeId::PaulBlue => "paulblue",
-        ThemeId::TeslaRed => "teslared",
+        ThemeId::MaggiePink => "maggiepink",
     }
 }
 
