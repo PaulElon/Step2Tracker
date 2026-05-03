@@ -2170,3 +2170,463 @@ button {
 :root[data-theme="maggiepink"] .border-indigo-500\/20 {
   border-color: rgba(194, 0, 101, 0.18) !important;
 }
+
+/* ================================================================= */
+/* LIGHT THEME: final surface + contrast cleanup                      */
+/* Mirrors the Maggie Pink pattern. SCOPE: data-theme="light" only.  */
+/* ================================================================= */
+
+/* — bg-slate-950 variants — */
+:root[data-theme="light"] .bg-slate-950,
+:root[data-theme="light"] .bg-slate-950\/20,
+:root[data-theme="light"] .bg-slate-950\/35,
+:root[data-theme="light"] .bg-slate-950\/40,
+:root[data-theme="light"] .bg-slate-950\/18,
+:root[data-theme="light"] .bg-slate-950\/45,
+:root[data-theme="light"] .bg-slate-950\/70 {
+  background-color: var(--surface-muted) !important;
+}
+
+:root[data-theme="light"] .bg-slate-950\/50,
+:root[data-theme="light"] .bg-slate-950\/60,
+:root[data-theme="light"] .bg-slate-950\/75 {
+  background-color: rgba(242, 242, 247, 0.98) !important;
+}
+
+:root[data-theme="light"] .bg-slate-950\/80,
+:root[data-theme="light"] .bg-slate-950\/96 {
+  background-color: var(--panel-bg) !important;
+}
+
+/* — bg-slate-900 variants — */
+:root[data-theme="light"] .bg-slate-900,
+:root[data-theme="light"] .bg-slate-900\/20,
+:root[data-theme="light"] .bg-slate-900\/40,
+:root[data-theme="light"] .bg-slate-900\/45,
+:root[data-theme="light"] .bg-slate-900\/50,
+:root[data-theme="light"] .bg-slate-900\/55,
+:root[data-theme="light"] .bg-slate-900\/60,
+:root[data-theme="light"] .bg-slate-900\/65,
+:root[data-theme="light"] .bg-slate-900\/70,
+:root[data-theme="light"] .bg-slate-900\/80,
+:root[data-theme="light"] .bg-slate-900\/95 {
+  background-color: var(--panel-support-bg) !important;
+}
+
+/* — bg-slate-800 variants — */
+:root[data-theme="light"] .bg-slate-800,
+:root[data-theme="light"] .bg-slate-800\/40,
+:root[data-theme="light"] .bg-slate-800\/50,
+:root[data-theme="light"] .bg-slate-800\/60,
+:root[data-theme="light"] .bg-slate-800\/70,
+:root[data-theme="light"] .bg-slate-800\/80,
+:root[data-theme="light"] .bg-slate-800\/90 {
+  background-color: var(--surface-muted) !important;
+}
+
+/* — bg-slate-700 / bg-slate-600 — */
+:root[data-theme="light"] .bg-slate-700,
+:root[data-theme="light"] .bg-slate-700\/40,
+:root[data-theme="light"] .bg-slate-700\/70,
+:root[data-theme="light"] .bg-slate-700\/80,
+:root[data-theme="light"] .bg-slate-600 {
+  background-color: var(--surface-muted) !important;
+}
+
+/* — hover states — */
+:root[data-theme="light"] .hover\:bg-slate-900:hover {
+  background-color: var(--panel-support-bg) !important;
+}
+:root[data-theme="light"] .hover\:bg-slate-800\/80:hover {
+  background-color: var(--surface-muted) !important;
+}
+
+/* — Gradient strip (Tracker Settings header panel) — */
+:root[data-theme="light"] .bg-gradient-to-br.from-slate-900 {
+  background-image: none !important;
+  background-color: var(--panel-support-bg) !important;
+}
+
+/* — Hardcoded #081220 dark hex (practice-tests table header, modal) — */
+:root[data-theme="light"] .bg-\[\#081220\]\/95 {
+  background-color: var(--panel-bg) !important;
+}
+
+/* — Slate borders → theme neutral — */
+:root[data-theme="light"] .border-slate-700,
+:root[data-theme="light"] .border-slate-600 {
+  border-color: var(--panel-border) !important;
+}
+:root[data-theme="light"] .border-slate-700\/60,
+:root[data-theme="light"] .border-slate-700\/70,
+:root[data-theme="light"] .border-slate-700\/80,
+:root[data-theme="light"] .border-slate-800,
+:root[data-theme="light"] .border-slate-800\/80 {
+  border-color: var(--panel-border) !important;
+}
+
+/* — White/alpha borders → theme neutral — */
+:root[data-theme="light"] .border-white\/10,
+:root[data-theme="light"] .border-white\/15,
+:root[data-theme="light"] .border-white\/20 {
+  border-color: var(--panel-border) !important;
+}
+:root[data-theme="light"] .border-white\/8,
+:root[data-theme="light"] .border-white\/\[0\.08\] {
+  border-color: rgba(60, 60, 67, 0.10) !important;
+}
+:root[data-theme="light"] .border-dashed.border-white\/10 {
+  border-color: rgba(0, 122, 255, 0.20) !important;
+}
+:root[data-theme="light"] .border-indigo-700 {
+  border-color: rgba(99, 102, 241, 0.40) !important;
+}
+:root[data-theme="light"] .border-indigo-500\/20 {
+  border-color: rgba(0, 122, 255, 0.18) !important;
+}
+
+/* — Missing text overrides (text-slate-50 / text-slate-700) — */
+:root[data-theme="light"] .text-slate-50 {
+  color: var(--rich-text) !important;
+}
+:root[data-theme="light"] .text-slate-700 {
+  color: var(--rich-text-muted) !important;
+}
+
+/* — Pale light-on-dark text → readable dark versions — */
+:root[data-theme="light"] .text-rose-100,
+:root[data-theme="light"] .text-rose-200,
+:root[data-theme="light"] .text-rose-300 {
+  color: #be123c !important;
+}
+:root[data-theme="light"] .text-rose-400 {
+  color: #e11d48 !important;
+}
+:root[data-theme="light"] .text-rose-100\/90 {
+  color: rgba(190, 18, 60, 0.9) !important;
+}
+:root[data-theme="light"] .text-amber-100 {
+  color: #b45309 !important;
+}
+:root[data-theme="light"] .text-cyan-50,
+:root[data-theme="light"] .text-cyan-100,
+:root[data-theme="light"] .text-cyan-200,
+:root[data-theme="light"] .text-cyan-300 {
+  color: #0e7490 !important;
+}
+:root[data-theme="light"] .text-emerald-50,
+:root[data-theme="light"] .text-emerald-100 {
+  color: #065f46 !important;
+}
+:root[data-theme="light"] .text-emerald-200 {
+  color: #065f46 !important;
+}
+:root[data-theme="light"] .text-violet-100,
+:root[data-theme="light"] .text-violet-300 {
+  color: #6d28d9 !important;
+}
+:root[data-theme="light"] .text-blue-100 {
+  color: #1e3a8a !important;
+}
+:root[data-theme="light"] .text-pink-100 {
+  color: #831843 !important;
+}
+
+/* — Red text on now-pale-rose panels — */
+:root[data-theme="light"] .text-red-200,
+:root[data-theme="light"] .text-red-300 {
+  color: #be123c !important;
+}
+:root[data-theme="light"] .text-red-400 {
+  color: #e11d48 !important;
+}
+/* text-red-100 is used only on solid dark-red undo button — keep white */
+:root[data-theme="light"] .text-red-100 {
+  color: #ffffff !important;
+}
+
+/* — File input "Choose File" button — */
+:root[data-theme="light"] input[type="file"]::file-selector-button,
+:root[data-theme="light"] input[type="file"]::-webkit-file-upload-button {
+  background-color: rgba(245, 245, 247, 0.97) !important;
+  color: #1c1c1e !important;
+  border-color: rgba(60, 60, 67, 0.25) !important;
+}
+:root[data-theme="light"] input[type="file"]:hover::file-selector-button,
+:root[data-theme="light"] input[type="file"]:hover::-webkit-file-upload-button {
+  background-color: rgba(236, 236, 239, 1) !important;
+}
+
+/* — Destructive ghost buttons (dark-bg design, invisible on light) — */
+:root[data-theme="light"] .bg-rose-300\/15,
+:root[data-theme="light"] .bg-rose-500\/10,
+:root[data-theme="light"] .bg-rose-950\/20 {
+  background-color: rgba(255, 228, 230, 0.95) !important;
+}
+:root[data-theme="light"] .hover\:bg-rose-300\/25:hover,
+:root[data-theme="light"] .hover\:bg-rose-500\/20:hover {
+  background-color: rgba(254, 205, 211, 1) !important;
+}
+:root[data-theme="light"] .border-rose-300\/30,
+:root[data-theme="light"] .border-rose-500\/30 {
+  border-color: rgba(225, 29, 72, 0.35) !important;
+}
+
+/* — Session-log error/warning panels → pale red surface + dark text — */
+:root[data-theme="light"] .bg-red-950\/50,
+:root[data-theme="light"] .bg-red-900\/60,
+:root[data-theme="light"] .bg-red-900\/40 {
+  background-color: rgba(255, 228, 230, 0.95) !important;
+}
+:root[data-theme="light"] .border-red-800\/70 {
+  border-color: rgba(225, 29, 72, 0.30) !important;
+}
+/* "Undo delete" solid button → keep readable as dark-red */
+:root[data-theme="light"] .bg-red-900\/70 {
+  background-color: #be123c !important;
+}
+:root[data-theme="light"] .hover\:bg-red-800:hover {
+  background-color: #9f1239 !important;
+}
+
+/* — Tiptap disabled buttons: near-invisible at 0.38 on light bg — */
+:root[data-theme="light"] .tiptap-editor__button:disabled,
+:root[data-theme="light"] .tiptap-fontsize__btn:disabled {
+  opacity: 0.5 !important;
+  color: var(--rich-text-muted) !important;
+}
+
+/* ================================================================= */
+/* AURORA (DARK) THEME: surface hierarchy cleanup                     */
+/* bg-slate-* classes use Tailwind hardcoded grays; map to CSS vars   */
+/* so panels have proper depth against the very dark aurora bg.       */
+/* SCOPE: data-theme="aurora" only.                                   */
+/* ================================================================= */
+
+/* — bg-slate-950 variants → deepest panel surface — */
+:root[data-theme="aurora"] .bg-slate-950,
+:root[data-theme="aurora"] .bg-slate-950\/20,
+:root[data-theme="aurora"] .bg-slate-950\/35,
+:root[data-theme="aurora"] .bg-slate-950\/40,
+:root[data-theme="aurora"] .bg-slate-950\/45,
+:root[data-theme="aurora"] .bg-slate-950\/50,
+:root[data-theme="aurora"] .bg-slate-950\/60,
+:root[data-theme="aurora"] .bg-slate-950\/70,
+:root[data-theme="aurora"] .bg-slate-950\/75,
+:root[data-theme="aurora"] .bg-slate-950\/80,
+:root[data-theme="aurora"] .bg-slate-950\/96 {
+  background-color: var(--panel-bg) !important;
+}
+
+/* — bg-slate-900 variants → support panel surface — */
+:root[data-theme="aurora"] .bg-slate-900,
+:root[data-theme="aurora"] .bg-slate-900\/20,
+:root[data-theme="aurora"] .bg-slate-900\/40,
+:root[data-theme="aurora"] .bg-slate-900\/45,
+:root[data-theme="aurora"] .bg-slate-900\/50,
+:root[data-theme="aurora"] .bg-slate-900\/55,
+:root[data-theme="aurora"] .bg-slate-900\/60,
+:root[data-theme="aurora"] .bg-slate-900\/65,
+:root[data-theme="aurora"] .bg-slate-900\/70,
+:root[data-theme="aurora"] .bg-slate-900\/80,
+:root[data-theme="aurora"] .bg-slate-900\/95 {
+  background-color: var(--panel-support-bg) !important;
+}
+
+/* — bg-slate-800 / 700 variants → muted surface — */
+:root[data-theme="aurora"] .bg-slate-800,
+:root[data-theme="aurora"] .bg-slate-800\/40,
+:root[data-theme="aurora"] .bg-slate-800\/50,
+:root[data-theme="aurora"] .bg-slate-800\/60,
+:root[data-theme="aurora"] .bg-slate-800\/70,
+:root[data-theme="aurora"] .bg-slate-800\/80,
+:root[data-theme="aurora"] .bg-slate-800\/90,
+:root[data-theme="aurora"] .bg-slate-700,
+:root[data-theme="aurora"] .bg-slate-700\/40,
+:root[data-theme="aurora"] .bg-slate-700\/80 {
+  background-color: var(--surface-muted) !important;
+}
+
+/* — bg-slate-600 (progress bar track, inline chips) — */
+:root[data-theme="aurora"] .bg-slate-600 {
+  background-color: var(--surface-muted) !important;
+}
+
+/* — Slate borders → theme alpha borders — */
+:root[data-theme="aurora"] .border-slate-700,
+:root[data-theme="aurora"] .border-slate-700\/60,
+:root[data-theme="aurora"] .border-slate-700\/70,
+:root[data-theme="aurora"] .border-slate-700\/80,
+:root[data-theme="aurora"] .border-slate-800,
+:root[data-theme="aurora"] .border-slate-800\/80,
+:root[data-theme="aurora"] .border-slate-600 {
+  border-color: var(--panel-border) !important;
+}
+
+/* — Gradient strip — */
+:root[data-theme="aurora"] .bg-gradient-to-br.from-slate-900 {
+  background-image: none !important;
+  background-color: var(--panel-support-bg) !important;
+}
+
+/* — hover states — */
+:root[data-theme="aurora"] .hover\:bg-slate-900:hover {
+  background-color: var(--panel-support-bg) !important;
+}
+:root[data-theme="aurora"] .hover\:bg-slate-800\/80:hover {
+  background-color: var(--surface-muted) !important;
+}
+
+/* ================================================================= */
+/* PAUL BLUE THEME: surface + contrast cleanup                        */
+/* Override hardcoded slate/gray blocks with navy-blue surfaces.      */
+/* SCOPE: data-theme="paulblue" only.                                 */
+/* ================================================================= */
+
+/* — bg-slate-950 variants → deep navy — */
+:root[data-theme="paulblue"] .bg-slate-950,
+:root[data-theme="paulblue"] .bg-slate-950\/18,
+:root[data-theme="paulblue"] .bg-slate-950\/20,
+:root[data-theme="paulblue"] .bg-slate-950\/35,
+:root[data-theme="paulblue"] .bg-slate-950\/40,
+:root[data-theme="paulblue"] .bg-slate-950\/45,
+:root[data-theme="paulblue"] .bg-slate-950\/50,
+:root[data-theme="paulblue"] .bg-slate-950\/60,
+:root[data-theme="paulblue"] .bg-slate-950\/70,
+:root[data-theme="paulblue"] .bg-slate-950\/75,
+:root[data-theme="paulblue"] .bg-slate-950\/80,
+:root[data-theme="paulblue"] .bg-slate-950\/96 {
+  background-color: var(--panel-bg) !important;
+}
+
+/* — bg-slate-900 variants → navy panel — */
+:root[data-theme="paulblue"] .bg-slate-900,
+:root[data-theme="paulblue"] .bg-slate-900\/20,
+:root[data-theme="paulblue"] .bg-slate-900\/40,
+:root[data-theme="paulblue"] .bg-slate-900\/45,
+:root[data-theme="paulblue"] .bg-slate-900\/50,
+:root[data-theme="paulblue"] .bg-slate-900\/55,
+:root[data-theme="paulblue"] .bg-slate-900\/60,
+:root[data-theme="paulblue"] .bg-slate-900\/65,
+:root[data-theme="paulblue"] .bg-slate-900\/70,
+:root[data-theme="paulblue"] .bg-slate-900\/80,
+:root[data-theme="paulblue"] .bg-slate-900\/95 {
+  background-color: var(--panel-support-bg) !important;
+}
+
+/* — bg-slate-800 / 700 variants → muted navy — */
+:root[data-theme="paulblue"] .bg-slate-800,
+:root[data-theme="paulblue"] .bg-slate-800\/40,
+:root[data-theme="paulblue"] .bg-slate-800\/50,
+:root[data-theme="paulblue"] .bg-slate-800\/60,
+:root[data-theme="paulblue"] .bg-slate-800\/70,
+:root[data-theme="paulblue"] .bg-slate-800\/80,
+:root[data-theme="paulblue"] .bg-slate-800\/90,
+:root[data-theme="paulblue"] .bg-slate-700,
+:root[data-theme="paulblue"] .bg-slate-700\/40,
+:root[data-theme="paulblue"] .bg-slate-700\/80 {
+  background-color: var(--surface-muted) !important;
+}
+
+/* — bg-slate-600 — */
+:root[data-theme="paulblue"] .bg-slate-600 {
+  background-color: var(--surface-muted) !important;
+}
+
+/* — Hardcoded #081220 dark hex → deep navy — */
+:root[data-theme="paulblue"] .bg-\[\#081220\]\/95 {
+  background-color: var(--panel-bg) !important;
+}
+
+/* — Slate borders → blue alpha borders — */
+:root[data-theme="paulblue"] .border-slate-700,
+:root[data-theme="paulblue"] .border-slate-700\/60,
+:root[data-theme="paulblue"] .border-slate-700\/70,
+:root[data-theme="paulblue"] .border-slate-700\/80,
+:root[data-theme="paulblue"] .border-slate-800,
+:root[data-theme="paulblue"] .border-slate-800\/80,
+:root[data-theme="paulblue"] .border-slate-600 {
+  border-color: var(--panel-border) !important;
+}
+
+/* — White/alpha borders → blue alpha — */
+:root[data-theme="paulblue"] .border-white\/10,
+:root[data-theme="paulblue"] .border-white\/15,
+:root[data-theme="paulblue"] .border-white\/20 {
+  border-color: var(--panel-border) !important;
+}
+:root[data-theme="paulblue"] .border-white\/8,
+:root[data-theme="paulblue"] .border-white\/\[0\.08\] {
+  border-color: rgba(96, 165, 250, 0.10) !important;
+}
+:root[data-theme="paulblue"] .border-dashed.border-white\/10 {
+  border-color: rgba(96, 165, 250, 0.22) !important;
+}
+:root[data-theme="paulblue"] .border-indigo-700 {
+  border-color: rgba(96, 165, 250, 0.40) !important;
+}
+:root[data-theme="paulblue"] .border-indigo-500\/20 {
+  border-color: rgba(96, 165, 250, 0.22) !important;
+}
+
+/* — Gradient strip (Tracker Settings header panel) — */
+:root[data-theme="paulblue"] .bg-gradient-to-br.from-slate-900 {
+  background-image: none !important;
+  background-color: var(--panel-support-bg) !important;
+}
+
+/* — hover states — */
+:root[data-theme="paulblue"] .hover\:bg-slate-900:hover {
+  background-color: var(--panel-support-bg) !important;
+}
+:root[data-theme="paulblue"] .hover\:bg-slate-800\/80:hover {
+  background-color: var(--surface-muted) !important;
+}
+
+/* — Text: ensure light-on-dark slate text stays visible on navy — */
+/* text-slate-400 (muted labels) — boost slightly for navy bg */
+:root[data-theme="paulblue"] .text-slate-400 {
+  color: #93c5fd !important;
+}
+/* text-slate-500 stays readable but shift blue */
+:root[data-theme="paulblue"] .text-slate-500 {
+  color: #7ba7d4 !important;
+}
+
+/* — Pale cyan/teal text looks fine on dark blue; keep readable — */
+:root[data-theme="paulblue"] .text-cyan-100,
+:root[data-theme="paulblue"] .text-cyan-200,
+:root[data-theme="paulblue"] .text-cyan-300 {
+  color: #7dd3fc !important;
+}
+
+/* — File input button → navy themed — */
+:root[data-theme="paulblue"] input[type="file"]::file-selector-button,
+:root[data-theme="paulblue"] input[type="file"]::-webkit-file-upload-button {
+  background-color: rgba(6, 22, 58, 0.92) !important;
+  color: #bfdbfe !important;
+  border-color: rgba(96, 165, 250, 0.35) !important;
+}
+:root[data-theme="paulblue"] input[type="file"]:hover::file-selector-button,
+:root[data-theme="paulblue"] input[type="file"]:hover::-webkit-file-upload-button {
+  background-color: rgba(8, 28, 72, 0.98) !important;
+}
+
+/* — Tiptap toolbar: keep dark navy on Paul Blue — */
+:root[data-theme="paulblue"] .tiptap-editor--pageless,
+:root[data-theme="paulblue"] .tiptap-editor--page {
+  background: var(--panel-bg);
+}
+:root[data-theme="paulblue"] .tiptap-editor__toolbar {
+  background: rgba(4, 12, 32, 0.98);
+  border-bottom-color: rgba(96, 165, 250, 0.12);
+}
+:root[data-theme="paulblue"] .tiptap-dd__panel {
+  background: rgba(4, 12, 32, 0.98);
+  border-color: rgba(96, 165, 250, 0.18);
+}
+
+/* — Scrollbar thumb on Paul Blue — */
+:root[data-theme="paulblue"] .scrollbar-subtle::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.18);
+}
