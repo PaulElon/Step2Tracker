@@ -21,11 +21,28 @@ export function NotebookImageNodeView({ node, selected, updateAttributes, delete
       const startWidth =
         imgRef.current?.offsetWidth ?? (width ? parseInt(String(width), 10) : 300);
 
+      // Walk up from the image to find the stable editor content container.
+      // Must be captured at pointerdown — the NodeViewWrapper shrinks with the
+      // image, so querying parentElement inside pointermove would give the
+      // already-shrunk width and prevent growing the image back.
+      let maxWidth = 1200;
+      let el: HTMLElement | null = imgRef.current;
+      while (el) {
+        if (
+          el.classList.contains("tiptap-editor__content") ||
+          el.classList.contains("ProseMirror") ||
+          el.classList.contains("notebook-editor-content")
+        ) {
+          maxWidth = el.clientWidth;
+          break;
+        }
+        el = el.parentElement;
+      }
+      if (maxWidth <= 0) maxWidth = 1200;
+
       const onPointerMove = (ev: PointerEvent) => {
         const dx = ev.clientX - startX;
-        const containerWidth =
-          imgRef.current?.parentElement?.clientWidth ?? 9999;
-        const next = Math.round(Math.min(containerWidth, Math.max(80, startWidth + dx)));
+        const next = Math.round(Math.min(maxWidth, Math.max(80, startWidth + dx)));
         updateAttributes({ width: String(next) });
       };
 
