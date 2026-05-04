@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, useEditor, ReactNodeViewRenderer } from "@tiptap/react";
 import { Extension, type Editor } from "@tiptap/core";
+import { NotebookImageNodeView } from "./notebook-image-node-view";
 import { Plugin } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -410,7 +411,30 @@ export function TiptapEditor({
         linkOnPaste: true,
         HTMLAttributes: { class: "tiptap-editor__link" },
       }),
-      Image.configure({ inline: false, allowBase64: false }),
+      Image.extend({
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            width: {
+              default: null,
+              parseHTML: (el: HTMLElement) => {
+                const w = el.getAttribute("width");
+                if (w) return w;
+                const sw = el.style.width;
+                if (sw) return sw.replace(/px$/, "");
+                return null;
+              },
+              renderHTML: (attrs: Record<string, unknown>) => {
+                if (!attrs.width) return {};
+                return { width: String(attrs.width) };
+              },
+            },
+          };
+        },
+        addNodeView() {
+          return ReactNodeViewRenderer(NotebookImageNodeView);
+        },
+      }).configure({ inline: false, allowBase64: false }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Extension.create({
         name: "imageUpload",

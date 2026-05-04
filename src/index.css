@@ -2285,3 +2285,80 @@ button {
 :root[data-theme="paulblue"] .scrollbar-subtle::-webkit-scrollbar-thumb {
   background: rgba(96, 165, 250, 0.18);
 }
+
+/* ── Notebook image node view ─────────────────────────────────────────────── */
+
+.notebook-image-node {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  /* block-level gap */
+  margin: 0.25rem 0;
+}
+
+.notebook-image-node--selected img {
+  outline: 2px solid rgba(99, 179, 237, 0.72);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.notebook-image-node__delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.82);
+  color: rgba(226, 232, 240, 0.9);
+  cursor: pointer;
+  user-select: none;
+  z-index: 10;
+}
+
+.notebook-image-node__delete:hover {
+  background: rgba(239, 68, 68, 0.72);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #fff;
+}
+
+.notebook-image-node__resize-handle {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 14px;
+  height: 14px;
+  cursor: se-resize;
+  background: rgba(99, 179, 237, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  border-radius: 3px;
+  z-index: 10;
+  user-select: none;
+  touch-action: none;
+}
+
+.notebook-image-node__resize-handle:hover {
+  background: rgba(99, 179, 237, 1);
+}
+
+.notebook-image-node__width-badge {
+  position: absolute;
+  bottom: 4px;
+  left: 6px;
+  padding: 1px 5px;
+  font-size: 10px;
+  line-height: 1.4;
+  border-radius: 3px;
+  background: rgba(15, 23, 42, 0.72);
+  color: rgba(148, 163, 184, 0.9);
+  pointer-events: none;
+  user-select: none;
+  z-index: 10;
+}
