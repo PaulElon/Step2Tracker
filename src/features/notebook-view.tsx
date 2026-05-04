@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ModalShell } from "../components/modal-shell";
 import { NotebookEditorAdapter } from "../components/notebook-editor-adapter";
 import { richTextToPlain } from "../components/rich-text-editor";
-import { embedNotebookImagesInHtml } from "../lib/notebook-images";
+import { embedNotebookImagesInHtml, purgeOrphanedNotebookImages } from "../lib/notebook-images";
 import { useAppStore } from "../state/app-store";
 import type { NotebookDocument, NotebookFolder, NotebookPage } from "../types/models";
 
@@ -806,6 +806,30 @@ export function NotebookView() {
     setStatus(null);
   }
 
+  async function handleCleanImages() {
+    await flushPendingNotebookSave();
+    try {
+      const orphans = await purgeOrphanedNotebookImages(notebookDocuments, true);
+      if (orphans.length === 0) {
+        setStatus({ kind: "success", message: "No orphaned images found." });
+        return;
+      }
+      if (!window.confirm(`Found ${orphans.length} unused image file(s). Delete them permanently?`)) {
+        return;
+      }
+      const deleted = await purgeOrphanedNotebookImages(notebookDocuments, false);
+      setStatus({ kind: "success", message: `Deleted ${deleted.length} unused image file(s).` });
+    } catch (error) {
+      const message =
+        typeof error === "string"
+          ? error
+          : error instanceof Error && error.message
+            ? error.message
+            : "Unable to clean images.";
+      setStatus({ kind: "error", message });
+    }
+  }
+
   async function exportActivePage(format: NotebookExportFormat) {
     setIsExportMenuOpen(false);
 
@@ -1359,6 +1383,13 @@ export function NotebookView() {
                         className={`${editorActionButtonClass} ${activeDocument.favorited ? "border-amber-300/30 bg-amber-400/12 text-amber-50 hover:bg-amber-400/22" : ""}`}
                       >
                         {activeDocument.favorited ? "Favorited" : "Favorite"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleCleanImages()}
+                        className="inline-flex h-9 items-center justify-center rounded-xl border border-white/8 bg-white/[0.02] px-3.5 text-sm text-slate-400 transition hover:border-white/15 hover:bg-white/[0.04] hover:text-slate-200"
+                      >
+                        Clean Images
                       </button>
                       <div ref={exportMenuRef} className="relative">
                         <button

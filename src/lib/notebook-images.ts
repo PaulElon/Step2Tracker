@@ -1,4 +1,5 @@
 import { core } from "@tauri-apps/api";
+import type { NotebookDocument } from "../types/models";
 
 const ALLOWED_TYPES: Record<string, string> = {
   "image/png": "png",
@@ -66,6 +67,16 @@ export async function embedNotebookImagesInHtml(html: string): Promise<EmbedNote
   }
 
   return { html: result, missingImages };
+}
+
+export async function purgeOrphanedNotebookImages(
+  documents: NotebookDocument[],
+  dryRun: boolean,
+): Promise<string[]> {
+  return core.invoke<string[]>("purge_orphaned_notebook_images", {
+    documentsJson: JSON.stringify(documents),
+    dryRun,
+  });
 }
 
 async function toBase64(file: File): Promise<string> {

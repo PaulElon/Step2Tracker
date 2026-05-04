@@ -319,6 +319,89 @@ async fn export_notebook_page(
     Ok(path.to_string_lossy().to_string())
 }
 
+fn is_valid_image_filename(filename: &str) -> bool {
+    if filename.is_empty() || filename.contains('/') || filename.contains('\\') || filename.contains("..") {
+        return false;
+    }
+    let ext = filename.rsplit('.').next().unwrap_or("").to_lowercase();
+    matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp")
+}
+
+#[tauri::command]
+fn purge_orphaned_notebook_images(
+    app: tauri::AppHandle,
+    documents_json: String,
+    dry_run: bool,
+) -> Result<Vec<String>, String> {
+    use std::collections::HashSet;
+
+    let _: serde_json::Value = serde_json::from_str(&documents_json)
+        .map_err(|e| format!("Invalid documents JSON: {e}"))?;
+
+    let mut referenced: HashSet<String> = HashSet::new();
+    let prefix = "nbimg://localhost/";
+    let mut haystack = documents_json.as_str();
+    while let Some(pos) = haystack.find(prefix) {
+        haystack = &haystack[pos + prefix.len()..];
+        let end = haystack
+            .find(|c: char| matches!(c, '"' | '\'' | ' ' | '<' | '>' | '\n' | '\r' | '\t'))
+            .unwrap_or(haystack.len());
+        let filename = &haystack[..end];
+        if is_valid_image_filename(filename) {
+            referenced.insert(filename.to_string());
+        }
+    }
+
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Unable to resolve app data directory: {e}"))?;
+
+    let assets_dir = data_dir.join("notebook-assets");
+
+    if !assets_dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let entries = fs::read_dir(&assets_dir)
+        .map_err(|e| format!("Unable to read notebook-assets directory: {e}"))?;
+
+    let mut orphans: Vec<String> = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Unable to read directory entry: {e}"))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| format!("Unable to get file type: {e}"))?;
+
+        if file_type.is_dir() {
+            continue;
+        }
+
+        let filename = entry.file_name().to_string_lossy().to_string();
+        if !is_valid_image_filename(&filename) {
+            continue;
+        }
+
+        if !referenced.contains(&filename) {
+            orphans.push(filename);
+        }
+    }
+
+    if dry_run {
+        return Ok(orphans);
+    }
+
+    let mut deleted: Vec<String> = Vec::new();
+    for filename in &orphans {
+        let file_path = assets_dir.join(filename);
+        if fs::remove_file(&file_path).is_ok() {
+            deleted.push(filename.clone());
+        }
+    }
+
+    Ok(deleted)
+}
+
 fn main() {
     tauri::Builder::default()
         .register_uri_scheme_protocol("nbimg", |ctx, request| nbimg_protocol_handler(ctx.app_handle(), request))
@@ -358,7 +441,8 @@ fn main() {
             save_notebook_image,
             read_notebook_image_as_base64,
             updater::check_for_updates,
-            updater::install_update
+            updater::install_update,
+            purge_orphaned_notebook_images
         ])
         .run(tauri::generate_context!())
         .expect("error while running TimeFolio Study Tracker");
