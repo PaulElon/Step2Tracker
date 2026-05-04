@@ -311,12 +311,14 @@ export function TiptapEditor({
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const [fontSizeLocal, setFontSizeLocal] = useState(16);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const toolbarRef = useRef<HTMLDivElement>(null);
   const fontSizeInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const setFontSizeLocalRef = useRef(setFontSizeLocal);
   const uploadHandlerRef = useRef<(file: File) => Promise<void>>(async () => {});
+  const dragCounterRef = useRef(0);
   setFontSizeLocalRef.current = setFontSizeLocal;
 
   onChangeRef.current = onChange;
@@ -335,19 +337,33 @@ export function TiptapEditor({
     }
   };
 
-  // React-level fallback for OS file drops (e.g. Finder drag). Tauri's WKWebView
-  // does not always route native file-drop events through ProseMirror's handleDrop,
-  // so we catch them here. The defaultPrevented guard avoids double-uploading when
-  // ProseMirror does handle the event first.
-  const handleEditorDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    if (e.dataTransfer.types.includes("Files")) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "copy";
-    }
+  // React-level file-drop handlers on the outer wrapper. Tauri's WKWebView does not
+  // always deliver native file-drop events to ProseMirror's DOM listener, so we
+  // intercept them at the React wrapper level which sits higher in the event chain.
+  // Non-file drags (text selection DnD) are ignored so ProseMirror can handle them.
+  const handleWrapperDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    dragCounterRef.current += 1;
+    if (dragCounterRef.current === 1) setIsDragOver(true);
   }, []);
 
-  const handleEditorDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    if (e.nativeEvent.defaultPrevented) return;
+  const handleWrapperDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const handleWrapperDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current === 0) setIsDragOver(false);
+  }, []);
+
+  const handleWrapperDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    dragCounterRef.current = 0;
+    setIsDragOver(false);
+    // Only intercept file drops; let ProseMirror handle text DnD.
     const files = Array.from(e.dataTransfer.files);
     const imageFile = files.find((f) => f.type.startsWith("image/"));
     if (!imageFile) return;
@@ -613,6 +629,7 @@ export function TiptapEditor({
     "tiptap-editor w-full h-full min-h-0 flex flex-col rounded-xl border border-white/10 text-sm text-white focus-within:outline-none focus-within:ring-2 focus-within:ring-cyan-400/40",
     "tiptap-editor--pageless",
     scrollable ? "overflow-y-auto scrollbar-subtle" : "",
+    isDragOver ? "is-drag-over" : "",
     className ?? "",
   ]
     .filter(Boolean)
@@ -932,9 +949,16 @@ export function TiptapEditor({
     </div>
   );
 
+  const wrapperDropProps = {
+    onDragEnter: handleWrapperDragEnter,
+    onDragOver: handleWrapperDragOver,
+    onDragLeave: handleWrapperDragLeave,
+    onDrop: handleWrapperDrop,
+  };
+
   if (!editor) {
     return (
-      <div className={wrapperClassName} style={{ minHeight, maxHeight: scrollable ? "180px" : undefined }}>
+      <div className={wrapperClassName} style={{ minHeight, maxHeight: scrollable ? "180px" : undefined }} {...wrapperDropProps}>
         {toolbar}
         <div className="flex min-h-0 flex-1 items-center px-2 py-2 text-slate-500">{placeholder ?? "Loading editor..."}</div>
       </div>
@@ -942,7 +966,7 @@ export function TiptapEditor({
   }
 
   return (
-    <div className={wrapperClassName} style={{ minHeight, maxHeight: scrollable ? "180px" : undefined }}>
+    <div className={wrapperClassName} style={{ minHeight, maxHeight: scrollable ? "180px" : undefined }} {...wrapperDropProps}>
       {toolbar}
       <input
         ref={fileInputRef}
@@ -954,8 +978,6 @@ export function TiptapEditor({
       <EditorContent
         editor={editor}
         className="tiptap-editor__content flex min-h-0 flex-1 scrollbar-subtle"
-        onDragOver={handleEditorDragOver}
-        onDrop={handleEditorDrop}
       />
     </div>
   );
