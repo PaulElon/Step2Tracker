@@ -1216,7 +1216,7 @@ function EntryCard({
 
   return (
     <div
-      className={`flex min-h-[17rem] w-full flex-col overflow-hidden rounded-2xl border border-l-4 px-4 py-3.5 transition-colors md:h-[17rem] ${
+      className={`flex min-h-[20rem] w-full flex-col overflow-hidden rounded-2xl border border-l-4 px-4 py-3.5 transition-colors md:h-[20rem] ${
         isEditing
           ? "border-cyan-400/30 bg-cyan-400/[0.06]"
           : "border-white/[0.08] bg-slate-950/45 hover:border-white/15"
@@ -1245,11 +1245,11 @@ function EntryCard({
         </div>
       </div>
 
-      <div className="mt-2.5 grid min-h-0 flex-1 grid-rows-[repeat(2,minmax(0,1fr))] gap-2">
-        <StudyPreview label="Missed" content={entry.missedPattern} />
-        <div className="min-h-0">
-          <StudyPreview label="Correct rule" content={entry.whyCorrectAnswerIsCorrect} />
-        </div>
+      <div className="mt-2.5 grid min-h-0 flex-1 grid-cols-1 gap-x-3 gap-y-2 sm:grid-cols-2">
+        <StudyPreview label="Missed pattern" content={entry.missedPattern} />
+        <StudyPreview label="Fix" content={entry.fix} />
+        <StudyPreview label="Why wrong answer is tempting" content={entry.whyTemptingWrongAnswerIsWrong} />
+        <StudyPreview label="Rule / Algorithm" content={entry.decisionRule} />
       </div>
 
       <div className="mt-2.5 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/[0.07] pt-2">
