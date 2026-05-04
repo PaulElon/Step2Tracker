@@ -334,6 +334,27 @@ export function TiptapEditor({
     }
   };
 
+  // React-level fallback for OS file drops (e.g. Finder drag). Tauri's WKWebView
+  // does not always route native file-drop events through ProseMirror's handleDrop,
+  // so we catch them here. The defaultPrevented guard avoids double-uploading when
+  // ProseMirror does handle the event first.
+  const handleEditorDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (e.dataTransfer.types.includes("Files")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    }
+  }, []);
+
+  const handleEditorDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (e.nativeEvent.defaultPrevented) return;
+    const files = Array.from(e.dataTransfer.files);
+    const imageFile = files.find((f) => f.type.startsWith("image/"));
+    if (!imageFile) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void uploadHandlerRef.current(imageFile);
+  }, []);
+
   const toggleMenu = useCallback((id: MenuId) => {
     setOpenMenu((prev) => (prev === id ? null : id));
   }, []);
@@ -906,7 +927,12 @@ export function TiptapEditor({
         style={{ display: "none" }}
         onChange={handleFileInputChange}
       />
-      <EditorContent editor={editor} className="tiptap-editor__content flex min-h-0 flex-1 scrollbar-subtle" />
+      <EditorContent
+        editor={editor}
+        className="tiptap-editor__content flex min-h-0 flex-1 scrollbar-subtle"
+        onDragOver={handleEditorDragOver}
+        onDrop={handleEditorDrop}
+      />
     </div>
   );
 }
