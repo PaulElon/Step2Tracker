@@ -1,4 +1,5 @@
 import { Bell, Check, Database, Download, ExternalLink, Globe, Monitor, Palette, Pencil, Plus, RotateCcw, Trash2, X, Zap } from "lucide-react";
+import { launchResource } from "../lib/launcher";
 import { useState, type ChangeEvent } from "react";
 import { Panel } from "../components/ui";
 import { themeList } from "../lib/themes";
@@ -170,6 +171,7 @@ function ResourcesPanel({
   const [showWebsiteModal, setShowWebsiteModal] = useState(false);
   const [showAppModal, setShowAppModal] = useState(false);
   const [modalInput, setModalInput] = useState("");
+  const [openError, setOpenError] = useState<string | null>(null);
 
   function beginEdit(link: ResourceLink) {
     setEditingId(link.id);
@@ -230,17 +232,11 @@ function ResourcesPanel({
   }
 
   async function handleOpen(url: string) {
+    setOpenError(null);
     try {
-      const isPath = url.startsWith("/") || url.startsWith("file://");
-      if (isPath) {
-        const { openPath } = await import("@tauri-apps/plugin-opener");
-        await openPath(url.replace(/^file:\/\//, ""));
-      } else {
-        const { openUrl } = await import("@tauri-apps/plugin-opener");
-        await openUrl(url);
-      }
-    } catch {
-      window.open(url, "_blank", "noopener,noreferrer");
+      await launchResource(url);
+    } catch (err) {
+      setOpenError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -258,6 +254,9 @@ function ResourcesPanel({
         }
       >
         <div className="space-y-2">
+          {openError ? (
+            <p className="rounded-lg bg-red-900/40 px-3 py-2 text-xs text-red-300">{openError}</p>
+          ) : null}
           {resourceLinks.length === 0 ? (
             <p className="text-sm text-slate-400">No saved resources yet.</p>
           ) : null}

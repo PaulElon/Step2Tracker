@@ -137,6 +137,42 @@ fn trash_error_log_entry(app: tauri::AppHandle, id: String) -> Result<ClientSnap
 }
 
 #[tauri::command]
+fn launch_path(path: String) -> Result<(), String> {
+    let path = path.trim().to_string();
+    if path.is_empty() {
+        return Err("Path is empty.".to_string());
+    }
+
+    let expanded = if path.starts_with("~/") {
+        let home = std::env::var("HOME").map_err(|_| "HOME environment variable not set.".to_string())?;
+        format!("{}{}", home, &path[1..])
+    } else if path == "~" {
+        std::env::var("HOME").map_err(|_| "HOME environment variable not set.".to_string())?
+    } else {
+        path.clone()
+    };
+
+    let p = std::path::Path::new(&expanded);
+    if !p.exists() {
+        return Err(format!("Path does not exist: {}", expanded));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&expanded)
+            .spawn()
+            .map_err(|e| format!("Failed to launch \"{}\": {}", expanded, e))?;
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err(format!("Local app launching is not supported on this platform. Path: {}", expanded))
+    }
+}
+
+#[tauri::command]
 fn open_notification_settings() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
@@ -436,6 +472,7 @@ fn main() {
             tf_persistence::tf_load_state,
             tf_persistence::tf_save_state,
             tf_persistence::tf_reset_state,
+            launch_path,
             open_notification_settings,
             export_notebook_page,
             save_notebook_image,

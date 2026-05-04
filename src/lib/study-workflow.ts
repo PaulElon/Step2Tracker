@@ -1,4 +1,5 @@
 import type { StudyBlock } from "../types/models";
+import { launchResource } from "./launcher";
 
 export type StudyLane = "review" | "content" | "assessment" | "recovery" | "admin";
 
@@ -47,26 +48,8 @@ export function getTaskLaunchTarget(taskTitle: string) {
   return launchMatchers.find((entry) => entry.matcher.test(taskTitle))?.target ?? null;
 }
 
-export async function openLaunchTarget(target: LaunchTarget) {
-  try {
-    if (target.mode === "path") {
-      const { openPath } = await import("@tauri-apps/plugin-opener");
-      await openPath(target.href);
-    } else {
-      const { openUrl } = await import("@tauri-apps/plugin-opener");
-      await openUrl(target.href);
-    }
-    return;
-  } catch {
-    // Not in Tauri context, fall back to browser.
-  }
-
-  if (target.mode === "path") {
-    window.alert("App launching requires the desktop application. Install the app to open local apps directly.");
-    return;
-  }
-
-  window.open(target.href, "_blank", "noopener,noreferrer");
+export async function openLaunchTarget(target: LaunchTarget): Promise<void> {
+  await launchResource(target.href);
 }
 
 export function getStudyLane(block: Pick<StudyBlock, "category" | "task" | "notes">): StudyLane {
