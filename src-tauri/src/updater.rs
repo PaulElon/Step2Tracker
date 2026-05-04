@@ -14,6 +14,15 @@ use tauri::Manager;
 #[cfg(not(debug_assertions))]
 use std::str::FromStr;
 
+#[derive(serde::Serialize, Clone)]
+pub struct UpdateCheckResult {
+    pub available: bool,
+    pub current_version: String,
+    pub latest_version: Option<String>,
+    pub notes: Option<String>,
+    pub date: Option<String>,
+}
+
 const DEFAULT_UPDATER_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFCREM0MDU1RDBDNEVGQwpSV1Q4VGd4ZEJjUzlDbHErREoxaUc5a1NBZ0hWOXNKVlhJNkw4Nnpmei82YytCZEJlY2JMbGpwQgo=";
 #[cfg(not(debug_assertions))]
 const DEFAULT_UPDATER_ENDPOINT: &str =
@@ -234,7 +243,9 @@ pub async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
                 .map_err(|e| e.to_string())?;
             app.restart();
         }
-        None => {}
+        None => {
+            return Err("No update is available. You are already running the latest version.".to_string());
+        }
     }
     Ok(())
 }
@@ -242,5 +253,60 @@ pub async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
 #[cfg(debug_assertions)]
 #[tauri::command]
 pub async fn install_update(_app: tauri::AppHandle) -> Result<(), String> {
-    Ok(())
+    Err("Update installation is not available in dev builds.".to_string())
+}
+
+#[cfg(not(debug_assertions))]
+#[tauri::command]
+pub async fn check_for_update(app: tauri::AppHandle) -> Result<UpdateCheckResult, String> {
+    let current_version = app.package_info().version.to_string();
+    let endpoints = configured_endpoints();
+    if endpoints.is_empty() {
+        return Err("No updater endpoints are configured.".to_string());
+    }
+    let endpoint_display = endpoints
+        .first()
+        .map(|u| u.as_str().to_string())
+        .unwrap_or_default();
+    let pubkey = updater_pubkey();
+    let updater = app
+        .updater_builder()
+        .pubkey(pubkey)
+        .endpoints(endpoints)
+        .map_err(|e| format!("Updater configuration error: {e}"))?
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Updater build error: {e}"))?;
+
+    let check = updater
+        .check()
+        .await
+        .map_err(|e| format!("Update check failed ({endpoint_display}): {e}"))?;
+
+    match check {
+        Some(update) => Ok(UpdateCheckResult {
+            available: true,
+            current_version,
+            latest_version: Some(update.version.clone()),
+            notes: update.body.clone(),
+            date: update.date.as_ref().map(|d| d.to_string()),
+        }),
+        None => Ok(UpdateCheckResult {
+            available: false,
+            current_version,
+            latest_version: None,
+            notes: None,
+            date: None,
+        }),
+    }
+}
+
+#[cfg(debug_assertions)]
+#[tauri::command]
+pub async fn check_for_update(_app: tauri::AppHandle) -> Result<UpdateCheckResult, String> {
+    Err(
+        "Update checks are not available in dev builds. \
+         Install a release build to receive updates."
+            .to_string(),
+    )
 }

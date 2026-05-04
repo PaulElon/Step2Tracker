@@ -1,6 +1,8 @@
-import { Bell, Check, Database, Download, ExternalLink, Globe, Monitor, Palette, Pencil, Plus, RotateCcw, Trash2, X, Zap } from "lucide-react";
+import { Bell, Check, Database, Download, ExternalLink, Globe, Monitor, Palette, Pencil, Plus, RefreshCw, RotateCcw, Trash2, X, Zap } from "lucide-react";
 import { launchResource } from "../lib/launcher";
-import { useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { Panel } from "../components/ui";
 import { themeList } from "../lib/themes";
 import { fieldClassName, secondaryButtonClassName } from "../lib/ui";
@@ -443,6 +445,226 @@ function ResourcesPanel({
   );
 }
 
+interface UpdateCheckResult {
+  available: boolean;
+  current_version: string;
+  latest_version?: string;
+  notes?: string;
+  date?: string;
+}
+
+type UpdateStatus =
+  | { kind: "idle" }
+  | { kind: "checking" }
+  | { kind: "up-to-date"; checkedAt: string; currentVersion: string }
+  | { kind: "available"; version: string; currentVersion: string; checkedAt: string }
+  | { kind: "installing" }
+  | { kind: "error"; message: string; checkedAt: string };
+
+const LAST_CHECK_KEY = "timefolio:lastUpdateCheckAt";
+const LAST_RESULT_KEY = "timefolio:lastUpdateCheckResult";
+const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+function formatCheckedAt(iso: string) {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function readCachedStatus(): UpdateStatus {
+  try {
+    const raw = localStorage.getItem(LAST_RESULT_KEY);
+    if (!raw) return { kind: "idle" };
+    const cached = JSON.parse(raw) as {
+      available: boolean;
+      version?: string;
+      currentVersion?: string;
+      checkedAt: string;
+    };
+    if (cached.available && cached.version) {
+      return {
+        kind: "available",
+        version: cached.version,
+        currentVersion: cached.currentVersion ?? "",
+        checkedAt: cached.checkedAt,
+      };
+    }
+    return {
+      kind: "up-to-date",
+      checkedAt: cached.checkedAt,
+      currentVersion: cached.currentVersion ?? "",
+    };
+  } catch {
+    return { kind: "idle" };
+  }
+}
+
+function UpdatesPanel() {
+  const [status, setStatus] = useState<UpdateStatus>(readCachedStatus);
+  const [appVersion, setAppVersion] = useState<string>("");
+  const hasAutoCheckedRef = useRef(false);
+
+  useEffect(() => {
+    getVersion()
+      .then(setAppVersion)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (hasAutoCheckedRef.current) return;
+    hasAutoCheckedRef.current = true;
+
+    const lastCheckAt = localStorage.getItem(LAST_CHECK_KEY);
+    const elapsed = lastCheckAt
+      ? Date.now() - new Date(lastCheckAt).getTime()
+      : Infinity;
+
+    if (elapsed >= CHECK_INTERVAL_MS) {
+      void runCheck(false);
+    }
+  }, []);
+
+  async function runCheck(force: boolean) {
+    if (!force && status.kind === "checking") return;
+    setStatus({ kind: "checking" });
+
+    const now = new Date().toISOString();
+    localStorage.setItem(LAST_CHECK_KEY, now);
+
+    try {
+      const result = await invoke<UpdateCheckResult>("check_for_update");
+      const currentVersion = result.current_version;
+
+      if (result.available && result.latest_version) {
+        const next: UpdateStatus = {
+          kind: "available",
+          version: result.latest_version,
+          currentVersion,
+          checkedAt: now,
+        };
+        setStatus(next);
+        localStorage.setItem(
+          LAST_RESULT_KEY,
+          JSON.stringify({
+            available: true,
+            version: result.latest_version,
+            currentVersion,
+            checkedAt: now,
+          }),
+        );
+      } else {
+        const next: UpdateStatus = { kind: "up-to-date", checkedAt: now, currentVersion };
+        setStatus(next);
+        localStorage.setItem(
+          LAST_RESULT_KEY,
+          JSON.stringify({ available: false, currentVersion, checkedAt: now }),
+        );
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setStatus({ kind: "error", message, checkedAt: now });
+    }
+  }
+
+  async function handleInstall() {
+    setStatus({ kind: "installing" });
+    try {
+      await invoke("install_update");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setStatus({ kind: "error", message, checkedAt: new Date().toISOString() });
+    }
+  }
+
+  const displayVersion =
+    status.kind === "up-to-date" || status.kind === "available"
+      ? status.currentVersion || appVersion
+      : appVersion;
+
+  const isBusy = status.kind === "checking" || status.kind === "installing";
+
+  let statusLine: React.ReactNode;
+  if (status.kind === "idle") {
+    statusLine = <span className="text-slate-400">Never checked</span>;
+  } else if (status.kind === "checking") {
+    statusLine = <span className="text-slate-300">Checking…</span>;
+  } else if (status.kind === "installing") {
+    statusLine = <span className="text-slate-300">Installing…</span>;
+  } else if (status.kind === "up-to-date") {
+    statusLine = (
+      <span className="text-emerald-300">
+        Up to date · checked {formatCheckedAt(status.checkedAt)}
+      </span>
+    );
+  } else if (status.kind === "available") {
+    statusLine = (
+      <span className="text-cyan-300">
+        Update available: v{status.version} · checked {formatCheckedAt(status.checkedAt)}
+      </span>
+    );
+  } else {
+    statusLine = (
+      <span className="text-rose-300">
+        Check failed · {formatCheckedAt(status.checkedAt)}
+      </span>
+    );
+  }
+
+  return (
+    <Panel title="Updates">
+      <div className="flex flex-col gap-4">
+        {displayVersion ? (
+          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+            Installed: v{displayVersion}
+          </p>
+        ) : null}
+
+        <p className="text-sm text-slate-300">{statusLine}</p>
+
+        {status.kind === "error" ? (
+          <div className="rounded-[14px] border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+            {status.message}
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={secondaryButtonClassName}
+            disabled={isBusy}
+            onClick={() => {
+              void runCheck(true);
+            }}
+          >
+            <RefreshCw className={`h-4 w-4 ${status.kind === "checking" ? "animate-spin" : ""}`} />
+            Check for Updates
+          </button>
+
+          {status.kind === "available" ? (
+            <button
+              type="button"
+              className="rounded-lg border border-cyan-500/30 bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isBusy}
+              onClick={() => {
+                void handleInstall();
+              }}
+            >
+              Install Update v{status.version}
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
 export function SettingsView({
   themeId,
   dailyGoalMinutes,
@@ -701,6 +923,8 @@ export function SettingsView({
         />
         <ResourcesPanel resourceLinks={resourceLinks} onSetResourceLinks={onSetResourceLinks} />
       </div>
+
+      <UpdatesPanel />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2.6fr)]">
         <Panel

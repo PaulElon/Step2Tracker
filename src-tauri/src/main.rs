@@ -478,6 +478,7 @@ fn main() {
             save_notebook_image,
             read_notebook_image_as_base64,
             updater::check_for_updates,
+            updater::check_for_update,
             updater::install_update,
             purge_orphaned_notebook_images
         ])
