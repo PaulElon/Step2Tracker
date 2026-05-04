@@ -158,6 +158,51 @@ fn open_notification_settings() -> Result<(), String> {
     }
 }
 
+fn mime_for_ext(ext: &str) -> Option<&'static str> {
+    match ext {
+        "png" => Some("image/png"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "gif" => Some("image/gif"),
+        "webp" => Some("image/webp"),
+        _ => None,
+    }
+}
+
+#[derive(serde::Serialize)]
+struct NotebookImageData {
+    mime: String,
+    data_b64: String,
+}
+
+#[tauri::command]
+fn read_notebook_image_as_base64(app: tauri::AppHandle, filename: String) -> Result<NotebookImageData, String> {
+    use base64::Engine as _;
+
+    if filename.is_empty() || filename.contains('/') || filename.contains('\\') || filename.contains("..") {
+        return Err("Invalid filename.".to_string());
+    }
+
+    let ext = filename.rsplit('.').next().unwrap_or("").to_lowercase();
+    let mime = mime_for_ext(&ext).ok_or_else(|| format!("Unsupported extension: {ext}"))?;
+
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Unable to resolve app data directory: {e}"))?;
+
+    let file_path = data_dir.join("notebook-assets").join(&filename);
+
+    let bytes = fs::read(&file_path)
+        .map_err(|e| format!("Unable to read image file: {e}"))?;
+
+    let data_b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+
+    Ok(NotebookImageData {
+        mime: mime.to_string(),
+        data_b64,
+    })
+}
+
 fn nbimg_protocol_handler(
     app: &tauri::AppHandle,
     request: tauri::http::Request<Vec<u8>>,
@@ -182,12 +227,9 @@ fn nbimg_protocol_handler(
     }
 
     let ext = file_name.rsplit('.').next().unwrap_or("").to_lowercase();
-    let mime = match ext.as_str() {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        _ => return err(403, b"Forbidden"),
+    let mime = match mime_for_ext(&ext) {
+        Some(m) => m,
+        None => return err(403, b"Forbidden"),
     };
 
     let data_dir = match app.path().app_data_dir() {
@@ -314,6 +356,7 @@ fn main() {
             open_notification_settings,
             export_notebook_page,
             save_notebook_image,
+            read_notebook_image_as_base64,
             updater::check_for_updates,
             updater::install_update
         ])

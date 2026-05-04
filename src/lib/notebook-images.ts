@@ -25,6 +25,49 @@ export async function uploadNotebookImage(file: File): Promise<string> {
   return core.invoke<string>("save_notebook_image", { dataB64, ext });
 }
 
+export function getNotebookImageFilenameFromSrc(src: string): string | null {
+  const prefix = "nbimg://localhost/";
+  if (!src.startsWith(prefix)) {
+    return null;
+  }
+  const filename = src.slice(prefix.length);
+  return filename || null;
+}
+
+export interface EmbedNotebookImagesResult {
+  html: string;
+  missingImages: string[];
+}
+
+export async function embedNotebookImagesInHtml(html: string): Promise<EmbedNotebookImagesResult> {
+  const uniqueSrcs = new Set<string>();
+  for (const m of html.matchAll(/nbimg:\/\/localhost\/([^"'\s<>]+)/g)) {
+    uniqueSrcs.add(`nbimg://localhost/${m[1]}`);
+  }
+
+  let result = html;
+  const missingImages: string[] = [];
+
+  for (const src of uniqueSrcs) {
+    const filename = getNotebookImageFilenameFromSrc(src);
+    if (!filename) {
+      continue;
+    }
+    try {
+      const { mime, data_b64 } = await core.invoke<{ mime: string; data_b64: string }>(
+        "read_notebook_image_as_base64",
+        { filename },
+      );
+      const dataUri = `data:${mime};base64,${data_b64}`;
+      result = result.split(src).join(dataUri);
+    } catch {
+      missingImages.push(filename);
+    }
+  }
+
+  return { html: result, missingImages };
+}
+
 async function toBase64(file: File): Promise<string> {
   const CHUNK_SIZE = 8192;
   const buffer = await file.arrayBuffer();

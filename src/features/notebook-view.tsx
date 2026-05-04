@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ModalShell } from "../components/modal-shell";
 import { NotebookEditorAdapter } from "../components/notebook-editor-adapter";
 import { richTextToPlain } from "../components/rich-text-editor";
+import { embedNotebookImagesInHtml } from "../lib/notebook-images";
 import { useAppStore } from "../state/app-store";
 import type { NotebookDocument, NotebookFolder, NotebookPage } from "../types/models";
 
@@ -815,33 +816,39 @@ export function NotebookView() {
 
     try {
       const baseName = sanitizeFileNameSegment(`${activeDocument.title || "Untitled Document"}-${activePage.title || "Page 1"}`);
-      const payload =
-        format === "txt"
-          ? {
-              fileName: `${baseName}.txt`,
-              content: createTxtExport(activeDocument, activePage),
-              label: "TXT",
-            }
-          : format === "html"
-            ? {
-                fileName: `${baseName}.html`,
-                content: createHtmlExport(activeDocument, activePage),
-                label: "HTML",
-              }
-            : {
-                fileName: `${baseName}.md`,
-                content: createMarkdownExport(activeDocument, activePage),
-                label: "Markdown",
-              };
+
+      let fileName: string;
+      let content: string;
+      let label: string;
+      let missingImages: string[] = [];
+
+      if (format === "txt") {
+        fileName = `${baseName}.txt`;
+        content = createTxtExport(activeDocument, activePage);
+        label = "TXT";
+      } else if (format === "html") {
+        fileName = `${baseName}.html`;
+        const embedded = await embedNotebookImagesInHtml(createHtmlExport(activeDocument, activePage));
+        content = embedded.html;
+        missingImages = embedded.missingImages;
+        label = "HTML";
+      } else {
+        fileName = `${baseName}.md`;
+        content = createMarkdownExport(activeDocument, activePage);
+        label = "Markdown";
+      }
 
       const savedPath = await invoke<string>("export_notebook_page", {
-        suggestedFileName: payload.fileName,
-        contents: payload.content,
+        suggestedFileName: fileName,
+        contents: content,
       });
 
       setStatus({
         kind: "success",
-        message: `${payload.label} export saved to ${savedPath}.`,
+        message:
+          missingImages.length > 0
+            ? `${label} export saved to ${savedPath}. ${missingImages.length} local image(s) could not be embedded.`
+            : `${label} export saved to ${savedPath}.`,
       });
     } catch (error) {
       const message =
