@@ -72,30 +72,193 @@ function getAppLabel(event: AutoTrackerV2NativeEvent): string {
   return "Unknown app";
 }
 
-// Returns true if hostname matches a domain rule, supporting exact and subdomain.
-// e.g. rule "uworld.com" matches "uworld.com" and "apps.uworld.com" but NOT "notuworld.com".
-function matchesDomainRule(hostname: string, rule: string): boolean {
-  const h = hostname.toLowerCase();
-  const r = rule.toLowerCase().trim();
-  if (!r) return false;
-  if (h === r) return true;
-  if (h.endsWith(`.${r}`)) return true;
-  return false;
+function normalizeWebsiteHost(hostname: string): string {
+  return hostname.trim().toLowerCase().replace(/\.+$/u, "").replace(/^www\./u, "");
 }
 
-// Returns true if bundleId or appName matches an app rule (exact case-insensitive, plus
-// conservative contains fallback for appName).
+function normalizeWebsitePath(pathname: string): string {
+  let normalized = pathname.trim();
+  if (!normalized) {
+    return "/";
+  }
+  if (!normalized.startsWith("/")) {
+    normalized = `/${normalized}`;
+  }
+  normalized = normalized.replace(/\/+$/u, "");
+  return normalized.length > 0 ? normalized : "/";
+}
+
+type ParsedWebsiteRule = {
+  raw: string;
+  host: string;
+  path: string;
+};
+
+function parseWebsiteRule(value: string): ParsedWebsiteRule | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const candidates = [trimmed, `https://${trimmed}`];
+  for (const candidate of candidates) {
+    try {
+      const url = new URL(candidate);
+      return {
+        raw: trimmed,
+        host: normalizeWebsiteHost(url.hostname),
+        path: normalizeWebsitePath(url.pathname),
+      };
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  return null;
+}
+
+function parseWebsiteTarget(value: string): ParsedWebsiteRule | null {
+  try {
+    const url = new URL(value);
+    return {
+      raw: value,
+      host: normalizeWebsiteHost(url.hostname),
+      path: normalizeWebsitePath(url.pathname),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function websiteHostsMatch(targetHost: string, ruleHost: string): boolean {
+  if (!targetHost || !ruleHost) {
+    return false;
+  }
+
+  return targetHost === ruleHost || targetHost.endsWith(`.${ruleHost}`);
+}
+
+function websitePathsMatch(targetPath: string, rulePath: string): boolean {
+  if (rulePath === "/") {
+    return true;
+  }
+
+  return targetPath === rulePath || targetPath.startsWith(`${rulePath}/`);
+}
+
+function matchWebsiteRule(browserUrl: string, rule: string): string | null {
+  const target = parseWebsiteTarget(browserUrl);
+  if (!target) {
+    return null;
+  }
+
+  const parsedRule = parseWebsiteRule(rule);
+  if (!parsedRule) {
+    return null;
+  }
+
+  if (!websiteHostsMatch(target.host, parsedRule.host)) {
+    return null;
+  }
+
+  if (!websitePathsMatch(target.path, parsedRule.path)) {
+    return null;
+  }
+
+  const pathReason = parsedRule.path === "/" ? "" : ` and path prefix ${parsedRule.path}`;
+  return `matched website rule "${rule}" by host ${parsedRule.host}${pathReason}`;
+}
+
+function normalizeAppValue(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function extractAppNameCandidate(rule: string): string | null {
+  const trimmed = rule.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const cleaned = trimmed.split(/[?#]/u)[0].replace(/\/+$/u, "");
+  const lastSegment = cleaned.split("/").filter((part) => part.length > 0).pop();
+  if (!lastSegment) {
+    return null;
+  }
+
+  if (lastSegment.toLowerCase().endsWith(".app")) {
+    return lastSegment.slice(0, -4);
+  }
+
+  return null;
+}
+
+function containsWithBoundary(haystack: string, needle: string): boolean {
+  if (!needle || needle.length < 3) {
+    return false;
+  }
+
+  const index = haystack.indexOf(needle);
+  if (index === -1) {
+    return false;
+  }
+
+  const before = index === 0 ? "" : haystack[index - 1];
+  const afterIndex = index + needle.length;
+  const after = afterIndex >= haystack.length ? "" : haystack[afterIndex];
+  const isBoundary = (character: string): boolean =>
+    character === "" || !/[a-z0-9]/iu.test(character);
+
+  return isBoundary(before) && isBoundary(after);
+}
+
 function matchesAppRule(
   bundleId: string | undefined,
   appName: string | undefined,
   rule: string,
-): boolean {
-  const r = rule.toLowerCase().trim();
-  if (!r) return false;
-  if (bundleId && bundleId.toLowerCase() === r) return true;
-  if (appName && appName.toLowerCase() === r) return true;
-  if (appName && appName.toLowerCase().includes(r)) return true;
-  return false;
+): string | null {
+  const trimmedRule = rule.trim();
+  if (!trimmedRule) {
+    return null;
+  }
+
+  const appNameCandidate = extractAppNameCandidate(trimmedRule);
+  const ruleCandidates = [trimmedRule, appNameCandidate].filter(
+    (candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0,
+  );
+
+  const normalizedBundleId = bundleId ? normalizeAppValue(bundleId) : "";
+  const normalizedAppName = appName ? normalizeAppValue(appName) : "";
+
+  for (const candidate of ruleCandidates) {
+    const normalizedCandidate = normalizeAppValue(candidate);
+    if (normalizedBundleId && normalizedBundleId === normalizedCandidate) {
+      return `matched app rule "${rule}" by bundle id ${bundleId?.trim() ?? normalizedCandidate}`;
+    }
+  }
+
+  for (const candidate of ruleCandidates) {
+    const normalizedCandidate = normalizeAppValue(candidate);
+    if (normalizedAppName && normalizedAppName === normalizedCandidate) {
+      return `matched app rule "${rule}" by app name ${appName?.trim() ?? normalizedCandidate}`;
+    }
+  }
+
+  for (const candidate of ruleCandidates) {
+    const normalizedCandidate = normalizeAppValue(candidate);
+    if (
+      normalizedAppName &&
+      (containsWithBoundary(normalizedAppName, normalizedCandidate) ||
+        containsWithBoundary(normalizedCandidate, normalizedAppName))
+    ) {
+      return `matched app rule "${rule}" by app name ${appName?.trim() ?? normalizedCandidate}`;
+    }
+  }
+
+  return null;
+}
+
+function toDistractionClassificationReason(reason: string): string {
+  return reason.replace(/^matched /u, "matched distraction ");
 }
 
 function classifyPreviewSpan(
@@ -106,63 +269,68 @@ function classifyPreviewSpan(
   settings: TfAutotrackerV2ClassificationSettings,
 ): { classification: TfAutotrackerV2PreviewClassification; classificationReason: string } {
   if (kind === "website" && browserUrl) {
-    let hostname: string;
-    try {
-      hostname = new URL(browserUrl).hostname.toLowerCase();
-    } catch {
-      return { classification: "unclassified", classificationReason: "invalid URL" };
-    }
-
-    let isTracked = false;
-    let trackedReason = "";
-    let isDistraction = false;
-    let distractionReason = "";
-
     for (const rule of settings.autoWebsites) {
-      if (matchesDomainRule(hostname, rule)) {
-        isTracked = true;
-        trackedReason = `matched website rule "${rule}"`;
-        break;
+      const matchReason = matchWebsiteRule(browserUrl, rule);
+      if (matchReason) {
+        for (const distractionRule of settings.distractionWebsites) {
+          const distractionMatchReason = matchWebsiteRule(browserUrl, distractionRule);
+          if (distractionMatchReason) {
+            return {
+              classification: "distraction",
+              classificationReason: toDistractionClassificationReason(distractionMatchReason),
+            };
+          }
+        }
+        return { classification: "tracked", classificationReason: matchReason };
       }
     }
 
     for (const rule of settings.distractionWebsites) {
-      if (matchesDomainRule(hostname, rule)) {
-        isDistraction = true;
-        distractionReason = `matched distraction website rule "${rule}"`;
-        break;
+      const matchReason = matchWebsiteRule(browserUrl, rule);
+      if (matchReason) {
+        return {
+          classification: "distraction",
+          classificationReason: toDistractionClassificationReason(matchReason),
+        };
       }
     }
 
-    if (isDistraction) return { classification: "distraction", classificationReason: distractionReason };
-    if (isTracked) return { classification: "tracked", classificationReason: trackedReason };
+    try {
+      new URL(browserUrl);
+    } catch {
+      return { classification: "unclassified", classificationReason: "invalid URL" };
+    }
+
     return { classification: "unclassified", classificationReason: "no matching rule" };
   }
 
   if (kind === "app") {
-    let isTracked = false;
-    let trackedReason = "";
-    let isDistraction = false;
-    let distractionReason = "";
-
     for (const rule of settings.autoApps) {
-      if (matchesAppRule(bundleId, appName, rule)) {
-        isTracked = true;
-        trackedReason = `matched app rule "${rule}"`;
-        break;
+      const matchReason = matchesAppRule(bundleId, appName, rule);
+      if (matchReason) {
+        for (const distractionRule of settings.distractionApps) {
+          const distractionMatchReason = matchesAppRule(bundleId, appName, distractionRule);
+          if (distractionMatchReason) {
+            return {
+              classification: "distraction",
+              classificationReason: toDistractionClassificationReason(distractionMatchReason),
+            };
+          }
+        }
+        return { classification: "tracked", classificationReason: matchReason };
       }
     }
 
     for (const rule of settings.distractionApps) {
-      if (matchesAppRule(bundleId, appName, rule)) {
-        isDistraction = true;
-        distractionReason = `matched distraction app rule "${rule}"`;
-        break;
+      const matchReason = matchesAppRule(bundleId, appName, rule);
+      if (matchReason) {
+        return {
+          classification: "distraction",
+          classificationReason: toDistractionClassificationReason(matchReason),
+        };
       }
     }
 
-    if (isDistraction) return { classification: "distraction", classificationReason: distractionReason };
-    if (isTracked) return { classification: "tracked", classificationReason: trackedReason };
     return { classification: "unclassified", classificationReason: "no matching rule" };
   }
 

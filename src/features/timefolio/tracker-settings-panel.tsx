@@ -1402,6 +1402,9 @@ export function TrackerSettingsPanel() {
                   Preview spans (read-only)
                 </div>
                 <span className="text-[10px] text-slate-600">Preview only — no sessions written.</span>
+                <span className="text-[10px] text-slate-600">
+                  Classification uses saved tracker rules. Click Save changes after editing rules.
+                </span>
               </div>
               {previewSpans.length > 0 ? (() => {
                 const trackedCount = previewSpans.filter((s) => s.classification === "tracked").length;
