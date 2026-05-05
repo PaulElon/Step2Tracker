@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildAutoTrackerV2PreviewSpans } from "../../src/lib/tf-autotracker-v2-preview-spans.js";
+import {
+  buildAutoTrackerV2PreviewSpans,
+  type TfAutotrackerV2ClassificationSettings,
+} from "../../src/lib/tf-autotracker-v2-preview-spans.js";
 import type { AutoTrackerV2NativeEvent } from "../../src/lib/tf-autotracker-v2-native-events.js";
 
 function makeEvent(
@@ -245,4 +248,228 @@ test("Missing appName and bundleId falls back to Unknown app label", () => {
   assert.equal(spans.length, 1);
   assert.equal(spans[0].kind, "app");
   assert.equal(spans[0].label, "Unknown app");
+});
+
+// --- Classification tests ---
+
+function makeSettings(
+  overrides: Partial<TfAutotrackerV2ClassificationSettings> = {},
+): TfAutotrackerV2ClassificationSettings {
+  return {
+    autoApps: [],
+    autoWebsites: [],
+    distractionApps: [],
+    distractionWebsites: [],
+    ...overrides,
+  };
+}
+
+test("UWorld URL classified tracked when website rule is uworld.com", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "untrackedFocused",
+      timestampMs: 1000,
+      browserUrl: "https://uworld.com/qbank/test",
+    }),
+  ];
+  const settings = makeSettings({ autoWebsites: ["uworld.com"] });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+  assert.equal(spans[0].classification, "tracked");
+  assert.ok(spans[0].classificationReason.includes("uworld.com"));
+});
+
+test("www.uworld.com matches website rule uworld.com (subdomain)", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "untrackedFocused",
+      timestampMs: 1000,
+      browserUrl: "https://www.uworld.com/qbank/test",
+    }),
+  ];
+  const settings = makeSettings({ autoWebsites: ["uworld.com"] });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+  assert.equal(spans[0].classification, "tracked");
+});
+
+test("apps.uworld.com matches website rule uworld.com (subdomain)", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "untrackedFocused",
+      timestampMs: 1000,
+      browserUrl: "https://apps.uworld.com/test",
+    }),
+  ];
+  const settings = makeSettings({ autoWebsites: ["uworld.com"] });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+  assert.equal(spans[0].classification, "tracked");
+});
+
+test("notuworld.com does NOT match website rule uworld.com", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "untrackedFocused",
+      timestampMs: 1000,
+      browserUrl: "https://notuworld.com/test",
+    }),
+  ];
+  const settings = makeSettings({ autoWebsites: ["uworld.com"] });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+  assert.equal(spans[0].classification, "unclassified");
+});
+
+test("Reddit URL classified distraction when website rule is reddit.com", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "untrackedFocused",
+      timestampMs: 1000,
+      browserUrl: "https://www.reddit.com/r/medicine",
+    }),
+  ];
+  const settings = makeSettings({ distractionWebsites: ["reddit.com"] });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+  assert.equal(spans[0].classification, "distraction");
+  assert.ok(spans[0].classificationReason.includes("reddit.com"));
+});
+
+test("Anki classified tracked when app rule is Anki", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "targetFocused",
+      timestampMs: 1000,
+      appName: "Anki",
+      bundleId: "net.ankiweb.dtop",
+    }),
+  ];
+  const settings = makeSettings({ autoApps: ["Anki"] });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+  assert.equal(spans[0].classification, "tracked");
+  assert.ok(spans[0].classificationReason.includes("Anki"));
+});
+
+test("Anki classified tracked when app rule matches bundle id net.ankiweb.launcher", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "targetFocused",
+      timestampMs: 1000,
+      appName: "Anki",
+      bundleId: "net.ankiweb.launcher",
+    }),
+  ];
+  const settings = makeSettings({ autoApps: ["net.ankiweb.launcher"] });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+  assert.equal(spans[0].classification, "tracked");
+});
+
+test("Discord app classified distraction", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "untrackedFocused",
+      timestampMs: 1000,
+      appName: "Discord",
+      bundleId: "com.hnc.Discord",
+    }),
+  ];
+  const settings = makeSettings({ distractionApps: ["Discord"] });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+  assert.equal(spans[0].classification, "distraction");
+  assert.ok(spans[0].classificationReason.includes("Discord"));
+});
+
+test("distraction wins if both tracked and distraction app rules match", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "targetFocused",
+      timestampMs: 1000,
+      appName: "Anki",
+      bundleId: "net.ankiweb.dtop",
+    }),
+  ];
+  const settings = makeSettings({
+    autoApps: ["Anki"],
+    distractionApps: ["Anki"],
+  });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+  assert.equal(spans[0].classification, "distraction");
+});
+
+test("distraction wins if both tracked and distraction website rules match", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "untrackedFocused",
+      timestampMs: 1000,
+      browserUrl: "https://uworld.com/test",
+    }),
+  ];
+  const settings = makeSettings({
+    autoWebsites: ["uworld.com"],
+    distractionWebsites: ["uworld.com"],
+  });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+  assert.equal(spans[0].classification, "distraction");
+});
+
+test("unclassified fallback when no rules match", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "targetFocused",
+      timestampMs: 1000,
+      appName: "SomeObscureApp",
+    }),
+  ];
+  const settings = makeSettings({ autoApps: ["Anki"], distractionApps: ["Discord"] });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+  assert.equal(spans[0].classification, "unclassified");
+  assert.equal(spans[0].classificationReason, "no matching rule");
+});
+
+test("matching is case-insensitive for app names", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "targetFocused",
+      timestampMs: 1000,
+      appName: "ANKI",
+    }),
+  ];
+  const settings = makeSettings({ autoApps: ["anki"] });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+  assert.equal(spans[0].classification, "tracked");
+});
+
+test("matching is case-insensitive for website rules", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "untrackedFocused",
+      timestampMs: 1000,
+      browserUrl: "https://UWorld.COM/test",
+    }),
+  ];
+  const settings = makeSettings({ autoWebsites: ["uworld.com"] });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+  assert.equal(spans[0].classification, "tracked");
+});
+
+test("no settings produces unclassified spans", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "targetFocused",
+      timestampMs: 1000,
+      appName: "Anki",
+    }),
+  ];
+  const spans = buildAutoTrackerV2PreviewSpans(events);
+  assert.equal(spans[0].classification, "unclassified");
 });

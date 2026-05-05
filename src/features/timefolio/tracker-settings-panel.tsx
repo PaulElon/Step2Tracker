@@ -13,7 +13,10 @@ import {
   type AutoTrackerV2NativeSnapshot,
   type AutoTrackerV2NativeStatus,
 } from "../../lib/tf-autotracker-v2-native-events";
-import { buildAutoTrackerV2PreviewSpans } from "../../lib/tf-autotracker-v2-preview-spans";
+import {
+  buildAutoTrackerV2PreviewSpans,
+  type TfAutotrackerV2ClassificationSettings,
+} from "../../lib/tf-autotracker-v2-preview-spans";
 import type { NativeTrackerSpanInput } from "../../lib/tf-native-span-reconciler";
 import { normalizeTfAppState } from "../../lib/tf-storage";
 import { useTimeFolioStore } from "../../state/tf-store";
@@ -1165,7 +1168,13 @@ export function TrackerSettingsPanel() {
 
         const isDelayPending = v2DelayCountdown !== null;
         const anyBusy = v2IsBusy || isDelayPending;
-        const previewSpans = buildAutoTrackerV2PreviewSpans(v2Snapshot?.events ?? []);
+        const classificationSettings: TfAutotrackerV2ClassificationSettings = {
+          autoApps: state.trackerPrefs.customAutoApps,
+          autoWebsites: state.trackerPrefs.customAutoWebsites,
+          distractionApps: state.trackerPrefs.customDistractionApps,
+          distractionWebsites: state.trackerPrefs.customDistractionWebsites,
+        };
+        const previewSpans = buildAutoTrackerV2PreviewSpans(v2Snapshot?.events ?? [], classificationSettings);
 
         return (
           <section className="flex flex-col gap-5 rounded-2xl border border-violet-500/20 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
@@ -1394,6 +1403,29 @@ export function TrackerSettingsPanel() {
                 </div>
                 <span className="text-[10px] text-slate-600">Preview only — no sessions written.</span>
               </div>
+              {previewSpans.length > 0 ? (() => {
+                const trackedCount = previewSpans.filter((s) => s.classification === "tracked").length;
+                const distractionCount = previewSpans.filter((s) => s.classification === "distraction").length;
+                const unclassifiedCount = previewSpans.filter((s) => s.classification === "unclassified").length;
+                return (
+                  <div className="flex flex-wrap gap-3 rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
+                    <span>
+                      <span className="font-medium text-emerald-400">{trackedCount}</span>
+                      {" tracked"}
+                    </span>
+                    <span className="text-slate-600">·</span>
+                    <span>
+                      <span className="font-medium text-rose-400">{distractionCount}</span>
+                      {" distractions"}
+                    </span>
+                    <span className="text-slate-600">·</span>
+                    <span>
+                      <span className="font-medium text-slate-300">{unclassifiedCount}</span>
+                      {" unclassified"}
+                    </span>
+                  </div>
+                );
+              })() : null}
               {previewSpans.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/40 px-4 py-4 text-sm text-slate-500">
                   No preview spans yet.
@@ -1413,6 +1445,17 @@ export function TrackerSettingsPanel() {
                         >
                           {span.kind}
                         </span>
+                        <span
+                          className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
+                            span.classification === "tracked"
+                              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                              : span.classification === "distraction"
+                                ? "border-rose-500/20 bg-rose-500/10 text-rose-300"
+                                : "border-slate-600 bg-slate-800 text-slate-400"
+                          }`}
+                        >
+                          {span.classification}
+                        </span>
                         {span.appName ? (
                           <span className="text-slate-400 truncate">{span.appName}</span>
                         ) : null}
@@ -1420,6 +1463,7 @@ export function TrackerSettingsPanel() {
                           <span className="font-mono text-slate-500 truncate">{span.bundleId}</span>
                         ) : null}
                       </div>
+                      <div className="text-slate-600 truncate">{span.classificationReason}</div>
                       {span.browserTitle ? (
                         <div className="text-slate-300 truncate">{span.browserTitle}</div>
                       ) : null}
