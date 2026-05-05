@@ -8,17 +8,24 @@
 
 #[cfg(target_os = "macos")]
 use std::process::Command;
+#[cfg(target_os = "macos")]
+use std::process::Stdio;
 use std::sync::Mutex;
 use std::time::SystemTime;
+#[cfg(target_os = "macos")]
+use std::time::Duration;
 
 use serde::Serialize;
 use uuid::Uuid;
+#[cfg(target_os = "macos")]
+use wait_timeout::ChildExt;
 
 const PLATFORM_LABEL: &str = "macos";
 const MAX_BUFFER_LEN: usize = 2_000;
 const IDLE_THRESHOLD_SECS: u64 = 60;
+const COMMAND_TIMEOUT_MS: u64 = 1_000;
 const COMMAND_TIMEOUT_NOTE: &str =
-    "lsappinfo/ioreg run synchronously and return promptly on macOS";
+    "lsappinfo/ioreg run with a short timeout and return promptly on macOS";
 
 // ---------------------------------------------------------------------------
 // Event and status types
@@ -208,22 +215,41 @@ fn foreground_changed(
 
 #[cfg(target_os = "macos")]
 fn run_command(program: &str, args: &[&str]) -> Result<String, String> {
-    let output = Command::new(program)
+    let mut child = Command::new(program)
         .args(args)
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|error| format!("{program} not available: {error}"))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
-            "{program} exited with {}: {}",
-            output.status,
-            stderr.trim()
-        ));
-    }
+    match child.wait_timeout(Duration::from_millis(COMMAND_TIMEOUT_MS)) {
+        Ok(Some(_status)) => {
+            let output = child
+                .wait_with_output()
+                .map_err(|error| format!("{program} output failed: {error}"))?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(format!(
+                    "{program} exited with {}: {}",
+                    output.status,
+                    stderr.trim()
+                ));
+            }
 
-    String::from_utf8(output.stdout)
-        .map_err(|error| format!("{program} returned non-utf8 output: {error}"))
+            String::from_utf8(output.stdout)
+                .map_err(|error| format!("{program} returned non-utf8 output: {error}"))
+        }
+        Ok(None) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            Err(format!("{program} timed out after {COMMAND_TIMEOUT_MS}ms"))
+        }
+        Err(error) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            Err(format!("{program} wait failed: {error}"))
+        }
+    }
 }
 
 #[cfg(not(target_os = "macos"))]

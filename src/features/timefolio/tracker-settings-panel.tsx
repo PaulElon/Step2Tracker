@@ -26,6 +26,9 @@ import type { TfAppState, TfTrackerPrefs } from "../../types/models";
 type TrackerListKey = keyof TfTrackerPrefs;
 const RESET_CONFIRMATION_TOKEN = "RESET";
 const V2_SHADOW_CAPTURE_INTERVAL_MS = 3000;
+const V2_NATIVE_CAPTURE_TIMEOUT_MS = 2500;
+const V2_NATIVE_SNAPSHOT_TIMEOUT_MS = 2500;
+type V2ShadowTickPhase = "capture" | "snapshot" | "complete" | "error" | "timeout";
 
 type PendingImportPreview = {
   fileName: string;
@@ -105,6 +108,36 @@ function countTrackerRules(prefs: TfTrackerPrefs): number {
     prefs.customDistractionApps.length +
     prefs.customDistractionWebsites.length
   );
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  phase: "capture" | "snapshot",
+): Promise<T> {
+  let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
+  const settledPromise = promise.then(
+    (value) => ({ kind: "resolved" as const, value }),
+    (error) => ({ kind: "rejected" as const, error }),
+  );
+  const timeoutPromise = new Promise<{ kind: "timeout" }>((resolve) => {
+    timeoutId = globalThis.setTimeout(() => resolve({ kind: "timeout" }), timeoutMs);
+  });
+
+  try {
+    const outcome = await Promise.race([settledPromise, timeoutPromise]);
+    if (outcome.kind === "resolved") {
+      return outcome.value;
+    }
+    if (outcome.kind === "rejected") {
+      throw outcome.error;
+    }
+    throw new Error(`${phase} timeout after ${timeoutMs}ms`);
+  } finally {
+    if (timeoutId !== null) {
+      globalThis.clearTimeout(timeoutId);
+    }
+  }
 }
 
 function getAccountSummary(account: TfAppState["account"]): { value: string; detail: string } {
@@ -408,8 +441,9 @@ export function TrackerSettingsPanel() {
   const [v2ShadowTickInfo, setV2ShadowTickInfo] = useState<{
     appendedCount: number;
     completedAtMs: number | null;
-    error: string | null;
     inFlight: boolean;
+    lastError: string | null;
+    phase: V2ShadowTickPhase;
     startedAtMs: number | null;
     tickCount: number;
   } | null>(null);
@@ -674,22 +708,29 @@ export function TrackerSettingsPanel() {
     }
 
     const startedAtMs = Date.now();
+    let tickCount = 0;
+    let phase: V2ShadowTickPhase = "capture";
+    let lastError: string | null = null;
     let appendedCount = 0;
-    let captureError: string | null = null;
     v2ShadowTickInFlightRef.current = true;
     v2CaptureInFlightRef.current = true;
     setV2InspectorError(null);
     setV2ShadowTickInfo((prev) => ({
       appendedCount: prev?.appendedCount ?? 0,
       completedAtMs: prev?.completedAtMs ?? null,
-      error: null,
       inFlight: true,
+      lastError: null,
+      phase: "capture",
       startedAtMs,
-      tickCount: (prev?.tickCount ?? 0) + 1,
+      tickCount: (tickCount = (prev?.tickCount ?? 0) + 1),
     }));
 
     try {
-      const result: AutoTrackerV2NativeCaptureResult = await captureAutoTrackerV2NativeOnce();
+      const result: AutoTrackerV2NativeCaptureResult = await withTimeout(
+        captureAutoTrackerV2NativeOnce(),
+        V2_NATIVE_CAPTURE_TIMEOUT_MS,
+        "capture",
+      );
       if (!v2IsMountedRef.current) {
         return true;
       }
@@ -697,52 +738,66 @@ export function TrackerSettingsPanel() {
       appendedCount = result.appended.length;
       setV2ProbeStatus(result.status);
       recordCaptureInfo(result);
+      phase = "snapshot";
+      setV2ShadowTickInfo((prev) =>
+        prev
+          ? {
+              ...prev,
+              appendedCount,
+              lastError: null,
+              phase,
+            }
+          : prev,
+      );
 
-      const captureErrors = result.appended
-        .filter((e) => e.kind === "error" && e.error)
-        .map((e) => e.error as string);
-      captureError = captureErrors.length > 0 ? captureErrors.join(" · ") : null;
-
-      const snapshot = await snapshotAutoTrackerV2Native();
+      const snapshot = await withTimeout(
+        snapshotAutoTrackerV2Native(),
+        V2_NATIVE_SNAPSHOT_TIMEOUT_MS,
+        "snapshot",
+      );
       if (!v2IsMountedRef.current) {
         return true;
       }
 
       setV2Snapshot(snapshot);
       setV2ProbeStatus(snapshot.status);
-      setV2ShadowTickInfo((prev) => ({
-        appendedCount,
-        completedAtMs: Date.now(),
-        error: captureError,
-        inFlight: false,
-        startedAtMs: prev?.startedAtMs ?? startedAtMs,
-        tickCount: prev?.tickCount ?? 0,
-      }));
+      phase = "complete";
       return true;
     } catch (err) {
       const errorMessage =
-        err instanceof Error && err.message ? err.message : "Shadow capture failed.";
+        err instanceof Error && err.message ? err.message : `${phase} failed.`;
+      const errorStep = phase;
+      const errorPhase = errorMessage.includes("timeout after") ? "timeout" : "error";
+      phase = errorPhase;
+      lastError = `${errorStep}: ${errorMessage}`;
       if (v2IsMountedRef.current) {
         setV2InspectorError(errorMessage);
-        setV2ShadowTickInfo((prev) => ({
-          appendedCount,
-          completedAtMs: Date.now(),
-          error: captureError ? `${captureError} · ${errorMessage}` : errorMessage,
-          inFlight: false,
-          startedAtMs: prev?.startedAtMs ?? startedAtMs,
-          tickCount: prev?.tickCount ?? 0,
-        }));
       }
       return false;
     } finally {
       v2ShadowTickInFlightRef.current = false;
       v2CaptureInFlightRef.current = false;
+      if (v2IsMountedRef.current) {
+        setV2ShadowTickInfo((prev) => ({
+          appendedCount,
+          completedAtMs: Date.now(),
+          inFlight: false,
+          lastError,
+          phase,
+          startedAtMs: prev?.startedAtMs ?? startedAtMs,
+          tickCount,
+        }));
+      }
     }
   }
 
   async function refreshV2SnapshotFromNative(errorMessage: string): Promise<boolean> {
     try {
-      const snap = await snapshotAutoTrackerV2Native();
+      const snap = await withTimeout(
+        snapshotAutoTrackerV2Native(),
+        V2_NATIVE_SNAPSHOT_TIMEOUT_MS,
+        "snapshot",
+      );
       if (!v2IsMountedRef.current) {
         return false;
       }
@@ -769,7 +824,11 @@ export function TrackerSettingsPanel() {
     setV2InspectorError(null);
 
     try {
-      const result: AutoTrackerV2NativeCaptureResult = await captureAutoTrackerV2NativeOnce();
+      const result: AutoTrackerV2NativeCaptureResult = await withTimeout(
+        captureAutoTrackerV2NativeOnce(),
+        V2_NATIVE_CAPTURE_TIMEOUT_MS,
+        "capture",
+      );
       if (!v2IsMountedRef.current) {
         return true;
       }
@@ -1484,7 +1543,7 @@ export function TrackerSettingsPanel() {
                       : "not yet"}
                   </span>
                   <span>·</span>
-                  <span>{v2ShadowTickInfo?.error ? `error: ${v2ShadowTickInfo.error}` : "error: none"}</span>
+                  <span>phase: {v2ShadowTickInfo?.phase ?? "capture"}</span>
                   <span>·</span>
                   <span>tick count: {v2ShadowTickInfo?.tickCount ?? 0}</span>
                   <span>·</span>
@@ -1494,6 +1553,8 @@ export function TrackerSettingsPanel() {
                     appended: {v2ShadowTickInfo?.appendedCount ?? 0} event
                     {(v2ShadowTickInfo?.appendedCount ?? 0) === 1 ? "" : "s"}
                   </span>
+                  <span>·</span>
+                  <span>{v2ShadowTickInfo?.lastError ? `last error: ${v2ShadowTickInfo.lastError}` : "last error: none"}</span>
                 </div>
               </div>
             ) : null}
