@@ -20,6 +20,10 @@ const IDLE_THRESHOLD_SECS: u64 = 60;
 const COMMAND_TIMEOUT_NOTE: &str =
     "lsappinfo/ioreg run synchronously and return promptly on macOS";
 
+// ---------------------------------------------------------------------------
+// Event and status types
+// ---------------------------------------------------------------------------
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TfAutotrackerV2NativeEvent {
@@ -37,6 +41,16 @@ pub struct TfAutotrackerV2NativeEvent {
     pub window_title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_idle: Option<bool>,
+    /// Active browser tab title (set when foreground app is a known browser).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub browser_title: Option<String>,
+    /// Active browser tab URL (set when foreground app is a known browser).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub browser_url: Option<String>,
+    /// Set when browser tab read was attempted but failed (e.g. permission denied).
+    /// Foreground capture itself still succeeds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub browser_tab_error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -67,6 +81,10 @@ pub struct TfAutotrackerV2NativeCaptureResult {
     pub status: TfAutotrackerV2NativeStatus,
     pub appended: Vec<TfAutotrackerV2NativeEvent>,
 }
+
+// ---------------------------------------------------------------------------
+// In-memory ring buffer
+// ---------------------------------------------------------------------------
 
 struct NativeBuffer {
     events: Vec<TfAutotrackerV2NativeEvent>,
@@ -106,6 +124,10 @@ impl NativeBuffer {
 
 static BUFFER: Mutex<NativeBuffer> = Mutex::new(NativeBuffer::new());
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 fn now_ms() -> i64 {
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
         Ok(duration) => duration.as_millis() as i64,
@@ -123,6 +145,9 @@ fn make_event(kind: &str, timestamp_ms: i64) -> TfAutotrackerV2NativeEvent {
         bundle_id: None,
         window_title: None,
         is_idle: None,
+        browser_title: None,
+        browser_url: None,
+        browser_tab_error: None,
         error: None,
     }
 }
@@ -172,6 +197,10 @@ fn foreground_changed(
     }
 }
 
+// ---------------------------------------------------------------------------
+// macOS subprocess helpers
+// ---------------------------------------------------------------------------
+
 #[cfg(target_os = "macos")]
 fn run_command(program: &str, args: &[&str]) -> Result<String, String> {
     let output = Command::new(program)
@@ -195,8 +224,12 @@ fn run_command(program: &str, args: &[&str]) -> Result<String, String> {
 #[cfg(not(target_os = "macos"))]
 #[allow(dead_code)]
 fn run_command(_program: &str, _args: &[&str]) -> Result<String, String> {
-    Err("Native foreground probe is only implemented for macOS in this slice.".to_string())
+    Err("Native probes are only implemented for macOS in this slice.".to_string())
 }
+
+// ---------------------------------------------------------------------------
+// Foreground app probe
+// ---------------------------------------------------------------------------
 
 #[cfg(target_os = "macos")]
 fn parse_lsappinfo_info(raw: &str) -> Option<(Option<String>, Option<String>)> {
@@ -246,15 +279,12 @@ fn read_foreground_app() -> Result<(Option<String>, Option<String>), String> {
         .map_err(|e| format!("lsappinfo info {asn} failed: {e}"))?;
     match parse_lsappinfo_info(&info_raw) {
         Some(result) => Ok(result),
-        // If lsappinfo info <ASN> returned nothing parseable, fall back to osascript
-        // which can at least provide the app name.
         None => read_foreground_app_osascript()
             .map_err(|_| format!("lsappinfo info {asn} returned no parseable app data.")),
     }
 }
 
 /// osascript fallback: returns app name only (no bundle ID).
-/// Used when lsappinfo cannot provide parseable output.
 #[cfg(target_os = "macos")]
 fn read_foreground_app_osascript() -> Result<(Option<String>, Option<String>), String> {
     let raw = run_command(
@@ -277,6 +307,10 @@ fn read_foreground_app() -> Result<(Option<String>, Option<String>), String> {
     Err("Foreground app probe is only implemented for macOS in this slice.".to_string())
 }
 
+// ---------------------------------------------------------------------------
+// Idle probe  (Part A fix: /usr/sbin/ioreg, not /usr/bin/ioreg)
+// ---------------------------------------------------------------------------
+
 #[cfg(target_os = "macos")]
 fn parse_idle_seconds(raw: &str) -> Option<u64> {
     for line in raw.lines() {
@@ -294,9 +328,24 @@ fn parse_idle_seconds(raw: &str) -> Option<u64> {
     None
 }
 
+/// Returns the path of the first accessible `ioreg` binary.
+/// macOS ships it in /usr/sbin; /usr/bin/ioreg does not exist on most installs.
+#[cfg(target_os = "macos")]
+fn find_ioreg() -> &'static str {
+    const CANDIDATES: &[&str] = &["/usr/sbin/ioreg", "/usr/bin/ioreg", "ioreg"];
+    for path in CANDIDATES {
+        if std::path::Path::new(path).exists() || path == &"ioreg" {
+            return path;
+        }
+    }
+    "ioreg"
+}
+
 #[cfg(target_os = "macos")]
 fn read_idle_seconds() -> Result<u64, String> {
-    let raw = run_command("/usr/bin/ioreg", &["-c", "IOHIDSystem"])?;
+    let ioreg = find_ioreg();
+    let raw = run_command(ioreg, &["-c", "IOHIDSystem"])
+        .map_err(|e| format!("ioreg ({ioreg}) failed: {e}"))?;
     parse_idle_seconds(&raw)
         .ok_or_else(|| "ioreg did not include HIDIdleTime.".to_string())
 }
@@ -305,6 +354,89 @@ fn read_idle_seconds() -> Result<u64, String> {
 fn read_idle_seconds() -> Result<u64, String> {
     Err("Idle probe is only implemented for macOS in this slice.".to_string())
 }
+
+// ---------------------------------------------------------------------------
+// Browser tab probe  (Part B)
+// ---------------------------------------------------------------------------
+
+struct BrowserTabInfo {
+    title: Option<String>,
+    url: Option<String>,
+    /// Set only when the AppleScript call failed entirely.
+    error: Option<String>,
+}
+
+/// Returns Some(BrowserTabInfo) when bundle_id is a known browser, None otherwise.
+#[cfg(target_os = "macos")]
+fn try_read_browser_tab(bundle_id: &str) -> Option<BrowserTabInfo> {
+    // (bundle_id, applescript_app_name, is_safari)
+    let (app_name, is_safari): (&str, bool) = match bundle_id {
+        "com.google.Chrome" => ("Google Chrome", false),
+        "com.apple.Safari" => ("Safari", true),
+        "com.microsoft.edgemac" => ("Microsoft Edge", false),
+        "com.brave.Browser" => ("Brave Browser", false),
+        "com.operasoftware.Opera" => ("Opera", false),
+        "com.vivaldi.Vivaldi" => ("Vivaldi", false),
+        _ => return None,
+    };
+
+    let (title_key, tab_ref) = if is_safari {
+        ("name", "current tab")
+    } else {
+        ("title", "active tab")
+    };
+
+    let title_script = format!(
+        "tell application \"{app_name}\" to get {title_key} of {tab_ref} of front window"
+    );
+    let url_script = format!(
+        "tell application \"{app_name}\" to get URL of {tab_ref} of front window"
+    );
+
+    let title_res = run_command("/usr/bin/osascript", &["-e", &title_script]);
+    let url_res = run_command("/usr/bin/osascript", &["-e", &url_script]);
+
+    let title = match &title_res {
+        Ok(s) => {
+            let t = s.trim().to_string();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t)
+            }
+        }
+        Err(_) => None,
+    };
+    let url = match &url_res {
+        Ok(s) => {
+            let u = s.trim().to_string();
+            if u.is_empty() {
+                None
+            } else {
+                Some(u)
+            }
+        }
+        Err(_) => None,
+    };
+
+    // Only surface an error when BOTH calls failed (permission denied, app not running, etc.)
+    let error = if title.is_none() && url.is_none() {
+        url_res.err().or_else(|| title_res.err())
+    } else {
+        None
+    };
+
+    Some(BrowserTabInfo { title, url, error })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn try_read_browser_tab(_bundle_id: &str) -> Option<BrowserTabInfo> {
+    None
+}
+
+// ---------------------------------------------------------------------------
+// Tauri commands
+// ---------------------------------------------------------------------------
 
 #[tauri::command]
 pub fn tf_autotracker_v2_native_probe() -> TfAutotrackerV2NativeStatus {
@@ -372,6 +504,16 @@ pub fn tf_autotracker_v2_native_capture_once() -> TfAutotrackerV2NativeCaptureRe
             let mut event = make_event("untrackedFocused", timestamp_ms);
             event.app_name = app_name.clone();
             event.bundle_id = bundle_id.clone();
+
+            // Enrich foreground event with active browser tab context.
+            if let Some(bid) = &bundle_id {
+                if let Some(tab) = try_read_browser_tab(bid) {
+                    event.browser_title = tab.title;
+                    event.browser_url = tab.url;
+                    event.browser_tab_error = tab.error;
+                }
+            }
+
             next_bundle_id = bundle_id;
             next_app_name = app_name;
             foreground_event = Some(event);
@@ -451,6 +593,10 @@ pub fn tf_autotracker_v2_native_capture_once() -> TfAutotrackerV2NativeCaptureRe
     }
 }
 
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -508,7 +654,6 @@ mod tests {
 
     #[test]
     fn foreground_changed_by_app_name_fallback() {
-        // No bundle IDs — falls back to app name comparison.
         assert!(foreground_changed(None, Some("Safari"), None, Some("Anki"), Some(1000)));
         assert!(!foreground_changed(
             None,
@@ -521,15 +666,12 @@ mod tests {
 
     #[test]
     fn foreground_changed_first_capture_no_ids() {
-        // Neither side has any identifier — first capture (last_sampled_at_ms = None) → true.
         assert!(foreground_changed(None, None, None, None, None));
-        // Subsequent capture with no ids → false (same unknown app, no reason to re-record).
         assert!(!foreground_changed(None, None, None, None, Some(1000)));
     }
 
     #[test]
     fn foreground_changed_mixed_bundle_id_presence() {
-        // Old had bundle ID, new doesn't — treat as changed.
         assert!(foreground_changed(
             Some("com.apple.Safari"),
             Some("Safari"),
@@ -537,7 +679,6 @@ mod tests {
             Some("Anki"),
             Some(1000),
         ));
-        // New has bundle ID, old didn't — treat as changed.
         assert!(foreground_changed(
             None,
             Some("Anki"),

@@ -1313,14 +1313,25 @@ export function TrackerSettingsPanel() {
             <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3">
               <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500">Last detected app</div>
               {lastAppEvent ? (
-                <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                  <span className="text-sm font-semibold text-slate-100">{lastAppEvent.appName}</span>
-                  {lastAppEvent.bundleId ? (
-                    <span className="font-mono text-xs text-slate-400">{lastAppEvent.bundleId}</span>
+                <div className="mt-1.5 flex flex-col gap-1">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span className="text-sm font-semibold text-slate-100">{lastAppEvent.appName}</span>
+                    {lastAppEvent.bundleId ? (
+                      <span className="font-mono text-xs text-slate-400">{lastAppEvent.bundleId}</span>
+                    ) : null}
+                    <span className="text-xs text-slate-500">
+                      · {new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(new Date(lastAppEvent.timestampMs))}
+                    </span>
+                  </div>
+                  {lastAppEvent.browserTitle ? (
+                    <div className="text-xs text-slate-200 truncate">{lastAppEvent.browserTitle}</div>
                   ) : null}
-                  <span className="text-xs text-slate-500">
-                    · {new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(new Date(lastAppEvent.timestampMs))}
-                  </span>
+                  {lastAppEvent.browserUrl ? (
+                    <div className="font-mono text-xs text-violet-300 truncate">{lastAppEvent.browserUrl}</div>
+                  ) : null}
+                  {lastAppEvent.browserTabError ? (
+                    <div className="text-xs text-amber-300">tab read: {lastAppEvent.browserTabError}</div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="mt-1 text-sm text-slate-500">No app captured yet.</div>
@@ -1351,6 +1362,15 @@ export function TrackerSettingsPanel() {
                         <span className={ev.isIdle ? "text-amber-300" : "text-emerald-300"}>
                           {ev.isIdle ? "idle" : "active"}
                         </span>
+                      ) : null}
+                      {ev.browserTitle ? (
+                        <span className="text-slate-200 truncate">{ev.browserTitle}</span>
+                      ) : null}
+                      {ev.browserUrl ? (
+                        <span className="font-mono text-violet-300 truncate">{ev.browserUrl}</span>
+                      ) : null}
+                      {ev.browserTabError ? (
+                        <span className="text-amber-300 truncate">tab: {ev.browserTabError}</span>
                       ) : null}
                       {ev.error ? (
                         <span className="text-rose-300 truncate">{ev.error}</span>

@@ -25,6 +25,12 @@ export type AutoTrackerV2NativeEvent = {
   bundleId?: string;
   windowTitle?: string;
   isIdle?: boolean;
+  /** Active browser tab title — set when foreground app is a known browser. */
+  browserTitle?: string;
+  /** Active browser tab URL — set when foreground app is a known browser. */
+  browserUrl?: string;
+  /** Set when browser tab read was attempted but failed (e.g. permission denied). */
+  browserTabError?: string;
   error?: string;
 };
 
