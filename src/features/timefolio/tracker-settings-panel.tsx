@@ -6,6 +6,7 @@ import {
 import { FF } from "../../lib/feature-flags";
 import {
   captureAutoTrackerV2NativeOnce,
+  captureAutoTrackerV2NativeOnceAsync,
   clearAutoTrackerV2NativeBuffer,
   probeAutoTrackerV2Native,
   snapshotAutoTrackerV2Native,
@@ -727,7 +728,7 @@ export function TrackerSettingsPanel() {
 
     try {
       const result: AutoTrackerV2NativeCaptureResult = await withTimeout(
-        captureAutoTrackerV2NativeOnce(),
+        captureAutoTrackerV2NativeOnceAsync(),
         V2_NATIVE_CAPTURE_TIMEOUT_MS,
         "capture",
       );

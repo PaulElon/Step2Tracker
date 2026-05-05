@@ -515,8 +515,7 @@ pub fn tf_autotracker_v2_native_clear_buffer() -> TfAutotrackerV2NativeStatus {
     build_status(&buffer, cfg!(target_os = "macos"), cfg!(target_os = "macos"))
 }
 
-#[tauri::command]
-pub fn tf_autotracker_v2_native_capture_once() -> TfAutotrackerV2NativeCaptureResult {
+fn capture_once_impl() -> TfAutotrackerV2NativeCaptureResult {
     let timestamp_ms = now_ms();
     let mut appended: Vec<TfAutotrackerV2NativeEvent> = Vec::new();
     let mut foreground_ok = false;
@@ -636,6 +635,19 @@ pub fn tf_autotracker_v2_native_capture_once() -> TfAutotrackerV2NativeCaptureRe
         status: build_status(&buffer, foreground_ok, idle_ok),
         appended,
     }
+}
+
+#[tauri::command]
+pub fn tf_autotracker_v2_native_capture_once() -> TfAutotrackerV2NativeCaptureResult {
+    capture_once_impl()
+}
+
+#[tauri::command]
+pub async fn tf_autotracker_v2_native_capture_once_async(
+) -> Result<TfAutotrackerV2NativeCaptureResult, String> {
+    tauri::async_runtime::spawn_blocking(capture_once_impl)
+        .await
+        .map_err(|error| format!("tf_autotracker_v2_native_capture_once_async join failed: {error}"))
 }
 
 // ---------------------------------------------------------------------------

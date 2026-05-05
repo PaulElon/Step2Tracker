@@ -72,3 +72,9 @@ export function captureAutoTrackerV2NativeOnce(): Promise<AutoTrackerV2NativeCap
     "tf_autotracker_v2_native_capture_once",
   );
 }
+
+export function captureAutoTrackerV2NativeOnceAsync(): Promise<AutoTrackerV2NativeCaptureResult> {
+  return core.invoke<AutoTrackerV2NativeCaptureResult>(
+    "tf_autotracker_v2_native_capture_once_async",
+  );
+}

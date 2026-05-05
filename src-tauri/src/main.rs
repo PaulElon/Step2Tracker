@@ -474,6 +474,7 @@ fn main() {
             tf_autotracker_v2_native::tf_autotracker_v2_native_snapshot,
             tf_autotracker_v2_native::tf_autotracker_v2_native_clear_buffer,
             tf_autotracker_v2_native::tf_autotracker_v2_native_capture_once,
+            tf_autotracker_v2_native::tf_autotracker_v2_native_capture_once_async,
             tf_persistence::tf_load_state,
             tf_persistence::tf_save_state,
             tf_persistence::tf_reset_state,
