@@ -1401,6 +1401,9 @@ export function TrackerSettingsPanel() {
                   <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
                     Read-only diagnostic view of the V2 native event buffer. Not wired to the reducer or session creation.
                   </p>
+                  <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">
+                    Dev inspector state is temporary; buffer/preview resets when leaving this page or restarting.
+                  </p>
                 </div>
                 <div className="inline-flex w-fit rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-amber-200">
                   Shadow runner temporarily disabled; manual capture path active.
@@ -1785,7 +1788,7 @@ export function TrackerSettingsPanel() {
                         Continuous writer
                       </div>
                       <span className="text-[10px] text-cyan-50/80">
-                        Dev continuous write enabled — writes finalized tracked preview sessions created by manual captures only.
+                        Dev continuous write enabled — writes finalized tracked and distraction preview sessions created by manual captures only.
                       </span>
                     </div>
 
@@ -1831,7 +1834,7 @@ export function TrackerSettingsPanel() {
                         Manual writer
                       </div>
                       <span className="text-[10px] text-amber-100/80">
-                        Dev manual write — writes one finalized preview session to Session Log.
+                        Dev manual write — writes one finalized tracked or distraction preview session to Session Log.
                       </span>
                     </div>
 
@@ -1886,6 +1889,15 @@ export function TrackerSettingsPanel() {
                                     </span>
                                     <span className="rounded-full border border-slate-700 bg-slate-900/80 px-2 py-0.5 text-[10px] font-medium text-slate-300">
                                       {formatPreviewDuration(session.durationMs)}
+                                    </span>
+                                    <span
+                                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                        session.isDistraction
+                                          ? "border border-rose-500/20 bg-rose-500/10 text-rose-200"
+                                          : "border border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
+                                      }`}
+                                    >
+                                      {session.isDistraction ? "distraction" : "tracked"}
                                     </span>
                                     <span className="font-mono text-[10px] text-slate-500">
                                       {session.sourceTargetStableId}

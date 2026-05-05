@@ -99,7 +99,9 @@ test("tracked UWorld then distraction Reddit under 60 seconds then tracked UWorl
 
   assert.equal(preview.state.status, "focused");
   assert.equal(preview.state.target.stableId, "apps.uworld.com/courseapp");
-  assert.equal(preview.finalizedCount, 0);
+  assert.equal(preview.finalizedCount, 1);
+  assert.equal(preview.finalizedPreviewSessions.length, 1);
+  assert.equal(preview.finalizedPreviewSessions[0]?.isDistraction, true);
   assert.deepEqual(preview.reducerEvents.map((event) => event.kind), [
     "targetFocused",
     "untrackedFocused",
@@ -114,13 +116,13 @@ test("tracked UWorld then distraction Reddit for at least 60 seconds finalizes t
   ]);
 
   assert.equal(preview.state.status, "idle");
-  assert.equal(preview.finalizedCount, 1);
+  assert.equal(preview.finalizedCount, 2);
   assert.deepEqual(preview.reducerEvents.map((event) => event.kind), [
     "targetFocused",
     "untrackedFocused",
     "tick",
   ]);
-  assert.equal(preview.finalizedPreviewSessions.length, 1);
+  assert.equal(preview.finalizedPreviewSessions.length, 2);
   assert.deepEqual(preview.finalizedPreviewSessions[0], {
     previewSessionId: "website:apps.uworld.com/courseapp:0",
     startedAtMs: 0,
@@ -135,11 +137,14 @@ test("tracked UWorld then distraction Reddit for at least 60 seconds finalizes t
     browserTitle: "UWorld",
     browserUrl: "https://apps.uworld.com/courseapp/step2",
     classificationReason: "matched website rule \"uworld.com\" by host uworld.com",
+    classification: "tracked",
     finalizedBy: "awayGraceElapsed",
+    isDistraction: false,
   });
+  assert.equal(preview.finalizedPreviewSessions[1]?.isDistraction, true);
 });
 
-test("distraction-only spans do not create a tracked reducer session", () => {
+test("distraction-only finalized spans create finalized distraction preview sessions", () => {
   const preview = buildAutoTrackerV2ReducerPreview([
     distractionRedditSpan({ startedAtMs: 1_000, endedAtMs: 2_000, durationMs: 1_000 }),
     distractionRedditSpan({
@@ -151,11 +156,14 @@ test("distraction-only spans do not create a tracked reducer session", () => {
   ]);
 
   assert.equal(preview.state.status, "idle");
-  assert.equal(preview.finalizedCount, 0);
-  assert.equal(preview.finalizedPreviewSessions.length, 0);
+  assert.equal(preview.finalizedCount, 2);
+  assert.equal(preview.finalizedPreviewSessions.length, 2);
   assert.equal(preview.reducerEvents.length, 0);
-  assert.equal(preview.ignoredSpans.length, 2);
-  assert.equal(preview.ignoredSpans[0]?.reason, "no tracked reducer session was open");
+  assert.equal(preview.ignoredSpans.length, 0);
+  assert.deepEqual(preview.finalizedPreviewSessions.map((session) => session.isDistraction), [
+    true,
+    true,
+  ]);
 });
 
 test("unclassified-only spans do not create a tracked reducer session", () => {
@@ -211,7 +219,7 @@ test("open tracked span remains open and focused", () => {
 
 test("ignored spans are reported with reasons", () => {
   const preview = buildAutoTrackerV2ReducerPreview([
-    distractionRedditSpan({ startedAtMs: 1_000, endedAtMs: 2_000, durationMs: 1_000 }),
+    distractionRedditSpan({ startedAtMs: 1_000, endedAtMs: null, durationMs: null }),
   ]);
 
   assert.equal(preview.ignoredSpans.length, 1);
@@ -247,7 +255,9 @@ test("maps a finalized UWorld preview session to a concise Session Log payload",
     browserTitle: "UWorld Step 2",
     browserUrl: "https://apps.uworld.com/courseapp/step2",
     classificationReason: "matched website rule \"uworld.com\" by host uworld.com",
+    classification: "tracked",
     finalizedBy: "awayGraceElapsed",
+    isDistraction: false,
   };
 
   const sessionLog = mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
@@ -269,6 +279,43 @@ test("maps a finalized UWorld preview session to a concise Session Log payload",
   });
 });
 
+test("maps a finalized distraction preview session to a distraction Session Log payload", () => {
+  const previewSession = {
+    previewSessionId: "website:reddit.com/r/medicine:1746453600000",
+    startedAtMs: Date.parse("2025-05-05T14:00:00.000Z"),
+    endedAtMs: Date.parse("2025-05-05T14:30:00.000Z"),
+    durationMs: 30 * 60_000,
+    targetLabel: "Reddit",
+    sourceTargetStableId: "reddit.com/r/medicine",
+    sourceSpanIds: ["span-reddit", "span-reddit-2"],
+    sourceEventIds: ["event-1", "event-2"],
+    browserTitle: "Reddit",
+    browserUrl: "https://www.reddit.com/r/medicine",
+    classificationReason: "matched distraction website rule \"reddit.com\" by host reddit.com",
+    finalizedBy: "awayGraceElapsed",
+    classification: "distraction",
+    isDistraction: true,
+  } as TfAutotrackerV2FinalizedPreviewSession;
+
+  const sessionLog = mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
+    previewSession,
+    "tf-auto-v2-preview-write-1",
+  );
+
+  assert.deepEqual(sessionLog, {
+    id: "tf-auto-v2-preview-write-1",
+    date: "2025-05-05",
+    method: "Reddit [Auto]",
+    methodKey: "auto-v2-preview-reddit",
+    hours: 0.5,
+    startISO: "2025-05-05T14:00:00.000Z",
+    endISO: "2025-05-05T14:30:00.000Z",
+    notes: "",
+    isDistraction: true,
+    isLive: false,
+  });
+});
+
 test("maps a finalized Anki preview session to a concise Session Log payload", () => {
   const previewSession: TfAutotrackerV2FinalizedPreviewSession = {
     previewSessionId: "app:/Applications/Anki.app:1746457200000",
@@ -282,7 +329,9 @@ test("maps a finalized Anki preview session to a concise Session Log payload", (
     appName: "Anki",
     bundleId: "net.ankiweb.dtop",
     classificationReason: "matched app rule \"/Applications/Anki.app\" by app name Anki",
+    classification: "tracked",
     finalizedBy: "manualStop",
+    isDistraction: false,
   };
 
   const sessionLog = mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
@@ -297,7 +346,7 @@ test("maps a finalized Anki preview session to a concise Session Log payload", (
   assert.doesNotMatch(sessionLog.notes, /previewSessionId=|sourceSpanIds=|sourceEventIds=|browserUrl=|browserTitle=|\|/);
 });
 
-test("continuous write selects only finalized tracked sessions and leaves open sessions alone", () => {
+test("continuous write selects finalized tracked and distraction sessions but leaves open sessions alone", () => {
   const preview = buildAutoTrackerV2ReducerPreview([
     trackedUWorldSpan({ startedAtMs: 0, endedAtMs: 10_000, durationMs: 10_000 }),
     distractionRedditSpan({ startedAtMs: 20_000, endedAtMs: 90_000, durationMs: 70_000 }),
@@ -314,9 +363,25 @@ test("continuous write selects only finalized tracked sessions and leaves open s
       classificationReason: "matched app rule \"/Applications/Anki.app\" by app name Anki",
     }),
   ]);
+  const distractionPreviewSession = {
+    previewSessionId: "website:reddit.com/r/medicine:20_000",
+    startedAtMs: 20_000,
+    endedAtMs: 90_000,
+    durationMs: 70_000,
+    targetLabel: "Reddit",
+    sourceTargetStableId: "reddit.com/r/medicine",
+    sourceSpanIds: ["span-reddit"],
+    sourceEventIds: ["span-reddit"],
+    browserTitle: "Reddit",
+    browserUrl: "https://www.reddit.com/r/medicine",
+    classificationReason: "matched distraction website rule \"reddit.com\" by host reddit.com",
+    finalizedBy: "awayGraceElapsed",
+    classification: "distraction",
+    isDistraction: true,
+  } as TfAutotrackerV2FinalizedPreviewSession;
 
   const selection = selectAutoTrackerV2ContinuousWritePreviewSessions({
-    finalizedPreviewSessions: preview.finalizedPreviewSessions,
+    finalizedPreviewSessions: [preview.finalizedPreviewSessions[0]!, distractionPreviewSession],
     state: preview.state,
     writtenPreviewSessionIds: [],
   });
@@ -324,8 +389,9 @@ test("continuous write selects only finalized tracked sessions and leaves open s
   assert.equal(preview.state.status, "focused");
   assert.deepEqual(selection.previewSessions.map((session) => session.previewSessionId), [
     "website:apps.uworld.com/courseapp:0",
+    distractionPreviewSession.previewSessionId,
   ]);
-  assert.deepEqual(selection.names, ["UWorld"]);
+  assert.deepEqual(selection.names, ["UWorld", "Reddit"]);
 });
 
 test("continuous write excludes duplicate preview session ids", () => {
@@ -346,6 +412,38 @@ test("continuous write excludes duplicate preview session ids", () => {
     finalizedPreviewSession.previewSessionId,
   ]);
   assert.equal(selection.skippedDuplicateCount, 1);
+});
+
+test("continuous write excludes unclassified preview sessions", () => {
+  const preview = buildAutoTrackerV2ReducerPreview([
+    trackedUWorldSpan({ startedAtMs: 0, endedAtMs: 10_000, durationMs: 10_000 }),
+    distractionRedditSpan({ startedAtMs: 20_000, endedAtMs: 90_000, durationMs: 70_000 }),
+  ]);
+  const unclassifiedPreviewSession = {
+    previewSessionId: "website:example.com:20_000",
+    startedAtMs: 20_000,
+    endedAtMs: 90_000,
+    durationMs: 70_000,
+    targetLabel: "Example",
+    sourceTargetStableId: "example.com",
+    sourceSpanIds: ["span-example"],
+    sourceEventIds: ["span-example"],
+    browserUrl: "https://example.com",
+    classificationReason: "no matching rule",
+    finalizedBy: "awayGraceElapsed",
+    classification: "unclassified",
+    isDistraction: false,
+  } as TfAutotrackerV2FinalizedPreviewSession;
+
+  const selection = selectAutoTrackerV2ContinuousWritePreviewSessions({
+    finalizedPreviewSessions: [preview.finalizedPreviewSessions[0]!, unclassifiedPreviewSession],
+    state: preview.state,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.deepEqual(selection.previewSessions.map((session) => session.previewSessionId), [
+    "website:apps.uworld.com/courseapp:0",
+  ]);
 });
 
 test("continuous write excludes already written preview session ids", () => {
@@ -381,7 +479,9 @@ test("continuous write emits session names for success status", () => {
         browserTitle: "UWorld Step 2",
         browserUrl: "https://apps.uworld.com/courseapp/step2",
         classificationReason: "matched website rule \"uworld.com\" by host uworld.com",
+        classification: "tracked",
         finalizedBy: "awayGraceElapsed",
+        isDistraction: false,
       },
       {
         previewSessionId: "app:/Applications/Anki.app:1746457200000",
@@ -395,7 +495,9 @@ test("continuous write emits session names for success status", () => {
         appName: "Anki",
         bundleId: "net.ankiweb.dtop",
         classificationReason: "matched app rule \"/Applications/Anki.app\" by app name Anki",
+        classification: "tracked",
         finalizedBy: "manualStop",
+        isDistraction: false,
       },
     ],
     state: {

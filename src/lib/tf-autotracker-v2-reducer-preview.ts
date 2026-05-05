@@ -8,7 +8,10 @@ import {
   type AutoTrackerV2Target,
 } from "./tf-autotracker-v2-session-machine.js";
 import { methodKeyFromLabel, roundHours } from "./tf-session-adapters.js";
-import type { TfAutotrackerV2PreviewSpan } from "./tf-autotracker-v2-preview-spans.js";
+import type {
+  TfAutotrackerV2PreviewClassification,
+  TfAutotrackerV2PreviewSpan,
+} from "./tf-autotracker-v2-preview-spans.js";
 import type { TfSessionLog } from "../types/models";
 
 export type TfAutotrackerV2ReducerPreviewIgnoredSpan = {
@@ -40,7 +43,9 @@ export type TfAutotrackerV2FinalizedPreviewSession = {
   browserTitle?: string;
   browserUrl?: string;
   classificationReason: string;
+  classification: TfAutotrackerV2PreviewClassification;
   finalizedBy: AutoTrackerV2FinalizedBy;
+  isDistraction: boolean;
 };
 
 export type TfAutotrackerV2ReducerPreview = {
@@ -103,16 +108,22 @@ export function buildAutoTrackerV2ReducerPreview(
   for (let index = 0; index < sortedSpans.length; index += 1) {
     const span = sortedSpans[index];
     const isTracked = span.classification === "tracked";
+    const isDistraction = span.classification === "distraction";
+    const isFinalizedSpan = isFinalizedPreviewSpan(span);
 
     if (!isTracked && state.status === "idle") {
       const classification =
         span.classification === "distraction" ? "distraction" : "unclassified";
-      ignoredSpans.push({
-        spanId: span.id,
-        label: span.label,
-        classification,
-        reason: "no tracked reducer session was open",
-      });
+      if (classification === "distraction" && isFinalizedSpan) {
+        finalizedPreviewSessions.push(createDistractionPreviewSession(span));
+      } else {
+        ignoredSpans.push({
+          spanId: span.id,
+          label: span.label,
+          classification,
+          reason: "no tracked reducer session was open",
+        });
+      }
       continue;
     }
 
@@ -143,6 +154,7 @@ export function buildAutoTrackerV2ReducerPreview(
       );
       activePreviewSession = startPreviewSessionIfNeeded(activePreviewSession, state, span, isTracked);
     }
+
     reducerEvents.push(formatReducerEvent(span, reducerEvent));
 
     if (result.finalizedSessions.length === 0) {
@@ -184,13 +196,31 @@ export function buildAutoTrackerV2ReducerPreview(
       }
       reducerEvents.push(formatReducerEvent(span, tickEvent));
     }
+
+    if (isDistraction && isFinalizedSpan) {
+      finalizedPreviewSessions.push(createDistractionPreviewSession(span));
+    }
   }
+
+  const orderedFinalizedPreviewSessions = [...finalizedPreviewSessions].sort((a, b) => {
+    const startedDelta = a.startedAtMs - b.startedAtMs;
+    if (startedDelta !== 0) {
+      return startedDelta;
+    }
+
+    const endedDelta = a.endedAtMs - b.endedAtMs;
+    if (endedDelta !== 0) {
+      return endedDelta;
+    }
+
+    return a.previewSessionId.localeCompare(b.previewSessionId);
+  });
 
   return {
     state,
     reducerEvents,
-    finalizedCount: finalizedSessions.length,
-    finalizedPreviewSessions,
+    finalizedCount: orderedFinalizedPreviewSessions.length,
+    finalizedPreviewSessions: orderedFinalizedPreviewSessions,
     ignoredSpans,
   };
 }
@@ -205,6 +235,10 @@ export function mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
 
   if (previewSession.endedAtMs <= previewSession.startedAtMs) {
     throw new RangeError("Preview session endedAtMs must be greater than startedAtMs.");
+  }
+
+  if (previewSession.classification === "unclassified") {
+    throw new RangeError("Unclassified preview sessions cannot be written.");
   }
 
   const startISO = new Date(previewSession.startedAtMs).toISOString();
@@ -222,7 +256,7 @@ export function mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
     startISO,
     endISO,
     notes: "",
-    isDistraction: false,
+    isDistraction: previewSession.isDistraction,
     isLive: false,
   };
 }
@@ -243,6 +277,10 @@ export function selectAutoTrackerV2ContinuousWritePreviewSessions({
   let skippedDuplicateCount = 0;
 
   for (const previewSession of finalizedPreviewSessions) {
+    if (previewSession.classification === "unclassified") {
+      continue;
+    }
+
     if (seenPreviewSessionIds.has(previewSession.previewSessionId)) {
       skippedDuplicateCount += 1;
       continue;
@@ -592,8 +630,61 @@ function finalizePreviewSession(
     browserTitle: activePreviewSession.browserTitle,
     browserUrl: activePreviewSession.browserUrl,
     classificationReason: activePreviewSession.classificationReason,
+    classification: "tracked",
     finalizedBy: finalizedSession.finalizedBy,
+    isDistraction: false,
   };
+}
+
+function createDistractionPreviewSession(
+  span: TfAutotrackerV2PreviewSpan,
+): TfAutotrackerV2FinalizedPreviewSession {
+  const sourceTargetStableId = getPreviewSpanTargetStableId(span);
+
+  return {
+    previewSessionId: `${span.kind}:${sourceTargetStableId}:${span.startedAtMs}`,
+    startedAtMs: span.startedAtMs,
+    endedAtMs: span.endedAtMs ?? span.startedAtMs,
+    durationMs: Math.max(0, span.durationMs ?? 0),
+    targetLabel: getPreviewSpanTargetLabel(span),
+    sourceTargetStableId,
+    sourceSpanIds: [span.id],
+    sourceEventIds: [...span.sourceEventIds],
+    appName: span.appName,
+    bundleId: span.bundleId,
+    browserTitle: span.browserTitle,
+    browserUrl: span.browserUrl,
+    classificationReason: span.classificationReason,
+    classification: "distraction",
+    finalizedBy: "manualStop",
+    isDistraction: true,
+  };
+}
+
+function isFinalizedPreviewSpan(span: TfAutotrackerV2PreviewSpan): boolean {
+  return (
+    Number.isFinite(span.startedAtMs) &&
+    Number.isFinite(span.endedAtMs) &&
+    Number.isFinite(span.durationMs) &&
+    (span.durationMs ?? 0) > 0 &&
+    (span.endedAtMs ?? 0) > span.startedAtMs
+  );
+}
+
+function getPreviewSpanTargetLabel(span: TfAutotrackerV2PreviewSpan): string {
+  if (span.kind === "website") {
+    return getWebsiteLabel(span);
+  }
+
+  return getAppLabel(span);
+}
+
+function getPreviewSpanTargetStableId(span: TfAutotrackerV2PreviewSpan): string {
+  if (span.kind === "website") {
+    return getWebsiteStableId(span);
+  }
+
+  return getAppStableId(span);
 }
 
 function appendUnique(values: string[], value: string): string[] {
