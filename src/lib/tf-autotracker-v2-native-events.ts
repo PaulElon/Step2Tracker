@@ -55,6 +55,15 @@ export type AutoTrackerV2NativeCaptureResult = {
   appended: AutoTrackerV2NativeEvent[];
 };
 
+export type AutoTrackerV2NativeShadowStatus = {
+  isRunning: boolean;
+  tickCount: number;
+  lastTickStartedAtMs: number | null;
+  lastTickCompletedAtMs: number | null;
+  lastTickAppendedCount: number;
+  lastError: string | null;
+};
+
 export function probeAutoTrackerV2Native(): Promise<AutoTrackerV2NativeStatus> {
   return core.invoke<AutoTrackerV2NativeStatus>("tf_autotracker_v2_native_probe");
 }
@@ -65,6 +74,24 @@ export function snapshotAutoTrackerV2Native(): Promise<AutoTrackerV2NativeSnapsh
 
 export function clearAutoTrackerV2NativeBuffer(): Promise<AutoTrackerV2NativeStatus> {
   return core.invoke<AutoTrackerV2NativeStatus>("tf_autotracker_v2_native_clear_buffer");
+}
+
+export function startAutoTrackerV2NativeShadowRunner(): Promise<AutoTrackerV2NativeShadowStatus> {
+  return core.invoke<AutoTrackerV2NativeShadowStatus>(
+    "tf_autotracker_v2_native_shadow_start",
+  );
+}
+
+export function stopAutoTrackerV2NativeShadowRunner(): Promise<AutoTrackerV2NativeShadowStatus> {
+  return core.invoke<AutoTrackerV2NativeShadowStatus>(
+    "tf_autotracker_v2_native_shadow_stop",
+  );
+}
+
+export function getAutoTrackerV2NativeShadowStatus(): Promise<AutoTrackerV2NativeShadowStatus> {
+  return core.invoke<AutoTrackerV2NativeShadowStatus>(
+    "tf_autotracker_v2_native_shadow_status",
+  );
 }
 
 export function captureAutoTrackerV2NativeOnce(): Promise<AutoTrackerV2NativeCaptureResult> {

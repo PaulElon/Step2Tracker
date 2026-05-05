@@ -2,15 +2,19 @@
 //
 // This module observes the local desktop and produces V2-compatible
 // normalized events into an in-memory ring buffer. It does NOT feed
-// the V2 reducer, does NOT persist anything, and does NOT spawn any
-// background polling thread. Sampling is on-demand via the
-// `tf_autotracker_v2_native_capture_once` command.
+// the V2 reducer and does NOT persist anything. Manual capture remains
+// on-demand via `tf_autotracker_v2_native_capture_once`, and the
+// diagnostic shadow runner is owned by Rust in-process only.
 
 #[cfg(target_os = "macos")]
 use std::process::Command;
 #[cfg(target_os = "macos")]
 use std::process::Stdio;
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
+use std::thread;
 use std::time::SystemTime;
 #[cfg(target_os = "macos")]
 use std::time::Duration;
@@ -24,6 +28,8 @@ const PLATFORM_LABEL: &str = "macos";
 const MAX_BUFFER_LEN: usize = 2_000;
 const IDLE_THRESHOLD_SECS: u64 = 60;
 const COMMAND_TIMEOUT_MS: u64 = 1_000;
+const SHADOW_RUNNER_INTERVAL_MS: u64 = 3_000;
+const SHADOW_RUNNER_SLEEP_SLICE_MS: u64 = 100;
 const COMMAND_TIMEOUT_NOTE: &str =
     "lsappinfo/ioreg run with a short timeout and return promptly on macOS";
 
@@ -89,6 +95,18 @@ pub struct TfAutotrackerV2NativeCaptureResult {
     pub appended: Vec<TfAutotrackerV2NativeEvent>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TfAutotrackerV2NativeShadowStatus {
+    pub is_running: bool,
+    pub tick_count: u64,
+    pub last_tick_started_at_ms: Option<i64>,
+    pub last_tick_completed_at_ms: Option<i64>,
+    pub last_tick_appended_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
+}
+
 // ---------------------------------------------------------------------------
 // In-memory ring buffer
 // ---------------------------------------------------------------------------
@@ -136,6 +154,34 @@ impl NativeBuffer {
 
 static BUFFER: Mutex<NativeBuffer> = Mutex::new(NativeBuffer::new());
 
+struct ShadowRunnerState {
+    is_running: bool,
+    tick_count: u64,
+    last_tick_started_at_ms: Option<i64>,
+    last_tick_completed_at_ms: Option<i64>,
+    last_tick_appended_count: usize,
+    last_error: Option<String>,
+    stop_signal: Option<Arc<AtomicBool>>,
+    generation: u64,
+}
+
+impl ShadowRunnerState {
+    const fn new() -> Self {
+        Self {
+            is_running: false,
+            tick_count: 0,
+            last_tick_started_at_ms: None,
+            last_tick_completed_at_ms: None,
+            last_tick_appended_count: 0,
+            last_error: None,
+            stop_signal: None,
+            generation: 0,
+        }
+    }
+}
+
+static SHADOW_RUNNER: Mutex<ShadowRunnerState> = Mutex::new(ShadowRunnerState::new());
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -179,6 +225,142 @@ fn build_status(
         last_sampled_at_ms: buffer.last_sampled_at_ms,
         note: COMMAND_TIMEOUT_NOTE.to_string(),
     }
+}
+
+fn build_shadow_status(state: &ShadowRunnerState) -> TfAutotrackerV2NativeShadowStatus {
+    TfAutotrackerV2NativeShadowStatus {
+        is_running: state.is_running,
+        tick_count: state.tick_count,
+        last_tick_started_at_ms: state.last_tick_started_at_ms,
+        last_tick_completed_at_ms: state.last_tick_completed_at_ms,
+        last_tick_appended_count: state.last_tick_appended_count,
+        last_error: state.last_error.clone(),
+    }
+}
+
+fn lock_shadow_runner() -> std::sync::MutexGuard<'static, ShadowRunnerState> {
+    match SHADOW_RUNNER.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+fn start_shadow_runner_state(
+    state: &mut ShadowRunnerState,
+    stop_signal: Arc<AtomicBool>,
+) -> (TfAutotrackerV2NativeShadowStatus, bool, u64) {
+    if state.is_running {
+        return (build_shadow_status(state), false, state.generation);
+    }
+
+    state.generation = state.generation.saturating_add(1);
+    state.is_running = true;
+    state.tick_count = 0;
+    state.last_tick_started_at_ms = None;
+    state.last_tick_completed_at_ms = None;
+    state.last_tick_appended_count = 0;
+    state.last_error = None;
+    state.stop_signal = Some(stop_signal);
+
+    (build_shadow_status(state), true, state.generation)
+}
+
+fn stop_shadow_runner_state(state: &mut ShadowRunnerState) -> TfAutotrackerV2NativeShadowStatus {
+    if let Some(stop_signal) = state.stop_signal.take() {
+        stop_signal.store(true, Ordering::Relaxed);
+    }
+    state.is_running = false;
+    build_shadow_status(state)
+}
+
+fn set_shadow_tick_started(generation: u64, started_at_ms: i64) {
+    let mut state = lock_shadow_runner();
+    if state.generation != generation {
+        return;
+    }
+
+    state.tick_count = state.tick_count.saturating_add(1);
+    state.last_tick_started_at_ms = Some(started_at_ms);
+}
+
+fn set_shadow_tick_completed(
+    generation: u64,
+    completed_at_ms: i64,
+    appended_count: usize,
+    last_error: Option<String>,
+) {
+    let mut state = lock_shadow_runner();
+    if state.generation != generation {
+        return;
+    }
+
+    state.last_tick_completed_at_ms = Some(completed_at_ms);
+    state.last_tick_appended_count = appended_count;
+    state.last_error = last_error;
+}
+
+fn finish_shadow_runner(generation: u64) {
+    let mut state = lock_shadow_runner();
+    if state.generation != generation {
+        return;
+    }
+
+    state.is_running = false;
+    state.stop_signal = None;
+}
+
+fn sleep_with_stop_signal(stop_signal: &AtomicBool, duration_ms: u64) -> bool {
+    let mut remaining_ms = duration_ms;
+    while remaining_ms > 0 {
+        if stop_signal.load(Ordering::Relaxed) {
+            return false;
+        }
+
+        let sleep_ms = remaining_ms.min(SHADOW_RUNNER_SLEEP_SLICE_MS);
+        thread::sleep(std::time::Duration::from_millis(sleep_ms));
+        remaining_ms -= sleep_ms;
+    }
+
+    !stop_signal.load(Ordering::Relaxed)
+}
+
+fn extract_capture_error(result: &TfAutotrackerV2NativeCaptureResult) -> Option<String> {
+    result
+        .appended
+        .iter()
+        .find_map(|event| match (event.kind.as_str(), event.error.as_deref()) {
+            ("error", Some(error)) => Some(error.to_string()),
+            _ => None,
+        })
+}
+
+fn spawn_shadow_runner_thread(generation: u64, stop_signal: Arc<AtomicBool>) {
+    thread::spawn(move || {
+        loop {
+            if stop_signal.load(Ordering::Relaxed) {
+                break;
+            }
+
+            set_shadow_tick_started(generation, now_ms());
+
+            let capture_outcome = std::panic::catch_unwind(capture_once_impl);
+            let (appended_count, last_error) = match capture_outcome {
+                Ok(result) => (result.appended.len(), extract_capture_error(&result)),
+                Err(_) => (
+                    0,
+                    Some("shadow runner panicked during native capture.".to_string()),
+                ),
+            };
+
+            set_shadow_tick_completed(generation, now_ms(), appended_count, last_error);
+
+            if !sleep_with_stop_signal(&stop_signal, SHADOW_RUNNER_INTERVAL_MS) {
+                break;
+            }
+        }
+
+        finish_shadow_runner(generation);
+    });
 }
 
 /// Returns true if the foreground app has changed relative to the last capture.
@@ -515,6 +697,33 @@ pub fn tf_autotracker_v2_native_clear_buffer() -> TfAutotrackerV2NativeStatus {
     build_status(&buffer, cfg!(target_os = "macos"), cfg!(target_os = "macos"))
 }
 
+#[tauri::command]
+pub fn tf_autotracker_v2_native_shadow_start() -> TfAutotrackerV2NativeShadowStatus {
+    let stop_signal = Arc::new(AtomicBool::new(false));
+    let (status, should_spawn, generation) = {
+        let mut state = lock_shadow_runner();
+        start_shadow_runner_state(&mut state, stop_signal.clone())
+    };
+
+    if should_spawn {
+        spawn_shadow_runner_thread(generation, stop_signal);
+    }
+
+    status
+}
+
+#[tauri::command]
+pub fn tf_autotracker_v2_native_shadow_stop() -> TfAutotrackerV2NativeShadowStatus {
+    let mut state = lock_shadow_runner();
+    stop_shadow_runner_state(&mut state)
+}
+
+#[tauri::command]
+pub fn tf_autotracker_v2_native_shadow_status() -> TfAutotrackerV2NativeShadowStatus {
+    let state = lock_shadow_runner();
+    build_shadow_status(&state)
+}
+
 fn capture_once_impl() -> TfAutotrackerV2NativeCaptureResult {
     let timestamp_ms = now_ms();
     let mut appended: Vec<TfAutotrackerV2NativeEvent> = Vec::new();
@@ -743,5 +952,49 @@ mod tests {
             Some("Safari"),
             Some(1000),
         ));
+    }
+
+    #[test]
+    fn shadow_status_defaults_to_stopped() {
+        let state = ShadowRunnerState::new();
+        let status = build_shadow_status(&state);
+        assert!(!status.is_running);
+        assert_eq!(status.tick_count, 0);
+        assert_eq!(status.last_tick_started_at_ms, None);
+        assert_eq!(status.last_tick_completed_at_ms, None);
+        assert_eq!(status.last_tick_appended_count, 0);
+        assert_eq!(status.last_error, None);
+    }
+
+    #[test]
+    fn shadow_runner_duplicate_start_guard_returns_existing_status() {
+        let stop_signal = Arc::new(AtomicBool::new(false));
+        let mut state = ShadowRunnerState::new();
+
+        let (first_status, first_started, first_generation) =
+            start_shadow_runner_state(&mut state, stop_signal.clone());
+        assert!(first_started);
+        assert!(first_status.is_running);
+        assert_eq!(first_generation, 1);
+
+        state.tick_count = 3;
+        let (second_status, second_started, second_generation) =
+            start_shadow_runner_state(&mut state, Arc::new(AtomicBool::new(false)));
+        assert!(!second_started);
+        assert!(second_status.is_running);
+        assert_eq!(second_status.tick_count, 3);
+        assert_eq!(second_generation, first_generation);
+    }
+
+    #[test]
+    fn shadow_runner_stop_marks_stopped_and_signals_flag() {
+        let stop_signal = Arc::new(AtomicBool::new(false));
+        let mut state = ShadowRunnerState::new();
+        let _ = start_shadow_runner_state(&mut state, stop_signal.clone());
+
+        let status = stop_shadow_runner_state(&mut state);
+        assert!(!status.is_running);
+        assert!(stop_signal.load(Ordering::Relaxed));
+        assert!(state.stop_signal.is_none());
     }
 }
