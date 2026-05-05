@@ -8,9 +8,13 @@ import { FF } from "../../lib/feature-flags";
 import {
   captureAutoTrackerV2NativeOnce,
   clearAutoTrackerV2NativeBuffer,
+  getAutoTrackerV2NativeSamplerStatus,
   probeAutoTrackerV2Native,
   snapshotAutoTrackerV2Native,
+  startAutoTrackerV2NativeSampler,
+  stopAutoTrackerV2NativeSampler,
   type AutoTrackerV2NativeCaptureResult,
+  type AutoTrackerV2NativeSamplerStatus,
   type AutoTrackerV2NativeSnapshot,
   type AutoTrackerV2NativeStatus,
 } from "../../lib/tf-autotracker-v2-native-events";
@@ -246,6 +250,13 @@ function formatPreviewDuration(durationMs: number): string {
   }
 
   return `${seconds}s`;
+}
+
+function formatTimeOfDayFromMs(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return "Never";
+  }
+  return new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(new Date(value));
 }
 
 function makeAutoTrackerV2PreviewSessionLogId(previewSessionId: string): string {
@@ -714,9 +725,11 @@ export function TrackerSettingsPanel() {
   const [v2Snapshot, setV2Snapshot] = useState<AutoTrackerV2NativeSnapshot | null>(null);
   const [v2InspectorError, setV2InspectorError] = useState<string | null>(null);
   const [v2IsBusy, setV2IsBusy] = useState(false);
+  const [v2SamplerActionBusy, setV2SamplerActionBusy] = useState(false);
   const [v2DelayCountdown, setV2DelayCountdown] = useState<number | null>(null);
-  const [v2IsSampling, setV2IsSampling] = useState(false);
-  const [v2SamplingSecondsLeft, setV2SamplingSecondsLeft] = useState<number | null>(null);
+  const [v2SamplerStatus, setV2SamplerStatus] = useState<AutoTrackerV2NativeSamplerStatus | null>(
+    null,
+  );
   const [v2LastCaptureInfo, setV2LastCaptureInfo] = useState<{
     appendedCount: number;
     captureErrors: string[];
@@ -739,8 +752,6 @@ export function TrackerSettingsPanel() {
   const [v2IsWritingSelectedSession, setV2IsWritingSelectedSession] = useState(false);
 
   const v2DelayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const v2SamplingCaptureIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const v2SamplingCountdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const v2WritingPreviewSessionIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -756,13 +767,21 @@ export function TrackerSettingsPanel() {
       if (v2DelayIntervalRef.current !== null) {
         clearInterval(v2DelayIntervalRef.current);
       }
-      if (v2SamplingCaptureIntervalRef.current !== null) {
-        clearInterval(v2SamplingCaptureIntervalRef.current);
-      }
-      if (v2SamplingCountdownIntervalRef.current !== null) {
-        clearInterval(v2SamplingCountdownIntervalRef.current);
-      }
     };
+  }, []);
+
+  useEffect(() => {
+    if (!FF.autotrackerV2NativeInspector && !FF.autotrackerV2NativeSampler) {
+      return;
+    }
+
+    void getAutoTrackerV2NativeSamplerStatus()
+      .then((status) => {
+        setV2SamplerStatus(status);
+      })
+      .catch(() => {
+        // Leave existing inspector state alone if sampler diagnostics are unavailable.
+      });
   }, []);
 
   const classificationSettings: TfAutotrackerV2ClassificationSettings = {
@@ -793,6 +812,7 @@ export function TrackerSettingsPanel() {
     .join("|");
   const reducerPreviewStateKey = `${reducerPreview.state.status}:${reducerPreviewActiveTarget?.stableId ?? ""}`;
   const writtenPreviewSessionIdsKey = Array.from(v2WrittenPreviewSessionIds).sort().join("|");
+  const isSamplerRunning = v2SamplerStatus?.running === true;
 
   useEffect(() => {
     if (!FF.autotrackerV2ContinuousWrite) {
@@ -870,6 +890,44 @@ export function TrackerSettingsPanel() {
     v2Snapshot?.events.length,
     writtenPreviewSessionIdsKey,
   ]);
+
+  useEffect(() => {
+    if (!FF.autotrackerV2NativeSampler || !isSamplerRunning) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const refresh = () => {
+      void Promise.all([
+        getAutoTrackerV2NativeSamplerStatus(),
+        snapshotAutoTrackerV2Native(),
+      ])
+        .then(([samplerStatus, snapshot]) => {
+          if (cancelled) {
+            return;
+          }
+          setV2SamplerStatus(samplerStatus);
+          setV2Snapshot(snapshot);
+          setV2ProbeStatus(snapshot.status);
+        })
+        .catch((err: unknown) => {
+          if (cancelled) {
+            return;
+          }
+          setV2InspectorError(
+            err instanceof Error && err.message ? err.message : "Sampler refresh failed.",
+          );
+        });
+    };
+
+    refresh();
+    const intervalId = window.setInterval(refresh, 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [isSamplerRunning]);
 
   if (isLoading) {
     return (
@@ -1087,12 +1145,33 @@ export function TrackerSettingsPanel() {
     });
   }
 
+  async function refreshV2SnapshotAndSamplerStatus() {
+    const [snapshot, samplerStatus] = await Promise.all([
+      snapshotAutoTrackerV2Native(),
+      FF.autotrackerV2NativeSampler ? getAutoTrackerV2NativeSamplerStatus() : Promise.resolve(null),
+    ]);
+
+    setV2Snapshot(snapshot);
+    setV2ProbeStatus(snapshot.status);
+    if (samplerStatus) {
+      setV2SamplerStatus(samplerStatus);
+    }
+  }
+
   async function handleV2Probe() {
     setV2InspectorError(null);
     setV2IsBusy(true);
     try {
-      const status = await probeAutoTrackerV2Native();
+      const [status, samplerStatus] = await Promise.all([
+        probeAutoTrackerV2Native(),
+        FF.autotrackerV2NativeSampler
+          ? getAutoTrackerV2NativeSamplerStatus()
+          : Promise.resolve(null),
+      ]);
       setV2ProbeStatus(status);
+      if (samplerStatus) {
+        setV2SamplerStatus(samplerStatus);
+      }
     } catch (err) {
       setV2InspectorError(err instanceof Error && err.message ? err.message : "Probe failed.");
     } finally {
@@ -1104,9 +1183,7 @@ export function TrackerSettingsPanel() {
     setV2InspectorError(null);
     setV2IsBusy(true);
     try {
-      const snap = await snapshotAutoTrackerV2Native();
-      setV2Snapshot(snap);
-      setV2ProbeStatus(snap.status);
+      await refreshV2SnapshotAndSamplerStatus();
     } catch (err) {
       setV2InspectorError(err instanceof Error && err.message ? err.message : "Snapshot failed.");
     } finally {
@@ -1121,9 +1198,7 @@ export function TrackerSettingsPanel() {
       const result: AutoTrackerV2NativeCaptureResult = await captureAutoTrackerV2NativeOnce();
       setV2ProbeStatus(result.status);
       recordCaptureInfo(result);
-      const snap = await snapshotAutoTrackerV2Native();
-      setV2Snapshot(snap);
-      setV2ProbeStatus(snap.status);
+      await refreshV2SnapshotAndSamplerStatus();
     } catch (err) {
       setV2InspectorError(err instanceof Error && err.message ? err.message : "Capture failed.");
     } finally {
@@ -1137,6 +1212,10 @@ export function TrackerSettingsPanel() {
     try {
       const status = await clearAutoTrackerV2NativeBuffer();
       setV2ProbeStatus(status);
+      if (FF.autotrackerV2NativeSampler) {
+        const samplerStatus = await getAutoTrackerV2NativeSamplerStatus();
+        setV2SamplerStatus(samplerStatus);
+      }
       setV2Snapshot((prev: AutoTrackerV2NativeSnapshot | null) =>
         prev ? { ...prev, status, events: [] } : null,
       );
@@ -1190,55 +1269,36 @@ export function TrackerSettingsPanel() {
     }, 1000);
   }
 
-  function handleV2StopSampling() {
-    if (v2SamplingCaptureIntervalRef.current !== null) {
-      clearInterval(v2SamplingCaptureIntervalRef.current);
-      v2SamplingCaptureIntervalRef.current = null;
+  async function handleV2StartNativeSampler() {
+    setV2InspectorError(null);
+    setV2SamplerActionBusy(true);
+    try {
+      const samplerStatus = await startAutoTrackerV2NativeSampler();
+      setV2SamplerStatus(samplerStatus);
+      await refreshV2SnapshotAndSamplerStatus();
+    } catch (err) {
+      setV2InspectorError(
+        err instanceof Error && err.message ? err.message : "Unable to start native sampler.",
+      );
+    } finally {
+      setV2SamplerActionBusy(false);
     }
-    if (v2SamplingCountdownIntervalRef.current !== null) {
-      clearInterval(v2SamplingCountdownIntervalRef.current);
-      v2SamplingCountdownIntervalRef.current = null;
-    }
-    setV2IsSampling(false);
-    setV2SamplingSecondsLeft(null);
-    snapshotAutoTrackerV2Native()
-      .then((snap) => {
-        setV2Snapshot(snap);
-        setV2ProbeStatus(snap.status);
-      })
-      .catch((err: unknown) => {
-        setV2InspectorError(
-          err instanceof Error && err.message ? err.message : "Snapshot after sampling failed.",
-        );
-      });
   }
 
-  function handleV2StartSampling() {
+  async function handleV2StopNativeSampler() {
     setV2InspectorError(null);
-    setV2IsSampling(true);
-    let secondsLeft = 30;
-    setV2SamplingSecondsLeft(secondsLeft);
-
-    v2SamplingCaptureIntervalRef.current = setInterval(() => {
-      captureAutoTrackerV2NativeOnce()
-        .then((result) => {
-          setV2ProbeStatus(result.status);
-          recordCaptureInfo(result);
-        })
-        .catch((err: unknown) => {
-          setV2InspectorError(
-            err instanceof Error && err.message ? err.message : "Sampling capture failed.",
-          );
-        });
-    }, 2000);
-
-    v2SamplingCountdownIntervalRef.current = setInterval(() => {
-      secondsLeft -= 1;
-      setV2SamplingSecondsLeft(secondsLeft);
-      if (secondsLeft <= 0) {
-        handleV2StopSampling();
-      }
-    }, 1000);
+    setV2SamplerActionBusy(true);
+    try {
+      const samplerStatus = await stopAutoTrackerV2NativeSampler();
+      setV2SamplerStatus(samplerStatus);
+      await refreshV2SnapshotAndSamplerStatus();
+    } catch (err) {
+      setV2InspectorError(
+        err instanceof Error && err.message ? err.message : "Unable to stop native sampler.",
+      );
+    } finally {
+      setV2SamplerActionBusy(false);
+    }
   }
 
   async function writeAutoTrackerV2PreviewSession(
@@ -1666,7 +1726,7 @@ export function TrackerSettingsPanel() {
         </div>
       </section>
 
-      {FF.autotrackerV2NativeInspector ? (() => {
+      {FF.autotrackerV2NativeInspector || FF.autotrackerV2NativeSampler ? (() => {
         const lastAppEvent = v2Snapshot
           ? [...v2Snapshot.events]
               .reverse()
@@ -1674,7 +1734,7 @@ export function TrackerSettingsPanel() {
           : undefined;
 
         const isDelayPending = v2DelayCountdown !== null;
-        const anyBusy = v2IsBusy || isDelayPending;
+        const anyBusy = v2IsBusy || v2SamplerActionBusy || isDelayPending;
 
         return (
           <section className="flex flex-col gap-5 rounded-2xl border border-violet-500/20 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
@@ -1693,14 +1753,14 @@ export function TrackerSettingsPanel() {
                   </p>
                 </div>
                 <div className="inline-flex w-fit rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-amber-200">
-                  Shadow runner temporarily disabled; manual capture path active.
+                  Manual capture remains the source of truth. Native sampler is Rust-owned and dev-only.
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={handleV2Probe}
-                  disabled={anyBusy || v2IsSampling}
+                  disabled={anyBusy || isSamplerRunning}
                   className="rounded-lg border border-violet-500/30 bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {v2IsBusy ? "…" : "Probe"}
@@ -1708,7 +1768,7 @@ export function TrackerSettingsPanel() {
                 <button
                   type="button"
                   onClick={handleV2CaptureOnce}
-                  disabled={anyBusy || v2IsSampling}
+                  disabled={anyBusy || isSamplerRunning}
                   className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Capture once
@@ -1716,29 +1776,33 @@ export function TrackerSettingsPanel() {
                 <button
                   type="button"
                   onClick={handleV2CaptureDelayed}
-                  disabled={isDelayPending || v2IsBusy || v2IsSampling}
+                  disabled={isDelayPending || v2IsBusy || v2SamplerActionBusy || isSamplerRunning}
                   className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-200 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isDelayPending ? `Capturing in ${v2DelayCountdown}s… switch now` : "Capture in 5s"}
                 </button>
-                <button
-                  type="button"
-                  onClick={v2IsSampling ? handleV2StopSampling : handleV2StartSampling}
-                  disabled={anyBusy}
-                  className={
-                    v2IsSampling
-                      ? "rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                      : "rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  }
-                >
-                  {v2IsSampling
-                    ? `Stop sampling (${v2SamplingSecondsLeft ?? 0}s left)`
-                    : "Sample 30s"}
-                </button>
+                {FF.autotrackerV2NativeSampler ? (
+                  <button
+                    type="button"
+                    onClick={isSamplerRunning ? handleV2StopNativeSampler : handleV2StartNativeSampler}
+                    disabled={
+                      isSamplerRunning
+                        ? v2SamplerActionBusy
+                        : v2IsBusy || v2SamplerActionBusy || isDelayPending
+                    }
+                    className={
+                      isSamplerRunning
+                        ? "rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        : "rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-100 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    }
+                  >
+                    {isSamplerRunning ? "Stop native sampler" : "Start native sampler"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={handleV2RefreshSnapshot}
-                  disabled={anyBusy || v2IsSampling}
+                  disabled={anyBusy || isSamplerRunning}
                   className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Refresh snapshot
@@ -1746,7 +1810,7 @@ export function TrackerSettingsPanel() {
                 <button
                   type="button"
                   onClick={handleV2ClearBuffer}
-                  disabled={anyBusy || v2IsSampling}
+                  disabled={anyBusy || isSamplerRunning}
                   className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Clear buffer
@@ -1786,6 +1850,41 @@ export function TrackerSettingsPanel() {
               </div>
             ) : null}
 
+            {FF.autotrackerV2NativeSampler && v2SamplerStatus ? (
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-50">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <span className="font-medium">
+                    Native sampler: {v2SamplerStatus.running ? "Running" : "Stopped"}
+                  </span>
+                  <span className="text-emerald-100/75">
+                    Tick count: {v2SamplerStatus.tickCount}
+                  </span>
+                  <span className="text-emerald-100/75">
+                    Last completed: {formatTimeOfDayFromMs(v2SamplerStatus.lastTickCompletedAtMs)}
+                  </span>
+                  <span className="text-emerald-100/75">
+                    Last appended: {v2SamplerStatus.lastAppendedCount}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-emerald-100/75">
+                  <span>Interval: {v2SamplerStatus.intervalMs}ms</span>
+                  {v2SamplerStatus.lastObservedAppName ? (
+                    <span>
+                      Last app: {v2SamplerStatus.lastObservedAppName}
+                      {v2SamplerStatus.lastObservedBundleId
+                        ? ` (${v2SamplerStatus.lastObservedBundleId})`
+                        : ""}
+                    </span>
+                  ) : null}
+                  {v2SamplerStatus.lastError ? (
+                    <span className="text-amber-200">Last error: {v2SamplerStatus.lastError}</span>
+                  ) : (
+                    <span>Last error: None</span>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
             {v2ProbeStatus ? (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <DataStatCard
@@ -1806,18 +1905,12 @@ export function TrackerSettingsPanel() {
                 />
                 <DataStatCard
                   label="Buffer"
-                  value={`${v2ProbeStatus.bufferLen} / ${v2ProbeStatus.bufferCapacity}`}
+                  value={`${v2SamplerStatus?.bufferCount ?? v2ProbeStatus.bufferLen} / ${v2ProbeStatus.bufferCapacity}`}
                   detail="Buffered events / capacity"
                 />
                 <DataStatCard
                   label="Last sampled"
-                  value={
-                    v2ProbeStatus.lastSampledAtMs
-                      ? new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(
-                          new Date(v2ProbeStatus.lastSampledAtMs),
-                        )
-                      : "Never"
-                  }
+                  value={formatTimeOfDayFromMs(v2ProbeStatus.lastSampledAtMs)}
                   detail={`Platform: ${v2ProbeStatus.platform}`}
                 />
               </div>
@@ -2075,7 +2168,7 @@ export function TrackerSettingsPanel() {
                         Continuous writer
                       </div>
                       <span className="text-[10px] text-cyan-50/80">
-                        Dev continuous write enabled — writes finalized tracked and distraction preview sessions created by manual captures only.
+                        Dev continuous write enabled — writes finalized tracked and distraction preview sessions from manual captures or the native sampler.
                       </span>
                     </div>
 
@@ -2109,7 +2202,7 @@ export function TrackerSettingsPanel() {
                       </div>
                     ) : (
                       <div className="rounded-lg border border-slate-700 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
-                        Waiting for newly finalized tracked preview sessions from manual captures.
+                        Waiting for newly finalized tracked or distraction preview sessions from manual captures or the native sampler.
                       </div>
                     )}
                   </div>

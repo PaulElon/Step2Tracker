@@ -55,6 +55,19 @@ export type AutoTrackerV2NativeCaptureResult = {
   appended: AutoTrackerV2NativeEvent[];
 };
 
+export type AutoTrackerV2NativeSamplerStatus = {
+  running: boolean;
+  intervalMs: number;
+  tickCount: number;
+  lastTickStartedAtMs: number | null;
+  lastTickCompletedAtMs: number | null;
+  lastAppendedCount: number;
+  lastError: string | null;
+  lastObservedAppName: string | null;
+  lastObservedBundleId: string | null;
+  bufferCount: number;
+};
+
 export function probeAutoTrackerV2Native(): Promise<AutoTrackerV2NativeStatus> {
   return core.invoke<AutoTrackerV2NativeStatus>("tf_autotracker_v2_native_probe");
 }
@@ -70,5 +83,23 @@ export function clearAutoTrackerV2NativeBuffer(): Promise<AutoTrackerV2NativeSta
 export function captureAutoTrackerV2NativeOnce(): Promise<AutoTrackerV2NativeCaptureResult> {
   return core.invoke<AutoTrackerV2NativeCaptureResult>(
     "tf_autotracker_v2_native_capture_once",
+  );
+}
+
+export function getAutoTrackerV2NativeSamplerStatus(): Promise<AutoTrackerV2NativeSamplerStatus> {
+  return core.invoke<AutoTrackerV2NativeSamplerStatus>(
+    "tf_autotracker_v2_native_sampler_status",
+  );
+}
+
+export function startAutoTrackerV2NativeSampler(): Promise<AutoTrackerV2NativeSamplerStatus> {
+  return core.invoke<AutoTrackerV2NativeSamplerStatus>(
+    "tf_autotracker_v2_native_sampler_start",
+  );
+}
+
+export function stopAutoTrackerV2NativeSampler(): Promise<AutoTrackerV2NativeSamplerStatus> {
+  return core.invoke<AutoTrackerV2NativeSamplerStatus>(
+    "tf_autotracker_v2_native_sampler_stop",
   );
 }

@@ -8,8 +8,10 @@
 
 #[cfg(target_os = "macos")]
 use std::process::Command;
-use std::sync::Mutex;
-use std::time::SystemTime;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, LazyLock, Mutex};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, SystemTime};
 
 use serde::Serialize;
 use uuid::Uuid;
@@ -17,6 +19,8 @@ use uuid::Uuid;
 const PLATFORM_LABEL: &str = "macos";
 const MAX_BUFFER_LEN: usize = 2_000;
 const IDLE_THRESHOLD_SECS: u64 = 60;
+const NATIVE_SAMPLER_INTERVAL_MS: u64 = 3_000;
+const NATIVE_SAMPLER_STOP_POLL_MS: u64 = 100;
 const COMMAND_TIMEOUT_NOTE: &str =
     "lsappinfo/ioreg run synchronously and return promptly on macOS";
 
@@ -82,6 +86,21 @@ pub struct TfAutotrackerV2NativeCaptureResult {
     pub appended: Vec<TfAutotrackerV2NativeEvent>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TfAutotrackerV2NativeSamplerStatus {
+    pub running: bool,
+    pub interval_ms: u64,
+    pub tick_count: u64,
+    pub last_tick_started_at_ms: Option<i64>,
+    pub last_tick_completed_at_ms: Option<i64>,
+    pub last_appended_count: usize,
+    pub last_error: Option<String>,
+    pub last_observed_app_name: Option<String>,
+    pub last_observed_bundle_id: Option<String>,
+    pub buffer_count: usize,
+}
+
 // ---------------------------------------------------------------------------
 // In-memory ring buffer
 // ---------------------------------------------------------------------------
@@ -129,6 +148,158 @@ impl NativeBuffer {
 
 static BUFFER: Mutex<NativeBuffer> = Mutex::new(NativeBuffer::new());
 
+struct NativeCaptureOutcome {
+    result: TfAutotrackerV2NativeCaptureResult,
+    observed_app_name: Option<String>,
+    observed_bundle_id: Option<String>,
+}
+
+struct NativeSamplerState {
+    is_active: bool,
+    stop_requested: bool,
+    stop_flag: Option<Arc<AtomicBool>>,
+    thread_handle: Option<JoinHandle<()>>,
+    tick_count: u64,
+    last_tick_started_at_ms: Option<i64>,
+    last_tick_completed_at_ms: Option<i64>,
+    last_appended_count: usize,
+    last_error: Option<String>,
+    last_observed_app_name: Option<String>,
+    last_observed_bundle_id: Option<String>,
+}
+
+impl NativeSamplerState {
+    const fn new() -> Self {
+        Self {
+            is_active: false,
+            stop_requested: false,
+            stop_flag: None,
+            thread_handle: None,
+            tick_count: 0,
+            last_tick_started_at_ms: None,
+            last_tick_completed_at_ms: None,
+            last_appended_count: 0,
+            last_error: None,
+            last_observed_app_name: None,
+            last_observed_bundle_id: None,
+        }
+    }
+
+    fn status(&self, buffer_count: usize) -> TfAutotrackerV2NativeSamplerStatus {
+        TfAutotrackerV2NativeSamplerStatus {
+            running: self.is_active && !self.stop_requested,
+            interval_ms: NATIVE_SAMPLER_INTERVAL_MS,
+            tick_count: self.tick_count,
+            last_tick_started_at_ms: self.last_tick_started_at_ms,
+            last_tick_completed_at_ms: self.last_tick_completed_at_ms,
+            last_appended_count: self.last_appended_count,
+            last_error: self.last_error.clone(),
+            last_observed_app_name: self.last_observed_app_name.clone(),
+            last_observed_bundle_id: self.last_observed_bundle_id.clone(),
+            buffer_count,
+        }
+    }
+
+    fn has_runtime(&self) -> bool {
+        self.is_active || self.stop_flag.is_some() || self.thread_handle.is_some()
+    }
+
+    fn begin_start(&mut self, stop_flag: Arc<AtomicBool>) -> bool {
+        if self.has_runtime() {
+            return false;
+        }
+
+        self.is_active = true;
+        self.stop_requested = false;
+        self.stop_flag = Some(stop_flag);
+        self.thread_handle = None;
+        self.tick_count = 0;
+        self.last_tick_started_at_ms = None;
+        self.last_tick_completed_at_ms = None;
+        self.last_appended_count = 0;
+        self.last_error = None;
+        self.last_observed_app_name = None;
+        self.last_observed_bundle_id = None;
+        true
+    }
+
+    fn attach_thread_handle(&mut self, handle: JoinHandle<()>) {
+        self.thread_handle = Some(handle);
+    }
+
+    fn abort_start(&mut self, error: String) {
+        self.is_active = false;
+        self.stop_requested = false;
+        self.stop_flag = None;
+        self.thread_handle = None;
+        self.last_error = Some(error);
+    }
+
+    fn request_stop(&mut self) -> bool {
+        if let Some(stop_flag) = &self.stop_flag {
+            stop_flag.store(true, Ordering::SeqCst);
+            self.stop_requested = true;
+            return true;
+        }
+        false
+    }
+
+    fn record_tick_started(&mut self, started_at_ms: i64) {
+        self.last_tick_started_at_ms = Some(started_at_ms);
+    }
+
+    fn record_tick_completed(&mut self, outcome: &NativeCaptureOutcome, completed_at_ms: i64) {
+        self.tick_count += 1;
+        self.last_tick_completed_at_ms = Some(completed_at_ms);
+        self.last_appended_count = outcome.result.appended.len();
+        self.last_error = outcome
+            .result
+            .appended
+            .iter()
+            .filter_map(|event| {
+                if event.kind == "error" {
+                    event.error.clone()
+                } else {
+                    None
+                }
+            })
+            .next_back();
+        if let Some(app_name) = &outcome.observed_app_name {
+            self.last_observed_app_name = Some(app_name.clone());
+        }
+        if let Some(bundle_id) = &outcome.observed_bundle_id {
+            self.last_observed_bundle_id = Some(bundle_id.clone());
+        }
+    }
+
+    fn mark_exited(&mut self) {
+        self.is_active = false;
+        self.stop_requested = false;
+        self.stop_flag = None;
+    }
+
+    fn cleanup_finished_thread(&mut self) {
+        let finished = self
+            .thread_handle
+            .as_ref()
+            .map(|handle| handle.is_finished())
+            .unwrap_or(false);
+        if !finished {
+            return;
+        }
+
+        if let Some(handle) = self.thread_handle.take() {
+            let _ = handle.join();
+        }
+        if !self.is_active {
+            self.stop_flag = None;
+        }
+    }
+}
+
+static SAMPLER: LazyLock<Mutex<NativeSamplerState>> =
+    LazyLock::new(|| Mutex::new(NativeSamplerState::new()));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -155,6 +326,24 @@ fn make_event(kind: &str, timestamp_ms: i64) -> TfAutotrackerV2NativeEvent {
         browser_tab_error: None,
         error: None,
     }
+}
+
+fn lock_buffer() -> std::sync::MutexGuard<'static, NativeBuffer> {
+    match BUFFER.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+fn lock_sampler() -> std::sync::MutexGuard<'static, NativeSamplerState> {
+    match SAMPLER.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+fn current_buffer_count() -> usize {
+    lock_buffer().events.len()
 }
 
 fn build_status(
@@ -441,56 +630,7 @@ fn try_read_browser_tab(_bundle_id: &str) -> Option<BrowserTabInfo> {
     None
 }
 
-// ---------------------------------------------------------------------------
-// Tauri commands
-// ---------------------------------------------------------------------------
-
-#[tauri::command]
-pub fn tf_autotracker_v2_native_probe() -> TfAutotrackerV2NativeStatus {
-    let foreground_ok = if cfg!(target_os = "macos") {
-        read_foreground_app().is_ok()
-    } else {
-        false
-    };
-    let idle_ok = if cfg!(target_os = "macos") {
-        read_idle_seconds().is_ok()
-    } else {
-        false
-    };
-
-    let buffer = match BUFFER.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    build_status(&buffer, foreground_ok, idle_ok)
-}
-
-#[tauri::command]
-pub fn tf_autotracker_v2_native_snapshot() -> TfAutotrackerV2NativeSnapshot {
-    let buffer = match BUFFER.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    let status =
-        build_status(&buffer, cfg!(target_os = "macos"), cfg!(target_os = "macos"));
-    TfAutotrackerV2NativeSnapshot {
-        status,
-        events: buffer.events.clone(),
-    }
-}
-
-#[tauri::command]
-pub fn tf_autotracker_v2_native_clear_buffer() -> TfAutotrackerV2NativeStatus {
-    let mut buffer = match BUFFER.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    buffer.clear();
-    build_status(&buffer, cfg!(target_os = "macos"), cfg!(target_os = "macos"))
-}
-
-#[tauri::command]
-pub fn tf_autotracker_v2_native_capture_once() -> TfAutotrackerV2NativeCaptureResult {
+fn capture_once_internal() -> NativeCaptureOutcome {
     let timestamp_ms = now_ms();
     let mut appended: Vec<TfAutotrackerV2NativeEvent> = Vec::new();
     let mut foreground_ok = false;
@@ -551,10 +691,10 @@ pub fn tf_autotracker_v2_native_capture_once() -> TfAutotrackerV2NativeCaptureRe
         }
     }
 
-    let mut buffer = match BUFFER.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
+    let observed_app_name = next_app_name.clone();
+    let observed_bundle_id = next_bundle_id.clone();
+
+    let mut buffer = lock_buffer();
 
     // Push probe error events into the buffer so snapshot/UI shows why capture failed.
     if let Some(event) = foreground_error_event {
@@ -576,11 +716,12 @@ pub fn tf_autotracker_v2_native_capture_once() -> TfAutotrackerV2NativeCaptureRe
         );
         // Also record when the browser URL changes within the same foreground app
         // so Chrome navigation (e.g. to UWorld) is captured without an app switch.
-        let browser_url_changed = !changed && match (&next_browser_url, &buffer.last_browser_url) {
-            (Some(new_url), Some(prev_url)) => new_url != prev_url,
-            (Some(_), None) => true,
-            _ => false,
-        };
+        let browser_url_changed = !changed
+            && match (&next_browser_url, &buffer.last_browser_url) {
+                (Some(new_url), Some(prev_url)) => new_url != prev_url,
+                (Some(_), None) => true,
+                _ => false,
+            };
         if changed || browser_url_changed {
             buffer.push(event.clone());
             appended.push(event);
@@ -606,10 +747,158 @@ pub fn tf_autotracker_v2_native_capture_once() -> TfAutotrackerV2NativeCaptureRe
 
     buffer.last_sampled_at_ms = Some(timestamp_ms);
 
-    TfAutotrackerV2NativeCaptureResult {
-        status: build_status(&buffer, foreground_ok, idle_ok),
-        appended,
+    NativeCaptureOutcome {
+        result: TfAutotrackerV2NativeCaptureResult {
+            status: build_status(&buffer, foreground_ok, idle_ok),
+            appended,
+        },
+        observed_app_name,
+        observed_bundle_id,
     }
+}
+
+fn sleep_native_sampler_interval(stop_flag: &Arc<AtomicBool>) {
+    let mut remaining_ms = NATIVE_SAMPLER_INTERVAL_MS;
+    while remaining_ms > 0 && !stop_flag.load(Ordering::SeqCst) {
+        let slice_ms = remaining_ms.min(NATIVE_SAMPLER_STOP_POLL_MS);
+        thread::sleep(Duration::from_millis(slice_ms));
+        remaining_ms -= slice_ms;
+    }
+}
+
+fn run_native_sampler_loop(stop_flag: Arc<AtomicBool>) {
+    loop {
+        if stop_flag.load(Ordering::SeqCst) {
+            break;
+        }
+
+        let started_at_ms = now_ms();
+        {
+            let mut sampler = lock_sampler();
+            sampler.record_tick_started(started_at_ms);
+        }
+
+        let outcome = capture_once_internal();
+        let completed_at_ms = now_ms();
+
+        {
+            let mut sampler = lock_sampler();
+            sampler.record_tick_completed(&outcome, completed_at_ms);
+        }
+
+        if stop_flag.load(Ordering::SeqCst) {
+            break;
+        }
+
+        sleep_native_sampler_interval(&stop_flag);
+    }
+
+    let mut sampler = lock_sampler();
+    sampler.mark_exited();
+}
+
+// ---------------------------------------------------------------------------
+// Tauri commands
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub fn tf_autotracker_v2_native_probe() -> TfAutotrackerV2NativeStatus {
+    let foreground_ok = if cfg!(target_os = "macos") {
+        read_foreground_app().is_ok()
+    } else {
+        false
+    };
+    let idle_ok = if cfg!(target_os = "macos") {
+        read_idle_seconds().is_ok()
+    } else {
+        false
+    };
+
+    let buffer = lock_buffer();
+    build_status(&buffer, foreground_ok, idle_ok)
+}
+
+#[tauri::command]
+pub fn tf_autotracker_v2_native_snapshot() -> TfAutotrackerV2NativeSnapshot {
+    let buffer = lock_buffer();
+    let status =
+        build_status(&buffer, cfg!(target_os = "macos"), cfg!(target_os = "macos"));
+    TfAutotrackerV2NativeSnapshot {
+        status,
+        events: buffer.events.clone(),
+    }
+}
+
+#[tauri::command]
+pub fn tf_autotracker_v2_native_clear_buffer() -> TfAutotrackerV2NativeStatus {
+    let mut buffer = lock_buffer();
+    buffer.clear();
+    build_status(&buffer, cfg!(target_os = "macos"), cfg!(target_os = "macos"))
+}
+
+#[tauri::command]
+pub fn tf_autotracker_v2_native_capture_once() -> TfAutotrackerV2NativeCaptureResult {
+    capture_once_internal().result
+}
+
+#[tauri::command]
+pub fn tf_autotracker_v2_native_sampler_status() -> TfAutotrackerV2NativeSamplerStatus {
+    let buffer_count = current_buffer_count();
+    let mut sampler = lock_sampler();
+    sampler.cleanup_finished_thread();
+    sampler.status(buffer_count)
+}
+
+#[tauri::command]
+pub fn tf_autotracker_v2_native_sampler_start() -> Result<TfAutotrackerV2NativeSamplerStatus, String> {
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    {
+        let mut sampler = lock_sampler();
+        sampler.cleanup_finished_thread();
+        if !sampler.begin_start(stop_flag.clone()) {
+            drop(sampler);
+            let buffer_count = current_buffer_count();
+            let sampler = lock_sampler();
+            let status = sampler.status(buffer_count);
+            return Ok(status);
+        }
+    }
+
+    match thread::Builder::new()
+        .name("tf-autotracker-v2-native-sampler".to_string())
+        .spawn({
+            let stop_flag = stop_flag.clone();
+            move || run_native_sampler_loop(stop_flag)
+        }) {
+        Ok(handle) => {
+            let mut sampler = lock_sampler();
+            sampler.attach_thread_handle(handle);
+            drop(sampler);
+            let buffer_count = current_buffer_count();
+            let sampler = lock_sampler();
+            let status = sampler.status(buffer_count);
+            Ok(status)
+        }
+        Err(error) => {
+            let mut sampler = lock_sampler();
+            sampler.abort_start(format!("Failed to start native sampler: {error}"));
+            Err(
+                sampler
+                    .last_error
+                    .clone()
+                    .unwrap_or_else(|| "Failed to start native sampler.".to_string()),
+            )
+        }
+    }
+}
+
+#[tauri::command]
+pub fn tf_autotracker_v2_native_sampler_stop() -> TfAutotrackerV2NativeSamplerStatus {
+    let buffer_count = current_buffer_count();
+    let mut sampler = lock_sampler();
+    sampler.cleanup_finished_thread();
+    let _ = sampler.request_stop();
+    sampler.status(buffer_count)
 }
 
 // ---------------------------------------------------------------------------
@@ -705,5 +994,40 @@ mod tests {
             Some("Safari"),
             Some(1000),
         ));
+    }
+
+    #[test]
+    fn sampler_status_defaults_to_stopped() {
+        let state = NativeSamplerState::new();
+        let status = state.status(0);
+
+        assert!(!status.running);
+        assert_eq!(status.interval_ms, NATIVE_SAMPLER_INTERVAL_MS);
+        assert_eq!(status.tick_count, 0);
+        assert_eq!(status.buffer_count, 0);
+        assert_eq!(status.last_error, None);
+    }
+
+    #[test]
+    fn sampler_duplicate_start_is_guarded() {
+        let mut state = NativeSamplerState::new();
+        let stop_flag = Arc::new(AtomicBool::new(false));
+
+        assert!(state.begin_start(stop_flag.clone()));
+        assert!(!state.begin_start(stop_flag));
+        assert!(state.status(3).running);
+        assert_eq!(state.status(3).buffer_count, 3);
+    }
+
+    #[test]
+    fn sampler_stop_signal_flips_state() {
+        let mut state = NativeSamplerState::new();
+        let stop_flag = Arc::new(AtomicBool::new(false));
+        assert!(state.begin_start(stop_flag.clone()));
+
+        let signaled = state.request_stop();
+        assert!(signaled);
+        assert!(stop_flag.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(!state.status(0).running);
     }
 }
