@@ -407,8 +407,11 @@ export function TrackerSettingsPanel() {
   const [v2SamplingSecondsLeft, setV2SamplingSecondsLeft] = useState<number | null>(null);
   const [v2ShadowTickInfo, setV2ShadowTickInfo] = useState<{
     appendedCount: number;
+    completedAtMs: number | null;
     error: string | null;
-    tickAtMs: number;
+    inFlight: boolean;
+    startedAtMs: number | null;
+    tickCount: number;
   } | null>(null);
   const [v2LastCaptureInfo, setV2LastCaptureInfo] = useState<{
     appendedCount: number;
@@ -419,9 +422,10 @@ export function TrackerSettingsPanel() {
   const v2DelayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const v2SamplingCaptureIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const v2SamplingCountdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const v2ShadowRunnerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const v2ShadowRunnerIntervalRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
   const v2CaptureInFlightRef = useRef(false);
   const v2ShadowRunningRef = useRef(false);
+  const v2ShadowTickInFlightRef = useRef(false);
   const v2IsMountedRef = useRef(true);
 
   useEffect(() => {
@@ -445,9 +449,10 @@ export function TrackerSettingsPanel() {
         clearInterval(v2SamplingCountdownIntervalRef.current);
       }
       if (v2ShadowRunnerIntervalRef.current !== null) {
-        clearInterval(v2ShadowRunnerIntervalRef.current);
+        window.clearInterval(v2ShadowRunnerIntervalRef.current);
       }
       v2ShadowRunningRef.current = false;
+      v2ShadowTickInFlightRef.current = false;
       v2CaptureInFlightRef.current = false;
     };
   }, []);
@@ -659,6 +664,82 @@ export function TrackerSettingsPanel() {
     });
   }
 
+  async function runV2ShadowTick(): Promise<boolean> {
+    if (
+      !v2ShadowRunningRef.current ||
+      v2ShadowTickInFlightRef.current ||
+      v2CaptureInFlightRef.current
+    ) {
+      return false;
+    }
+
+    const startedAtMs = Date.now();
+    let appendedCount = 0;
+    let captureError: string | null = null;
+    v2ShadowTickInFlightRef.current = true;
+    v2CaptureInFlightRef.current = true;
+    setV2InspectorError(null);
+    setV2ShadowTickInfo((prev) => ({
+      appendedCount: prev?.appendedCount ?? 0,
+      completedAtMs: prev?.completedAtMs ?? null,
+      error: null,
+      inFlight: true,
+      startedAtMs,
+      tickCount: (prev?.tickCount ?? 0) + 1,
+    }));
+
+    try {
+      const result: AutoTrackerV2NativeCaptureResult = await captureAutoTrackerV2NativeOnce();
+      if (!v2IsMountedRef.current) {
+        return true;
+      }
+
+      appendedCount = result.appended.length;
+      setV2ProbeStatus(result.status);
+      recordCaptureInfo(result);
+
+      const captureErrors = result.appended
+        .filter((e) => e.kind === "error" && e.error)
+        .map((e) => e.error as string);
+      captureError = captureErrors.length > 0 ? captureErrors.join(" · ") : null;
+
+      const snapshot = await snapshotAutoTrackerV2Native();
+      if (!v2IsMountedRef.current) {
+        return true;
+      }
+
+      setV2Snapshot(snapshot);
+      setV2ProbeStatus(snapshot.status);
+      setV2ShadowTickInfo((prev) => ({
+        appendedCount,
+        completedAtMs: Date.now(),
+        error: captureError,
+        inFlight: false,
+        startedAtMs: prev?.startedAtMs ?? startedAtMs,
+        tickCount: prev?.tickCount ?? 0,
+      }));
+      return true;
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error && err.message ? err.message : "Shadow capture failed.";
+      if (v2IsMountedRef.current) {
+        setV2InspectorError(errorMessage);
+        setV2ShadowTickInfo((prev) => ({
+          appendedCount,
+          completedAtMs: Date.now(),
+          error: captureError ? `${captureError} · ${errorMessage}` : errorMessage,
+          inFlight: false,
+          startedAtMs: prev?.startedAtMs ?? startedAtMs,
+          tickCount: prev?.tickCount ?? 0,
+        }));
+      }
+      return false;
+    } finally {
+      v2ShadowTickInFlightRef.current = false;
+      v2CaptureInFlightRef.current = false;
+    }
+  }
+
   async function refreshV2SnapshotFromNative(errorMessage: string): Promise<boolean> {
     try {
       const snap = await snapshotAutoTrackerV2Native();
@@ -677,7 +758,6 @@ export function TrackerSettingsPanel() {
   }
 
   async function runV2CaptureAndRefreshSnapshot(
-    sourceLabel: "capture-once" | "delayed" | "sampling" | "shadow",
     captureErrorMessage: string,
     snapshotErrorMessage: string,
   ): Promise<boolean> {
@@ -696,27 +776,10 @@ export function TrackerSettingsPanel() {
 
       setV2ProbeStatus(result.status);
       recordCaptureInfo(result);
-      if (sourceLabel === "shadow") {
-        const captureErrors = result.appended
-          .filter((e) => e.kind === "error" && e.error)
-          .map((e) => e.error as string);
-        setV2ShadowTickInfo({
-          appendedCount: result.appended.length,
-          error: captureErrors.length > 0 ? captureErrors.join(" · ") : null,
-          tickAtMs: Date.now(),
-        });
-      }
       return await refreshV2SnapshotFromNative(snapshotErrorMessage);
     } catch (err) {
       if (v2IsMountedRef.current) {
         setV2InspectorError(err instanceof Error && err.message ? err.message : captureErrorMessage);
-        if (sourceLabel === "shadow") {
-          setV2ShadowTickInfo({
-            appendedCount: 0,
-            error: err instanceof Error && err.message ? err.message : captureErrorMessage,
-            tickAtMs: Date.now(),
-          });
-        }
       }
       return false;
     } finally {
@@ -754,7 +817,6 @@ export function TrackerSettingsPanel() {
     setV2IsBusy(true);
     try {
       await runV2CaptureAndRefreshSnapshot(
-        "capture-once",
         "Capture failed.",
         "Snapshot after capture failed.",
       );
@@ -806,7 +868,6 @@ export function TrackerSettingsPanel() {
         setV2DelayCountdown(null);
         setV2IsBusy(true);
         runV2CaptureAndRefreshSnapshot(
-          "delayed",
           "Delayed capture failed.",
           "Snapshot after delayed capture failed.",
         )
@@ -850,7 +911,6 @@ export function TrackerSettingsPanel() {
 
     v2SamplingCaptureIntervalRef.current = setInterval(() => {
       void runV2CaptureAndRefreshSnapshot(
-        "sampling",
         "Sampling capture failed.",
         "Snapshot after sampling capture failed.",
       )
@@ -884,36 +944,42 @@ export function TrackerSettingsPanel() {
     setV2InspectorError(null);
     setV2IsShadowRunning(true);
     v2ShadowRunningRef.current = true;
+    v2ShadowTickInFlightRef.current = false;
     setV2ShadowTickInfo(null);
-    void runV2CaptureAndRefreshSnapshot(
-      "shadow",
-      "Shadow capture failed.",
-      "Snapshot after shadow capture failed.",
-    ).catch((err: unknown) => {
-      setV2InspectorError(err instanceof Error && err.message ? err.message : "Shadow capture failed.");
+    void runV2ShadowTick().catch((err: unknown) => {
+      setV2InspectorError(
+        err instanceof Error && err.message ? err.message : "Shadow capture failed.",
+      );
     });
-    v2ShadowRunnerIntervalRef.current = setInterval(() => {
-      if (!v2ShadowRunningRef.current || v2CaptureInFlightRef.current) {
+    v2ShadowRunnerIntervalRef.current = window.setInterval(() => {
+      if (!v2ShadowRunningRef.current || v2ShadowTickInFlightRef.current) {
         return;
       }
 
-      void runV2CaptureAndRefreshSnapshot(
-        "shadow",
-        "Shadow capture failed.",
-        "Snapshot after shadow capture failed.",
-      ).catch((err: unknown) => {
-        setV2InspectorError(err instanceof Error && err.message ? err.message : "Shadow capture failed.");
+      void runV2ShadowTick().catch((err: unknown) => {
+        setV2InspectorError(
+          err instanceof Error && err.message ? err.message : "Shadow capture failed.",
+        );
       });
     }, V2_SHADOW_CAPTURE_INTERVAL_MS);
   }
 
   function handleV2StopShadowRun() {
     if (v2ShadowRunnerIntervalRef.current !== null) {
-      clearInterval(v2ShadowRunnerIntervalRef.current);
+      window.clearInterval(v2ShadowRunnerIntervalRef.current);
       v2ShadowRunnerIntervalRef.current = null;
     }
     v2ShadowRunningRef.current = false;
+    v2ShadowTickInFlightRef.current = false;
     setV2IsShadowRunning(false);
+    setV2ShadowTickInfo((prev) =>
+      prev
+        ? {
+            ...prev,
+            inFlight: false,
+          }
+        : prev,
+    );
   }
 
   async function handleRefreshAutoTrackerStatus() {
@@ -1401,20 +1467,33 @@ export function TrackerSettingsPanel() {
                   <span>tick every {V2_SHADOW_CAPTURE_INTERVAL_MS / 1000}s</span>
                   <span>·</span>
                   <span>
-                    last tick:{" "}
-                    {v2ShadowTickInfo?.tickAtMs
+                    last tick started:{" "}
+                    {v2ShadowTickInfo?.startedAtMs
                       ? new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(
-                          new Date(v2ShadowTickInfo.tickAtMs),
+                          new Date(v2ShadowTickInfo.startedAtMs),
                         )
                       : "not yet"}
                   </span>
                   <span>·</span>
                   <span>
-                    appended: {v2ShadowTickInfo?.appendedCount ?? 0} event
-                    {(v2ShadowTickInfo?.appendedCount ?? 0) === 1 ? "" : "s"}
+                    last tick completed:{" "}
+                    {v2ShadowTickInfo?.completedAtMs
+                      ? new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(
+                          new Date(v2ShadowTickInfo.completedAtMs),
+                        )
+                      : "not yet"}
                   </span>
                   <span>·</span>
                   <span>{v2ShadowTickInfo?.error ? `error: ${v2ShadowTickInfo.error}` : "error: none"}</span>
+                  <span>·</span>
+                  <span>tick count: {v2ShadowTickInfo?.tickCount ?? 0}</span>
+                  <span>·</span>
+                  <span>in-flight: {v2ShadowTickInfo?.inFlight ? "yes" : "no"}</span>
+                  <span>·</span>
+                  <span>
+                    appended: {v2ShadowTickInfo?.appendedCount ?? 0} event
+                    {(v2ShadowTickInfo?.appendedCount ?? 0) === 1 ? "" : "s"}
+                  </span>
                 </div>
               </div>
             ) : null}
@@ -1423,9 +1502,9 @@ export function TrackerSettingsPanel() {
               <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-xs text-slate-400">
                 Shadow stopped
                 <span className="ml-2 text-slate-500">
-                  {v2ShadowTickInfo?.tickAtMs
+                  {v2ShadowTickInfo?.completedAtMs
                     ? `last tick ${new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(
-                        new Date(v2ShadowTickInfo.tickAtMs),
+                        new Date(v2ShadowTickInfo.completedAtMs),
                       )}`
                     : "no shadow tick yet"}
                 </span>
