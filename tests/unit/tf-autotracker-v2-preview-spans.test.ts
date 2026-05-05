@@ -293,8 +293,10 @@ test("website rule https://apps.uworld.com matches https://apps.uworld.com/cours
   assert.equal(spans[0].classification, "tracked");
   assert.equal(
     spans[0].classificationReason,
-    'matched website rule "https://apps.uworld.com" by host apps.uworld.com',
+    'matched website rule "UWorld" (https://apps.uworld.com) by host apps.uworld.com',
   );
+  assert.equal(spans[0].matchedRuleName, "UWorld");
+  assert.equal(spans[0].matchedRuleTarget, "https://apps.uworld.com");
 });
 
 test("website rule uworld.com matches apps.uworld.com", () => {
@@ -339,8 +341,10 @@ test("website rule https://www.reddit.com matches https://www.reddit.com/r/Step2
   assert.equal(spans[0].classification, "distraction");
   assert.equal(
     spans[0].classificationReason,
-    'matched distraction website rule "https://www.reddit.com" by host reddit.com',
+    'matched distraction website rule "Reddit" (https://www.reddit.com) by host reddit.com',
   );
+  assert.equal(spans[0].matchedRuleName, "Reddit");
+  assert.equal(spans[0].matchedRuleTarget, "https://www.reddit.com");
 });
 
 test("website rule https://www.reddit.com/?feed=home matches https://www.reddit.com/?feed=home", () => {
@@ -429,8 +433,10 @@ test("/Applications/Anki.app matches appName Anki", () => {
   assert.equal(spans[0].classification, "tracked");
   assert.equal(
     spans[0].classificationReason,
-    'matched app rule "/Applications/Anki.app" by app name Anki',
+    'matched app rule "Anki" (/Applications/Anki.app) by app name Anki',
   );
+  assert.equal(spans[0].matchedRuleName, "Anki");
+  assert.equal(spans[0].matchedRuleTarget, "/Applications/Anki.app");
 });
 
 test("/Applications/ChatGPT.app matches appName ChatGPT", () => {
@@ -448,8 +454,68 @@ test("/Applications/ChatGPT.app matches appName ChatGPT", () => {
   assert.equal(spans[0].classification, "distraction");
   assert.equal(
     spans[0].classificationReason,
-    'matched distraction app rule "/Applications/ChatGPT.app" by app name ChatGPT',
+    'matched distraction app rule "ChatGPT" (/Applications/ChatGPT.app) by app name ChatGPT',
   );
+});
+
+test("named website rule carries friendly match metadata", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "untrackedFocused",
+      timestampMs: 1000,
+      browserTitle: "r/popular",
+      browserUrl: "https://apps.uworld.com/courseapp/step2",
+    }),
+  ];
+  const settings = makeSettings({
+    autoWebsites: [{ id: "rule-uworld", name: "UWorld", target: "https://apps.uworld.com", kind: "website" }],
+  });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+
+  assert.equal(spans[0].classification, "tracked");
+  assert.equal(spans[0].matchedRuleName, "UWorld");
+  assert.equal(spans[0].matchedRuleTarget, "https://apps.uworld.com");
+});
+
+test("named distraction website rule carries friendly match metadata", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "untrackedFocused",
+      timestampMs: 1000,
+      browserTitle: "r/popular",
+      browserUrl: "https://www.reddit.com/r/popular",
+    }),
+  ];
+  const settings = makeSettings({
+    distractionWebsites: [{ id: "rule-reddit", name: "Reddit", target: "https://www.reddit.com", kind: "website" }],
+  });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+
+  assert.equal(spans[0].classification, "distraction");
+  assert.equal(spans[0].matchedRuleName, "Reddit");
+  assert.equal(spans[0].matchedRuleTarget, "https://www.reddit.com");
+});
+
+test("named app rule carries friendly match metadata", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "targetFocused",
+      timestampMs: 1000,
+      appName: "Anki",
+      bundleId: "net.ankiweb.dtop",
+    }),
+  ];
+  const settings = makeSettings({
+    autoApps: [{ id: "rule-anki", name: "Anki", target: "/Applications/Anki.app", kind: "app" }],
+  });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+
+  assert.equal(spans[0].classification, "tracked");
+  assert.equal(spans[0].matchedRuleName, "Anki");
+  assert.equal(spans[0].matchedRuleTarget, "/Applications/Anki.app");
 });
 
 test("Anki classified tracked when app rule is Anki", () => {

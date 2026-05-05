@@ -4,6 +4,9 @@ import type {
   TfSummaryPayload,
   TfTrackerPrefs,
   TfAccountState,
+  TfTrackerRule,
+  TfTrackerRuleInput,
+  TfTrackerRuleKind,
 } from "../types/models";
 import {
   loadNativeTfState,
@@ -55,6 +58,177 @@ function safeStringArray(v: unknown): string[] {
   return v.filter((x): x is string => typeof x === "string");
 }
 
+const TRACKER_RULE_NAME_OVERRIDES: Record<string, string> = {
+  amboss: "AMBOSS",
+  anki: "Anki",
+  chatgpt: "ChatGPT",
+  reddit: "Reddit",
+  uworld: "UWorld",
+};
+
+const GENERIC_HOST_SEGMENTS = new Set([
+  "app",
+  "apps",
+  "beta",
+  "docs",
+  "help",
+  "learn",
+  "m",
+  "portal",
+  "support",
+  "web",
+  "www",
+]);
+
+function titleizeTrackerRuleSegment(value: string): string {
+  const normalized = value.trim().replace(/[-_]+/gu, " ");
+  if (!normalized) {
+    return "";
+  }
+
+  const override = TRACKER_RULE_NAME_OVERRIDES[normalized.toLowerCase()];
+  if (override) {
+    return override;
+  }
+
+  return normalized
+    .split(/\s+/u)
+    .filter((part) => part.length > 0)
+    .map((part) => {
+      const partOverride = TRACKER_RULE_NAME_OVERRIDES[part.toLowerCase()];
+      if (partOverride) {
+        return partOverride;
+      }
+      return `${part.slice(0, 1).toUpperCase()}${part.slice(1).toLowerCase()}`;
+    })
+    .join(" ");
+}
+
+function extractAppNameFromTarget(target: string): string {
+  const trimmed = target.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const withoutQuery = trimmed.split(/[?#]/u)[0].replace(/\/+$/u, "");
+  const lastSegment = withoutQuery.split("/").filter((part) => part.length > 0).pop() ?? withoutQuery;
+  if (!lastSegment) {
+    return "";
+  }
+
+  if (lastSegment.toLowerCase().endsWith(".app")) {
+    return lastSegment.slice(0, -4);
+  }
+
+  return titleizeTrackerRuleSegment(lastSegment.replace(/\.[a-z0-9]+$/iu, ""));
+}
+
+function extractWebsiteNameFromTarget(target: string): string {
+  const trimmed = target.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const candidates = [trimmed, `https://${trimmed}`];
+  for (const candidate of candidates) {
+    try {
+      const url = new URL(candidate);
+      const hostParts = url.hostname
+        .trim()
+        .toLowerCase()
+        .replace(/\.+$/u, "")
+        .split(".")
+        .filter((part) => part.length > 0);
+      if (hostParts.length === 0) {
+        continue;
+      }
+
+      const nonTldParts = hostParts.length > 1 ? hostParts.slice(0, -1) : hostParts;
+      const preferredPart =
+        [...nonTldParts].reverse().find((part) => !GENERIC_HOST_SEGMENTS.has(part)) ??
+        nonTldParts[nonTldParts.length - 1] ??
+        hostParts[0];
+      const titled = titleizeTrackerRuleSegment(preferredPart);
+      if (titled) {
+        return titled;
+      }
+
+      return url.hostname.replace(/^www\./u, "");
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  return titleizeTrackerRuleSegment(trimmed);
+}
+
+function buildTrackerRuleId(kind: TfTrackerRuleKind, index: number, target: string): string {
+  const normalizedTarget =
+    target
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gu, "-")
+      .replace(/^-+|-+$/gu, "")
+      .slice(0, 48) || "rule";
+  return `tf-rule-${kind}-${index}-${normalizedTarget}`;
+}
+
+export function deriveTfTrackerRuleName(target: string, kind: TfTrackerRuleKind): string {
+  const derived =
+    kind === "app" ? extractAppNameFromTarget(target) : extractWebsiteNameFromTarget(target);
+  return derived || target.trim() || (kind === "app" ? "App" : "Website");
+}
+
+function normalizeTrackerRule(
+  value: TfTrackerRuleInput | unknown,
+  kind: TfTrackerRuleKind,
+  index: number,
+): TfTrackerRule | null {
+  if (typeof value === "string") {
+    const target = value.trim();
+    if (!target) {
+      return null;
+    }
+
+    return {
+      id: buildTrackerRuleId(kind, index, target),
+      name: deriveTfTrackerRuleName(target, kind),
+      target,
+      kind,
+    };
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const target = safeString(raw.target).trim();
+  if (!target) {
+    return null;
+  }
+
+  const id = safeString(raw.id).trim() || buildTrackerRuleId(kind, index, target);
+  const name = safeString(raw.name).trim() || deriveTfTrackerRuleName(target, kind);
+
+  return {
+    id,
+    name,
+    target,
+    kind,
+  };
+}
+
+function normalizeTrackerRuleArray(value: unknown, kind: TfTrackerRuleKind): TfTrackerRule[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry, index) => normalizeTrackerRule(entry as TfTrackerRuleInput | unknown, kind, index))
+    .filter((entry): entry is TfTrackerRule => entry !== null);
+}
+
 function normalizeSession(entry: unknown): TfSessionLog | null {
   if (!entry || typeof entry !== "object") return null;
   const e = entry as Record<string, unknown>;
@@ -101,10 +275,10 @@ function normalizeSummary(entry: unknown): TfSummaryPayload | null {
 function normalizeTrackerPrefs(v: unknown): TfTrackerPrefs {
   const p = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
   return {
-    customAutoApps: safeStringArray(p.customAutoApps),
-    customAutoWebsites: safeStringArray(p.customAutoWebsites),
-    customDistractionApps: safeStringArray(p.customDistractionApps),
-    customDistractionWebsites: safeStringArray(p.customDistractionWebsites),
+    customAutoApps: normalizeTrackerRuleArray(p.customAutoApps, "app"),
+    customAutoWebsites: normalizeTrackerRuleArray(p.customAutoWebsites, "website"),
+    customDistractionApps: normalizeTrackerRuleArray(p.customDistractionApps, "app"),
+    customDistractionWebsites: normalizeTrackerRuleArray(p.customDistractionWebsites, "website"),
   };
 }
 

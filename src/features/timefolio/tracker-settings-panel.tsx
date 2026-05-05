@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { Check, Globe, Monitor, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   probeNativeAutoTrackerBootstrap,
   type NativeAutoTrackerBootstrapProbe,
@@ -24,9 +25,10 @@ import {
   type TfAutotrackerV2FinalizedPreviewSession,
 } from "../../lib/tf-autotracker-v2-reducer-preview";
 import type { NativeTrackerSpanInput } from "../../lib/tf-native-span-reconciler";
-import { normalizeTfAppState } from "../../lib/tf-storage";
+import { deriveTfTrackerRuleName, normalizeTfAppState } from "../../lib/tf-storage";
+import { fieldClassName, iconButtonClassName, secondaryButtonClassName } from "../../lib/ui";
 import { useTimeFolioStore } from "../../state/tf-store";
-import type { TfAppState, TfTrackerPrefs } from "../../types/models";
+import type { TfAppState, TfTrackerPrefs, TfTrackerRule, TfTrackerRuleKind } from "../../types/models";
 
 type TrackerListKey = keyof TfTrackerPrefs;
 const RESET_CONFIRMATION_TOKEN = "RESET";
@@ -44,40 +46,50 @@ const TRACKER_LISTS: Array<{
   key: TrackerListKey;
   title: string;
   description: string;
-  placeholder: string;
+  defaultKind: TfTrackerRuleKind;
+  namePlaceholder: string;
+  targetPlaceholder: string;
 }> = [
   {
     key: "customAutoApps",
     title: "Auto-tracked apps",
     description: "Apps you want TimeFolio to treat as study or focus-friendly activity.",
-    placeholder: "e.g. Notion",
+    defaultKind: "app",
+    namePlaceholder: "e.g. Anki",
+    targetPlaceholder: "/Applications/Anki.app",
   },
   {
     key: "customAutoWebsites",
     title: "Auto-tracked websites",
     description: "Websites you want to count as productive by default.",
-    placeholder: "e.g. docs.example.com",
+    defaultKind: "website",
+    namePlaceholder: "e.g. UWorld",
+    targetPlaceholder: "https://apps.uworld.com",
   },
   {
     key: "customDistractionApps",
     title: "Distraction apps",
     description: "Apps you want to flag as distractions in your local TimeFolio view.",
-    placeholder: "e.g. Discord",
+    defaultKind: "app",
+    namePlaceholder: "e.g. Discord",
+    targetPlaceholder: "/Applications/Discord.app",
   },
   {
     key: "customDistractionWebsites",
     title: "Distraction websites",
     description: "Websites you want to classify as distractions.",
-    placeholder: "e.g. youtube.com",
+    defaultKind: "website",
+    namePlaceholder: "e.g. Reddit",
+    targetPlaceholder: "https://www.reddit.com",
   },
 ];
 
 function cloneTrackerPrefs(prefs: TfTrackerPrefs): TfTrackerPrefs {
   return {
-    customAutoApps: [...prefs.customAutoApps],
-    customAutoWebsites: [...prefs.customAutoWebsites],
-    customDistractionApps: [...prefs.customDistractionApps],
-    customDistractionWebsites: [...prefs.customDistractionWebsites],
+    customAutoApps: prefs.customAutoApps.map((rule) => ({ ...rule })),
+    customAutoWebsites: prefs.customAutoWebsites.map((rule) => ({ ...rule })),
+    customDistractionApps: prefs.customDistractionApps.map((rule) => ({ ...rule })),
+    customDistractionWebsites: prefs.customDistractionWebsites.map((rule) => ({ ...rule })),
   };
 }
 
@@ -90,16 +102,46 @@ function getEmptyTrackerPrefs(): TfTrackerPrefs {
   };
 }
 
-function sanitizeItems(items: string[]): string[] {
-  return items.map((item) => item.trim()).filter((item) => item.length > 0);
+function generateTrackerRuleId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `tf-rule-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function listsMatch(a: string[], b: string[]): boolean {
+function sanitizeTrackerRules(
+  rules: TfTrackerRule[],
+  kind: TfTrackerRuleKind,
+): TfTrackerRule[] {
+  return rules
+    .map((rule) => {
+      const target = rule.target.trim();
+      if (!target) {
+        return null;
+      }
+
+      return {
+        id: rule.id.trim() || generateTrackerRuleId(),
+        name: rule.name.trim() || deriveTfTrackerRuleName(target, kind),
+        target,
+        kind,
+      };
+    })
+    .filter((rule): rule is TfTrackerRule => rule !== null);
+}
+
+function trackerRuleListsMatch(a: TfTrackerRule[], b: TfTrackerRule[]): boolean {
   if (a.length !== b.length) {
     return false;
   }
 
-  return a.every((item, index) => item === b[index]);
+  return a.every((rule, index) => {
+    const other = b[index];
+    return (
+      other !== undefined &&
+      rule.id === other.id &&
+      rule.name === other.name &&
+      rule.target === other.target &&
+      rule.kind === other.kind
+    );
+  });
 }
 
 function countTrackerRules(prefs: TfTrackerPrefs): number {
@@ -292,9 +334,11 @@ function PanelStatus({
 function TrackerListCard({
   title,
   description,
-  placeholder,
-  items,
-  onItemsChange,
+  defaultKind,
+  namePlaceholder,
+  targetPlaceholder,
+  rules,
+  onRulesChange,
   onSave,
   isSaving,
   isDisabled,
@@ -302,40 +346,97 @@ function TrackerListCard({
 }: {
   title: string;
   description: string;
-  placeholder: string;
-  items: string[];
-  onItemsChange: (nextItems: string[]) => void;
+  defaultKind: TfTrackerRuleKind;
+  namePlaceholder: string;
+  targetPlaceholder: string;
+  rules: TfTrackerRule[];
+  onRulesChange: (nextRules: TfTrackerRule[]) => void;
   onSave: () => Promise<void>;
   isSaving: boolean;
   isDisabled: boolean;
   isDirty: boolean;
 }) {
-  const [newItem, setNewItem] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editTarget, setEditTarget] = useState("");
+  const [newName, setNewName] = useState("");
+  const [pendingTarget, setPendingTarget] = useState("");
+  const [showTargetModal, setShowTargetModal] = useState(false);
+  const [modalInput, setModalInput] = useState("");
 
-  function addItem() {
-    const value = newItem.trim();
-    if (!value) {
+  const isAppRuleList = defaultKind === "app";
+  const canAdd = newName.trim().length > 0 && pendingTarget.trim().length > 0;
+
+  function beginEdit(rule: TfTrackerRule) {
+    setEditingId(rule.id);
+    setEditName(rule.name);
+    setEditTarget(rule.target);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditName("");
+    setEditTarget("");
+  }
+
+  function commitEdit() {
+    if (!editingId) {
       return;
     }
-    onItemsChange([...items, value]);
-    setNewItem("");
-  }
 
-  function updateItem(index: number, value: string) {
-    const next = [...items];
-    next[index] = value;
-    onItemsChange(next);
-  }
-
-  function removeItem(index: number) {
-    onItemsChange(items.filter((_, currentIndex) => currentIndex !== index));
-  }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      addItem();
+    const target = editTarget.trim();
+    if (!target) {
+      cancelEdit();
+      return;
     }
+
+    onRulesChange(
+      rules.map((rule) =>
+        rule.id === editingId
+          ? {
+              ...rule,
+              name: editName.trim() || deriveTfTrackerRuleName(target, defaultKind),
+              target,
+              kind: defaultKind,
+            }
+          : rule,
+      ),
+    );
+    cancelEdit();
+  }
+
+  function handleAdd() {
+    const target = pendingTarget.trim();
+    if (!target) {
+      return;
+    }
+
+    onRulesChange([
+      ...rules,
+      {
+        id: generateTrackerRuleId(),
+        name: newName.trim() || deriveTfTrackerRuleName(target, defaultKind),
+        target,
+        kind: defaultKind,
+      },
+    ]);
+    setNewName("");
+    setPendingTarget("");
+  }
+
+  function handleDelete(id: string) {
+    onRulesChange(rules.filter((rule) => rule.id !== id));
+  }
+
+  function handleTargetDone() {
+    const target = modalInput.trim();
+    if (!target) {
+      return;
+    }
+
+    setPendingTarget(target);
+    setModalInput("");
+    setShowTargetModal(false);
   }
 
   return (
@@ -346,56 +447,132 @@ function TrackerListCard({
           <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
         </div>
         <span className="rounded-full border border-slate-700 bg-slate-900/80 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400">
-          {items.length}
+          {rules.length}
         </span>
       </div>
 
-      {items.length === 0 ? (
+      {rules.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/50 px-4 py-5 text-sm text-slate-500">
-          No items yet. Add the first entry below.
+          No rules yet. Add the first entry below.
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {items.map((item, index) => (
-            <div key={`${title}-${index}-${item}`} className="flex gap-2">
-              <input
-                type="text"
-                value={item}
-                onChange={(event) => updateItem(index, event.target.value)}
-                disabled={isSaving || isDisabled}
-                className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-60"
-              />
-              <button
-                type="button"
-                onClick={() => removeItem(index)}
-                disabled={isSaving || isDisabled}
-                className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:opacity-60"
-              >
-                Remove
-              </button>
+        <div className="space-y-2">
+          {rules.map((rule) => (
+            <div
+              key={rule.id}
+              className="flex items-center gap-2 rounded-[16px] border border-white/10 bg-slate-950/35 px-3 py-2"
+            >
+              {editingId === rule.id ? (
+                <>
+                  <input
+                    value={editName}
+                    onChange={(event) => setEditName(event.target.value)}
+                    placeholder="Name"
+                    disabled={isSaving || isDisabled}
+                    className={`${fieldClassName} flex-1`}
+                  />
+                  <input
+                    value={editTarget}
+                    onChange={(event) => setEditTarget(event.target.value)}
+                    placeholder={targetPlaceholder}
+                    disabled={isSaving || isDisabled}
+                    className={`${fieldClassName} flex-1`}
+                  />
+                  <button
+                    type="button"
+                    className={secondaryButtonClassName}
+                    onClick={commitEdit}
+                    disabled={isSaving || isDisabled}
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Cancel"
+                    className={iconButtonClassName}
+                    onClick={cancelEdit}
+                    disabled={isSaving || isDisabled}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-white">{rule.name}</p>
+                    <p className="mt-0.5 truncate text-xs text-slate-400">{rule.target}</p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`Edit ${rule.name}`}
+                    className={iconButtonClassName}
+                    onClick={() => beginEdit(rule)}
+                    disabled={isSaving || isDisabled}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${rule.name}`}
+                    className={iconButtonClassName}
+                    onClick={() => handleDelete(rule.id)}
+                    disabled={isSaving || isDisabled}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <input
-          type="text"
-          value={newItem}
-          onChange={(event) => setNewItem(event.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isSaving || isDisabled}
-          placeholder={placeholder}
-          className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-60"
-        />
-        <button
-          type="button"
-          onClick={addItem}
-          disabled={isSaving || isDisabled || newItem.trim().length === 0}
-          className="rounded-lg border border-indigo-500/40 bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          Add item
-        </button>
+      <div className="rounded-[16px] border border-dashed border-white/10 bg-slate-950/20 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={newName}
+            onChange={(event) => setNewName(event.target.value)}
+            disabled={isSaving || isDisabled}
+            placeholder={namePlaceholder}
+            className={`${fieldClassName} min-w-[180px] flex-1`}
+          />
+          <button
+            type="button"
+            className={`${secondaryButtonClassName} ${!isAppRuleList ? "border-cyan-400/40 text-cyan-300" : "opacity-60"}`}
+            disabled={isSaving || isDisabled || isAppRuleList}
+            onClick={() => {
+              setModalInput(pendingTarget);
+              setShowTargetModal(true);
+            }}
+          >
+            <Globe className="h-4 w-4" />
+            Website{!isAppRuleList ? " ✓" : ""}
+          </button>
+          <button
+            type="button"
+            className={`${secondaryButtonClassName} ${isAppRuleList ? "border-cyan-400/40 text-cyan-300" : "opacity-60"}`}
+            disabled={isSaving || isDisabled || !isAppRuleList}
+            onClick={() => {
+              setModalInput(pendingTarget);
+              setShowTargetModal(true);
+            }}
+          >
+            <Monitor className="h-4 w-4" />
+            App{isAppRuleList ? " ✓" : ""}
+          </button>
+          <button
+            type="button"
+            className={secondaryButtonClassName}
+            onClick={handleAdd}
+            disabled={isSaving || isDisabled || !canAdd}
+          >
+            <Plus className="h-4 w-4" />
+            Add
+          </button>
+        </div>
+        {pendingTarget ? (
+          <p className="truncate px-1 pt-2 text-xs text-slate-400">{pendingTarget}</p>
+        ) : null}
       </div>
 
       <div className="flex items-center justify-between gap-3 pt-1">
@@ -411,6 +588,52 @@ function TrackerListCard({
           {isSaving ? "Saving…" : "Save changes"}
         </button>
       </div>
+
+      {showTargetModal ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setShowTargetModal(false)}
+        >
+          <div
+            className="glass-panel mx-4 w-full max-w-md"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {isAppRuleList ? (
+              <>
+                <p className="text-sm text-slate-200">Steps to add app (in order):</p>
+                <p className="mt-2 text-sm text-slate-200">1. Open Finder.</p>
+                <p className="mt-1 text-sm text-slate-200">2. Open Applications and find the app.</p>
+                <p className="mt-1 text-sm text-slate-200">3. Right click the app and hold the option key.</p>
+                <p className="mt-1 text-sm text-slate-200">4. Choose Copy “App” as Pathname, then paste it below.</p>
+              </>
+            ) : (
+              <h3 className="text-base font-semibold text-white">
+                Paste the URL for {newName.trim() || "this website"}
+              </h3>
+            )}
+            <input
+              autoFocus
+              value={modalInput}
+              onChange={(event) => setModalInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  handleTargetDone();
+                }
+                if (event.key === "Escape") {
+                  setShowTargetModal(false);
+                }
+              }}
+              placeholder={targetPlaceholder}
+              className={`${fieldClassName} mt-4 placeholder:opacity-30`}
+            />
+            <div className="mt-4 flex justify-end">
+              <button type="button" className={secondaryButtonClassName} onClick={handleTargetDone}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -616,9 +839,10 @@ export function TrackerSettingsPanel() {
   }
 
   async function handleSave(key: TrackerListKey) {
+    const kind = TRACKER_LISTS.find((config) => config.key === key)?.defaultKind ?? "website";
     const nextTrackerPrefs = {
       ...draftPrefs,
-      [key]: sanitizeItems(draftPrefs[key]),
+      [key]: sanitizeTrackerRules(draftPrefs[key], kind),
     } as TfTrackerPrefs;
 
     setSavingKey(key);
@@ -1974,22 +2198,25 @@ export function TrackerSettingsPanel() {
 
       <div className="grid gap-4 xl:grid-cols-2">
         {TRACKER_LISTS.map((config) => {
-          const items = draftPrefs[config.key];
-          const originalItems = state.trackerPrefs[config.key];
-          const sanitizedDraft = sanitizeItems(items);
-          const isDirty = !listsMatch(sanitizedDraft, sanitizeItems(originalItems));
+          const rules = draftPrefs[config.key];
+          const originalRules = state.trackerPrefs[config.key];
+          const sanitizedDraft = sanitizeTrackerRules(rules, config.defaultKind);
+          const sanitizedOriginal = sanitizeTrackerRules(originalRules, config.defaultKind);
+          const isDirty = !trackerRuleListsMatch(sanitizedDraft, sanitizedOriginal);
 
           return (
             <TrackerListCard
               key={config.key}
               title={config.title}
               description={config.description}
-              placeholder={config.placeholder}
-              items={items}
-              onItemsChange={(nextItems) =>
+              defaultKind={config.defaultKind}
+              namePlaceholder={config.namePlaceholder}
+              targetPlaceholder={config.targetPlaceholder}
+              rules={rules}
+              onRulesChange={(nextRules) =>
                 setDraftPrefs((prev) => ({
                   ...prev,
-                  [config.key]: nextItems,
+                  [config.key]: nextRules,
                 }))
               }
               onSave={() => handleSave(config.key)}

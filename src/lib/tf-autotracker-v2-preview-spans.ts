@@ -4,14 +4,16 @@
 // "would track" preview spans. Never writes any state, never creates sessions.
 
 import type { AutoTrackerV2NativeEvent } from "./tf-autotracker-v2-native-events.js";
+import { deriveTfTrackerRuleName } from "./tf-storage.js";
+import type { TfTrackerRuleInput, TfTrackerRuleKind } from "../types/models";
 
 export type TfAutotrackerV2PreviewClassification = "tracked" | "distraction" | "unclassified";
 
 export type TfAutotrackerV2ClassificationSettings = {
-  autoApps: string[];
-  autoWebsites: string[];
-  distractionApps: string[];
-  distractionWebsites: string[];
+  autoApps: TfTrackerRuleInput[];
+  autoWebsites: TfTrackerRuleInput[];
+  distractionApps: TfTrackerRuleInput[];
+  distractionWebsites: TfTrackerRuleInput[];
 };
 
 export type TfAutotrackerV2PreviewSpan = {
@@ -27,6 +29,20 @@ export type TfAutotrackerV2PreviewSpan = {
   durationMs: number | null;
   sourceEventIds: string[];
   classification: TfAutotrackerV2PreviewClassification;
+  classificationReason: string;
+  matchedRuleName?: string;
+  matchedRuleTarget?: string;
+};
+
+type NormalizedTrackerRule = {
+  name: string;
+  target: string;
+  kind: TfTrackerRuleKind;
+};
+
+type TfAutotrackerV2RuleMatch = {
+  matchedRuleName: string;
+  matchedRuleTarget: string;
   classificationReason: string;
 };
 
@@ -94,6 +110,41 @@ type ParsedWebsiteRule = {
   path: string;
 };
 
+function normalizeTrackerRuleInput(
+  ruleInput: TfTrackerRuleInput,
+  kind: TfTrackerRuleKind,
+): NormalizedTrackerRule | null {
+  if (typeof ruleInput === "string") {
+    const target = ruleInput.trim();
+    if (!target) {
+      return null;
+    }
+
+    return {
+      name: deriveTfTrackerRuleName(target, kind),
+      target,
+      kind,
+    };
+  }
+
+  if (!ruleInput || typeof ruleInput !== "object") {
+    return null;
+  }
+
+  const target = typeof ruleInput.target === "string" ? ruleInput.target.trim() : "";
+  if (!target) {
+    return null;
+  }
+
+  return {
+    name:
+      (typeof ruleInput.name === "string" && ruleInput.name.trim()) ||
+      deriveTfTrackerRuleName(target, kind),
+    target,
+    kind,
+  };
+}
+
 function parseWebsiteRule(value: string): ParsedWebsiteRule | null {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -146,13 +197,22 @@ function websitePathsMatch(targetPath: string, rulePath: string): boolean {
   return targetPath === rulePath || targetPath.startsWith(`${rulePath}/`);
 }
 
-function matchWebsiteRule(browserUrl: string, rule: string): string | null {
+function matchWebsiteRule(
+  browserUrl: string,
+  ruleInput: TfTrackerRuleInput,
+  reasonPrefix: "matched website rule" | "matched distraction website rule" = "matched website rule",
+): TfAutotrackerV2RuleMatch | null {
   const target = parseWebsiteTarget(browserUrl);
   if (!target) {
     return null;
   }
 
-  const parsedRule = parseWebsiteRule(rule);
+  const rule = normalizeTrackerRuleInput(ruleInput, "website");
+  if (!rule) {
+    return null;
+  }
+
+  const parsedRule = parseWebsiteRule(rule.target);
   if (!parsedRule) {
     return null;
   }
@@ -166,7 +226,11 @@ function matchWebsiteRule(browserUrl: string, rule: string): string | null {
   }
 
   const pathReason = parsedRule.path === "/" ? "" : ` and path prefix ${parsedRule.path}`;
-  return `matched website rule "${rule}" by host ${parsedRule.host}${pathReason}`;
+  return {
+    matchedRuleName: rule.name,
+    matchedRuleTarget: rule.target,
+    classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by host ${parsedRule.host}${pathReason}`,
+  };
 }
 
 function normalizeAppValue(value: string): string {
@@ -214,15 +278,16 @@ function containsWithBoundary(haystack: string, needle: string): boolean {
 function matchesAppRule(
   bundleId: string | undefined,
   appName: string | undefined,
-  rule: string,
-): string | null {
-  const trimmedRule = rule.trim();
-  if (!trimmedRule) {
+  ruleInput: TfTrackerRuleInput,
+  reasonPrefix: "matched app rule" | "matched distraction app rule" = "matched app rule",
+): TfAutotrackerV2RuleMatch | null {
+  const rule = normalizeTrackerRuleInput(ruleInput, "app");
+  if (!rule) {
     return null;
   }
 
-  const appNameCandidate = extractAppNameCandidate(trimmedRule);
-  const ruleCandidates = [trimmedRule, appNameCandidate].filter(
+  const appNameCandidate = extractAppNameCandidate(rule.target);
+  const ruleCandidates = [rule.target, appNameCandidate].filter(
     (candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0,
   );
 
@@ -232,14 +297,22 @@ function matchesAppRule(
   for (const candidate of ruleCandidates) {
     const normalizedCandidate = normalizeAppValue(candidate);
     if (normalizedBundleId && normalizedBundleId === normalizedCandidate) {
-      return `matched app rule "${rule}" by bundle id ${bundleId?.trim() ?? normalizedCandidate}`;
+      return {
+        matchedRuleName: rule.name,
+        matchedRuleTarget: rule.target,
+        classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by bundle id ${bundleId?.trim() ?? normalizedCandidate}`,
+      };
     }
   }
 
   for (const candidate of ruleCandidates) {
     const normalizedCandidate = normalizeAppValue(candidate);
     if (normalizedAppName && normalizedAppName === normalizedCandidate) {
-      return `matched app rule "${rule}" by app name ${appName?.trim() ?? normalizedCandidate}`;
+      return {
+        matchedRuleName: rule.name,
+        matchedRuleTarget: rule.target,
+        classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by app name ${appName?.trim() ?? normalizedCandidate}`,
+      };
     }
   }
 
@@ -250,15 +323,15 @@ function matchesAppRule(
       (containsWithBoundary(normalizedAppName, normalizedCandidate) ||
         containsWithBoundary(normalizedCandidate, normalizedAppName))
     ) {
-      return `matched app rule "${rule}" by app name ${appName?.trim() ?? normalizedCandidate}`;
+      return {
+        matchedRuleName: rule.name,
+        matchedRuleTarget: rule.target,
+        classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by app name ${appName?.trim() ?? normalizedCandidate}`,
+      };
     }
   }
 
   return null;
-}
-
-function toDistractionClassificationReason(reason: string): string {
-  return reason.replace(/^matched /u, "matched distraction ");
 }
 
 function classifyPreviewSpan(
@@ -267,30 +340,48 @@ function classifyPreviewSpan(
   appName: string | undefined,
   browserUrl: string | undefined,
   settings: TfAutotrackerV2ClassificationSettings,
-): { classification: TfAutotrackerV2PreviewClassification; classificationReason: string } {
+): {
+  classification: TfAutotrackerV2PreviewClassification;
+  classificationReason: string;
+  matchedRuleName?: string;
+  matchedRuleTarget?: string;
+} {
   if (kind === "website" && browserUrl) {
     for (const rule of settings.autoWebsites) {
       const matchReason = matchWebsiteRule(browserUrl, rule);
       if (matchReason) {
         for (const distractionRule of settings.distractionWebsites) {
-          const distractionMatchReason = matchWebsiteRule(browserUrl, distractionRule);
+          const distractionMatchReason = matchWebsiteRule(
+            browserUrl,
+            distractionRule,
+            "matched distraction website rule",
+          );
           if (distractionMatchReason) {
             return {
               classification: "distraction",
-              classificationReason: toDistractionClassificationReason(distractionMatchReason),
+              classificationReason: distractionMatchReason.classificationReason,
+              matchedRuleName: distractionMatchReason.matchedRuleName,
+              matchedRuleTarget: distractionMatchReason.matchedRuleTarget,
             };
           }
         }
-        return { classification: "tracked", classificationReason: matchReason };
+        return {
+          classification: "tracked",
+          classificationReason: matchReason.classificationReason,
+          matchedRuleName: matchReason.matchedRuleName,
+          matchedRuleTarget: matchReason.matchedRuleTarget,
+        };
       }
     }
 
     for (const rule of settings.distractionWebsites) {
-      const matchReason = matchWebsiteRule(browserUrl, rule);
+      const matchReason = matchWebsiteRule(browserUrl, rule, "matched distraction website rule");
       if (matchReason) {
         return {
           classification: "distraction",
-          classificationReason: toDistractionClassificationReason(matchReason),
+          classificationReason: matchReason.classificationReason,
+          matchedRuleName: matchReason.matchedRuleName,
+          matchedRuleTarget: matchReason.matchedRuleTarget,
         };
       }
     }
@@ -309,24 +400,38 @@ function classifyPreviewSpan(
       const matchReason = matchesAppRule(bundleId, appName, rule);
       if (matchReason) {
         for (const distractionRule of settings.distractionApps) {
-          const distractionMatchReason = matchesAppRule(bundleId, appName, distractionRule);
+          const distractionMatchReason = matchesAppRule(
+            bundleId,
+            appName,
+            distractionRule,
+            "matched distraction app rule",
+          );
           if (distractionMatchReason) {
             return {
               classification: "distraction",
-              classificationReason: toDistractionClassificationReason(distractionMatchReason),
+              classificationReason: distractionMatchReason.classificationReason,
+              matchedRuleName: distractionMatchReason.matchedRuleName,
+              matchedRuleTarget: distractionMatchReason.matchedRuleTarget,
             };
           }
         }
-        return { classification: "tracked", classificationReason: matchReason };
+        return {
+          classification: "tracked",
+          classificationReason: matchReason.classificationReason,
+          matchedRuleName: matchReason.matchedRuleName,
+          matchedRuleTarget: matchReason.matchedRuleTarget,
+        };
       }
     }
 
     for (const rule of settings.distractionApps) {
-      const matchReason = matchesAppRule(bundleId, appName, rule);
+      const matchReason = matchesAppRule(bundleId, appName, rule, "matched distraction app rule");
       if (matchReason) {
         return {
           classification: "distraction",
-          classificationReason: toDistractionClassificationReason(matchReason),
+          classificationReason: matchReason.classificationReason,
+          matchedRuleName: matchReason.matchedRuleName,
+          matchedRuleTarget: matchReason.matchedRuleTarget,
         };
       }
     }
@@ -385,7 +490,7 @@ export function buildAutoTrackerV2PreviewSpans(
 
     // Start a new span
     const kind: "app" | "website" = hasUrl ? "website" : "app";
-    const { classification, classificationReason } = classifyPreviewSpan(
+    const { classification, classificationReason, matchedRuleName, matchedRuleTarget } = classifyPreviewSpan(
       kind,
       ev.bundleId,
       ev.appName,
@@ -409,6 +514,8 @@ export function buildAutoTrackerV2PreviewSpans(
       sourceEventIds: [evId],
       classification,
       classificationReason,
+      matchedRuleName,
+      matchedRuleTarget,
     };
     spans.push(newSpan);
     currentIdentity = identity;

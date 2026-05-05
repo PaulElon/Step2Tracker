@@ -35,6 +35,8 @@ export type TfAutotrackerV2FinalizedPreviewSession = {
   endedAtMs: number;
   durationMs: number;
   targetLabel: string;
+  matchedRuleName?: string;
+  matchedRuleTarget?: string;
   sourceTargetStableId: string;
   sourceSpanIds: string[];
   sourceEventIds: string[];
@@ -65,6 +67,8 @@ export type TfAutotrackerV2ContinuousWriteSelection = {
 type ActiveFinalizedPreviewSession = {
   previewSessionId: string;
   targetLabel: string;
+  matchedRuleName?: string;
+  matchedRuleTarget?: string;
   sourceTargetStableId: string;
   sourceSpanIds: string[];
   sourceEventIds: string[];
@@ -314,9 +318,20 @@ export function selectAutoTrackerV2ContinuousWritePreviewSessions({
 function deriveAutoTrackerV2PreviewSessionDisplayName(
   previewSession: Pick<
     TfAutotrackerV2FinalizedPreviewSession,
-    "appName" | "browserTitle" | "browserUrl" | "bundleId" | "sourceTargetStableId" | "targetLabel"
+    | "appName"
+    | "browserTitle"
+    | "browserUrl"
+    | "bundleId"
+    | "matchedRuleName"
+    | "sourceTargetStableId"
+    | "targetLabel"
   >,
 ): string {
+  const matchedRuleName = previewSession.matchedRuleName?.trim();
+  if (matchedRuleName) {
+    return matchedRuleName;
+  }
+
   const explicitLabel = previewSession.targetLabel.trim();
   if (explicitLabel) {
     return explicitLabel;
@@ -548,7 +563,9 @@ function createActivePreviewSession(
 ): ActiveFinalizedPreviewSession {
   return {
     previewSessionId,
-    targetLabel: target.label ?? span.label,
+    targetLabel: span.matchedRuleName?.trim() || target.label || span.label,
+    matchedRuleName: span.matchedRuleName,
+    matchedRuleTarget: span.matchedRuleTarget,
     sourceTargetStableId: target.stableId,
     sourceSpanIds: [span.id],
     sourceEventIds: [...span.sourceEventIds],
@@ -581,11 +598,14 @@ function appendTrackedSourceSpan(
   return {
     ...appendedPreviewSession,
     targetLabel:
+      span.matchedRuleName?.trim() ||
       span.browserTitle?.trim() ||
       span.appName?.trim() ||
       span.label.trim() ||
       appendedPreviewSession.targetLabel,
     classificationReason: appendedPreviewSession.classificationReason || span.classificationReason,
+    matchedRuleName: span.matchedRuleName ?? appendedPreviewSession.matchedRuleName,
+    matchedRuleTarget: span.matchedRuleTarget ?? appendedPreviewSession.matchedRuleTarget,
     appName: span.appName ?? appendedPreviewSession.appName,
     bundleId: span.bundleId ?? appendedPreviewSession.bundleId,
     browserTitle: span.browserTitle ?? appendedPreviewSession.browserTitle,
@@ -622,6 +642,8 @@ function finalizePreviewSession(
     endedAtMs: finalizedSession.endedAtMs,
     durationMs: Math.max(0, finalizedSession.endedAtMs - finalizedSession.startedAtMs),
     targetLabel: activePreviewSession.targetLabel || finalizedSession.target.label || finalizedSession.target.stableId,
+    matchedRuleName: activePreviewSession.matchedRuleName,
+    matchedRuleTarget: activePreviewSession.matchedRuleTarget,
     sourceTargetStableId: activePreviewSession.sourceTargetStableId || finalizedSession.target.stableId,
     sourceSpanIds: [...activePreviewSession.sourceSpanIds],
     sourceEventIds: [...activePreviewSession.sourceEventIds],
@@ -647,6 +669,8 @@ function createDistractionPreviewSession(
     endedAtMs: span.endedAtMs ?? span.startedAtMs,
     durationMs: Math.max(0, span.durationMs ?? 0),
     targetLabel: getPreviewSpanTargetLabel(span),
+    matchedRuleName: span.matchedRuleName,
+    matchedRuleTarget: span.matchedRuleTarget,
     sourceTargetStableId,
     sourceSpanIds: [span.id],
     sourceEventIds: [...span.sourceEventIds],
@@ -720,6 +744,11 @@ function getWebsiteStableId(span: TfAutotrackerV2PreviewSpan): string {
 }
 
 function getWebsiteLabel(span: TfAutotrackerV2PreviewSpan): string {
+  const matchedRuleName = span.matchedRuleName?.trim();
+  if (matchedRuleName) {
+    return matchedRuleName;
+  }
+
   const title = span.browserTitle?.trim();
   if (title) {
     return title;
@@ -743,6 +772,11 @@ function getAppStableId(span: TfAutotrackerV2PreviewSpan): string {
 }
 
 function getAppLabel(span: TfAutotrackerV2PreviewSpan): string {
+  const matchedRuleName = span.matchedRuleName?.trim();
+  if (matchedRuleName) {
+    return matchedRuleName;
+  }
+
   const appName = span.appName?.trim();
   if (appName) {
     return appName;

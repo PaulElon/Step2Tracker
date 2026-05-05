@@ -385,11 +385,22 @@ export interface TfSummaryPayload {
   };
 }
 
+export type TfTrackerRuleKind = "website" | "app";
+
+export interface TfTrackerRule {
+  id: string;
+  name: string;
+  target: string;
+  kind: TfTrackerRuleKind;
+}
+
+export type TfTrackerRuleInput = TfTrackerRule | string;
+
 export interface TfTrackerPrefs {
-  customAutoApps: string[];
-  customAutoWebsites: string[];
-  customDistractionApps: string[];
-  customDistractionWebsites: string[];
+  customAutoApps: TfTrackerRule[];
+  customAutoWebsites: TfTrackerRule[];
+  customDistractionApps: TfTrackerRule[];
+  customDistractionWebsites: TfTrackerRule[];
 }
 
 export interface TfAccountState {
