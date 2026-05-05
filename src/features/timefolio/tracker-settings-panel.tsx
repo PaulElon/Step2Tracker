@@ -26,11 +26,12 @@ import {
 } from "../../lib/tf-autotracker-v2-reducer-preview";
 import type { NativeTrackerSpanInput } from "../../lib/tf-native-span-reconciler";
 import { deriveTfTrackerRuleName, normalizeTfAppState } from "../../lib/tf-storage";
-import { fieldClassName, iconButtonClassName, secondaryButtonClassName } from "../../lib/ui";
+import { cn, fieldClassName, iconButtonClassName, secondaryButtonClassName } from "../../lib/ui";
 import { useTimeFolioStore } from "../../state/tf-store";
 import type { TfAppState, TfTrackerPrefs, TfTrackerRule, TfTrackerRuleKind } from "../../types/models";
 
 type TrackerListKey = keyof TfTrackerPrefs;
+type TrackerGroupKey = "allowed" | "distractions";
 const RESET_CONFIRMATION_TOKEN = "RESET";
 
 type PendingImportPreview = {
@@ -42,45 +43,41 @@ type PendingImportPreview = {
   hasAccount: boolean;
 };
 
-const TRACKER_LISTS: Array<{
-  key: TrackerListKey;
+const TRACKER_GROUPS: Array<{
+  key: TrackerGroupKey;
   title: string;
   description: string;
-  defaultKind: TfTrackerRuleKind;
+  listKeys: Record<TfTrackerRuleKind, TrackerListKey>;
   namePlaceholder: string;
-  targetPlaceholder: string;
+  targetPlaceholders: Record<TfTrackerRuleKind, string>;
 }> = [
   {
-    key: "customAutoApps",
-    title: "Auto-tracked apps",
-    description: "Apps you want TimeFolio to treat as study or focus-friendly activity.",
-    defaultKind: "app",
-    namePlaceholder: "e.g. Anki",
-    targetPlaceholder: "/Applications/Anki.app",
+    key: "allowed",
+    title: "Allowed",
+    description: "Resources TimeFolio should count as study/focus activity.",
+    listKeys: {
+      app: "customAutoApps",
+      website: "customAutoWebsites",
+    },
+    namePlaceholder: "e.g. UWorld or Anki",
+    targetPlaceholders: {
+      app: "/Applications/Anki.app",
+      website: "https://apps.uworld.com",
+    },
   },
   {
-    key: "customAutoWebsites",
-    title: "Auto-tracked websites",
-    description: "Websites you want to count as productive by default.",
-    defaultKind: "website",
-    namePlaceholder: "e.g. UWorld",
-    targetPlaceholder: "https://apps.uworld.com",
-  },
-  {
-    key: "customDistractionApps",
-    title: "Distraction apps",
-    description: "Apps you want to flag as distractions in your local TimeFolio view.",
-    defaultKind: "app",
-    namePlaceholder: "e.g. Discord",
-    targetPlaceholder: "/Applications/Discord.app",
-  },
-  {
-    key: "customDistractionWebsites",
-    title: "Distraction websites",
-    description: "Websites you want to classify as distractions.",
-    defaultKind: "website",
-    namePlaceholder: "e.g. Reddit",
-    targetPlaceholder: "https://www.reddit.com",
+    key: "distractions",
+    title: "Distractions",
+    description: "Resources TimeFolio should flag as distractions.",
+    listKeys: {
+      app: "customDistractionApps",
+      website: "customDistractionWebsites",
+    },
+    namePlaceholder: "e.g. Reddit or ChatGPT",
+    targetPlaceholders: {
+      app: "/Applications/ChatGPT.app",
+      website: "https://www.reddit.com",
+    },
   },
 ];
 
@@ -331,13 +328,37 @@ function PanelStatus({
   );
 }
 
-function TrackerListCard({
+type TrackerRuleRow = {
+  rule: TfTrackerRule;
+  kind: TfTrackerRuleKind;
+  listKey: TrackerListKey;
+};
+
+function RuleKindPill({ kind }: { kind: TfTrackerRuleKind }) {
+  const isWebsite = kind === "website";
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium uppercase tracking-[0.18em]",
+        isWebsite
+          ? "border-cyan-400/25 bg-cyan-500/10 text-cyan-200"
+          : "border-emerald-400/25 bg-emerald-500/10 text-emerald-200",
+      )}
+    >
+      {isWebsite ? <Globe className="h-3.5 w-3.5" /> : <Monitor className="h-3.5 w-3.5" />}
+      {isWebsite ? "Website" : "App"}
+    </span>
+  );
+}
+
+function TrackerGroupCard({
   title,
   description,
-  defaultKind,
+  listKeys,
   namePlaceholder,
-  targetPlaceholder,
-  rules,
+  targetPlaceholders,
+  rulesByKind,
   onRulesChange,
   onSave,
   isSaving,
@@ -346,44 +367,56 @@ function TrackerListCard({
 }: {
   title: string;
   description: string;
-  defaultKind: TfTrackerRuleKind;
+  listKeys: Record<TfTrackerRuleKind, TrackerListKey>;
   namePlaceholder: string;
-  targetPlaceholder: string;
-  rules: TfTrackerRule[];
-  onRulesChange: (nextRules: TfTrackerRule[]) => void;
+  targetPlaceholders: Record<TfTrackerRuleKind, string>;
+  rulesByKind: Record<TfTrackerRuleKind, TfTrackerRule[]>;
+  onRulesChange: (kind: TfTrackerRuleKind, nextRules: TfTrackerRule[]) => void;
   onSave: () => Promise<void>;
   isSaving: boolean;
   isDisabled: boolean;
   isDirty: boolean;
 }) {
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editTarget, setEditTarget] = useState("");
   const [newName, setNewName] = useState("");
+  const [pendingKind, setPendingKind] = useState<TfTrackerRuleKind>("website");
   const [pendingTarget, setPendingTarget] = useState("");
   const [showTargetModal, setShowTargetModal] = useState(false);
   const [modalInput, setModalInput] = useState("");
 
-  const isAppRuleList = defaultKind === "app";
+  const combinedRules: TrackerRuleRow[] = [
+    ...rulesByKind.website.map((rule) => ({
+      rule,
+      kind: "website" as const,
+      listKey: listKeys.website,
+    })),
+    ...rulesByKind.app.map((rule) => ({
+      rule,
+      kind: "app" as const,
+      listKey: listKeys.app,
+    })),
+  ];
   const canAdd = newName.trim().length > 0 && pendingTarget.trim().length > 0;
 
-  function beginEdit(rule: TfTrackerRule) {
-    setEditingId(rule.id);
-    setEditName(rule.name);
-    setEditTarget(rule.target);
+  function makeRowKey(kind: TfTrackerRuleKind, id: string) {
+    return `${kind}:${id}`;
+  }
+
+  function beginEdit(row: TrackerRuleRow) {
+    setEditingKey(makeRowKey(row.kind, row.rule.id));
+    setEditName(row.rule.name);
+    setEditTarget(row.rule.target);
   }
 
   function cancelEdit() {
-    setEditingId(null);
+    setEditingKey(null);
     setEditName("");
     setEditTarget("");
   }
 
-  function commitEdit() {
-    if (!editingId) {
-      return;
-    }
-
+  function commitEdit(row: TrackerRuleRow) {
     const target = editTarget.trim();
     if (!target) {
       cancelEdit();
@@ -391,13 +424,14 @@ function TrackerListCard({
     }
 
     onRulesChange(
-      rules.map((rule) =>
-        rule.id === editingId
+      row.kind,
+      rulesByKind[row.kind].map((rule) =>
+        rule.id === row.rule.id
           ? {
               ...rule,
-              name: editName.trim() || deriveTfTrackerRuleName(target, defaultKind),
+              name: editName.trim() || deriveTfTrackerRuleName(target, row.kind),
               target,
-              kind: defaultKind,
+              kind: row.kind,
             }
           : rule,
       ),
@@ -411,21 +445,24 @@ function TrackerListCard({
       return;
     }
 
-    onRulesChange([
-      ...rules,
+    onRulesChange(pendingKind, [
+      ...rulesByKind[pendingKind],
       {
         id: generateTrackerRuleId(),
-        name: newName.trim() || deriveTfTrackerRuleName(target, defaultKind),
+        name: newName.trim() || deriveTfTrackerRuleName(target, pendingKind),
         target,
-        kind: defaultKind,
+        kind: pendingKind,
       },
     ]);
     setNewName("");
     setPendingTarget("");
   }
 
-  function handleDelete(id: string) {
-    onRulesChange(rules.filter((rule) => rule.id !== id));
+  function handleDelete(row: TrackerRuleRow) {
+    onRulesChange(
+      row.kind,
+      rulesByKind[row.kind].filter((rule) => rule.id !== row.rule.id),
+    );
   }
 
   function handleTargetDone() {
@@ -439,6 +476,12 @@ function TrackerListCard({
     setShowTargetModal(false);
   }
 
+  function openTargetModal(kind: TfTrackerRuleKind) {
+    setPendingKind(kind);
+    setModalInput(pendingTarget);
+    setShowTargetModal(true);
+  }
+
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-slate-700 bg-slate-800/70 p-5 shadow-lg shadow-black/10">
       <div className="flex items-start justify-between gap-4">
@@ -447,83 +490,89 @@ function TrackerListCard({
           <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
         </div>
         <span className="rounded-full border border-slate-700 bg-slate-900/80 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400">
-          {rules.length}
+          {combinedRules.length}
         </span>
       </div>
 
-      {rules.length === 0 ? (
+      {combinedRules.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/50 px-4 py-5 text-sm text-slate-500">
           No rules yet. Add the first entry below.
         </div>
       ) : (
         <div className="space-y-2">
-          {rules.map((rule) => (
-            <div
-              key={rule.id}
-              className="flex items-center gap-2 rounded-[16px] border border-white/10 bg-slate-950/35 px-3 py-2"
-            >
-              {editingId === rule.id ? (
-                <>
-                  <input
-                    value={editName}
-                    onChange={(event) => setEditName(event.target.value)}
-                    placeholder="Name"
-                    disabled={isSaving || isDisabled}
-                    className={`${fieldClassName} flex-1`}
-                  />
-                  <input
-                    value={editTarget}
-                    onChange={(event) => setEditTarget(event.target.value)}
-                    placeholder={targetPlaceholder}
-                    disabled={isSaving || isDisabled}
-                    className={`${fieldClassName} flex-1`}
-                  />
-                  <button
-                    type="button"
-                    className={secondaryButtonClassName}
-                    onClick={commitEdit}
-                    disabled={isSaving || isDisabled}
-                  >
-                    <Check className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Cancel"
-                    className={iconButtonClassName}
-                    onClick={cancelEdit}
-                    disabled={isSaving || isDisabled}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-white">{rule.name}</p>
-                    <p className="mt-0.5 truncate text-xs text-slate-400">{rule.target}</p>
-                  </div>
-                  <button
-                    type="button"
-                    aria-label={`Edit ${rule.name}`}
-                    className={iconButtonClassName}
-                    onClick={() => beginEdit(rule)}
-                    disabled={isSaving || isDisabled}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Delete ${rule.name}`}
-                    className={iconButtonClassName}
-                    onClick={() => handleDelete(rule.id)}
-                    disabled={isSaving || isDisabled}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </>
-              )}
-            </div>
-          ))}
+          {combinedRules.map((row) => {
+            const rowKey = makeRowKey(row.kind, row.rule.id);
+            const isEditing = editingKey === rowKey;
+
+            return (
+              <div
+                key={rowKey}
+                className="flex items-center gap-2 rounded-[16px] border border-white/10 bg-slate-950/35 px-3 py-2"
+              >
+                <RuleKindPill kind={row.kind} />
+                {isEditing ? (
+                  <>
+                    <input
+                      value={editName}
+                      onChange={(event) => setEditName(event.target.value)}
+                      placeholder="Name"
+                      disabled={isSaving || isDisabled}
+                      className={`${fieldClassName} flex-1`}
+                    />
+                    <input
+                      value={editTarget}
+                      onChange={(event) => setEditTarget(event.target.value)}
+                      placeholder={targetPlaceholders[row.kind]}
+                      disabled={isSaving || isDisabled}
+                      className={`${fieldClassName} flex-1`}
+                    />
+                    <button
+                      type="button"
+                      className={secondaryButtonClassName}
+                      onClick={() => commitEdit(row)}
+                      disabled={isSaving || isDisabled}
+                    >
+                      <Check className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Cancel"
+                      className={iconButtonClassName}
+                      onClick={cancelEdit}
+                      disabled={isSaving || isDisabled}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-white">{row.rule.name}</p>
+                      <p className="mt-0.5 truncate text-xs text-slate-400">{row.rule.target}</p>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Edit ${row.rule.name}`}
+                      className={iconButtonClassName}
+                      onClick={() => beginEdit(row)}
+                      disabled={isSaving || isDisabled}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${row.rule.name}`}
+                      className={iconButtonClassName}
+                      onClick={() => handleDelete(row)}
+                      disabled={isSaving || isDisabled}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -538,27 +587,33 @@ function TrackerListCard({
           />
           <button
             type="button"
-            className={`${secondaryButtonClassName} ${!isAppRuleList ? "border-cyan-400/40 text-cyan-300" : "opacity-60"}`}
-            disabled={isSaving || isDisabled || isAppRuleList}
-            onClick={() => {
-              setModalInput(pendingTarget);
-              setShowTargetModal(true);
-            }}
+            className={cn(
+              secondaryButtonClassName,
+              pendingKind === "website"
+                ? "border-cyan-400/40 bg-cyan-500/10 text-cyan-200"
+                : "opacity-70",
+            )}
+            disabled={isSaving || isDisabled}
+            aria-pressed={pendingKind === "website"}
+            onClick={() => openTargetModal("website")}
           >
             <Globe className="h-4 w-4" />
-            Website{!isAppRuleList ? " ✓" : ""}
+            Website{pendingKind === "website" ? " ✓" : ""}
           </button>
           <button
             type="button"
-            className={`${secondaryButtonClassName} ${isAppRuleList ? "border-cyan-400/40 text-cyan-300" : "opacity-60"}`}
-            disabled={isSaving || isDisabled || !isAppRuleList}
-            onClick={() => {
-              setModalInput(pendingTarget);
-              setShowTargetModal(true);
-            }}
+            className={cn(
+              secondaryButtonClassName,
+              pendingKind === "app"
+                ? "border-cyan-400/40 bg-cyan-500/10 text-cyan-200"
+                : "opacity-70",
+            )}
+            disabled={isSaving || isDisabled}
+            aria-pressed={pendingKind === "app"}
+            onClick={() => openTargetModal("app")}
           >
             <Monitor className="h-4 w-4" />
-            App{isAppRuleList ? " ✓" : ""}
+            App{pendingKind === "app" ? " ✓" : ""}
           </button>
           <button
             type="button"
@@ -598,7 +653,7 @@ function TrackerListCard({
             className="glass-panel mx-4 w-full max-w-md"
             onClick={(event) => event.stopPropagation()}
           >
-            {isAppRuleList ? (
+            {pendingKind === "app" ? (
               <>
                 <p className="text-sm text-slate-200">Steps to add app (in order):</p>
                 <p className="mt-2 text-sm text-slate-200">1. Open Finder.</p>
@@ -623,7 +678,7 @@ function TrackerListCard({
                   setShowTargetModal(false);
                 }
               }}
-              placeholder={targetPlaceholder}
+              placeholder={targetPlaceholders[pendingKind]}
               className={`${fieldClassName} mt-4 placeholder:opacity-30`}
             />
             <div className="mt-4 flex justify-end">
@@ -641,7 +696,7 @@ function TrackerListCard({
 export function TrackerSettingsPanel() {
   const { state, isLoading, error, reload, reset, saveState, importNativeSpans, upsertSessionLog } = useTimeFolioStore();
   const [draftPrefs, setDraftPrefs] = useState<TfTrackerPrefs>(() => cloneTrackerPrefs(state.trackerPrefs));
-  const [savingKey, setSavingKey] = useState<TrackerListKey | null>(null);
+  const [savingKey, setSavingKey] = useState<TrackerGroupKey | null>(null);
   const [dataMessage, setDataMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [isDataBusy, setIsDataBusy] = useState(false);
   const [isConfirmingReset, setIsConfirmingReset] = useState(false);
@@ -838,14 +893,22 @@ export function TrackerSettingsPanel() {
     );
   }
 
-  async function handleSave(key: TrackerListKey) {
-    const kind = TRACKER_LISTS.find((config) => config.key === key)?.defaultKind ?? "website";
+  async function handleSave(groupKey: TrackerGroupKey) {
+    const groupConfig = TRACKER_GROUPS.find((config) => config.key === groupKey);
+    if (!groupConfig) {
+      return;
+    }
+
     const nextTrackerPrefs = {
       ...draftPrefs,
-      [key]: sanitizeTrackerRules(draftPrefs[key], kind),
+      [groupConfig.listKeys.website]: sanitizeTrackerRules(
+        draftPrefs[groupConfig.listKeys.website],
+        "website",
+      ),
+      [groupConfig.listKeys.app]: sanitizeTrackerRules(draftPrefs[groupConfig.listKeys.app], "app"),
     } as TfTrackerPrefs;
 
-    setSavingKey(key);
+    setSavingKey(groupKey);
     try {
       await saveState({
         ...state,
@@ -2197,28 +2260,38 @@ export function TrackerSettingsPanel() {
       })() : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
-        {TRACKER_LISTS.map((config) => {
-          const rules = draftPrefs[config.key];
-          const originalRules = state.trackerPrefs[config.key];
-          const sanitizedDraft = sanitizeTrackerRules(rules, config.defaultKind);
-          const sanitizedOriginal = sanitizeTrackerRules(originalRules, config.defaultKind);
-          const isDirty = !trackerRuleListsMatch(sanitizedDraft, sanitizedOriginal);
+        {TRACKER_GROUPS.map((config) => {
+          const rulesByKind = {
+            website: draftPrefs[config.listKeys.website],
+            app: draftPrefs[config.listKeys.app],
+          };
+          const originalRulesByKind = {
+            website: state.trackerPrefs[config.listKeys.website],
+            app: state.trackerPrefs[config.listKeys.app],
+          };
+          const sanitizedDraftWebsite = sanitizeTrackerRules(rulesByKind.website, "website");
+          const sanitizedDraftApp = sanitizeTrackerRules(rulesByKind.app, "app");
+          const sanitizedOriginalWebsite = sanitizeTrackerRules(originalRulesByKind.website, "website");
+          const sanitizedOriginalApp = sanitizeTrackerRules(originalRulesByKind.app, "app");
+          const isDirty =
+            !trackerRuleListsMatch(sanitizedDraftWebsite, sanitizedOriginalWebsite) ||
+            !trackerRuleListsMatch(sanitizedDraftApp, sanitizedOriginalApp);
 
           return (
-            <TrackerListCard
+            <TrackerGroupCard
               key={config.key}
               title={config.title}
               description={config.description}
-              defaultKind={config.defaultKind}
               namePlaceholder={config.namePlaceholder}
-              targetPlaceholder={config.targetPlaceholder}
-              rules={rules}
-              onRulesChange={(nextRules) =>
+              targetPlaceholders={config.targetPlaceholders}
+              listKeys={config.listKeys}
+              rulesByKind={rulesByKind}
+              onRulesChange={(kind, nextRules) => {
                 setDraftPrefs((prev) => ({
                   ...prev,
-                  [config.key]: nextRules,
-                }))
-              }
+                  [config.listKeys[kind]]: nextRules,
+                }));
+              }}
               onSave={() => handleSave(config.key)}
               isSaving={savingKey === config.key}
               isDisabled={isDataBusy}
