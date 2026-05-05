@@ -93,6 +93,9 @@ struct NativeBuffer {
     /// Fallback dedup key used when bundle_id is absent for both old and new app.
     last_app_name: Option<String>,
     last_idle: Option<bool>,
+    /// Last successfully captured browser URL — used to detect in-browser navigation
+    /// without an app switch. Cleared whenever the foreground app changes.
+    last_browser_url: Option<String>,
 }
 
 impl NativeBuffer {
@@ -103,6 +106,7 @@ impl NativeBuffer {
             last_app_bundle_id: None,
             last_app_name: None,
             last_idle: None,
+            last_browser_url: None,
         }
     }
 
@@ -119,6 +123,7 @@ impl NativeBuffer {
         self.last_app_bundle_id = None;
         self.last_app_name = None;
         self.last_idle = None;
+        self.last_browser_url = None;
     }
 }
 
@@ -313,9 +318,11 @@ fn read_foreground_app() -> Result<(Option<String>, Option<String>), String> {
 
 #[cfg(target_os = "macos")]
 fn parse_idle_seconds(raw: &str) -> Option<u64> {
+    const KEY: &str = "\"HIDIdleTime\"";
     for line in raw.lines() {
-        let line = line.trim();
-        if let Some(rest) = line.strip_prefix("\"HIDIdleTime\"") {
+        // ioreg output prepends pipe/space characters before the key; search by substring.
+        if let Some(pos) = line.find(KEY) {
+            let rest = &line[pos + KEY.len()..];
             let value = rest.trim_start_matches(|c: char| !c.is_ascii_digit());
             let digits: String = value.chars().take_while(|c| c.is_ascii_digit()).collect();
             if !digits.is_empty() {
@@ -497,6 +504,8 @@ pub fn tf_autotracker_v2_native_capture_once() -> TfAutotrackerV2NativeCaptureRe
     let mut next_bundle_id: Option<String> = None;
     let mut next_app_name: Option<String> = None;
     let mut next_idle: Option<bool> = None;
+    // New browser URL captured this probe — used for URL-change dedup.
+    let mut next_browser_url: Option<String> = None;
 
     match read_foreground_app() {
         Ok((app_name, bundle_id)) => {
@@ -509,8 +518,9 @@ pub fn tf_autotracker_v2_native_capture_once() -> TfAutotrackerV2NativeCaptureRe
             if let Some(bid) = &bundle_id {
                 if let Some(tab) = try_read_browser_tab(bid) {
                     event.browser_title = tab.title;
-                    event.browser_url = tab.url;
+                    event.browser_url = tab.url.clone();
                     event.browser_tab_error = tab.error;
+                    next_browser_url = tab.url;
                 }
             }
 
@@ -564,12 +574,21 @@ pub fn tf_autotracker_v2_native_capture_once() -> TfAutotrackerV2NativeCaptureRe
             event.app_name.as_deref(),
             buffer.last_sampled_at_ms,
         );
-        if changed {
+        // Also record when the browser URL changes within the same foreground app
+        // so Chrome navigation (e.g. to UWorld) is captured without an app switch.
+        let browser_url_changed = !changed && match (&next_browser_url, &buffer.last_browser_url) {
+            (Some(new_url), Some(prev_url)) => new_url != prev_url,
+            (Some(_), None) => true,
+            _ => false,
+        };
+        if changed || browser_url_changed {
             buffer.push(event.clone());
             appended.push(event);
         }
         buffer.last_app_bundle_id = next_bundle_id;
         buffer.last_app_name = next_app_name;
+        // Reset last_browser_url unconditionally so it always reflects the latest probe.
+        buffer.last_browser_url = next_browser_url;
     }
 
     if let Some(event) = idle_event {
