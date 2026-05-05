@@ -17,6 +17,7 @@ import {
   buildAutoTrackerV2PreviewSpans,
   type TfAutotrackerV2ClassificationSettings,
 } from "../../lib/tf-autotracker-v2-preview-spans";
+import { buildAutoTrackerV2ReducerPreview } from "../../lib/tf-autotracker-v2-reducer-preview";
 import type { NativeTrackerSpanInput } from "../../lib/tf-native-span-reconciler";
 import { normalizeTfAppState } from "../../lib/tf-storage";
 import { useTimeFolioStore } from "../../state/tf-store";
@@ -1175,6 +1176,15 @@ export function TrackerSettingsPanel() {
           distractionWebsites: state.trackerPrefs.customDistractionWebsites,
         };
         const previewSpans = buildAutoTrackerV2PreviewSpans(v2Snapshot?.events ?? [], classificationSettings);
+        const reducerPreview = buildAutoTrackerV2ReducerPreview(previewSpans);
+        const reducerPreviewActiveTarget =
+          reducerPreview.state.status === "focused"
+            ? reducerPreview.state.target
+            : reducerPreview.state.status === "awayPending"
+              ? reducerPreview.state.session.target
+              : reducerPreview.state.status === "recoverableOpen"
+                ? reducerPreview.state.session.target
+                : null;
 
         return (
           <section className="flex flex-col gap-5 rounded-2xl border border-violet-500/20 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
@@ -1490,6 +1500,79 @@ export function TrackerSettingsPanel() {
                   ))}
                 </div>
               )}
+
+              <div className="flex flex-col gap-2 rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                  <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                    Reducer preview (read-only)
+                  </div>
+                  <span className="text-[10px] text-slate-600">In-memory only — no sessions written.</span>
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400">
+                  <span>
+                    <span className="font-medium text-slate-200">State:</span>{" "}
+                    <span className="text-emerald-300">{reducerPreview.state.status}</span>
+                  </span>
+                  {reducerPreviewActiveTarget ? (
+                    <span className="truncate">
+                      <span className="font-medium text-slate-200">Active target:</span>{" "}
+                      <span className="text-slate-100">{reducerPreviewActiveTarget.label ?? reducerPreviewActiveTarget.stableId}</span>
+                    </span>
+                  ) : null}
+                  <span>
+                    <span className="font-medium text-slate-200">Finalized:</span>{" "}
+                    <span className="text-slate-100">{reducerPreview.finalizedCount}</span>
+                  </span>
+                  <span>
+                    <span className="font-medium text-slate-200">Ignored:</span>{" "}
+                    <span className="text-slate-100">{reducerPreview.ignoredSpans.length}</span>
+                  </span>
+                </div>
+                {reducerPreview.reducerEvents.length > 0 ? (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                      Last reducer events
+                    </div>
+                    <div className="flex flex-col divide-y divide-slate-800 overflow-hidden rounded-lg border border-slate-800 bg-slate-950/70">
+                      {reducerPreview.reducerEvents.slice(-4).map((event) => (
+                        <div key={`${event.sourceSpanId}-${event.kind}-${event.timestampMs}`} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-2 text-xs">
+                          <span className="font-mono tabular-nums text-slate-500">
+                            {new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(
+                              new Date(event.timestampMs),
+                            )}
+                          </span>
+                          <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-300">
+                            {event.kind}
+                          </span>
+                          <span className="truncate text-slate-200">{event.label}</span>
+                          <span className="font-mono text-slate-500">#{event.sourceSpanId}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500">No reducer events were generated.</div>
+                )}
+                {reducerPreview.ignoredSpans.length > 0 ? (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                      Ignored spans
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-xs text-slate-400">
+                      {reducerPreview.ignoredSpans.slice(-4).map((span) => (
+                        <span
+                          key={span.spanId}
+                          className="rounded-full border border-slate-700 bg-slate-900/80 px-2 py-1"
+                        >
+                          <span className="font-medium text-slate-200">{span.label}</span>
+                          <span className="text-slate-500"> · </span>
+                          <span className="text-slate-400">{span.reason}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </section>
         );
