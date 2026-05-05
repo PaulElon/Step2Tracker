@@ -17,7 +17,11 @@ import {
   buildAutoTrackerV2PreviewSpans,
   type TfAutotrackerV2ClassificationSettings,
 } from "../../lib/tf-autotracker-v2-preview-spans";
-import { buildAutoTrackerV2ReducerPreview } from "../../lib/tf-autotracker-v2-reducer-preview";
+import {
+  buildAutoTrackerV2ReducerPreview,
+  mapAutoTrackerV2FinalizedPreviewSessionToSessionLog,
+  type TfAutotrackerV2FinalizedPreviewSession,
+} from "../../lib/tf-autotracker-v2-reducer-preview";
 import type { NativeTrackerSpanInput } from "../../lib/tf-native-span-reconciler";
 import { normalizeTfAppState } from "../../lib/tf-storage";
 import { useTimeFolioStore } from "../../state/tf-store";
@@ -185,6 +189,37 @@ function formatLastChecked(value: string | null | undefined): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(parsed);
+}
+
+function formatPreviewDuration(durationMs: number): string {
+  const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+
+  return `${seconds}s`;
+}
+
+function makeAutoTrackerV2PreviewSessionLogId(previewSessionId: string): string {
+  const normalizedPreviewId =
+    previewSessionId
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gu, "-")
+      .replace(/^-+|-+$/gu, "")
+      .slice(0, 60) || "preview-session";
+  const uniqueSuffix =
+    globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  return `tf-auto-v2-preview-${normalizedPreviewId}-${uniqueSuffix}`;
 }
 
 async function getLatestAutoTrackerSpansPlaceholder(): Promise<NativeTrackerSpanInput[]> {
@@ -380,7 +415,7 @@ function TrackerListCard({
 }
 
 export function TrackerSettingsPanel() {
-  const { state, isLoading, error, reload, reset, saveState, importNativeSpans } = useTimeFolioStore();
+  const { state, isLoading, error, reload, reset, saveState, importNativeSpans, upsertSessionLog } = useTimeFolioStore();
   const [draftPrefs, setDraftPrefs] = useState<TfTrackerPrefs>(() => cloneTrackerPrefs(state.trackerPrefs));
   const [savingKey, setSavingKey] = useState<TrackerListKey | null>(null);
   const [dataMessage, setDataMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
@@ -408,6 +443,13 @@ export function TrackerSettingsPanel() {
     captureErrors: string[];
     capturedAtMs: number;
   } | null>(null);
+  const [v2ManualWriteSelectionId, setV2ManualWriteSelectionId] = useState("");
+  const [v2ManualWriteWrittenIds, setV2ManualWriteWrittenIds] = useState<string[]>([]);
+  const [v2ManualWriteMessage, setV2ManualWriteMessage] = useState<{
+    tone: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [v2IsWritingSelectedSession, setV2IsWritingSelectedSession] = useState(false);
 
   const v2DelayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const v2SamplingCaptureIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -796,6 +838,52 @@ export function TrackerSettingsPanel() {
     }, 1000);
   }
 
+  async function handleV2WriteSelectedFinalizedPreviewSession(
+    previewSession: TfAutotrackerV2FinalizedPreviewSession | null,
+  ) {
+    if (!FF.autotrackerV2ManualWrite || !previewSession || v2IsWritingSelectedSession) {
+      return;
+    }
+
+    if (v2ManualWriteWrittenIds.includes(previewSession.previewSessionId)) {
+      setV2ManualWriteMessage({
+        tone: "error",
+        text: "This preview session was already written during the current inspector session.",
+      });
+      return;
+    }
+
+    setV2ManualWriteMessage(null);
+    setV2IsWritingSelectedSession(true);
+
+    try {
+      const sessionLog = mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
+        previewSession,
+        makeAutoTrackerV2PreviewSessionLogId(previewSession.previewSessionId),
+      );
+      await upsertSessionLog(sessionLog);
+      setV2ManualWriteWrittenIds((current) =>
+        current.includes(previewSession.previewSessionId)
+          ? current
+          : [...current, previewSession.previewSessionId],
+      );
+      setV2ManualWriteMessage({
+        tone: "success",
+        text: `Wrote 1 preview session to Session Log: ${sessionLog.method}.`,
+      });
+    } catch (err) {
+      setV2ManualWriteMessage({
+        tone: "error",
+        text:
+          err instanceof Error && err.message
+            ? err.message
+            : "Unable to write the selected finalized preview session.",
+      });
+    } finally {
+      setV2IsWritingSelectedSession(false);
+    }
+  }
+
   async function handleRefreshAutoTrackerStatus() {
     setIsAutoTrackerRefreshing(true);
     try {
@@ -1177,6 +1265,14 @@ export function TrackerSettingsPanel() {
         };
         const previewSpans = buildAutoTrackerV2PreviewSpans(v2Snapshot?.events ?? [], classificationSettings);
         const reducerPreview = buildAutoTrackerV2ReducerPreview(previewSpans);
+        const finalizedPreviewSessions = reducerPreview.finalizedPreviewSessions;
+        const selectedFinalizedPreviewSession =
+          finalizedPreviewSessions.find(
+            (session) => session.previewSessionId === v2ManualWriteSelectionId,
+          ) ?? null;
+        const selectedFinalizedPreviewSessionAlreadyWritten =
+          selectedFinalizedPreviewSession !== null &&
+          v2ManualWriteWrittenIds.includes(selectedFinalizedPreviewSession.previewSessionId);
         const reducerPreviewActiveTarget =
           reducerPreview.state.status === "focused"
             ? reducerPreview.state.target
@@ -1573,6 +1669,136 @@ export function TrackerSettingsPanel() {
                         </span>
                       ))}
                     </div>
+                  </div>
+                ) : null}
+                {FF.autotrackerV2ManualWrite ? (
+                  <div className="flex flex-col gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">
+                        Manual writer
+                      </div>
+                      <span className="text-[10px] text-amber-100/80">
+                        Dev manual write — writes one finalized preview session to Session Log.
+                      </span>
+                    </div>
+
+                    {v2ManualWriteMessage ? (
+                      <div
+                        className={`rounded-lg border px-3 py-2 text-sm ${
+                          v2ManualWriteMessage.tone === "error"
+                            ? "border-rose-500/20 bg-rose-500/10 text-rose-100"
+                            : "border-emerald-500/20 bg-emerald-500/10 text-emerald-100"
+                        }`}
+                      >
+                        {v2ManualWriteMessage.text}
+                      </div>
+                    ) : null}
+
+                    {finalizedPreviewSessions.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-slate-700 bg-slate-950/40 px-4 py-4 text-sm text-slate-400">
+                        No finalized preview sessions available to write.
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex flex-col divide-y divide-slate-800 overflow-hidden rounded-lg border border-slate-800 bg-slate-950/70">
+                          {finalizedPreviewSessions.map((session) => {
+                            const isSelected =
+                              session.previewSessionId === v2ManualWriteSelectionId;
+                            const alreadyWritten = v2ManualWriteWrittenIds.includes(
+                              session.previewSessionId,
+                            );
+
+                            return (
+                              <label
+                                key={session.previewSessionId}
+                                className={`flex cursor-pointer gap-3 px-3 py-3 text-sm ${
+                                  isSelected ? "bg-amber-500/10" : ""
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="autotracker-v2-finalized-preview-session"
+                                  value={session.previewSessionId}
+                                  checked={isSelected}
+                                  onChange={(event) => {
+                                    setV2ManualWriteSelectionId(event.target.value);
+                                    setV2ManualWriteMessage(null);
+                                  }}
+                                  className="mt-0.5 accent-amber-400"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                    <span className="font-semibold text-slate-100">
+                                      {session.targetLabel}
+                                    </span>
+                                    <span className="rounded-full border border-slate-700 bg-slate-900/80 px-2 py-0.5 text-[10px] font-medium text-slate-300">
+                                      {formatPreviewDuration(session.durationMs)}
+                                    </span>
+                                    <span className="font-mono text-[10px] text-slate-500">
+                                      {session.sourceTargetStableId}
+                                    </span>
+                                    {alreadyWritten ? (
+                                      <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                                        written
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <div className="mt-1 text-xs text-slate-400">
+                                    {session.classificationReason}
+                                  </div>
+                                  {session.browserTitle ? (
+                                    <div className="mt-1 text-xs text-slate-300">
+                                      {session.browserTitle}
+                                    </div>
+                                  ) : null}
+                                  {session.browserUrl ? (
+                                    <div className="mt-1 font-mono text-xs text-violet-300 break-all">
+                                      {session.browserUrl}
+                                    </div>
+                                  ) : null}
+                                  <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-slate-500">
+                                    <span>
+                                      {new Intl.DateTimeFormat(undefined, {
+                                        timeStyle: "medium",
+                                      }).format(new Date(session.startedAtMs))}
+                                    </span>
+                                    <span>→</span>
+                                    <span>
+                                      {new Intl.DateTimeFormat(undefined, {
+                                        timeStyle: "medium",
+                                      }).format(new Date(session.endedAtMs))}
+                                    </span>
+                                    <span>·</span>
+                                    <span>{session.sourceSpanIds.length} spans</span>
+                                    <span>·</span>
+                                    <span>{session.sourceEventIds.length} events</span>
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleV2WriteSelectedFinalizedPreviewSession(
+                              selectedFinalizedPreviewSession,
+                            );
+                          }}
+                          disabled={
+                            selectedFinalizedPreviewSession === null ||
+                            selectedFinalizedPreviewSessionAlreadyWritten ||
+                            v2IsWritingSelectedSession
+                          }
+                          className="rounded-lg border border-amber-500/30 bg-amber-500/20 px-4 py-2 text-sm font-medium text-amber-100 transition-colors hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {v2IsWritingSelectedSession
+                            ? "Writing selected finalized preview session…"
+                            : "Write selected finalized preview session"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : null}
               </div>

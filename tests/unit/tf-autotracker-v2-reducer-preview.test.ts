@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildAutoTrackerV2ReducerPreview } from "../../src/lib/tf-autotracker-v2-reducer-preview.js";
+import {
+  buildAutoTrackerV2ReducerPreview,
+  mapAutoTrackerV2FinalizedPreviewSessionToSessionLog,
+  type TfAutotrackerV2FinalizedPreviewSession,
+} from "../../src/lib/tf-autotracker-v2-reducer-preview.js";
 import type { TfAutotrackerV2PreviewSpan } from "../../src/lib/tf-autotracker-v2-preview-spans.js";
 
 function makeSpan(
@@ -115,6 +119,23 @@ test("tracked UWorld then distraction Reddit for at least 60 seconds finalizes t
     "untrackedFocused",
     "tick",
   ]);
+  assert.equal(preview.finalizedPreviewSessions.length, 1);
+  assert.deepEqual(preview.finalizedPreviewSessions[0], {
+    previewSessionId: "website:apps.uworld.com/courseapp:0",
+    startedAtMs: 0,
+    endedAtMs: 20_000,
+    durationMs: 20_000,
+    targetLabel: "UWorld",
+    sourceTargetStableId: "apps.uworld.com/courseapp",
+    sourceSpanIds: ["span-uworld", "span-reddit"],
+    sourceEventIds: ["span-uworld", "span-reddit"],
+    appName: undefined,
+    bundleId: undefined,
+    browserTitle: "UWorld",
+    browserUrl: "https://apps.uworld.com/courseapp/step2",
+    classificationReason: "matched website rule \"uworld.com\" by host uworld.com",
+    finalizedBy: "awayGraceElapsed",
+  });
 });
 
 test("distraction-only spans do not create a tracked reducer session", () => {
@@ -130,6 +151,7 @@ test("distraction-only spans do not create a tracked reducer session", () => {
 
   assert.equal(preview.state.status, "idle");
   assert.equal(preview.finalizedCount, 0);
+  assert.equal(preview.finalizedPreviewSessions.length, 0);
   assert.equal(preview.reducerEvents.length, 0);
   assert.equal(preview.ignoredSpans.length, 2);
   assert.equal(preview.ignoredSpans[0]?.reason, "no tracked reducer session was open");
@@ -148,6 +170,7 @@ test("unclassified-only spans do not create a tracked reducer session", () => {
 
   assert.equal(preview.state.status, "idle");
   assert.equal(preview.finalizedCount, 0);
+  assert.equal(preview.finalizedPreviewSessions.length, 0);
   assert.equal(preview.reducerEvents.length, 0);
   assert.equal(preview.ignoredSpans.length, 2);
 });
@@ -182,6 +205,7 @@ test("open tracked span remains open and focused", () => {
   assert.equal(preview.state.status, "focused");
   assert.equal(preview.state.target.label, "UWorld");
   assert.equal(preview.finalizedCount, 0);
+  assert.equal(preview.finalizedPreviewSessions.length, 0);
 });
 
 test("ignored spans are reported with reasons", () => {
@@ -207,4 +231,40 @@ test("input order is sorted by startedAtMs before reducer mapping", () => {
     "untrackedFocused",
     "targetFocused",
   ]);
+});
+
+test("maps a finalized preview session to a writable Session Log payload", () => {
+  const previewSession: TfAutotrackerV2FinalizedPreviewSession = {
+    previewSessionId: "website:apps.uworld.com/courseapp:1746453600000",
+    startedAtMs: Date.parse("2025-05-05T14:00:00.000Z"),
+    endedAtMs: Date.parse("2025-05-05T14:30:00.000Z"),
+    durationMs: 30 * 60_000,
+    targetLabel: "UWorld",
+    sourceTargetStableId: "apps.uworld.com/courseapp",
+    sourceSpanIds: ["span-1", "span-2"],
+    sourceEventIds: ["event-1", "event-2"],
+    browserTitle: "UWorld Step 2",
+    browserUrl: "https://apps.uworld.com/courseapp/step2",
+    classificationReason: "matched website rule \"uworld.com\" by host uworld.com",
+    finalizedBy: "awayGraceElapsed",
+  };
+
+  const sessionLog = mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
+    previewSession,
+    "tf-auto-v2-preview-write-1",
+  );
+
+  assert.deepEqual(sessionLog, {
+    id: "tf-auto-v2-preview-write-1",
+    date: "2025-05-05",
+    method: "[AUTO V2 PREVIEW] UWorld",
+    methodKey: "auto-v2-preview-uworld",
+    hours: 0.5,
+    startISO: "2025-05-05T14:00:00.000Z",
+    endISO: "2025-05-05T14:30:00.000Z",
+    notes:
+      "[AUTO V2 PREVIEW] previewSessionId=website:apps.uworld.com/courseapp:1746453600000 | stableId=apps.uworld.com/courseapp | reason=matched website rule \"uworld.com\" by host uworld.com | finalizedBy=awayGraceElapsed | sourceSpanIds=span-1,span-2 | sourceEventIds=event-1,event-2 | browserTitle=UWorld Step 2 | browserUrl=https://apps.uworld.com/courseapp/step2",
+    isDistraction: false,
+    isLive: false,
+  });
 });
