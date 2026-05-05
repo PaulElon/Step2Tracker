@@ -13,6 +13,7 @@ import {
   type AutoTrackerV2NativeSnapshot,
   type AutoTrackerV2NativeStatus,
 } from "../../lib/tf-autotracker-v2-native-events";
+import { buildAutoTrackerV2PreviewSpans } from "../../lib/tf-autotracker-v2-preview-spans";
 import type { NativeTrackerSpanInput } from "../../lib/tf-native-span-reconciler";
 import { normalizeTfAppState } from "../../lib/tf-storage";
 import { useTimeFolioStore } from "../../state/tf-store";
@@ -1164,6 +1165,7 @@ export function TrackerSettingsPanel() {
 
         const isDelayPending = v2DelayCountdown !== null;
         const anyBusy = v2IsBusy || isDelayPending;
+        const previewSpans = buildAutoTrackerV2PreviewSpans(v2Snapshot?.events ?? []);
 
         return (
           <section className="flex flex-col gap-5 rounded-2xl border border-violet-500/20 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
@@ -1384,6 +1386,64 @@ export function TrackerSettingsPanel() {
                 Buffer is empty.
               </div>
             ) : null}
+
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                  Preview spans (read-only)
+                </div>
+                <span className="text-[10px] text-slate-600">Preview only — no sessions written.</span>
+              </div>
+              {previewSpans.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/40 px-4 py-4 text-sm text-slate-500">
+                  No preview spans yet.
+                </div>
+              ) : (
+                <div className="flex flex-col divide-y divide-slate-800 rounded-xl border border-slate-700 bg-slate-950/50 overflow-hidden">
+                  {previewSpans.slice(-5).map((span) => (
+                    <div key={span.id} className="flex flex-col gap-0.5 px-3 py-2 text-xs">
+                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                        <span className="font-semibold text-slate-100 truncate">{span.label}</span>
+                        <span
+                          className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
+                            span.kind === "website"
+                              ? "border-cyan-500/20 bg-cyan-500/10 text-cyan-300"
+                              : "border-violet-500/20 bg-violet-500/10 text-violet-300"
+                          }`}
+                        >
+                          {span.kind}
+                        </span>
+                        {span.appName ? (
+                          <span className="text-slate-400 truncate">{span.appName}</span>
+                        ) : null}
+                        {span.bundleId ? (
+                          <span className="font-mono text-slate-500 truncate">{span.bundleId}</span>
+                        ) : null}
+                      </div>
+                      {span.browserTitle ? (
+                        <div className="text-slate-300 truncate">{span.browserTitle}</div>
+                      ) : null}
+                      {span.browserUrl ? (
+                        <div className="font-mono text-violet-300 truncate">{span.browserUrl}</div>
+                      ) : null}
+                      <div className="flex gap-2 text-slate-500">
+                        <span className="tabular-nums">
+                          {new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(
+                            new Date(span.startedAtMs),
+                          )}
+                        </span>
+                        <span>·</span>
+                        <span className={span.endedAtMs === null ? "font-medium text-emerald-400" : ""}>
+                          {span.endedAtMs === null
+                            ? "Open"
+                            : `${Math.round(Math.max(0, span.durationMs ?? 0) / 1000)}s`}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
         );
       })() : null}
