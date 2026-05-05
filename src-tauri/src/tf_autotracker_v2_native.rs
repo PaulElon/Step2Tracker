@@ -234,9 +234,42 @@ fn parse_lsappinfo_info(raw: &str) -> Option<(Option<String>, Option<String>)> {
 
 #[cfg(target_os = "macos")]
 fn read_foreground_app() -> Result<(Option<String>, Option<String>), String> {
-    let raw = run_command("/usr/bin/lsappinfo", &["info", "front"])?;
-    parse_lsappinfo_info(&raw)
-        .ok_or_else(|| "lsappinfo returned no parseable foreground app data.".to_string())
+    // `lsappinfo info front` returns empty output on macOS 14+.
+    // Reliable pattern: get ASN from `lsappinfo front`, then query `lsappinfo info <ASN>`.
+    let asn_raw = run_command("/usr/bin/lsappinfo", &["front"])
+        .map_err(|e| format!("lsappinfo front failed: {e}"))?;
+    let asn = asn_raw.trim();
+    if asn.is_empty() {
+        return read_foreground_app_osascript();
+    }
+    let info_raw = run_command("/usr/bin/lsappinfo", &["info", asn])
+        .map_err(|e| format!("lsappinfo info {asn} failed: {e}"))?;
+    match parse_lsappinfo_info(&info_raw) {
+        Some(result) => Ok(result),
+        // If lsappinfo info <ASN> returned nothing parseable, fall back to osascript
+        // which can at least provide the app name.
+        None => read_foreground_app_osascript()
+            .map_err(|_| format!("lsappinfo info {asn} returned no parseable app data.")),
+    }
+}
+
+/// osascript fallback: returns app name only (no bundle ID).
+/// Used when lsappinfo cannot provide parseable output.
+#[cfg(target_os = "macos")]
+fn read_foreground_app_osascript() -> Result<(Option<String>, Option<String>), String> {
+    let raw = run_command(
+        "/usr/bin/osascript",
+        &[
+            "-e",
+            "tell application \"System Events\" to get name of first application process whose frontmost is true",
+        ],
+    )
+    .map_err(|e| format!("osascript foreground fallback failed: {e}"))?;
+    let name = raw.trim();
+    if name.is_empty() {
+        return Err("osascript returned an empty app name.".to_string());
+    }
+    Ok((Some(name.to_string()), None))
 }
 
 #[cfg(not(target_os = "macos"))]
