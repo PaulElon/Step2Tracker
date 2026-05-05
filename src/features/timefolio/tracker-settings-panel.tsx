@@ -7,14 +7,10 @@ import { FF } from "../../lib/feature-flags";
 import {
   captureAutoTrackerV2NativeOnce,
   clearAutoTrackerV2NativeBuffer,
-  getAutoTrackerV2NativeShadowStatus,
   probeAutoTrackerV2Native,
   snapshotAutoTrackerV2Native,
-  startAutoTrackerV2NativeShadowRunner,
-  stopAutoTrackerV2NativeShadowRunner,
   type AutoTrackerV2NativeCaptureResult,
   type AutoTrackerV2NativeSnapshot,
-  type AutoTrackerV2NativeShadowStatus,
   type AutoTrackerV2NativeStatus,
 } from "../../lib/tf-autotracker-v2-native-events";
 import {
@@ -29,10 +25,6 @@ import type { TfAppState, TfTrackerPrefs } from "../../types/models";
 
 type TrackerListKey = keyof TfTrackerPrefs;
 const RESET_CONFIRMATION_TOKEN = "RESET";
-const V2_SHADOW_CAPTURE_INTERVAL_MS = 3000;
-const V2_SHADOW_STATUS_POLL_INTERVAL_MS = 1500;
-const V2_NATIVE_CAPTURE_TIMEOUT_MS = 2500;
-const V2_NATIVE_SNAPSHOT_TIMEOUT_MS = 2500;
 
 type PendingImportPreview = {
   fileName: string;
@@ -112,36 +104,6 @@ function countTrackerRules(prefs: TfTrackerPrefs): number {
     prefs.customDistractionApps.length +
     prefs.customDistractionWebsites.length
   );
-}
-
-async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  phase: string,
-): Promise<T> {
-  let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
-  const settledPromise = promise.then(
-    (value) => ({ kind: "resolved" as const, value }),
-    (error) => ({ kind: "rejected" as const, error }),
-  );
-  const timeoutPromise = new Promise<{ kind: "timeout" }>((resolve) => {
-    timeoutId = globalThis.setTimeout(() => resolve({ kind: "timeout" }), timeoutMs);
-  });
-
-  try {
-    const outcome = await Promise.race([settledPromise, timeoutPromise]);
-    if (outcome.kind === "resolved") {
-      return outcome.value;
-    }
-    if (outcome.kind === "rejected") {
-      throw outcome.error;
-    }
-    throw new Error(`${phase} timeout after ${timeoutMs}ms`);
-  } finally {
-    if (timeoutId !== null) {
-      globalThis.clearTimeout(timeoutId);
-    }
-  }
 }
 
 function getAccountSummary(account: TfAppState["account"]): { value: string; detail: string } {
@@ -440,7 +402,6 @@ export function TrackerSettingsPanel() {
   const [v2IsBusy, setV2IsBusy] = useState(false);
   const [v2DelayCountdown, setV2DelayCountdown] = useState<number | null>(null);
   const [v2IsSampling, setV2IsSampling] = useState(false);
-  const [v2ShadowStatus, setV2ShadowStatus] = useState<AutoTrackerV2NativeShadowStatus | null>(null);
   const [v2SamplingSecondsLeft, setV2SamplingSecondsLeft] = useState<number | null>(null);
   const [v2LastCaptureInfo, setV2LastCaptureInfo] = useState<{
     appendedCount: number;
@@ -451,12 +412,6 @@ export function TrackerSettingsPanel() {
   const v2DelayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const v2SamplingCaptureIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const v2SamplingCountdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const v2ShadowPollIntervalRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
-  const v2CaptureInFlightRef = useRef(false);
-  const v2ShadowPollInFlightRef = useRef(false);
-  const v2ShadowPollingActiveRef = useRef(false);
-  const v2IsMountedRef = useRef(true);
-  const v2IsShadowRunning = v2ShadowStatus?.isRunning ?? false;
 
   useEffect(() => {
     setDraftPrefs(cloneTrackerPrefs(state.trackerPrefs));
@@ -467,18 +422,7 @@ export function TrackerSettingsPanel() {
   }, []);
 
   useEffect(() => {
-    if (!FF.autotrackerV2NativeInspector) {
-      return;
-    }
-    void refreshV2InspectorFromNative(
-      "Initial snapshot failed.",
-      "Initial shadow status failed.",
-    );
-  }, []);
-
-  useEffect(() => {
     return () => {
-      v2IsMountedRef.current = false;
       if (v2DelayIntervalRef.current !== null) {
         clearInterval(v2DelayIntervalRef.current);
       }
@@ -488,9 +432,6 @@ export function TrackerSettingsPanel() {
       if (v2SamplingCountdownIntervalRef.current !== null) {
         clearInterval(v2SamplingCountdownIntervalRef.current);
       }
-      stopV2ShadowPolling();
-      v2CaptureInFlightRef.current = false;
-      void stopAutoTrackerV2NativeShadowRunner().catch(() => undefined);
     };
   }, []);
 
@@ -701,121 +642,6 @@ export function TrackerSettingsPanel() {
     });
   }
 
-  function stopV2ShadowPolling() {
-    v2ShadowPollingActiveRef.current = false;
-    if (v2ShadowPollIntervalRef.current !== null) {
-      window.clearInterval(v2ShadowPollIntervalRef.current);
-      v2ShadowPollIntervalRef.current = null;
-    }
-  }
-
-  function startV2ShadowPolling() {
-    stopV2ShadowPolling();
-    v2ShadowPollingActiveRef.current = true;
-    v2ShadowPollIntervalRef.current = window.setInterval(() => {
-      if (v2ShadowPollInFlightRef.current) {
-        return;
-      }
-      void refreshV2InspectorFromNative(
-        "Snapshot refresh failed while shadow runner was active.",
-        "Shadow status refresh failed while shadow runner was active.",
-        true,
-      );
-    }, V2_SHADOW_STATUS_POLL_INTERVAL_MS);
-  }
-
-  async function refreshV2InspectorFromNative(
-    snapshotErrorMessage: string,
-    shadowStatusErrorMessage: string,
-    fromShadowPoll = false,
-  ): Promise<boolean> {
-    if (fromShadowPoll && v2ShadowPollInFlightRef.current) {
-      return false;
-    }
-
-    if (fromShadowPoll) {
-      v2ShadowPollInFlightRef.current = true;
-    }
-
-    try {
-      const [snap, shadowStatus] = await Promise.all([
-        withTimeout(
-          snapshotAutoTrackerV2Native(),
-          V2_NATIVE_SNAPSHOT_TIMEOUT_MS,
-          "snapshot",
-        ),
-        withTimeout(
-          getAutoTrackerV2NativeShadowStatus(),
-          V2_NATIVE_SNAPSHOT_TIMEOUT_MS,
-          "status",
-        ),
-      ]);
-      if (!v2IsMountedRef.current) {
-        return false;
-      }
-      if (fromShadowPoll && !v2ShadowPollingActiveRef.current) {
-        return false;
-      }
-
-      setV2Snapshot(snap);
-      setV2ProbeStatus(snap.status);
-      setV2ShadowStatus(shadowStatus);
-      if (fromShadowPoll && !shadowStatus.isRunning) {
-        stopV2ShadowPolling();
-      }
-      return true;
-    } catch (err) {
-      if (v2IsMountedRef.current) {
-        const fallbackMessage = snapshotErrorMessage || shadowStatusErrorMessage;
-        setV2InspectorError(
-          err instanceof Error && err.message ? err.message : fallbackMessage,
-        );
-      }
-      return false;
-    } finally {
-      if (fromShadowPoll) {
-        v2ShadowPollInFlightRef.current = false;
-      }
-    }
-  }
-
-  async function runV2CaptureAndRefreshSnapshot(
-    captureErrorMessage: string,
-    snapshotErrorMessage: string,
-  ): Promise<boolean> {
-    if (v2CaptureInFlightRef.current) {
-      return false;
-    }
-
-    v2CaptureInFlightRef.current = true;
-    setV2InspectorError(null);
-
-    try {
-      const result: AutoTrackerV2NativeCaptureResult = await withTimeout(
-        captureAutoTrackerV2NativeOnce(),
-        V2_NATIVE_CAPTURE_TIMEOUT_MS,
-        "capture",
-      );
-      if (!v2IsMountedRef.current) {
-        return true;
-      }
-
-      setV2ProbeStatus(result.status);
-      recordCaptureInfo(result);
-      return await refreshV2InspectorFromNative(
-        snapshotErrorMessage,
-        "Shadow status refresh failed after capture.",
-      );
-    } catch (err) {
-      if (v2IsMountedRef.current) {
-        setV2InspectorError(err instanceof Error && err.message ? err.message : captureErrorMessage);
-      }
-      return false;
-    } finally {
-      v2CaptureInFlightRef.current = false;
-    }
-  }
-
   async function handleV2Probe() {
     setV2InspectorError(null);
     setV2IsBusy(true);
@@ -833,7 +659,9 @@ export function TrackerSettingsPanel() {
     setV2InspectorError(null);
     setV2IsBusy(true);
     try {
-      await refreshV2InspectorFromNative("Snapshot failed.", "Shadow status failed.");
+      const snap = await snapshotAutoTrackerV2Native();
+      setV2Snapshot(snap);
+      setV2ProbeStatus(snap.status);
     } catch (err) {
       setV2InspectorError(err instanceof Error && err.message ? err.message : "Snapshot failed.");
     } finally {
@@ -845,10 +673,12 @@ export function TrackerSettingsPanel() {
     setV2InspectorError(null);
     setV2IsBusy(true);
     try {
-      await runV2CaptureAndRefreshSnapshot(
-        "Capture failed.",
-        "Snapshot after capture failed.",
-      );
+      const result: AutoTrackerV2NativeCaptureResult = await captureAutoTrackerV2NativeOnce();
+      setV2ProbeStatus(result.status);
+      recordCaptureInfo(result);
+      const snap = await snapshotAutoTrackerV2Native();
+      setV2Snapshot(snap);
+      setV2ProbeStatus(snap.status);
     } catch (err) {
       setV2InspectorError(err instanceof Error && err.message ? err.message : "Capture failed.");
     } finally {
@@ -876,12 +706,7 @@ export function TrackerSettingsPanel() {
   }
 
   function handleV2CaptureDelayed() {
-    if (
-      v2DelayIntervalRef.current !== null ||
-      v2IsSampling ||
-      v2IsShadowRunning ||
-      v2IsBusy
-    ) {
+    if (v2DelayIntervalRef.current !== null) {
       return;
     }
     setV2InspectorError(null);
@@ -896,10 +721,16 @@ export function TrackerSettingsPanel() {
         }
         setV2DelayCountdown(null);
         setV2IsBusy(true);
-        runV2CaptureAndRefreshSnapshot(
-          "Delayed capture failed.",
-          "Snapshot after delayed capture failed.",
-        )
+        captureAutoTrackerV2NativeOnce()
+          .then((result) => {
+            setV2ProbeStatus(result.status);
+            recordCaptureInfo(result);
+            return snapshotAutoTrackerV2Native();
+          })
+          .then((snap) => {
+            setV2Snapshot(snap);
+            setV2ProbeStatus(snap.status);
+          })
           .catch((err: unknown) => {
             setV2InspectorError(
               err instanceof Error && err.message ? err.message : "Delayed capture failed.",
@@ -925,27 +756,30 @@ export function TrackerSettingsPanel() {
     }
     setV2IsSampling(false);
     setV2SamplingSecondsLeft(null);
-    void refreshV2InspectorFromNative(
-      "Snapshot after sampling failed.",
-      "Shadow status refresh failed after sampling.",
-    );
+    snapshotAutoTrackerV2Native()
+      .then((snap) => {
+        setV2Snapshot(snap);
+        setV2ProbeStatus(snap.status);
+      })
+      .catch((err: unknown) => {
+        setV2InspectorError(
+          err instanceof Error && err.message ? err.message : "Snapshot after sampling failed.",
+        );
+      });
   }
 
   function handleV2StartSampling() {
-    if (v2IsShadowRunning || v2IsBusy || v2DelayCountdown !== null) {
-      return;
-    }
-
     setV2InspectorError(null);
     setV2IsSampling(true);
     let secondsLeft = 30;
     setV2SamplingSecondsLeft(secondsLeft);
 
     v2SamplingCaptureIntervalRef.current = setInterval(() => {
-      void runV2CaptureAndRefreshSnapshot(
-        "Sampling capture failed.",
-        "Snapshot after sampling capture failed.",
-      )
+      captureAutoTrackerV2NativeOnce()
+        .then((result) => {
+          setV2ProbeStatus(result.status);
+          recordCaptureInfo(result);
+        })
         .catch((err: unknown) => {
           setV2InspectorError(
             err instanceof Error && err.message ? err.message : "Sampling capture failed.",
@@ -960,72 +794,6 @@ export function TrackerSettingsPanel() {
         handleV2StopSampling();
       }
     }, 1000);
-  }
-
-  async function handleV2StartShadowRun() {
-    if (
-      v2IsShadowRunning ||
-      v2IsSampling ||
-      v2IsBusy ||
-      v2DelayCountdown !== null
-    ) {
-      return;
-    }
-
-    setV2InspectorError(null);
-    setV2IsBusy(true);
-    try {
-      const status = await withTimeout(
-        startAutoTrackerV2NativeShadowRunner(),
-        V2_NATIVE_CAPTURE_TIMEOUT_MS,
-        "start",
-      );
-      if (!v2IsMountedRef.current) {
-        return;
-      }
-
-      setV2ShadowStatus(status);
-      startV2ShadowPolling();
-      await refreshV2InspectorFromNative(
-        "Snapshot refresh failed after starting shadow run.",
-        "Shadow status refresh failed after starting shadow run.",
-        true,
-      );
-    } catch (err) {
-      setV2InspectorError(
-        err instanceof Error && err.message ? err.message : "Shadow runner start failed.",
-      );
-    } finally {
-      setV2IsBusy(false);
-    }
-  }
-
-  async function handleV2StopShadowRun() {
-    stopV2ShadowPolling();
-    setV2InspectorError(null);
-    setV2IsBusy(true);
-    try {
-      const status = await withTimeout(
-        stopAutoTrackerV2NativeShadowRunner(),
-        V2_NATIVE_CAPTURE_TIMEOUT_MS,
-        "stop",
-      );
-      if (!v2IsMountedRef.current) {
-        return;
-      }
-
-      setV2ShadowStatus(status);
-      await refreshV2InspectorFromNative(
-        "Snapshot refresh failed after stopping shadow run.",
-        "Shadow status refresh failed after stopping shadow run.",
-      );
-    } catch (err) {
-      setV2InspectorError(
-        err instanceof Error && err.message ? err.message : "Shadow runner stop failed.",
-      );
-    } finally {
-      setV2IsBusy(false);
-    }
   }
 
   async function handleRefreshAutoTrackerStatus() {
@@ -1401,9 +1169,6 @@ export function TrackerSettingsPanel() {
 
         const isDelayPending = v2DelayCountdown !== null;
         const anyBusy = v2IsBusy || isDelayPending;
-        const inspectorControlsBlocked = anyBusy || v2IsSampling || v2IsShadowRunning;
-        const shadowRefreshBlocked = anyBusy || v2IsSampling;
-        const clearBufferBlocked = anyBusy || v2IsSampling;
         const classificationSettings: TfAutotrackerV2ClassificationSettings = {
           autoApps: state.trackerPrefs.customAutoApps,
           autoWebsites: state.trackerPrefs.customAutoWebsites,
@@ -1434,15 +1199,15 @@ export function TrackerSettingsPanel() {
                     Read-only diagnostic view of the V2 native event buffer. Not wired to the reducer or session creation.
                   </p>
                 </div>
-                <div className="inline-flex w-fit rounded-full border border-slate-700 bg-slate-950/40 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400">
-                  Shadow only - no sessions written
+                <div className="inline-flex w-fit rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-amber-200">
+                  Shadow runner temporarily disabled; manual capture path active.
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={handleV2Probe}
-                  disabled={inspectorControlsBlocked}
+                  disabled={anyBusy || v2IsSampling}
                   className="rounded-lg border border-violet-500/30 bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {v2IsBusy ? "…" : "Probe"}
@@ -1450,7 +1215,7 @@ export function TrackerSettingsPanel() {
                 <button
                   type="button"
                   onClick={handleV2CaptureOnce}
-                  disabled={inspectorControlsBlocked}
+                  disabled={anyBusy || v2IsSampling}
                   className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Capture once
@@ -1458,7 +1223,7 @@ export function TrackerSettingsPanel() {
                 <button
                   type="button"
                   onClick={handleV2CaptureDelayed}
-                  disabled={isDelayPending || inspectorControlsBlocked}
+                  disabled={isDelayPending || v2IsBusy || v2IsSampling}
                   className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-200 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isDelayPending ? `Capturing in ${v2DelayCountdown}s… switch now` : "Capture in 5s"}
@@ -1466,7 +1231,7 @@ export function TrackerSettingsPanel() {
                 <button
                   type="button"
                   onClick={v2IsSampling ? handleV2StopSampling : handleV2StartSampling}
-                  disabled={!v2IsSampling && (v2IsBusy || isDelayPending || v2IsShadowRunning)}
+                  disabled={anyBusy}
                   className={
                     v2IsSampling
                       ? "rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
@@ -1479,20 +1244,8 @@ export function TrackerSettingsPanel() {
                 </button>
                 <button
                   type="button"
-                  onClick={v2IsShadowRunning ? handleV2StopShadowRun : handleV2StartShadowRun}
-                  disabled={!v2IsShadowRunning && (v2IsBusy || isDelayPending || v2IsSampling)}
-                  className={
-                    v2IsShadowRunning
-                      ? "rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                      : "rounded-lg border border-violet-500/30 bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
-                  }
-                >
-                  {v2IsShadowRunning ? "Stop shadow run" : "Start shadow run"}
-                </button>
-                <button
-                  type="button"
                   onClick={handleV2RefreshSnapshot}
-                  disabled={shadowRefreshBlocked}
+                  disabled={anyBusy || v2IsSampling}
                   className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Refresh snapshot
@@ -1500,65 +1253,11 @@ export function TrackerSettingsPanel() {
                 <button
                   type="button"
                   onClick={handleV2ClearBuffer}
-                  disabled={clearBufferBlocked}
+                  disabled={anyBusy || v2IsSampling}
                   className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Clear buffer
                 </button>
-              </div>
-            </div>
-
-            <div
-              className={
-                v2IsShadowRunning
-                  ? "rounded-xl border border-violet-500/20 bg-violet-500/10 px-4 py-3 text-xs text-violet-100"
-                  : "rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-xs text-slate-400"
-              }
-            >
-              <div className="font-medium">
-                {v2IsShadowRunning ? "Rust shadow runner active" : "Rust shadow runner stopped"}
-              </div>
-              <div
-                className={
-                  v2IsShadowRunning
-                    ? "mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-violet-100/90"
-                    : "mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-slate-500"
-                }
-              >
-                <span>capture every {V2_SHADOW_CAPTURE_INTERVAL_MS / 1000}s</span>
-                <span>·</span>
-                <span>state: {v2IsShadowRunning ? "running" : "stopped"}</span>
-                <span>·</span>
-                <span>tick count: {v2ShadowStatus?.tickCount ?? 0}</span>
-                <span>·</span>
-                <span>
-                  last tick started:{" "}
-                  {v2ShadowStatus?.lastTickStartedAtMs
-                    ? new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(
-                        new Date(v2ShadowStatus.lastTickStartedAtMs),
-                      )
-                    : "not yet"}
-                </span>
-                <span>·</span>
-                <span>
-                  last tick completed:{" "}
-                  {v2ShadowStatus?.lastTickCompletedAtMs
-                    ? new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(
-                        new Date(v2ShadowStatus.lastTickCompletedAtMs),
-                      )
-                    : "not yet"}
-                </span>
-                <span>·</span>
-                <span>
-                  last appended: {v2ShadowStatus?.lastTickAppendedCount ?? 0} event
-                  {(v2ShadowStatus?.lastTickAppendedCount ?? 0) === 1 ? "" : "s"}
-                </span>
-                <span>·</span>
-                <span>
-                  {v2ShadowStatus?.lastError
-                    ? `last error: ${v2ShadowStatus.lastError}`
-                    : "last error: none"}
-                </span>
               </div>
             </div>
 
@@ -1582,7 +1281,7 @@ export function TrackerSettingsPanel() {
                 </span>
                 {v2LastCaptureInfo.captureErrors.length > 0 ? (
                   <span className="ml-2 text-amber-200">
-                    · Capture errors: {v2LastCaptureInfo.captureErrors.join(" · ")}
+                    · Probe errors: {v2LastCaptureInfo.captureErrors.join(" · ")}
                   </span>
                 ) : null}
                 <span className="ml-2 text-current opacity-60">
