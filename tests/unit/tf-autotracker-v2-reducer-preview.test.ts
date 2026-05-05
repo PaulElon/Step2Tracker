@@ -233,7 +233,7 @@ test("input order is sorted by startedAtMs before reducer mapping", () => {
   ]);
 });
 
-test("maps a finalized preview session to a writable Session Log payload", () => {
+test("maps a finalized UWorld preview session to a concise Session Log payload", () => {
   const previewSession: TfAutotrackerV2FinalizedPreviewSession = {
     previewSessionId: "website:apps.uworld.com/courseapp:1746453600000",
     startedAtMs: Date.parse("2025-05-05T14:00:00.000Z"),
@@ -257,14 +257,41 @@ test("maps a finalized preview session to a writable Session Log payload", () =>
   assert.deepEqual(sessionLog, {
     id: "tf-auto-v2-preview-write-1",
     date: "2025-05-05",
-    method: "[AUTO V2 PREVIEW] UWorld",
+    method: "UWorld [Auto]",
     methodKey: "auto-v2-preview-uworld",
     hours: 0.5,
     startISO: "2025-05-05T14:00:00.000Z",
     endISO: "2025-05-05T14:30:00.000Z",
-    notes:
-      "[AUTO V2 PREVIEW] previewSessionId=website:apps.uworld.com/courseapp:1746453600000 | stableId=apps.uworld.com/courseapp | reason=matched website rule \"uworld.com\" by host uworld.com | finalizedBy=awayGraceElapsed | sourceSpanIds=span-1,span-2 | sourceEventIds=event-1,event-2 | browserTitle=UWorld Step 2 | browserUrl=https://apps.uworld.com/courseapp/step2",
+    notes: "",
     isDistraction: false,
     isLive: false,
   });
+});
+
+test("maps a finalized Anki preview session to a concise Session Log payload", () => {
+  const previewSession: TfAutotrackerV2FinalizedPreviewSession = {
+    previewSessionId: "app:/Applications/Anki.app:1746457200000",
+    startedAtMs: Date.parse("2025-05-05T15:00:00.000Z"),
+    endedAtMs: Date.parse("2025-05-05T15:45:00.000Z"),
+    durationMs: 45 * 60_000,
+    targetLabel: "Anki",
+    sourceTargetStableId: "/Applications/Anki.app",
+    sourceSpanIds: ["span-anki", "span-notes"],
+    sourceEventIds: ["event-anki", "event-notes"],
+    appName: "Anki",
+    bundleId: "net.ankiweb.dtop",
+    classificationReason: "matched app rule \"/Applications/Anki.app\" by app name Anki",
+    finalizedBy: "manualStop",
+  };
+
+  const sessionLog = mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
+    previewSession,
+    "tf-auto-v2-preview-write-2",
+  );
+
+  assert.equal(sessionLog.method, "Anki [Auto]");
+  assert.equal(sessionLog.methodKey, "auto-v2-preview-anki");
+  assert.equal(sessionLog.notes, "");
+  assert.ok(!sessionLog.method.includes("[AUTO V2 PREVIEW]"));
+  assert.doesNotMatch(sessionLog.notes, /previewSessionId=|sourceSpanIds=|sourceEventIds=|browserUrl=|browserTitle=|\|/);
 });

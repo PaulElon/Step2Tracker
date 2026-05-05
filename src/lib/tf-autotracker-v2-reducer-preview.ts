@@ -203,35 +203,114 @@ export function mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
 
   const startISO = new Date(previewSession.startedAtMs).toISOString();
   const endISO = new Date(previewSession.endedAtMs).toISOString();
-  const methodBase = previewSession.targetLabel.trim() || previewSession.sourceTargetStableId.trim() || "Auto-Tracked";
-  const method = `[AUTO V2 PREVIEW] ${methodBase}`;
-  const notes = [
-    `[AUTO V2 PREVIEW] previewSessionId=${previewSession.previewSessionId}`,
-    `stableId=${previewSession.sourceTargetStableId}`,
-    `reason=${previewSession.classificationReason}`,
-    `finalizedBy=${previewSession.finalizedBy}`,
-    `sourceSpanIds=${previewSession.sourceSpanIds.join(",")}`,
-    `sourceEventIds=${previewSession.sourceEventIds.join(",")}`,
-    previewSession.appName ? `appName=${previewSession.appName}` : null,
-    previewSession.bundleId ? `bundleId=${previewSession.bundleId}` : null,
-    previewSession.browserTitle ? `browserTitle=${previewSession.browserTitle}` : null,
-    previewSession.browserUrl ? `browserUrl=${previewSession.browserUrl}` : null,
-  ]
-    .filter((part): part is string => part !== null)
-    .join(" | ");
+  const resourceDisplayName = deriveAutoTrackerV2PreviewSessionDisplayName(previewSession);
+  const method = `${resourceDisplayName} [Auto]`;
+  const methodKey = methodKeyFromLabel(`[AUTO V2 PREVIEW] ${resourceDisplayName}`);
 
   return {
     id: sessionLogId,
     date: startISO.slice(0, 10),
     method,
-    methodKey: methodKeyFromLabel(method),
+    methodKey,
     hours: roundHours(previewSession.durationMs / 3_600_000),
     startISO,
     endISO,
-    notes,
+    notes: "",
     isDistraction: false,
     isLive: false,
   };
+}
+
+function deriveAutoTrackerV2PreviewSessionDisplayName(
+  previewSession: Pick<
+    TfAutotrackerV2FinalizedPreviewSession,
+    "appName" | "browserTitle" | "browserUrl" | "bundleId" | "sourceTargetStableId" | "targetLabel"
+  >,
+): string {
+  const explicitLabel = previewSession.targetLabel.trim();
+  if (explicitLabel) {
+    return explicitLabel;
+  }
+
+  const browserTitle = previewSession.browserTitle?.trim();
+  if (browserTitle) {
+    const compactTitle = compactAutoTrackerV2Title(browserTitle);
+    if (compactTitle) {
+      return compactTitle;
+    }
+  }
+
+  const appName = previewSession.appName?.trim();
+  if (appName) {
+    return appName;
+  }
+
+  const bundleName = deriveAppNameFromBundleId(previewSession.bundleId);
+  if (bundleName) {
+    return bundleName;
+  }
+
+  const browserLabel = deriveWebsiteLabelFromUrl(previewSession.browserUrl);
+  if (browserLabel) {
+    return browserLabel;
+  }
+
+  const stableIdLabel = normalizeStableIdSegment(previewSession.sourceTargetStableId);
+  return stableIdLabel || "Auto-Tracked";
+}
+
+function compactAutoTrackerV2Title(value: string): string {
+  const normalized = value.trim();
+  if (!normalized) {
+    return "";
+  }
+
+  const separators = [" | ", " - ", " — ", " – ", " · ", " : "];
+  for (const separator of separators) {
+    const index = normalized.indexOf(separator);
+    if (index > 0) {
+      return normalized.slice(0, index).trim();
+    }
+  }
+
+  return normalized;
+}
+
+function deriveAppNameFromBundleId(bundleId?: string): string {
+  const trimmed = bundleId?.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const lastSegment = trimmed.split("/").filter((part) => part.length > 0).pop();
+  if (!lastSegment) {
+    return "";
+  }
+
+  if (lastSegment.toLowerCase().endsWith(".app")) {
+    return lastSegment.slice(0, -4);
+  }
+
+  return "";
+}
+
+function deriveWebsiteLabelFromUrl(browserUrl?: string): string {
+  const trimmed = browserUrl?.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  try {
+    const url = new URL(trimmed);
+    const host = url.hostname.trim();
+    if (!host) {
+      return "";
+    }
+
+    return host.replace(/^www\./u, "");
+  } catch {
+    return "";
+  }
 }
 
 function createTargetFocusedEvent(
