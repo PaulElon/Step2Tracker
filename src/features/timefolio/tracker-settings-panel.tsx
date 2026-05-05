@@ -20,6 +20,7 @@ import {
 import {
   buildAutoTrackerV2ReducerPreview,
   mapAutoTrackerV2FinalizedPreviewSessionToSessionLog,
+  selectAutoTrackerV2ContinuousWritePreviewSessions,
   type TfAutotrackerV2FinalizedPreviewSession,
 } from "../../lib/tf-autotracker-v2-reducer-preview";
 import type { NativeTrackerSpanInput } from "../../lib/tf-native-span-reconciler";
@@ -444,16 +445,25 @@ export function TrackerSettingsPanel() {
     capturedAtMs: number;
   } | null>(null);
   const [v2ManualWriteSelectionId, setV2ManualWriteSelectionId] = useState("");
-  const [v2ManualWriteWrittenIds, setV2ManualWriteWrittenIds] = useState<string[]>([]);
+  const [v2WrittenPreviewSessionIds, setV2WrittenPreviewSessionIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [v2ManualWriteMessage, setV2ManualWriteMessage] = useState<{
     tone: "success" | "error";
     text: string;
+  } | null>(null);
+  const [v2ContinuousWriteStatus, setV2ContinuousWriteStatus] = useState<{
+    writtenCount: number;
+    names: string[];
+    skippedDuplicateCount: number;
+    error: string | null;
   } | null>(null);
   const [v2IsWritingSelectedSession, setV2IsWritingSelectedSession] = useState(false);
 
   const v2DelayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const v2SamplingCaptureIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const v2SamplingCountdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const v2WritingPreviewSessionIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setDraftPrefs(cloneTrackerPrefs(state.trackerPrefs));
@@ -476,6 +486,112 @@ export function TrackerSettingsPanel() {
       }
     };
   }, []);
+
+  const classificationSettings: TfAutotrackerV2ClassificationSettings = {
+    autoApps: state.trackerPrefs.customAutoApps,
+    autoWebsites: state.trackerPrefs.customAutoWebsites,
+    distractionApps: state.trackerPrefs.customDistractionApps,
+    distractionWebsites: state.trackerPrefs.customDistractionWebsites,
+  };
+  const previewSpans = buildAutoTrackerV2PreviewSpans(v2Snapshot?.events ?? [], classificationSettings);
+  const reducerPreview = buildAutoTrackerV2ReducerPreview(previewSpans);
+  const finalizedPreviewSessions = reducerPreview.finalizedPreviewSessions;
+  const selectedFinalizedPreviewSession =
+    finalizedPreviewSessions.find((session) => session.previewSessionId === v2ManualWriteSelectionId) ??
+    null;
+  const selectedFinalizedPreviewSessionAlreadyWritten =
+    selectedFinalizedPreviewSession !== null &&
+    v2WrittenPreviewSessionIds.has(selectedFinalizedPreviewSession.previewSessionId);
+  const reducerPreviewActiveTarget =
+    reducerPreview.state.status === "focused"
+      ? reducerPreview.state.target
+      : reducerPreview.state.status === "awayPending"
+        ? reducerPreview.state.session.target
+        : reducerPreview.state.status === "recoverableOpen"
+          ? reducerPreview.state.session.target
+          : null;
+  const finalizedPreviewSessionIdsKey = finalizedPreviewSessions
+    .map((session) => session.previewSessionId)
+    .join("|");
+  const reducerPreviewStateKey = `${reducerPreview.state.status}:${reducerPreviewActiveTarget?.stableId ?? ""}`;
+  const writtenPreviewSessionIdsKey = Array.from(v2WrittenPreviewSessionIds).sort().join("|");
+
+  useEffect(() => {
+    if (!FF.autotrackerV2ContinuousWrite) {
+      return;
+    }
+
+    if ((v2Snapshot?.events.length ?? 0) === 0) {
+      return;
+    }
+
+    const selection = selectAutoTrackerV2ContinuousWritePreviewSessions({
+      finalizedPreviewSessions,
+      state: reducerPreview.state,
+      writtenPreviewSessionIds: v2WrittenPreviewSessionIds,
+    });
+    const previewSessionsToWrite = selection.previewSessions.filter(
+      (session) => !v2WritingPreviewSessionIdsRef.current.has(session.previewSessionId),
+    );
+
+    if (previewSessionsToWrite.length === 0) {
+      return;
+    }
+
+    let isActive = true;
+    for (const previewSession of previewSessionsToWrite) {
+      v2WritingPreviewSessionIdsRef.current.add(previewSession.previewSessionId);
+    }
+
+    void (async () => {
+      const names: string[] = [];
+      let writtenCount = 0;
+
+      try {
+        for (const previewSession of previewSessionsToWrite) {
+          const method = await writeAutoTrackerV2PreviewSession(previewSession);
+          names.push(method);
+          writtenCount += 1;
+        }
+
+        if (isActive) {
+          setV2ContinuousWriteStatus({
+            writtenCount,
+            names,
+            skippedDuplicateCount: selection.skippedDuplicateCount,
+            error: null,
+          });
+        }
+      } catch (err) {
+        if (isActive) {
+          setV2ContinuousWriteStatus({
+            writtenCount,
+            names,
+            skippedDuplicateCount: selection.skippedDuplicateCount,
+            error:
+              err instanceof Error && err.message
+                ? err.message
+                : "Unable to write finalized preview sessions automatically.",
+          });
+        }
+      } finally {
+        for (const previewSession of previewSessionsToWrite) {
+          v2WritingPreviewSessionIdsRef.current.delete(previewSession.previewSessionId);
+        }
+      }
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    FF.autotrackerV2ContinuousWrite,
+    finalizedPreviewSessionIdsKey,
+    reducerPreviewStateKey,
+    upsertSessionLog,
+    v2Snapshot?.events.length,
+    writtenPreviewSessionIdsKey,
+  ]);
 
   if (isLoading) {
     return (
@@ -838,6 +954,25 @@ export function TrackerSettingsPanel() {
     }, 1000);
   }
 
+  async function writeAutoTrackerV2PreviewSession(
+    previewSession: TfAutotrackerV2FinalizedPreviewSession,
+  ): Promise<string> {
+    const sessionLog = mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
+      previewSession,
+      makeAutoTrackerV2PreviewSessionLogId(previewSession.previewSessionId),
+    );
+    await upsertSessionLog(sessionLog);
+    setV2WrittenPreviewSessionIds((current) => {
+      if (current.has(previewSession.previewSessionId)) {
+        return current;
+      }
+      const next = new Set(current);
+      next.add(previewSession.previewSessionId);
+      return next;
+    });
+    return sessionLog.method;
+  }
+
   async function handleV2WriteSelectedFinalizedPreviewSession(
     previewSession: TfAutotrackerV2FinalizedPreviewSession | null,
   ) {
@@ -845,7 +980,10 @@ export function TrackerSettingsPanel() {
       return;
     }
 
-    if (v2ManualWriteWrittenIds.includes(previewSession.previewSessionId)) {
+    if (
+      v2WrittenPreviewSessionIds.has(previewSession.previewSessionId) ||
+      v2WritingPreviewSessionIdsRef.current.has(previewSession.previewSessionId)
+    ) {
       setV2ManualWriteMessage({
         tone: "error",
         text: "This preview session was already written during the current inspector session.",
@@ -855,21 +993,13 @@ export function TrackerSettingsPanel() {
 
     setV2ManualWriteMessage(null);
     setV2IsWritingSelectedSession(true);
+    v2WritingPreviewSessionIdsRef.current.add(previewSession.previewSessionId);
 
     try {
-      const sessionLog = mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
-        previewSession,
-        makeAutoTrackerV2PreviewSessionLogId(previewSession.previewSessionId),
-      );
-      await upsertSessionLog(sessionLog);
-      setV2ManualWriteWrittenIds((current) =>
-        current.includes(previewSession.previewSessionId)
-          ? current
-          : [...current, previewSession.previewSessionId],
-      );
+      const method = await writeAutoTrackerV2PreviewSession(previewSession);
       setV2ManualWriteMessage({
         tone: "success",
-        text: `Wrote 1 preview session to Session Log: ${sessionLog.method}.`,
+        text: `Wrote 1 preview session to Session Log: ${method}.`,
       });
     } catch (err) {
       setV2ManualWriteMessage({
@@ -880,6 +1010,7 @@ export function TrackerSettingsPanel() {
             : "Unable to write the selected finalized preview session.",
       });
     } finally {
+      v2WritingPreviewSessionIdsRef.current.delete(previewSession.previewSessionId);
       setV2IsWritingSelectedSession(false);
     }
   }
@@ -1257,30 +1388,6 @@ export function TrackerSettingsPanel() {
 
         const isDelayPending = v2DelayCountdown !== null;
         const anyBusy = v2IsBusy || isDelayPending;
-        const classificationSettings: TfAutotrackerV2ClassificationSettings = {
-          autoApps: state.trackerPrefs.customAutoApps,
-          autoWebsites: state.trackerPrefs.customAutoWebsites,
-          distractionApps: state.trackerPrefs.customDistractionApps,
-          distractionWebsites: state.trackerPrefs.customDistractionWebsites,
-        };
-        const previewSpans = buildAutoTrackerV2PreviewSpans(v2Snapshot?.events ?? [], classificationSettings);
-        const reducerPreview = buildAutoTrackerV2ReducerPreview(previewSpans);
-        const finalizedPreviewSessions = reducerPreview.finalizedPreviewSessions;
-        const selectedFinalizedPreviewSession =
-          finalizedPreviewSessions.find(
-            (session) => session.previewSessionId === v2ManualWriteSelectionId,
-          ) ?? null;
-        const selectedFinalizedPreviewSessionAlreadyWritten =
-          selectedFinalizedPreviewSession !== null &&
-          v2ManualWriteWrittenIds.includes(selectedFinalizedPreviewSession.previewSessionId);
-        const reducerPreviewActiveTarget =
-          reducerPreview.state.status === "focused"
-            ? reducerPreview.state.target
-            : reducerPreview.state.status === "awayPending"
-              ? reducerPreview.state.session.target
-              : reducerPreview.state.status === "recoverableOpen"
-                ? reducerPreview.state.session.target
-                : null;
 
         return (
           <section className="flex flex-col gap-5 rounded-2xl border border-violet-500/20 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
@@ -1671,6 +1778,52 @@ export function TrackerSettingsPanel() {
                     </div>
                   </div>
                 ) : null}
+                {FF.autotrackerV2ContinuousWrite ? (
+                  <div className="flex flex-col gap-3 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3">
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <div className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-100">
+                        Continuous writer
+                      </div>
+                      <span className="text-[10px] text-cyan-50/80">
+                        Dev continuous write enabled — writes finalized tracked preview sessions created by manual captures only.
+                      </span>
+                    </div>
+
+                    {v2ContinuousWriteStatus ? (
+                      <div
+                        className={`rounded-lg border px-3 py-2 text-sm ${
+                          v2ContinuousWriteStatus.error
+                            ? "border-rose-500/20 bg-rose-500/10 text-rose-100"
+                            : "border-emerald-500/20 bg-emerald-500/10 text-emerald-100"
+                        }`}
+                      >
+                        <div>
+                          Wrote {v2ContinuousWriteStatus.writtenCount} finalized preview session
+                          {v2ContinuousWriteStatus.writtenCount === 1 ? "" : "s"} automatically.
+                        </div>
+                        {v2ContinuousWriteStatus.names.length > 0 ? (
+                          <div className="mt-1">
+                            {v2ContinuousWriteStatus.names.join(", ")}
+                          </div>
+                        ) : null}
+                        {v2ContinuousWriteStatus.skippedDuplicateCount > 0 ? (
+                          <div className="mt-1">
+                            Skipped {v2ContinuousWriteStatus.skippedDuplicateCount} duplicate preview
+                            session
+                            {v2ContinuousWriteStatus.skippedDuplicateCount === 1 ? "" : "s"}.
+                          </div>
+                        ) : null}
+                        {v2ContinuousWriteStatus.error ? (
+                          <div className="mt-1">{v2ContinuousWriteStatus.error}</div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-slate-700 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
+                        Waiting for newly finalized tracked preview sessions from manual captures.
+                      </div>
+                    )}
+                  </div>
+                ) : null}
                 {FF.autotrackerV2ManualWrite ? (
                   <div className="flex flex-col gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
                     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -1704,7 +1857,7 @@ export function TrackerSettingsPanel() {
                           {finalizedPreviewSessions.map((session) => {
                             const isSelected =
                               session.previewSessionId === v2ManualWriteSelectionId;
-                            const alreadyWritten = v2ManualWriteWrittenIds.includes(
+                            const alreadyWritten = v2WrittenPreviewSessionIds.has(
                               session.previewSessionId,
                             );
 

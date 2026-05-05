@@ -51,6 +51,12 @@ export type TfAutotrackerV2ReducerPreview = {
   ignoredSpans: TfAutotrackerV2ReducerPreviewIgnoredSpan[];
 };
 
+export type TfAutotrackerV2ContinuousWriteSelection = {
+  previewSessions: TfAutotrackerV2FinalizedPreviewSession[];
+  skippedDuplicateCount: number;
+  names: string[];
+};
+
 type ActiveFinalizedPreviewSession = {
   previewSessionId: string;
   targetLabel: string;
@@ -221,6 +227,52 @@ export function mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
   };
 }
 
+export function selectAutoTrackerV2ContinuousWritePreviewSessions({
+  finalizedPreviewSessions,
+  state,
+  writtenPreviewSessionIds,
+}: {
+  finalizedPreviewSessions: TfAutotrackerV2FinalizedPreviewSession[];
+  state: AutoTrackerV2SessionMachineState;
+  writtenPreviewSessionIds: Iterable<string>;
+}): TfAutotrackerV2ContinuousWriteSelection {
+  const writtenIds = new Set(writtenPreviewSessionIds);
+  const seenPreviewSessionIds = new Set<string>();
+  const activeTargetStableId = getOpenPreviewTargetStableId(state);
+  const previewSessions: TfAutotrackerV2FinalizedPreviewSession[] = [];
+  let skippedDuplicateCount = 0;
+
+  for (const previewSession of finalizedPreviewSessions) {
+    if (seenPreviewSessionIds.has(previewSession.previewSessionId)) {
+      skippedDuplicateCount += 1;
+      continue;
+    }
+    seenPreviewSessionIds.add(previewSession.previewSessionId);
+
+    if (writtenIds.has(previewSession.previewSessionId)) {
+      skippedDuplicateCount += 1;
+      continue;
+    }
+
+    if (
+      activeTargetStableId &&
+      previewSession.sourceTargetStableId === activeTargetStableId
+    ) {
+      continue;
+    }
+
+    previewSessions.push(previewSession);
+  }
+
+  return {
+    previewSessions,
+    skippedDuplicateCount,
+    names: previewSessions.map((previewSession) =>
+      deriveAutoTrackerV2PreviewSessionDisplayName(previewSession),
+    ),
+  };
+}
+
 function deriveAutoTrackerV2PreviewSessionDisplayName(
   previewSession: Pick<
     TfAutotrackerV2FinalizedPreviewSession,
@@ -257,6 +309,20 @@ function deriveAutoTrackerV2PreviewSessionDisplayName(
 
   const stableIdLabel = normalizeStableIdSegment(previewSession.sourceTargetStableId);
   return stableIdLabel || "Auto-Tracked";
+}
+
+function getOpenPreviewTargetStableId(
+  state: AutoTrackerV2SessionMachineState,
+): string | null {
+  if (state.status === "focused") {
+    return state.target.stableId;
+  }
+
+  if (state.status === "awayPending" || state.status === "recoverableOpen") {
+    return state.session.target.stableId;
+  }
+
+  return null;
 }
 
 function compactAutoTrackerV2Title(value: string): string {

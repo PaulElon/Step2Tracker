@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildAutoTrackerV2ReducerPreview,
   mapAutoTrackerV2FinalizedPreviewSessionToSessionLog,
+  selectAutoTrackerV2ContinuousWritePreviewSessions,
   type TfAutotrackerV2FinalizedPreviewSession,
 } from "../../src/lib/tf-autotracker-v2-reducer-preview.js";
 import type { TfAutotrackerV2PreviewSpan } from "../../src/lib/tf-autotracker-v2-preview-spans.js";
@@ -294,4 +295,115 @@ test("maps a finalized Anki preview session to a concise Session Log payload", (
   assert.equal(sessionLog.notes, "");
   assert.ok(!sessionLog.method.includes("[AUTO V2 PREVIEW]"));
   assert.doesNotMatch(sessionLog.notes, /previewSessionId=|sourceSpanIds=|sourceEventIds=|browserUrl=|browserTitle=|\|/);
+});
+
+test("continuous write selects only finalized tracked sessions and leaves open sessions alone", () => {
+  const preview = buildAutoTrackerV2ReducerPreview([
+    trackedUWorldSpan({ startedAtMs: 0, endedAtMs: 10_000, durationMs: 10_000 }),
+    distractionRedditSpan({ startedAtMs: 20_000, endedAtMs: 90_000, durationMs: 70_000 }),
+    makeSpan({
+      id: "span-anki",
+      label: "Anki",
+      kind: "app",
+      appName: "Anki",
+      bundleId: "net.ankiweb.dtop",
+      startedAtMs: 100_000,
+      endedAtMs: null,
+      durationMs: null,
+      classification: "tracked",
+      classificationReason: "matched app rule \"/Applications/Anki.app\" by app name Anki",
+    }),
+  ]);
+
+  const selection = selectAutoTrackerV2ContinuousWritePreviewSessions({
+    finalizedPreviewSessions: preview.finalizedPreviewSessions,
+    state: preview.state,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(preview.state.status, "focused");
+  assert.deepEqual(selection.previewSessions.map((session) => session.previewSessionId), [
+    "website:apps.uworld.com/courseapp:0",
+  ]);
+  assert.deepEqual(selection.names, ["UWorld"]);
+});
+
+test("continuous write excludes duplicate preview session ids", () => {
+  const preview = buildAutoTrackerV2ReducerPreview([
+    trackedUWorldSpan({ startedAtMs: 0, endedAtMs: 10_000, durationMs: 10_000 }),
+    distractionRedditSpan({ startedAtMs: 20_000, endedAtMs: 90_000, durationMs: 70_000 }),
+  ]);
+  const [finalizedPreviewSession] = preview.finalizedPreviewSessions;
+  assert.ok(finalizedPreviewSession);
+
+  const selection = selectAutoTrackerV2ContinuousWritePreviewSessions({
+    finalizedPreviewSessions: [finalizedPreviewSession, finalizedPreviewSession],
+    state: preview.state,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.deepEqual(selection.previewSessions.map((session) => session.previewSessionId), [
+    finalizedPreviewSession.previewSessionId,
+  ]);
+  assert.equal(selection.skippedDuplicateCount, 1);
+});
+
+test("continuous write excludes already written preview session ids", () => {
+  const preview = buildAutoTrackerV2ReducerPreview([
+    trackedUWorldSpan({ startedAtMs: 0, endedAtMs: 10_000, durationMs: 10_000 }),
+    distractionRedditSpan({ startedAtMs: 20_000, endedAtMs: 90_000, durationMs: 70_000 }),
+  ]);
+  const [finalizedPreviewSession] = preview.finalizedPreviewSessions;
+  assert.ok(finalizedPreviewSession);
+
+  const selection = selectAutoTrackerV2ContinuousWritePreviewSessions({
+    finalizedPreviewSessions: [finalizedPreviewSession],
+    state: preview.state,
+    writtenPreviewSessionIds: [finalizedPreviewSession.previewSessionId],
+  });
+
+  assert.deepEqual(selection.previewSessions, []);
+  assert.equal(selection.skippedDuplicateCount, 1);
+});
+
+test("continuous write emits session names for success status", () => {
+  const selection = selectAutoTrackerV2ContinuousWritePreviewSessions({
+    finalizedPreviewSessions: [
+      {
+        previewSessionId: "website:apps.uworld.com/courseapp:1746453600000",
+        startedAtMs: Date.parse("2025-05-05T14:00:00.000Z"),
+        endedAtMs: Date.parse("2025-05-05T14:30:00.000Z"),
+        durationMs: 30 * 60_000,
+        targetLabel: "UWorld",
+        sourceTargetStableId: "apps.uworld.com/courseapp",
+        sourceSpanIds: ["span-1"],
+        sourceEventIds: ["event-1"],
+        browserTitle: "UWorld Step 2",
+        browserUrl: "https://apps.uworld.com/courseapp/step2",
+        classificationReason: "matched website rule \"uworld.com\" by host uworld.com",
+        finalizedBy: "awayGraceElapsed",
+      },
+      {
+        previewSessionId: "app:/Applications/Anki.app:1746457200000",
+        startedAtMs: Date.parse("2025-05-05T15:00:00.000Z"),
+        endedAtMs: Date.parse("2025-05-05T15:45:00.000Z"),
+        durationMs: 45 * 60_000,
+        targetLabel: "Anki",
+        sourceTargetStableId: "/Applications/Anki.app",
+        sourceSpanIds: ["span-anki"],
+        sourceEventIds: ["event-anki"],
+        appName: "Anki",
+        bundleId: "net.ankiweb.dtop",
+        classificationReason: "matched app rule \"/Applications/Anki.app\" by app name Anki",
+        finalizedBy: "manualStop",
+      },
+    ],
+    state: {
+      status: "idle",
+      lastEventMs: 0,
+    },
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.deepEqual(selection.names, ["UWorld", "Anki"]);
 });
