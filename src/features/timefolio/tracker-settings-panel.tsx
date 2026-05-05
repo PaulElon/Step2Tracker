@@ -405,6 +405,11 @@ export function TrackerSettingsPanel() {
   const [v2IsSampling, setV2IsSampling] = useState(false);
   const [v2IsShadowRunning, setV2IsShadowRunning] = useState(false);
   const [v2SamplingSecondsLeft, setV2SamplingSecondsLeft] = useState<number | null>(null);
+  const [v2ShadowTickInfo, setV2ShadowTickInfo] = useState<{
+    appendedCount: number;
+    error: string | null;
+    tickAtMs: number;
+  } | null>(null);
   const [v2LastCaptureInfo, setV2LastCaptureInfo] = useState<{
     appendedCount: number;
     captureErrors: string[];
@@ -672,6 +677,7 @@ export function TrackerSettingsPanel() {
   }
 
   async function runV2CaptureAndRefreshSnapshot(
+    sourceLabel: "capture-once" | "delayed" | "sampling" | "shadow",
     captureErrorMessage: string,
     snapshotErrorMessage: string,
   ): Promise<boolean> {
@@ -690,10 +696,27 @@ export function TrackerSettingsPanel() {
 
       setV2ProbeStatus(result.status);
       recordCaptureInfo(result);
+      if (sourceLabel === "shadow") {
+        const captureErrors = result.appended
+          .filter((e) => e.kind === "error" && e.error)
+          .map((e) => e.error as string);
+        setV2ShadowTickInfo({
+          appendedCount: result.appended.length,
+          error: captureErrors.length > 0 ? captureErrors.join(" · ") : null,
+          tickAtMs: Date.now(),
+        });
+      }
       return await refreshV2SnapshotFromNative(snapshotErrorMessage);
     } catch (err) {
       if (v2IsMountedRef.current) {
         setV2InspectorError(err instanceof Error && err.message ? err.message : captureErrorMessage);
+        if (sourceLabel === "shadow") {
+          setV2ShadowTickInfo({
+            appendedCount: 0,
+            error: err instanceof Error && err.message ? err.message : captureErrorMessage,
+            tickAtMs: Date.now(),
+          });
+        }
       }
       return false;
     } finally {
@@ -730,7 +753,11 @@ export function TrackerSettingsPanel() {
     setV2InspectorError(null);
     setV2IsBusy(true);
     try {
-      await runV2CaptureAndRefreshSnapshot("Capture failed.", "Snapshot after capture failed.");
+      await runV2CaptureAndRefreshSnapshot(
+        "capture-once",
+        "Capture failed.",
+        "Snapshot after capture failed.",
+      );
     } catch (err) {
       setV2InspectorError(err instanceof Error && err.message ? err.message : "Capture failed.");
     } finally {
@@ -778,7 +805,11 @@ export function TrackerSettingsPanel() {
         }
         setV2DelayCountdown(null);
         setV2IsBusy(true);
-        runV2CaptureAndRefreshSnapshot("Delayed capture failed.", "Snapshot after delayed capture failed.")
+        runV2CaptureAndRefreshSnapshot(
+          "delayed",
+          "Delayed capture failed.",
+          "Snapshot after delayed capture failed.",
+        )
           .catch((err: unknown) => {
             setV2InspectorError(
               err instanceof Error && err.message ? err.message : "Delayed capture failed.",
@@ -819,6 +850,7 @@ export function TrackerSettingsPanel() {
 
     v2SamplingCaptureIntervalRef.current = setInterval(() => {
       void runV2CaptureAndRefreshSnapshot(
+        "sampling",
         "Sampling capture failed.",
         "Snapshot after sampling capture failed.",
       )
@@ -852,12 +884,21 @@ export function TrackerSettingsPanel() {
     setV2InspectorError(null);
     setV2IsShadowRunning(true);
     v2ShadowRunningRef.current = true;
+    setV2ShadowTickInfo(null);
+    void runV2CaptureAndRefreshSnapshot(
+      "shadow",
+      "Shadow capture failed.",
+      "Snapshot after shadow capture failed.",
+    ).catch((err: unknown) => {
+      setV2InspectorError(err instanceof Error && err.message ? err.message : "Shadow capture failed.");
+    });
     v2ShadowRunnerIntervalRef.current = setInterval(() => {
       if (!v2ShadowRunningRef.current || v2CaptureInFlightRef.current) {
         return;
       }
 
       void runV2CaptureAndRefreshSnapshot(
+        "shadow",
         "Shadow capture failed.",
         "Snapshot after shadow capture failed.",
       ).catch((err: unknown) => {
@@ -1355,9 +1396,39 @@ export function TrackerSettingsPanel() {
 
             {v2IsShadowRunning ? (
               <div className="rounded-xl border border-violet-500/20 bg-violet-500/10 px-4 py-3 text-xs text-violet-100">
-                Shadow running - captures every {V2_SHADOW_CAPTURE_INTERVAL_MS / 1000}s - last capture appended{" "}
-                {v2LastCaptureInfo?.appendedCount ?? 0} event
-                {(v2LastCaptureInfo?.appendedCount ?? 0) === 1 ? "" : "s"}
+                <div className="font-medium">Shadow running</div>
+                <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-violet-100/90">
+                  <span>tick every {V2_SHADOW_CAPTURE_INTERVAL_MS / 1000}s</span>
+                  <span>·</span>
+                  <span>
+                    last tick:{" "}
+                    {v2ShadowTickInfo?.tickAtMs
+                      ? new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(
+                          new Date(v2ShadowTickInfo.tickAtMs),
+                        )
+                      : "not yet"}
+                  </span>
+                  <span>·</span>
+                  <span>
+                    appended: {v2ShadowTickInfo?.appendedCount ?? 0} event
+                    {(v2ShadowTickInfo?.appendedCount ?? 0) === 1 ? "" : "s"}
+                  </span>
+                  <span>·</span>
+                  <span>{v2ShadowTickInfo?.error ? `error: ${v2ShadowTickInfo.error}` : "error: none"}</span>
+                </div>
+              </div>
+            ) : null}
+
+            {!v2IsShadowRunning ? (
+              <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-xs text-slate-400">
+                Shadow stopped
+                <span className="ml-2 text-slate-500">
+                  {v2ShadowTickInfo?.tickAtMs
+                    ? `last tick ${new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(
+                        new Date(v2ShadowTickInfo.tickAtMs),
+                      )}`
+                    : "no shadow tick yet"}
+                </span>
               </div>
             ) : null}
 
