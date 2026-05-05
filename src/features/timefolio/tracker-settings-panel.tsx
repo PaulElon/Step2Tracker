@@ -3,6 +3,16 @@ import {
   probeNativeAutoTrackerBootstrap,
   type NativeAutoTrackerBootstrapProbe,
 } from "../../lib/native-persistence";
+import { FF } from "../../lib/feature-flags";
+import {
+  captureAutoTrackerV2NativeOnce,
+  clearAutoTrackerV2NativeBuffer,
+  probeAutoTrackerV2Native,
+  snapshotAutoTrackerV2Native,
+  type AutoTrackerV2NativeCaptureResult,
+  type AutoTrackerV2NativeSnapshot,
+  type AutoTrackerV2NativeStatus,
+} from "../../lib/tf-autotracker-v2-native-events";
 import type { NativeTrackerSpanInput } from "../../lib/tf-native-span-reconciler";
 import { normalizeTfAppState } from "../../lib/tf-storage";
 import { useTimeFolioStore } from "../../state/tf-store";
@@ -380,12 +390,44 @@ export function TrackerSettingsPanel() {
   const [isAutoTrackerRefreshing, setIsAutoTrackerRefreshing] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
+  // V2 native inspector state (shadow/diagnostic only — never wired to reducer)
+  const [v2ProbeStatus, setV2ProbeStatus] = useState<AutoTrackerV2NativeStatus | null>(null);
+  const [v2Snapshot, setV2Snapshot] = useState<AutoTrackerV2NativeSnapshot | null>(null);
+  const [v2InspectorError, setV2InspectorError] = useState<string | null>(null);
+  const [v2IsBusy, setV2IsBusy] = useState(false);
+  const [v2DelayCountdown, setV2DelayCountdown] = useState<number | null>(null);
+  const [v2IsSampling, setV2IsSampling] = useState(false);
+  const [v2SamplingSecondsLeft, setV2SamplingSecondsLeft] = useState<number | null>(null);
+  const [v2LastCaptureInfo, setV2LastCaptureInfo] = useState<{
+    appendedCount: number;
+    captureErrors: string[];
+    capturedAtMs: number;
+  } | null>(null);
+
+  const v2DelayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const v2SamplingCaptureIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const v2SamplingCountdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
     setDraftPrefs(cloneTrackerPrefs(state.trackerPrefs));
   }, [state.trackerPrefs]);
 
   useEffect(() => {
     void handleRefreshAutoTrackerStatus();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (v2DelayIntervalRef.current !== null) {
+        clearInterval(v2DelayIntervalRef.current);
+      }
+      if (v2SamplingCaptureIntervalRef.current !== null) {
+        clearInterval(v2SamplingCaptureIntervalRef.current);
+      }
+      if (v2SamplingCountdownIntervalRef.current !== null) {
+        clearInterval(v2SamplingCountdownIntervalRef.current);
+      }
+    };
   }, []);
 
   if (isLoading) {
@@ -582,6 +624,171 @@ export function TrackerSettingsPanel() {
     } finally {
       setIsDataBusy(false);
     }
+  }
+
+  function recordCaptureInfo(result: AutoTrackerV2NativeCaptureResult) {
+    const captureErrors = result.appended
+      .filter((e) => e.kind === "error" && e.error)
+      .map((e) => e.error as string);
+    setV2LastCaptureInfo({
+      appendedCount: result.appended.length,
+      captureErrors,
+      capturedAtMs: Date.now(),
+    });
+  }
+
+  async function handleV2Probe() {
+    setV2InspectorError(null);
+    setV2IsBusy(true);
+    try {
+      const status = await probeAutoTrackerV2Native();
+      setV2ProbeStatus(status);
+    } catch (err) {
+      setV2InspectorError(err instanceof Error && err.message ? err.message : "Probe failed.");
+    } finally {
+      setV2IsBusy(false);
+    }
+  }
+
+  async function handleV2RefreshSnapshot() {
+    setV2InspectorError(null);
+    setV2IsBusy(true);
+    try {
+      const snap = await snapshotAutoTrackerV2Native();
+      setV2Snapshot(snap);
+      setV2ProbeStatus(snap.status);
+    } catch (err) {
+      setV2InspectorError(err instanceof Error && err.message ? err.message : "Snapshot failed.");
+    } finally {
+      setV2IsBusy(false);
+    }
+  }
+
+  async function handleV2CaptureOnce() {
+    setV2InspectorError(null);
+    setV2IsBusy(true);
+    try {
+      const result: AutoTrackerV2NativeCaptureResult = await captureAutoTrackerV2NativeOnce();
+      setV2ProbeStatus(result.status);
+      recordCaptureInfo(result);
+      const snap = await snapshotAutoTrackerV2Native();
+      setV2Snapshot(snap);
+      setV2ProbeStatus(snap.status);
+    } catch (err) {
+      setV2InspectorError(err instanceof Error && err.message ? err.message : "Capture failed.");
+    } finally {
+      setV2IsBusy(false);
+    }
+  }
+
+  async function handleV2ClearBuffer() {
+    setV2InspectorError(null);
+    setV2IsBusy(true);
+    try {
+      const status = await clearAutoTrackerV2NativeBuffer();
+      setV2ProbeStatus(status);
+      setV2Snapshot((prev: AutoTrackerV2NativeSnapshot | null) =>
+        prev ? { ...prev, status, events: [] } : null,
+      );
+      setV2LastCaptureInfo(null);
+    } catch (err) {
+      setV2InspectorError(
+        err instanceof Error && err.message ? err.message : "Clear buffer failed.",
+      );
+    } finally {
+      setV2IsBusy(false);
+    }
+  }
+
+  function handleV2CaptureDelayed() {
+    if (v2DelayIntervalRef.current !== null) {
+      return;
+    }
+    setV2InspectorError(null);
+    setV2DelayCountdown(5);
+    let remaining = 5;
+    v2DelayIntervalRef.current = setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        if (v2DelayIntervalRef.current !== null) {
+          clearInterval(v2DelayIntervalRef.current);
+          v2DelayIntervalRef.current = null;
+        }
+        setV2DelayCountdown(null);
+        setV2IsBusy(true);
+        captureAutoTrackerV2NativeOnce()
+          .then((result) => {
+            setV2ProbeStatus(result.status);
+            recordCaptureInfo(result);
+            return snapshotAutoTrackerV2Native();
+          })
+          .then((snap) => {
+            setV2Snapshot(snap);
+            setV2ProbeStatus(snap.status);
+          })
+          .catch((err: unknown) => {
+            setV2InspectorError(
+              err instanceof Error && err.message ? err.message : "Delayed capture failed.",
+            );
+          })
+          .finally(() => {
+            setV2IsBusy(false);
+          });
+      } else {
+        setV2DelayCountdown(remaining);
+      }
+    }, 1000);
+  }
+
+  function handleV2StopSampling() {
+    if (v2SamplingCaptureIntervalRef.current !== null) {
+      clearInterval(v2SamplingCaptureIntervalRef.current);
+      v2SamplingCaptureIntervalRef.current = null;
+    }
+    if (v2SamplingCountdownIntervalRef.current !== null) {
+      clearInterval(v2SamplingCountdownIntervalRef.current);
+      v2SamplingCountdownIntervalRef.current = null;
+    }
+    setV2IsSampling(false);
+    setV2SamplingSecondsLeft(null);
+    snapshotAutoTrackerV2Native()
+      .then((snap) => {
+        setV2Snapshot(snap);
+        setV2ProbeStatus(snap.status);
+      })
+      .catch((err: unknown) => {
+        setV2InspectorError(
+          err instanceof Error && err.message ? err.message : "Snapshot after sampling failed.",
+        );
+      });
+  }
+
+  function handleV2StartSampling() {
+    setV2InspectorError(null);
+    setV2IsSampling(true);
+    let secondsLeft = 30;
+    setV2SamplingSecondsLeft(secondsLeft);
+
+    v2SamplingCaptureIntervalRef.current = setInterval(() => {
+      captureAutoTrackerV2NativeOnce()
+        .then((result) => {
+          setV2ProbeStatus(result.status);
+          recordCaptureInfo(result);
+        })
+        .catch((err: unknown) => {
+          setV2InspectorError(
+            err instanceof Error && err.message ? err.message : "Sampling capture failed.",
+          );
+        });
+    }, 2000);
+
+    v2SamplingCountdownIntervalRef.current = setInterval(() => {
+      secondsLeft -= 1;
+      setV2SamplingSecondsLeft(secondsLeft);
+      if (secondsLeft <= 0) {
+        handleV2StopSampling();
+      }
+    }, 1000);
   }
 
   async function handleRefreshAutoTrackerStatus() {
@@ -947,6 +1154,219 @@ export function TrackerSettingsPanel() {
           {autoTrackerStatus?.basePath ? ` · Base path: ${autoTrackerStatus.basePath}` : ""}
         </div>
       </section>
+
+      {FF.autotrackerV2NativeInspector ? (() => {
+        const lastAppEvent = v2Snapshot
+          ? [...v2Snapshot.events]
+              .reverse()
+              .find((e) => (e.kind === "targetFocused" || e.kind === "untrackedFocused") && e.appName)
+          : undefined;
+
+        const isDelayPending = v2DelayCountdown !== null;
+        const anyBusy = v2IsBusy || isDelayPending;
+
+        return (
+          <section className="flex flex-col gap-5 rounded-2xl border border-violet-500/20 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex flex-col gap-2">
+                <div className="inline-flex w-fit rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-violet-300">
+                  Shadow · Diagnostic only
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-slate-100">Auto-Tracker V2 Native Inspector</h3>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
+                    Read-only diagnostic view of the V2 native event buffer. Not wired to the reducer or session creation.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleV2Probe}
+                  disabled={anyBusy || v2IsSampling}
+                  className="rounded-lg border border-violet-500/30 bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {v2IsBusy ? "…" : "Probe"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleV2CaptureOnce}
+                  disabled={anyBusy || v2IsSampling}
+                  className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Capture once
+                </button>
+                <button
+                  type="button"
+                  onClick={handleV2CaptureDelayed}
+                  disabled={isDelayPending || v2IsBusy || v2IsSampling}
+                  className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-200 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isDelayPending ? `Capturing in ${v2DelayCountdown}s… switch now` : "Capture in 5s"}
+                </button>
+                <button
+                  type="button"
+                  onClick={v2IsSampling ? handleV2StopSampling : handleV2StartSampling}
+                  disabled={anyBusy}
+                  className={
+                    v2IsSampling
+                      ? "rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      : "rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  }
+                >
+                  {v2IsSampling
+                    ? `Stop sampling (${v2SamplingSecondsLeft ?? 0}s left)`
+                    : "Sample 30s"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleV2RefreshSnapshot}
+                  disabled={anyBusy || v2IsSampling}
+                  className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Refresh snapshot
+                </button>
+                <button
+                  type="button"
+                  onClick={handleV2ClearBuffer}
+                  disabled={anyBusy || v2IsSampling}
+                  className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Clear buffer
+                </button>
+              </div>
+            </div>
+
+            {v2InspectorError ? (
+              <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                {v2InspectorError}
+              </div>
+            ) : null}
+
+            {v2LastCaptureInfo ? (
+              <div
+                className={`rounded-xl border px-4 py-3 text-xs ${
+                  v2LastCaptureInfo.captureErrors.length > 0
+                    ? "border-amber-500/20 bg-amber-500/10 text-amber-100"
+                    : "border-emerald-500/20 bg-emerald-500/10 text-emerald-100"
+                }`}
+              >
+                <span className="font-medium">
+                  Last capture: {v2LastCaptureInfo.appendedCount} event
+                  {v2LastCaptureInfo.appendedCount !== 1 ? "s" : ""} appended
+                </span>
+                {v2LastCaptureInfo.captureErrors.length > 0 ? (
+                  <span className="ml-2 text-amber-200">
+                    · Probe errors: {v2LastCaptureInfo.captureErrors.join(" · ")}
+                  </span>
+                ) : null}
+                <span className="ml-2 text-current opacity-60">
+                  at{" "}
+                  {new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(
+                    new Date(v2LastCaptureInfo.capturedAtMs),
+                  )}
+                </span>
+              </div>
+            ) : null}
+
+            {v2ProbeStatus ? (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <DataStatCard
+                  label="Native support"
+                  value={v2ProbeStatus.supported ? "Supported" : "Unsupported"}
+                  detail={v2ProbeStatus.note}
+                />
+                <DataStatCard
+                  label="Probe capabilities"
+                  value={
+                    v2ProbeStatus.foregroundProbeAvailable && v2ProbeStatus.idleProbeAvailable
+                      ? "Full"
+                      : v2ProbeStatus.foregroundProbeAvailable
+                        ? "Foreground only"
+                        : "Unavailable"
+                  }
+                  detail={`Foreground detection: ${v2ProbeStatus.foregroundProbeAvailable ? "Available" : "Unavailable"} · Idle detection: ${v2ProbeStatus.idleProbeAvailable ? "Available" : "Unavailable"}`}
+                />
+                <DataStatCard
+                  label="Buffer"
+                  value={`${v2ProbeStatus.bufferLen} / ${v2ProbeStatus.bufferCapacity}`}
+                  detail="Buffered events / capacity"
+                />
+                <DataStatCard
+                  label="Last sampled"
+                  value={
+                    v2ProbeStatus.lastSampledAtMs
+                      ? new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(
+                          new Date(v2ProbeStatus.lastSampledAtMs),
+                        )
+                      : "Never"
+                  }
+                  detail={`Platform: ${v2ProbeStatus.platform}`}
+                />
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/40 px-4 py-5 text-sm text-slate-500">
+                Click Probe or Capture once to load V2 native status.
+              </div>
+            )}
+
+            <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3">
+              <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500">Last detected app</div>
+              {lastAppEvent ? (
+                <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <span className="text-sm font-semibold text-slate-100">{lastAppEvent.appName}</span>
+                  {lastAppEvent.bundleId ? (
+                    <span className="font-mono text-xs text-slate-400">{lastAppEvent.bundleId}</span>
+                  ) : null}
+                  <span className="text-xs text-slate-500">
+                    · {new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(new Date(lastAppEvent.timestampMs))}
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-1 text-sm text-slate-500">No app captured yet.</div>
+              )}
+            </div>
+
+            {v2Snapshot && v2Snapshot.events.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                  Last {Math.min(v2Snapshot.events.length, 10)} of {v2Snapshot.events.length} buffered events
+                </div>
+                <div className="flex flex-col divide-y divide-slate-800 rounded-xl border border-slate-700 bg-slate-950/50 overflow-hidden">
+                  {v2Snapshot.events.slice(-10).map((ev) => (
+                    <div key={ev.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-3 py-2 text-xs">
+                      <span className="font-mono text-slate-500 tabular-nums shrink-0">
+                        {new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(new Date(ev.timestampMs))}
+                      </span>
+                      <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-300 shrink-0">
+                        {ev.kind}
+                      </span>
+                      {ev.appName ? (
+                        <span className="text-slate-200 truncate">{ev.appName}</span>
+                      ) : null}
+                      {ev.bundleId ? (
+                        <span className="font-mono text-slate-400 truncate">{ev.bundleId}</span>
+                      ) : null}
+                      {ev.isIdle !== undefined ? (
+                        <span className={ev.isIdle ? "text-amber-300" : "text-emerald-300"}>
+                          {ev.isIdle ? "idle" : "active"}
+                        </span>
+                      ) : null}
+                      {ev.error ? (
+                        <span className="text-rose-300 truncate">{ev.error}</span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : v2Snapshot && v2Snapshot.events.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/40 px-4 py-4 text-sm text-slate-500">
+                Buffer is empty.
+              </div>
+            ) : null}
+          </section>
+        );
+      })() : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
         {TRACKER_LISTS.map((config) => {

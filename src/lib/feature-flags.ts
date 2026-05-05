@@ -5,4 +5,6 @@ export const FF = {
     (import.meta.env.DEV && import.meta.env.VITE_FF_TIMEFOLIO !== "false"),
   notebook: import.meta.env.VITE_FF_NOTEBOOK !== "false",
   tiptapEditor: import.meta.env.VITE_FF_TIPTAP_EDITOR !== "false",
+  // Shadow diagnostic only. Never enabled in production unless env var is explicitly "true".
+  autotrackerV2NativeInspector: import.meta.env.VITE_FF_AUTOTRACKER_V2_NATIVE_INSPECTOR === "true",
 } as const;
