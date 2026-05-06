@@ -28,6 +28,37 @@ export const TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION = 1;
 export const TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT = 2_000;
 export const TF_AUTOTRACKER_V2_DEV_WRITTEN_ID_LIMIT = 2_000;
 
+export interface QueuedTfStateSaveResult {
+  saved: TfAppState;
+  isLatest: boolean;
+  requestId: number;
+}
+
+export function createQueuedTfStateSaver(
+  save: (state: TfAppState) => Promise<TfAppState>,
+): {
+  enqueue(state: TfAppState): Promise<QueuedTfStateSaveResult>;
+} {
+  let queue = Promise.resolve<void>(undefined);
+  let latestRequestId = 0;
+
+  return {
+    enqueue(state: TfAppState) {
+      const requestId = ++latestRequestId;
+      const pending = queue.then(() => save(state));
+      queue = pending.then(
+        () => undefined,
+        () => undefined,
+      );
+      return pending.then((saved) => ({
+        saved,
+        isLatest: requestId === latestRequestId,
+        requestId,
+      }));
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Empty / default state
 // ---------------------------------------------------------------------------
@@ -655,7 +686,9 @@ export async function loadTfState(): Promise<TfAppState> {
   if (isNativeTauriRuntime()) {
     try {
       const nativeState = await loadNativeTfState();
-      return normalizeTfAppState(nativeState);
+      const normalized = normalizeTfAppState(nativeState);
+      saveTfStateToLocalStorage(normalized);
+      return normalized;
     } catch {
       return loadTfStateFromLocalStorage();
     }
@@ -668,7 +701,9 @@ export async function saveTfState(state: TfAppState): Promise<TfAppState> {
   if (isNativeTauriRuntime()) {
     try {
       const nativeState = await saveNativeTfState(state);
-      return normalizeTfAppState(nativeState);
+      const normalized = normalizeTfAppState(nativeState);
+      saveTfStateToLocalStorage(normalized);
+      return normalized;
     } catch {
       return saveTfStateToLocalStorage(state);
     }
