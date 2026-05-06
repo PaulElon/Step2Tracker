@@ -4,6 +4,15 @@ import type {
   TfSummaryPayload,
   TfTrackerPrefs,
   TfAccountState,
+  TfAutoTrackerV2DevContinuousWriteStatus,
+  TfAutoTrackerV2DevRecoveryStatus,
+  TfAutoTrackerV2DevPersistedEvent,
+  TfAutoTrackerV2DevPersistedOpenPreviewSession,
+  TfAutoTrackerV2DevPersistedSamplerStatus,
+  TfAutoTrackerV2DevPersistedState,
+  TfTrackerRule,
+  TfTrackerRuleInput,
+  TfTrackerRuleKind,
 } from "../types/models";
 import {
   loadNativeTfState,
@@ -13,6 +22,56 @@ import {
 
 export const TF_STATE_VERSION = 1;
 export const TF_STORAGE_KEY = "timefolio-tracker:state";
+export const TF_AUTOTRACKER_V2_DEV_STATE_STORAGE_KEY =
+  "timefolio-tracker:autotracker-v2-dev-preview";
+export const TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION = 1;
+export const TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT = 2_000;
+export const TF_AUTOTRACKER_V2_DEV_WRITTEN_ID_LIMIT = 2_000;
+
+export interface QueuedTfStateSaveResult {
+  saved: TfAppState;
+  isLatest: boolean;
+  requestId: number;
+}
+
+export interface TfStorageLike {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+export interface TfPersistenceRuntime {
+  isNativeRuntime(): boolean;
+  localStorage: TfStorageLike | null | (() => TfStorageLike | null);
+  loadNativeState(): Promise<TfAppState>;
+  saveNativeState(state: TfAppState): Promise<TfAppState>;
+  resetNativeState(): Promise<TfAppState>;
+}
+
+export function createQueuedTfStateSaver(
+  save: (state: TfAppState) => Promise<TfAppState>,
+): {
+  enqueue(state: TfAppState): Promise<QueuedTfStateSaveResult>;
+} {
+  let queue = Promise.resolve<void>(undefined);
+  let latestRequestId = 0;
+
+  return {
+    enqueue(state: TfAppState) {
+      const requestId = ++latestRequestId;
+      const pending = queue.then(() => save(state));
+      queue = pending.then(
+        () => undefined,
+        () => undefined,
+      );
+      return pending.then((saved) => ({
+        saved,
+        isLatest: requestId === latestRequestId,
+        requestId,
+      }));
+    },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Empty / default state
@@ -53,6 +112,186 @@ function safeBoolean(v: unknown, fallback = false): boolean {
 function safeStringArray(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
   return v.filter((x): x is string => typeof x === "string");
+}
+
+function safeNullableString(v: unknown): string | null {
+  return typeof v === "string" ? v : null;
+}
+
+function safeNullableNumber(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+const TRACKER_RULE_NAME_OVERRIDES: Record<string, string> = {
+  amboss: "AMBOSS",
+  anki: "Anki",
+  chatgpt: "ChatGPT",
+  reddit: "Reddit",
+  uworld: "UWorld",
+};
+
+const GENERIC_HOST_SEGMENTS = new Set([
+  "app",
+  "apps",
+  "beta",
+  "docs",
+  "help",
+  "learn",
+  "m",
+  "portal",
+  "support",
+  "web",
+  "www",
+]);
+
+function titleizeTrackerRuleSegment(value: string): string {
+  const normalized = value.trim().replace(/[-_]+/gu, " ");
+  if (!normalized) {
+    return "";
+  }
+
+  const override = TRACKER_RULE_NAME_OVERRIDES[normalized.toLowerCase()];
+  if (override) {
+    return override;
+  }
+
+  return normalized
+    .split(/\s+/u)
+    .filter((part) => part.length > 0)
+    .map((part) => {
+      const partOverride = TRACKER_RULE_NAME_OVERRIDES[part.toLowerCase()];
+      if (partOverride) {
+        return partOverride;
+      }
+      return `${part.slice(0, 1).toUpperCase()}${part.slice(1).toLowerCase()}`;
+    })
+    .join(" ");
+}
+
+function extractAppNameFromTarget(target: string): string {
+  const trimmed = target.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const withoutQuery = trimmed.split(/[?#]/u)[0].replace(/\/+$/u, "");
+  const lastSegment = withoutQuery.split("/").filter((part) => part.length > 0).pop() ?? withoutQuery;
+  if (!lastSegment) {
+    return "";
+  }
+
+  if (lastSegment.toLowerCase().endsWith(".app")) {
+    return lastSegment.slice(0, -4);
+  }
+
+  return titleizeTrackerRuleSegment(lastSegment.replace(/\.[a-z0-9]+$/iu, ""));
+}
+
+function extractWebsiteNameFromTarget(target: string): string {
+  const trimmed = target.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const candidates = [trimmed, `https://${trimmed}`];
+  for (const candidate of candidates) {
+    try {
+      const url = new URL(candidate);
+      const hostParts = url.hostname
+        .trim()
+        .toLowerCase()
+        .replace(/\.+$/u, "")
+        .split(".")
+        .filter((part) => part.length > 0);
+      if (hostParts.length === 0) {
+        continue;
+      }
+
+      const nonTldParts = hostParts.length > 1 ? hostParts.slice(0, -1) : hostParts;
+      const preferredPart =
+        [...nonTldParts].reverse().find((part) => !GENERIC_HOST_SEGMENTS.has(part)) ??
+        nonTldParts[nonTldParts.length - 1] ??
+        hostParts[0];
+      const titled = titleizeTrackerRuleSegment(preferredPart);
+      if (titled) {
+        return titled;
+      }
+
+      return url.hostname.replace(/^www\./u, "");
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  return titleizeTrackerRuleSegment(trimmed);
+}
+
+function buildTrackerRuleId(kind: TfTrackerRuleKind, index: number, target: string): string {
+  const normalizedTarget =
+    target
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gu, "-")
+      .replace(/^-+|-+$/gu, "")
+      .slice(0, 48) || "rule";
+  return `tf-rule-${kind}-${index}-${normalizedTarget}`;
+}
+
+export function deriveTfTrackerRuleName(target: string, kind: TfTrackerRuleKind): string {
+  const derived =
+    kind === "app" ? extractAppNameFromTarget(target) : extractWebsiteNameFromTarget(target);
+  return derived || target.trim() || (kind === "app" ? "App" : "Website");
+}
+
+function normalizeTrackerRule(
+  value: TfTrackerRuleInput | unknown,
+  kind: TfTrackerRuleKind,
+  index: number,
+): TfTrackerRule | null {
+  if (typeof value === "string") {
+    const target = value.trim();
+    if (!target) {
+      return null;
+    }
+
+    return {
+      id: buildTrackerRuleId(kind, index, target),
+      name: deriveTfTrackerRuleName(target, kind),
+      target,
+      kind,
+    };
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const target = safeString(raw.target).trim();
+  if (!target) {
+    return null;
+  }
+
+  const id = safeString(raw.id).trim() || buildTrackerRuleId(kind, index, target);
+  const name = safeString(raw.name).trim() || deriveTfTrackerRuleName(target, kind);
+
+  return {
+    id,
+    name,
+    target,
+    kind,
+  };
+}
+
+function normalizeTrackerRuleArray(value: unknown, kind: TfTrackerRuleKind): TfTrackerRule[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry, index) => normalizeTrackerRule(entry as TfTrackerRuleInput | unknown, kind, index))
+    .filter((entry): entry is TfTrackerRule => entry !== null);
 }
 
 function normalizeSession(entry: unknown): TfSessionLog | null {
@@ -101,10 +340,10 @@ function normalizeSummary(entry: unknown): TfSummaryPayload | null {
 function normalizeTrackerPrefs(v: unknown): TfTrackerPrefs {
   const p = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
   return {
-    customAutoApps: safeStringArray(p.customAutoApps),
-    customAutoWebsites: safeStringArray(p.customAutoWebsites),
-    customDistractionApps: safeStringArray(p.customDistractionApps),
-    customDistractionWebsites: safeStringArray(p.customDistractionWebsites),
+    customAutoApps: normalizeTrackerRuleArray(p.customAutoApps, "app"),
+    customAutoWebsites: normalizeTrackerRuleArray(p.customAutoWebsites, "website"),
+    customDistractionApps: normalizeTrackerRuleArray(p.customDistractionApps, "app"),
+    customDistractionWebsites: normalizeTrackerRuleArray(p.customDistractionWebsites, "website"),
   };
 }
 
@@ -154,6 +393,277 @@ export function normalizeTfAppState(input: unknown): TfAppState {
   }
 }
 
+function normalizeTfAutoTrackerV2DevEvent(
+  value: unknown,
+): TfAutoTrackerV2DevPersistedEvent | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const id = safeString(raw.id).trim();
+  const timestampMs = safeNullableNumber(raw.timestampMs);
+  if (!id || timestampMs === null) {
+    return null;
+  }
+
+  const kind = safeString(raw.kind).trim();
+  if (
+    kind !== "targetFocused" &&
+    kind !== "untrackedFocused" &&
+    kind !== "idleChanged" &&
+    kind !== "appShutdown" &&
+    kind !== "permissionStatus" &&
+    kind !== "error"
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    kind,
+    timestampMs,
+    platform: "macos",
+    appName: safeString(raw.appName).trim() || undefined,
+    bundleId: safeString(raw.bundleId).trim() || undefined,
+    windowTitle: safeString(raw.windowTitle).trim() || undefined,
+    isIdle: typeof raw.isIdle === "boolean" ? raw.isIdle : undefined,
+    browserTitle: safeString(raw.browserTitle).trim() || undefined,
+    browserUrl: safeString(raw.browserUrl).trim() || undefined,
+    browserTabError: safeString(raw.browserTabError).trim() || undefined,
+    error: safeString(raw.error).trim() || undefined,
+  };
+}
+
+function normalizeTfAutoTrackerV2DevSamplerStatus(
+  value: unknown,
+): TfAutoTrackerV2DevPersistedSamplerStatus | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  return {
+    running: safeBoolean(raw.running),
+    intervalMs: Math.max(0, safeNumber(raw.intervalMs, 0)),
+    tickCount: Math.max(0, safeNumber(raw.tickCount, 0)),
+    lastTickStartedAtMs: safeNullableNumber(raw.lastTickStartedAtMs),
+    lastTickCompletedAtMs: safeNullableNumber(raw.lastTickCompletedAtMs),
+    lastAppendedCount: Math.max(0, safeNumber(raw.lastAppendedCount, 0)),
+    lastError: safeNullableString(raw.lastError),
+    lastObservedAppName: safeNullableString(raw.lastObservedAppName),
+    lastObservedBundleId: safeNullableString(raw.lastObservedBundleId),
+    bufferCount: Math.max(0, safeNumber(raw.bufferCount, 0)),
+  };
+}
+
+function normalizeTfAutoTrackerV2DevContinuousWriteStatus(
+  value: unknown,
+): TfAutoTrackerV2DevContinuousWriteStatus | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  return {
+    writtenCount: Math.max(0, safeNumber(raw.writtenCount, 0)),
+    names: safeStringArray(raw.names),
+    skippedDuplicateCount: Math.max(0, safeNumber(raw.skippedDuplicateCount, 0)),
+    error: safeNullableString(raw.error),
+  };
+}
+
+function normalizeTfAutoTrackerV2DevRecoveryStatus(
+  value: unknown,
+): TfAutoTrackerV2DevRecoveryStatus {
+  return value === "recoverable" ||
+    value === "finalizable" ||
+    value === "finalized" ||
+    value === "ignored" ||
+    value === "noEligibleSession"
+    ? value
+    : "noEligibleSession";
+}
+
+function normalizeTfAutoTrackerV2DevPersistedOpenPreviewSession(
+  value: unknown,
+): TfAutoTrackerV2DevPersistedOpenPreviewSession | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const previewSessionId = safeString(raw.previewSessionId).trim();
+  const sourceTargetStableId = safeString(raw.sourceTargetStableId).trim();
+  const targetLabel = safeString(raw.targetLabel).trim();
+  const classificationReason = safeString(raw.classificationReason).trim();
+  const startedAtMs = safeNullableNumber(raw.startedAtMs);
+  const lastSeenAtMs = safeNullableNumber(raw.lastSeenAtMs);
+  const classification =
+    raw.classification === "tracked" ||
+    raw.classification === "distraction" ||
+    raw.classification === "unclassified"
+      ? raw.classification
+      : null;
+
+  if (
+    !previewSessionId ||
+    !sourceTargetStableId ||
+    !targetLabel ||
+    !classificationReason ||
+    startedAtMs === null ||
+    lastSeenAtMs === null ||
+    classification === null
+  ) {
+    return null;
+  }
+
+  return {
+    previewSessionId,
+    startedAtMs,
+    lastSeenAtMs,
+    targetLabel,
+    matchedRuleName: safeString(raw.matchedRuleName).trim() || undefined,
+    matchedRuleTarget: safeString(raw.matchedRuleTarget).trim() || undefined,
+    sourceTargetStableId,
+    sourceSpanIds: safeStringArray(raw.sourceSpanIds),
+    sourceEventIds: safeStringArray(raw.sourceEventIds),
+    appName: safeString(raw.appName).trim() || undefined,
+    bundleId: safeString(raw.bundleId).trim() || undefined,
+    browserTitle: safeString(raw.browserTitle).trim() || undefined,
+    browserUrl: safeString(raw.browserUrl).trim() || undefined,
+    classificationReason,
+    classification,
+    isDistraction: safeBoolean(raw.isDistraction, classification === "distraction"),
+  };
+}
+
+function normalizeTfAutoTrackerV2DevWrittenPreviewSessionIds(value: unknown): string[] {
+  const seen = new Set<string>();
+  const ids = safeStringArray(value)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+    .filter((entry) => {
+      if (seen.has(entry)) {
+        return false;
+      }
+      seen.add(entry);
+      return true;
+    });
+  return ids.slice(-TF_AUTOTRACKER_V2_DEV_WRITTEN_ID_LIMIT);
+}
+
+export function normalizeTfAutoTrackerV2DevPersistedState(
+  input: unknown,
+): TfAutoTrackerV2DevPersistedState | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+
+  const raw = input as Record<string, unknown>;
+  const schemaVersion = safeNumber(
+    raw.schemaVersion,
+    TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION,
+  );
+  if (schemaVersion !== TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION) {
+    return null;
+  }
+
+  const events = Array.isArray(raw.events)
+    ? raw.events
+        .map((entry) => normalizeTfAutoTrackerV2DevEvent(entry))
+        .filter((entry): entry is TfAutoTrackerV2DevPersistedEvent => entry !== null)
+        .slice(-TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT)
+    : [];
+  const samplerStatus = normalizeTfAutoTrackerV2DevSamplerStatus(raw.samplerStatus);
+
+  return {
+    schemaVersion: TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION,
+    lastPersistedAtMs: Math.max(
+      0,
+      safeNumber(raw.lastPersistedAtMs ?? raw.savedAtMs, 0),
+    ),
+    events,
+    writtenPreviewSessionIds: normalizeTfAutoTrackerV2DevWrittenPreviewSessionIds(
+      raw.writtenPreviewSessionIds,
+    ),
+    samplerStatus,
+    continuousWriteStatus: normalizeTfAutoTrackerV2DevContinuousWriteStatus(
+      raw.continuousWriteStatus,
+    ),
+    lastSamplerRunning: safeBoolean(raw.lastSamplerRunning, samplerStatus?.running ?? false),
+    lastSamplerTickCompletedAtMs:
+      safeNullableNumber(raw.lastSamplerTickCompletedAtMs) ??
+      samplerStatus?.lastTickCompletedAtMs ??
+      null,
+    lastEligibleOpenPreviewSession: normalizeTfAutoTrackerV2DevPersistedOpenPreviewSession(
+      raw.lastEligibleOpenPreviewSession,
+    ),
+    recoveryStatus: normalizeTfAutoTrackerV2DevRecoveryStatus(raw.recoveryStatus),
+    lastRecoveryMessage: safeNullableString(raw.lastRecoveryMessage),
+  };
+}
+
+function hasTfAutoTrackerV2DevPersistedStateData(
+  state: TfAutoTrackerV2DevPersistedState,
+): boolean {
+  return (
+    state.events.length > 0 ||
+    state.writtenPreviewSessionIds.length > 0 ||
+    state.samplerStatus !== null ||
+    state.continuousWriteStatus !== null ||
+    state.lastSamplerRunning ||
+    state.lastSamplerTickCompletedAtMs !== null ||
+    state.lastEligibleOpenPreviewSession !== null ||
+    state.recoveryStatus !== "noEligibleSession" ||
+    state.lastRecoveryMessage !== null
+  );
+}
+
+export function loadTfAutoTrackerV2DevPersistedState(): TfAutoTrackerV2DevPersistedState | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(TF_AUTOTRACKER_V2_DEV_STATE_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    return normalizeTfAutoTrackerV2DevPersistedState(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+export function saveTfAutoTrackerV2DevPersistedState(
+  state: TfAutoTrackerV2DevPersistedState,
+): TfAutoTrackerV2DevPersistedState | null {
+  const normalized = normalizeTfAutoTrackerV2DevPersistedState(state);
+  if (typeof window === "undefined" || normalized === null) {
+    return normalized;
+  }
+
+  if (!hasTfAutoTrackerV2DevPersistedStateData(normalized)) {
+    window.localStorage.removeItem(TF_AUTOTRACKER_V2_DEV_STATE_STORAGE_KEY);
+    return null;
+  }
+
+  window.localStorage.setItem(
+    TF_AUTOTRACKER_V2_DEV_STATE_STORAGE_KEY,
+    JSON.stringify(normalized),
+  );
+  return normalized;
+}
+
+export function clearTfAutoTrackerV2DevPersistedState(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(TF_AUTOTRACKER_V2_DEV_STATE_STORAGE_KEY);
+}
+
 // ---------------------------------------------------------------------------
 // Browser / localStorage persistence
 // ---------------------------------------------------------------------------
@@ -163,9 +673,26 @@ function isNativeTauriRuntime(): boolean {
   return typeof (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== "undefined";
 }
 
-function loadTfStateFromLocalStorage(): TfAppState {
+function getBrowserStorage(): TfStorageLike | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.localStorage;
+}
+
+function resolveStorage(
+  storage: TfStorageLike | null | (() => TfStorageLike | null),
+): TfStorageLike | null {
+  return typeof storage === "function" ? storage() : storage;
+}
+
+function loadTfStateFromLocalStorage(storage: TfStorageLike | null): TfAppState {
+  if (!storage) {
+    return getEmptyTfAppState();
+  }
+
   try {
-    const raw = window.localStorage.getItem(TF_STORAGE_KEY);
+    const raw = storage.getItem(TF_STORAGE_KEY);
     if (!raw) return getEmptyTfAppState();
     const parsed: unknown = JSON.parse(raw);
     return normalizeTfAppState(parsed);
@@ -174,66 +701,77 @@ function loadTfStateFromLocalStorage(): TfAppState {
   }
 }
 
-function saveTfStateToLocalStorage(state: TfAppState): TfAppState {
+function saveTfStateToLocalStorage(storage: TfStorageLike | null, state: TfAppState): TfAppState {
   const normalized = normalizeTfAppState(state);
-  window.localStorage.setItem(TF_STORAGE_KEY, JSON.stringify(normalized));
+  storage?.setItem(TF_STORAGE_KEY, JSON.stringify(normalized));
   return normalized;
 }
 
-function resetTfStateToLocalStorage(): TfAppState {
+function resetTfStateToLocalStorage(storage: TfStorageLike | null): TfAppState {
   const empty = getEmptyTfAppState();
-  window.localStorage.setItem(TF_STORAGE_KEY, JSON.stringify(empty));
+  storage?.setItem(TF_STORAGE_KEY, JSON.stringify(empty));
   return empty;
 }
 
-export async function loadTfState(): Promise<TfAppState> {
-  if (isNativeTauriRuntime()) {
-    try {
-      const nativeState = await loadNativeTfState();
-      return normalizeTfAppState(nativeState);
-    } catch {
-      return loadTfStateFromLocalStorage();
-    }
-  }
+export function createTfPersistenceApi(runtime: TfPersistenceRuntime): {
+  load(): Promise<TfAppState>;
+  save(state: TfAppState): Promise<TfAppState>;
+  reset(): Promise<TfAppState>;
+} {
+  return {
+    async load(): Promise<TfAppState> {
+      if (runtime.isNativeRuntime()) {
+        const nativeState = await runtime.loadNativeState();
+        const normalized = normalizeTfAppState(nativeState);
+        saveTfStateToLocalStorage(resolveStorage(runtime.localStorage), normalized);
+        return normalized;
+      }
 
-  return loadTfStateFromLocalStorage();
+      return loadTfStateFromLocalStorage(resolveStorage(runtime.localStorage));
+    },
+
+    async save(state: TfAppState): Promise<TfAppState> {
+      if (runtime.isNativeRuntime()) {
+        const nativeState = await runtime.saveNativeState(state);
+        const normalized = normalizeTfAppState(nativeState);
+        saveTfStateToLocalStorage(resolveStorage(runtime.localStorage), normalized);
+        return normalized;
+      }
+
+      return saveTfStateToLocalStorage(resolveStorage(runtime.localStorage), state);
+    },
+
+    async reset(): Promise<TfAppState> {
+      if (runtime.isNativeRuntime()) {
+        const nativeState = await runtime.resetNativeState();
+        const normalized = normalizeTfAppState(nativeState);
+        saveTfStateToLocalStorage(resolveStorage(runtime.localStorage), normalized);
+        return normalized;
+      }
+
+      return resetTfStateToLocalStorage(resolveStorage(runtime.localStorage));
+    },
+  };
+}
+
+const tfPersistenceApi = createTfPersistenceApi({
+  isNativeRuntime: isNativeTauriRuntime,
+  localStorage: getBrowserStorage,
+  loadNativeState: loadNativeTfState,
+  saveNativeState: saveNativeTfState,
+  resetNativeState: resetNativeTfState,
+});
+
+export async function loadTfState(): Promise<TfAppState> {
+  return tfPersistenceApi.load();
 }
 
 export async function saveTfState(state: TfAppState): Promise<TfAppState> {
-  if (isNativeTauriRuntime()) {
-    try {
-      const nativeState = await saveNativeTfState(state);
-      return normalizeTfAppState(nativeState);
-    } catch {
-      return saveTfStateToLocalStorage(state);
-    }
-  }
-
-  return saveTfStateToLocalStorage(state);
+  return tfPersistenceApi.save(state);
 }
 
 export async function resetTfState(): Promise<TfAppState> {
-  const empty = getEmptyTfAppState();
-
-  if (isNativeTauriRuntime()) {
-    try {
-      const nativeState = await resetNativeTfState();
-      const normalized = normalizeTfAppState(nativeState);
-      saveTfStateToLocalStorage(normalized);
-      return normalized;
-    } catch {
-      try {
-        const savedEmpty = await saveNativeTfState(empty);
-        const normalized = normalizeTfAppState(savedEmpty);
-        saveTfStateToLocalStorage(normalized);
-        return normalized;
-      } catch {
-        return resetTfStateToLocalStorage();
-      }
-    }
-  }
-
-  return resetTfStateToLocalStorage();
+  return tfPersistenceApi.reset();
 }
 
 // ---------------------------------------------------------------------------

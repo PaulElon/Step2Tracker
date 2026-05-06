@@ -1,10 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
+  createQueuedTfStateSaver,
   deleteTfSessionLog,
   getEmptyTfAppState,
   loadTfState,
-  resetTfState,
   saveTfState,
   upsertTfSessionLog,
 } from "../lib/tf-storage";
@@ -42,6 +42,8 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const stateRef = useRef(state);
+  const queuedSaverRef = useRef(createQueuedTfStateSaver(saveTfState));
 
   useEffect(() => {
     mountedRef.current = true;
@@ -50,14 +52,56 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  const applyState = useCallback((nextState: TfAppState) => {
+    stateRef.current = nextState;
+    if (mountedRef.current) {
+      setState(nextState);
+    }
+  }, []);
+
+  const persistQueuedState = useCallback(
+    async (nextState: TfAppState) => {
+      const result = await queuedSaverRef.current.enqueue(nextState);
+      if (result.isLatest) {
+        applyState(result.saved);
+      }
+      return result.saved;
+    },
+    [applyState],
+  );
+
+  const commitStateChange = useCallback(
+    async (mutate: (prev: TfAppState) => TfAppState) => {
+      setError(null);
+      const previous = stateRef.current;
+      const next = mutate(previous);
+      applyState(next);
+
+      try {
+        return await persistQueuedState(next);
+      } catch (err) {
+        if (stateRef.current === next) {
+          applyState(previous);
+        }
+        if (mountedRef.current) {
+          setError(toErrorString(err));
+        }
+        throw err;
+      }
+    },
+    [applyState, persistQueuedState],
+  );
+
   const reload = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const loaded = await loadTfState();
-      if (mountedRef.current) {
-        setState(loaded);
-      }
+      applyState(loaded);
     } catch (err) {
       if (mountedRef.current) {
         setError(toErrorString(err));
@@ -74,90 +118,47 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
   }, [reload]);
 
   const reset = useCallback(async () => {
-    setError(null);
-    try {
-      const empty = await resetTfState();
-      if (mountedRef.current) {
-        setState(empty);
-      }
-    } catch (err) {
-      if (mountedRef.current) {
-        setError(toErrorString(err));
-      }
-    }
-  }, []);
+    await commitStateChange(() => getEmptyTfAppState());
+  }, [commitStateChange]);
 
-  const saveState = useCallback(async (nextState: TfAppState) => {
-    setError(null);
-    try {
-      const saved = await saveTfState(nextState);
-      if (mountedRef.current) {
-        setState(saved);
-      }
-    } catch (err) {
-      if (mountedRef.current) {
-        setError(toErrorString(err));
-      }
-    }
-  }, []);
+  const saveState = useCallback(
+    async (nextState: TfAppState) => {
+      await commitStateChange(() => nextState);
+    },
+    [commitStateChange],
+  );
 
-  const upsertSessionLog = useCallback(async (session: TfSessionLog) => {
-    setError(null);
-    try {
-      setState((prev) => {
-        const next = upsertTfSessionLog(prev, session);
-        saveTfState(next).catch((err) => {
-          if (mountedRef.current) {
-            setError(toErrorString(err));
-            setState(prev);
-          }
-        });
-        return next;
-      });
-    } catch (err) {
-      if (mountedRef.current) {
-        setError(toErrorString(err));
-      }
-    }
-  }, []);
+  const upsertSessionLog = useCallback(
+    async (session: TfSessionLog) => {
+      await commitStateChange((prev) => upsertTfSessionLog(prev, session));
+    },
+    [commitStateChange],
+  );
 
-  const deleteSessionLog = useCallback(async (id: string) => {
-    setError(null);
-    try {
-      setState((prev) => {
-        const next = deleteTfSessionLog(prev, id);
-        saveTfState(next).catch((err) => {
-          if (mountedRef.current) {
-            setError(toErrorString(err));
-            setState(prev);
-          }
-        });
-        return next;
-      });
-    } catch (err) {
-      if (mountedRef.current) {
-        setError(toErrorString(err));
-      }
-    }
-  }, []);
+  const deleteSessionLog = useCallback(
+    async (id: string) => {
+      await commitStateChange((prev) => deleteTfSessionLog(prev, id));
+    },
+    [commitStateChange],
+  );
 
   const importNativeSpans = useCallback(
     async (spans: NativeTrackerSpanInput[]) => {
       setError(null);
       try {
-        const { newEntries, skipped, ackKeys } = reconcileNativeSpansToSessions(spans, state.sessionLogs);
+        const currentState = stateRef.current;
+        const { newEntries, skipped, ackKeys } = reconcileNativeSpansToSessions(
+          spans,
+          currentState.sessionLogs,
+        );
         if (newEntries.length === 0) {
           return { imported: 0, skipped, ackKeys };
         }
 
-        const nextState: TfAppState = {
-          ...state,
-          sessionLogs: [...state.sessionLogs, ...newEntries],
-        };
-        const saved = await saveTfState(nextState);
-        if (mountedRef.current) {
-          setState(saved);
-        }
+        await commitStateChange((prev) => ({
+          ...prev,
+          sessionLogs: [...prev.sessionLogs, ...newEntries],
+        }));
         return { imported: newEntries.length, skipped, ackKeys };
       } catch (err) {
         if (mountedRef.current) {
@@ -166,7 +167,7 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     },
-    [state]
+    [commitStateChange],
   );
 
   const value: TimeFolioStoreValue = {

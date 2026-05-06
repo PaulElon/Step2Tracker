@@ -385,11 +385,22 @@ export interface TfSummaryPayload {
   };
 }
 
+export type TfTrackerRuleKind = "website" | "app";
+
+export interface TfTrackerRule {
+  id: string;
+  name: string;
+  target: string;
+  kind: TfTrackerRuleKind;
+}
+
+export type TfTrackerRuleInput = TfTrackerRule | string;
+
 export interface TfTrackerPrefs {
-  customAutoApps: string[];
-  customAutoWebsites: string[];
-  customDistractionApps: string[];
-  customDistractionWebsites: string[];
+  customAutoApps: TfTrackerRule[];
+  customAutoWebsites: TfTrackerRule[];
+  customDistractionApps: TfTrackerRule[];
+  customDistractionWebsites: TfTrackerRule[];
 }
 
 export interface TfAccountState {
@@ -401,6 +412,89 @@ export interface TfAccountState {
   planTier: "free" | "pro";
   themeUnlocks: string[];
   billingCustomerId: string | null;
+}
+
+export type TfAutoTrackerV2DevEventKind =
+  | "targetFocused"
+  | "untrackedFocused"
+  | "idleChanged"
+  | "appShutdown"
+  | "permissionStatus"
+  | "error";
+
+export interface TfAutoTrackerV2DevPersistedEvent {
+  id: string;
+  kind: TfAutoTrackerV2DevEventKind;
+  timestampMs: number;
+  platform: "macos";
+  appName?: string;
+  bundleId?: string;
+  windowTitle?: string;
+  isIdle?: boolean;
+  browserTitle?: string;
+  browserUrl?: string;
+  browserTabError?: string;
+  error?: string;
+}
+
+export interface TfAutoTrackerV2DevPersistedSamplerStatus {
+  running: boolean;
+  intervalMs: number;
+  tickCount: number;
+  lastTickStartedAtMs: number | null;
+  lastTickCompletedAtMs: number | null;
+  lastAppendedCount: number;
+  lastError: string | null;
+  lastObservedAppName: string | null;
+  lastObservedBundleId: string | null;
+  bufferCount: number;
+}
+
+export interface TfAutoTrackerV2DevContinuousWriteStatus {
+  writtenCount: number;
+  names: string[];
+  skippedDuplicateCount: number;
+  error: string | null;
+}
+
+export type TfAutoTrackerV2DevRecoveryStatus =
+  | "recoverable"
+  | "finalizable"
+  | "finalized"
+  | "ignored"
+  | "noEligibleSession";
+
+export interface TfAutoTrackerV2DevPersistedOpenPreviewSession {
+  previewSessionId: string;
+  startedAtMs: number;
+  lastSeenAtMs: number;
+  targetLabel: string;
+  matchedRuleName?: string;
+  matchedRuleTarget?: string;
+  sourceTargetStableId: string;
+  sourceSpanIds: string[];
+  sourceEventIds: string[];
+  appName?: string;
+  bundleId?: string;
+  browserTitle?: string;
+  browserUrl?: string;
+  classificationReason: string;
+  classification: "tracked" | "distraction" | "unclassified";
+  isDistraction: boolean;
+}
+
+export interface TfAutoTrackerV2DevPersistedState {
+  schemaVersion: 1;
+  lastPersistedAtMs: number;
+  events: TfAutoTrackerV2DevPersistedEvent[];
+  writtenPreviewSessionIds: string[];
+  samplerStatus: TfAutoTrackerV2DevPersistedSamplerStatus | null;
+  continuousWriteStatus: TfAutoTrackerV2DevContinuousWriteStatus | null;
+  lastSamplerRunning: boolean;
+  lastSamplerTickCompletedAtMs: number | null;
+  lastEligibleOpenPreviewSession: TfAutoTrackerV2DevPersistedOpenPreviewSession | null;
+  recoveryStatus: TfAutoTrackerV2DevRecoveryStatus;
+  lastRecoveryMessage: string | null;
 }
 
 export interface TfAppState {

@@ -2,6 +2,7 @@
 
 mod persistence;
 mod tf_autotracker;
+mod tf_autotracker_v2_native;
 mod tf_persistence;
 mod updater;
 
@@ -469,6 +470,17 @@ fn main() {
             upsert_error_log_entry,
             trash_error_log_entry,
             tf_autotracker::tf_autotracker_probe_bootstrap,
+            tf_autotracker_v2_native::tf_autotracker_v2_native_probe,
+            tf_autotracker_v2_native::tf_autotracker_v2_native_snapshot,
+            tf_autotracker_v2_native::tf_autotracker_v2_native_clear_buffer,
+            tf_autotracker_v2_native::tf_autotracker_v2_native_capture_once,
+            tf_autotracker_v2_native::tf_autotracker_v2_native_recovery_read,
+            tf_autotracker_v2_native::tf_autotracker_v2_native_recovery_diagnostics,
+            tf_autotracker_v2_native::tf_autotracker_v2_native_recovery_clear,
+            tf_autotracker_v2_native::tf_autotracker_v2_native_recovery_debug_write_now,
+            tf_autotracker_v2_native::tf_autotracker_v2_native_sampler_start,
+            tf_autotracker_v2_native::tf_autotracker_v2_native_sampler_stop,
+            tf_autotracker_v2_native::tf_autotracker_v2_native_sampler_status,
             tf_persistence::tf_load_state,
             tf_persistence::tf_save_state,
             tf_persistence::tf_reset_state,
