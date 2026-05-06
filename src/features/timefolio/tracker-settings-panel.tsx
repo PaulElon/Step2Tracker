@@ -40,6 +40,10 @@ import {
   shouldStartAutoTrackerV2StartupRecoveryHydration,
   type TfAutotrackerV2FinalizedPreviewSession,
 } from "../../lib/tf-autotracker-v2-reducer-preview";
+import {
+  AutoTrackerV2UserControlCard,
+  type AutoTrackerV2UserControlMessage,
+} from "./autotracker-v2-user-control-card";
 import type { NativeTrackerSpanInput } from "../../lib/tf-native-span-reconciler";
 import {
   TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION,
@@ -820,6 +824,9 @@ export function TrackerSettingsPanel() {
   const [v2IsBusy, setV2IsBusy] = useState(false);
   const [v2SamplerActionBusy, setV2SamplerActionBusy] = useState(false);
   const [v2DelayCountdown, setV2DelayCountdown] = useState<number | null>(null);
+  const [v2UserModeMessage, setV2UserModeMessage] = useState<AutoTrackerV2UserControlMessage>(
+    null,
+  );
   const [v2SamplerStatus, setV2SamplerStatus] = useState<AutoTrackerV2NativeSamplerStatus | null>(
     null,
   );
@@ -875,6 +882,7 @@ export function TrackerSettingsPanel() {
   const v2DelayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const v2WritingPreviewSessionIdsRef = useRef<Set<string>>(new Set());
   const v2DidHydratePersistedStateRef = useRef(false);
+  const isV2SamplerStatusEnabled = FF.autotrackerV2NativeSampler || FF.autotrackerV2UserMode;
 
   useEffect(() => {
     setDraftPrefs(cloneTrackerPrefs(state.trackerPrefs));
@@ -898,6 +906,7 @@ export function TrackerSettingsPanel() {
         hasAppliedHydration: v2DidHydratePersistedStateRef.current,
         nativeInspectorEnabled: FF.autotrackerV2NativeInspector,
         nativeSamplerEnabled: FF.autotrackerV2NativeSampler,
+        userModeEnabled: FF.autotrackerV2UserMode,
       })
     ) {
       return;
@@ -972,13 +981,27 @@ export function TrackerSettingsPanel() {
       ...v2WritingPreviewSessionIdsRef.current,
     ]),
   });
+  const v2UserModeRecoveryAvailable =
+    currentPersistedRecoveryAssessment.status === "recoverable" ||
+    currentPersistedRecoveryAssessment.status === "finalizable" ||
+    recoveredPreviewAssessment.status === "recoverable" ||
+    recoveredPreviewAssessment.status === "finalizable";
+  const v2UserModeRecoveryDetail = currentPersistedRecoveryAssessment.canFinalize
+    ? "The current tracked or distraction session can be saved now."
+    : currentPersistedRecoveryAssessment.status === "recoverable"
+      ? "The current tracked or distraction session is still within the stop-and-save window."
+      : recoveredPreviewAssessment.canFinalize
+        ? "A previously interrupted tracked or distraction session can be saved now."
+        : recoveredPreviewAssessment.status === "recoverable"
+          ? "A previously interrupted tracked or distraction session is still within the recovery window."
+          : "No recoverable session is currently available.";
 
   function persistAutoTrackerV2DevState(updateUi = true): void {
     if (!v2HasLoadedPersistedState) {
       return;
     }
 
-    if (!FF.autotrackerV2NativeInspector && !FF.autotrackerV2NativeSampler) {
+    if (!FF.autotrackerV2NativeInspector && !isV2SamplerStatusEnabled) {
       return;
     }
 
@@ -1024,14 +1047,14 @@ export function TrackerSettingsPanel() {
       return;
     }
 
-    if (!FF.autotrackerV2NativeInspector && !FF.autotrackerV2NativeSampler) {
+    if (!FF.autotrackerV2NativeInspector && !isV2SamplerStatusEnabled) {
       return;
     }
 
     persistAutoTrackerV2DevState();
   }, [
     FF.autotrackerV2NativeInspector,
-    FF.autotrackerV2NativeSampler,
+    isV2SamplerStatusEnabled,
     v2ContinuousWriteStatus,
     v2SamplerStatus,
     v2HasLoadedPersistedState,
@@ -1045,7 +1068,7 @@ export function TrackerSettingsPanel() {
       return;
     }
 
-    if (!FF.autotrackerV2NativeInspector && !FF.autotrackerV2NativeSampler) {
+    if (!FF.autotrackerV2NativeInspector && !isV2SamplerStatusEnabled) {
       return;
     }
 
@@ -1063,7 +1086,7 @@ export function TrackerSettingsPanel() {
     };
   }, [
     FF.autotrackerV2NativeInspector,
-    FF.autotrackerV2NativeSampler,
+    isV2SamplerStatusEnabled,
     v2ContinuousWriteStatus,
     v2SamplerStatus,
     v2HasLoadedPersistedState,
@@ -1150,7 +1173,7 @@ export function TrackerSettingsPanel() {
   ]);
 
   useEffect(() => {
-    if (!FF.autotrackerV2NativeSampler || !isSamplerRunning) {
+    if (!isV2SamplerStatusEnabled || !isSamplerRunning) {
       return;
     }
 
@@ -1417,7 +1440,7 @@ export function TrackerSettingsPanel() {
     const [diagnosticsResult, recoveryResult, samplerStatusResult] = await Promise.allSettled([
       readAutoTrackerV2NativeRecoveryDiagnostics(),
       readAutoTrackerV2NativeRecovery(),
-      FF.autotrackerV2NativeSampler ? getAutoTrackerV2NativeSamplerStatus() : Promise.resolve(null),
+      isV2SamplerStatusEnabled ? getAutoTrackerV2NativeSamplerStatus() : Promise.resolve(null),
     ]);
 
     if (diagnosticsResult.status === "fulfilled") {
@@ -1564,7 +1587,7 @@ export function TrackerSettingsPanel() {
   }> {
     const [snapshot, samplerStatus, recoveryDiagnostics] = await Promise.all([
       snapshotAutoTrackerV2Native(),
-      FF.autotrackerV2NativeSampler ? getAutoTrackerV2NativeSamplerStatus() : Promise.resolve(null),
+      isV2SamplerStatusEnabled ? getAutoTrackerV2NativeSamplerStatus() : Promise.resolve(null),
       readAutoTrackerV2NativeRecoveryDiagnostics().catch(() => null),
     ]);
 
@@ -1588,9 +1611,7 @@ export function TrackerSettingsPanel() {
     try {
       const [status, samplerStatus, recoveryDiagnostics] = await Promise.all([
         probeAutoTrackerV2Native(),
-        FF.autotrackerV2NativeSampler
-          ? getAutoTrackerV2NativeSamplerStatus()
-          : Promise.resolve(null),
+        isV2SamplerStatusEnabled ? getAutoTrackerV2NativeSamplerStatus() : Promise.resolve(null),
         readAutoTrackerV2NativeRecoveryDiagnostics().catch(() => null),
       ]);
       setV2ProbeStatus(status);
@@ -1655,9 +1676,7 @@ export function TrackerSettingsPanel() {
     try {
       const result = await debugWriteAutoTrackerV2NativeRecoveryNow();
       const [samplerStatus, recoveryDiagnostics] = await Promise.all([
-        FF.autotrackerV2NativeSampler
-          ? getAutoTrackerV2NativeSamplerStatus()
-          : Promise.resolve(null),
+        isV2SamplerStatusEnabled ? getAutoTrackerV2NativeSamplerStatus() : Promise.resolve(null),
         readAutoTrackerV2NativeRecoveryDiagnostics().catch(() => null),
       ]);
       setV2RecoveryDebugWriteResult(result);
@@ -1693,7 +1712,7 @@ export function TrackerSettingsPanel() {
         clearAutoTrackerV2NativeRecovery(),
       ]);
       setV2ProbeStatus(status);
-      if (FF.autotrackerV2NativeSampler) {
+      if (isV2SamplerStatusEnabled) {
         const samplerStatus = await getAutoTrackerV2NativeSamplerStatus();
         setV2SamplerStatus(samplerStatus);
       }
@@ -1800,15 +1819,24 @@ export function TrackerSettingsPanel() {
 
   async function handleV2StartNativeSampler() {
     setV2InspectorError(null);
+    setV2UserModeMessage(null);
     setV2SamplerActionBusy(true);
     try {
       const samplerStatus = await startAutoTrackerV2NativeSampler();
       setV2SamplerStatus(samplerStatus);
       await refreshV2SnapshotAndSamplerStatus();
+      setV2UserModeMessage({
+        tone: "success",
+        text: "Auto-Tracker started.",
+      });
     } catch (err) {
-      setV2InspectorError(
-        err instanceof Error && err.message ? err.message : "Unable to start native sampler.",
-      );
+      const message =
+        err instanceof Error && err.message ? err.message : "Unable to start Auto-Tracker.";
+      setV2InspectorError(message);
+      setV2UserModeMessage({
+        tone: "error",
+        text: message,
+      });
     } finally {
       setV2SamplerActionBusy(false);
     }
@@ -1816,15 +1844,24 @@ export function TrackerSettingsPanel() {
 
   async function handleV2StopNativeSampler() {
     setV2InspectorError(null);
+    setV2UserModeMessage(null);
     setV2SamplerActionBusy(true);
     try {
       const samplerStatus = await stopAutoTrackerV2NativeSampler();
       setV2SamplerStatus(samplerStatus);
       await refreshV2SnapshotAndSamplerStatus();
+      setV2UserModeMessage({
+        tone: "success",
+        text: "Auto-Tracker stopped.",
+      });
     } catch (err) {
-      setV2InspectorError(
-        err instanceof Error && err.message ? err.message : "Unable to stop native sampler.",
-      );
+      const message =
+        err instanceof Error && err.message ? err.message : "Unable to stop Auto-Tracker.";
+      setV2InspectorError(message);
+      setV2UserModeMessage({
+        tone: "error",
+        text: message,
+      });
     } finally {
       setV2SamplerActionBusy(false);
     }
@@ -1902,6 +1939,7 @@ export function TrackerSettingsPanel() {
     }
 
     setV2InspectorError(null);
+    setV2UserModeMessage(null);
     setV2StopFinalizeMessage(null);
     setV2IsStopFinalizing(true);
 
@@ -1935,6 +1973,12 @@ export function TrackerSettingsPanel() {
           tone: "info",
           text: stoppedSampler ? `Stopped native sampler. ${reasonText}` : reasonText,
         });
+        setV2UserModeMessage({
+          tone: "info",
+          text: stoppedSampler
+            ? "Stopped Auto-Tracker. No recoverable session was available to save."
+            : "No recoverable session was available to save.",
+        });
         return;
       }
 
@@ -1947,16 +1991,27 @@ export function TrackerSettingsPanel() {
             ? `Stopped native sampler and wrote ${method} to Session Log.`
             : `Wrote ${method} to Session Log.`,
         });
+        setV2UserModeMessage({
+          tone: "success",
+          text: stoppedSampler
+            ? "Stopped Auto-Tracker and saved the current session."
+            : "Saved the current session.",
+        });
       } finally {
         v2WritingPreviewSessionIdsRef.current.delete(selection.previewSession.previewSessionId);
       }
     } catch (err) {
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : "Unable to stop and save Auto-Tracker.";
       setV2StopFinalizeMessage({
         tone: "error",
-        text:
-          err instanceof Error && err.message
-            ? err.message
-            : "Unable to stop and finalize the current preview session.",
+        text: message,
+      });
+      setV2UserModeMessage({
+        tone: "error",
+        text: message,
       });
     } finally {
       setV2IsStopFinalizing(false);
@@ -2247,12 +2302,12 @@ export function TrackerSettingsPanel() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
             <div className="inline-flex w-fit rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-teal-300">
-              Read-only
+              Local control
             </div>
             <div>
               <h3 className="text-base font-semibold text-slate-100">Auto-Tracker Status</h3>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-                Read-only scaffold/placeholder for Auto-Tracker status. This card does not perform live ingestion or write any data.
+                Production-facing Auto-Tracker controls appear here when enabled. Bootstrap status stays local-only.
               </p>
             </div>
           </div>
@@ -2265,21 +2320,45 @@ export function TrackerSettingsPanel() {
             >
               {isAutoTrackerRefreshing ? "Refreshing…" : "Refresh status"}
             </button>
-            <button
-              type="button"
-              onClick={handleImportLatestAutoTrackerSpans}
-              disabled={isAutoTrackerImporting}
-              className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-3 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isAutoTrackerImporting ? "Previewing…" : "Preview placeholder auto-tracker import"}
-            </button>
+            {!FF.autotrackerV2UserMode ? (
+              <button
+                type="button"
+                onClick={handleImportLatestAutoTrackerSpans}
+                disabled={isAutoTrackerImporting}
+                className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-3 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isAutoTrackerImporting ? "Previewing…" : "Preview placeholder auto-tracker import"}
+              </button>
+            ) : null}
           </div>
         </div>
 
-        {autoTrackerImportMessage ? (
+        {!FF.autotrackerV2UserMode && autoTrackerImportMessage ? (
           <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
             {autoTrackerImportMessage}
           </div>
+        ) : null}
+
+        {FF.autotrackerV2UserMode ? (
+            <AutoTrackerV2UserControlCard
+            isRunning={isSamplerRunning}
+            isSamplerActionBusy={v2SamplerActionBusy}
+            isStopAndSaveBusy={v2IsBusy || v2IsStopFinalizing || v2IsRecoveryFinalizing || v2IsWritingSelectedSession}
+            lastDetectedAppName={v2SamplerStatus?.lastObservedAppName ?? null}
+            lastSampleTimeMs={v2SamplerStatus?.lastTickCompletedAtMs ?? v2Snapshot?.status.lastSampledAtMs ?? null}
+            recoveryAvailable={v2UserModeRecoveryAvailable}
+            recoveryDetail={v2UserModeRecoveryDetail}
+            message={v2UserModeMessage}
+            onStart={() => {
+              void handleV2StartNativeSampler();
+            }}
+            onStop={() => {
+              void handleV2StopNativeSampler();
+            }}
+            onStopAndSave={() => {
+              void handleV2StopAndFinalizeCurrentPreviewSession();
+            }}
+          />
         ) : null}
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

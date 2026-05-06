@@ -12,4 +12,5 @@ export const FF = {
     import.meta.env.VITE_FF_AUTOTRACKER_V2_CONTINUOUS_WRITE === "true",
   autotrackerV2NativeSampler:
     import.meta.env.VITE_FF_AUTOTRACKER_V2_NATIVE_SAMPLER === "true",
+  autotrackerV2UserMode: import.meta.env.VITE_FF_AUTOTRACKER_V2_USER_MODE === "true",
 } as const;
