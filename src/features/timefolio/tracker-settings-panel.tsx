@@ -8,8 +8,10 @@ import { FF } from "../../lib/feature-flags";
 import {
   captureAutoTrackerV2NativeOnce,
   clearAutoTrackerV2NativeBuffer,
+  clearAutoTrackerV2NativeRecovery,
   getAutoTrackerV2NativeSamplerStatus,
   probeAutoTrackerV2Native,
+  readAutoTrackerV2NativeRecovery,
   snapshotAutoTrackerV2Native,
   startAutoTrackerV2NativeSampler,
   stopAutoTrackerV2NativeSampler,
@@ -26,6 +28,7 @@ import {
   assessAutoTrackerV2RecoveredPreviewSession,
   buildAutoTrackerV2ReducerPreview,
   finalizeAutoTrackerV2RecoveredPreviewSession,
+  mergeAutoTrackerV2DevRecoveryState,
   mapAutoTrackerV2FinalizedPreviewSessionToSessionLog,
   selectAutoTrackerV2RecoveredPreviewSession,
   selectAutoTrackerV2ContinuousWritePreviewSessions,
@@ -59,7 +62,7 @@ type TrackerListKey = keyof TfTrackerPrefs;
 type TrackerGroupKey = "allowed" | "distractions";
 const RESET_CONFIRMATION_TOKEN = "RESET";
 const AUTOTRACKER_V2_RECOVERY_NOTE =
-  "Recovered dev Auto-Tracker preview state from local persistence. Native sampler remains stopped until you start it again.";
+  "Recovered dev Auto-Tracker preview state from local/native persistence. Native sampler remains stopped until you start it again.";
 
 type PendingImportPreview = {
   fileName: string;
@@ -904,41 +907,100 @@ export function TrackerSettingsPanel() {
     }
 
     v2DidHydratePersistedStateRef.current = true;
-    const restored = loadTfAutoTrackerV2DevPersistedState();
-    if (!restored) {
+    let cancelled = false;
+
+    void (async () => {
+      const localPersistedState = loadTfAutoTrackerV2DevPersistedState();
+      let nativeRecoveryState = null;
+      let nativeRecoveryError: string | null = null;
+
+      try {
+        nativeRecoveryState = await readAutoTrackerV2NativeRecovery();
+      } catch (err) {
+        nativeRecoveryError =
+          err instanceof Error && err.message
+            ? `Native dev Auto-Tracker recovery read failed: ${err.message}`
+            : "Native dev Auto-Tracker recovery read failed.";
+      }
+
+      const restored = mergeAutoTrackerV2DevRecoveryState({
+        localPersistedState,
+        nativeRecoveryState,
+      });
+
+      if (cancelled) {
+        return;
+      }
+
+      if (!restored) {
+        setV2PersistenceError(nativeRecoveryError);
+        setV2HasLoadedPersistedState(true);
+        return;
+      }
+
+      if (restored.events.length > 0) {
+        const recoveredSnapshot = buildRecoveredAutoTrackerV2Snapshot(restored.events);
+        setV2Snapshot((current) => current ?? recoveredSnapshot);
+        setV2ProbeStatus((current) => current ?? recoveredSnapshot.status);
+      }
+
+      if (restored.samplerStatus) {
+        setV2SamplerStatus((current) => current ?? restored.samplerStatus);
+      }
+
+      if (restored.continuousWriteStatus) {
+        setV2ContinuousWriteStatus(restored.continuousWriteStatus);
+      }
+
+      if (restored.writtenPreviewSessionIds.length > 0) {
+        setV2WrittenPreviewSessionIds(new Set(restored.writtenPreviewSessionIds));
+      }
+
+      const restoredPreviewSpans = buildAutoTrackerV2PreviewSpans(
+        restored.events,
+        classificationSettings,
+      );
+      const restoredReducerPreview = buildAutoTrackerV2ReducerPreview(restoredPreviewSpans);
+      const restoredLastSeenAtMs =
+        restored.lastSamplerTickCompletedAtMs ??
+        restored.samplerStatus?.lastTickCompletedAtMs ??
+        restored.events.at(-1)?.timestampMs ??
+        restoredReducerPreview.state.lastEventMs;
+      const restoredOpenPreviewSession =
+        restored.events.length > 0
+          ? selectAutoTrackerV2RecoveredPreviewSession({
+              previewSpans: restoredPreviewSpans,
+              state: restoredReducerPreview.state,
+              lastSeenAtMs: restoredLastSeenAtMs,
+            }) ?? restored.lastEligibleOpenPreviewSession
+          : restored.lastEligibleOpenPreviewSession;
+      const restoredRecoveryAssessment = assessAutoTrackerV2RecoveredPreviewSession({
+        recoveredPreviewSession: restoredOpenPreviewSession,
+        nowMs: Date.now(),
+        writtenPreviewSessionIds: restored.writtenPreviewSessionIds,
+      });
+
+      setV2LastPersistedAtMs(restored.lastPersistedAtMs);
+      setV2RecoveredStateSummary({
+        eventsCount: restored.events.length,
+        writtenPreviewSessionIdCount: restored.writtenPreviewSessionIds.length,
+        lastSamplerRunning: restored.lastSamplerRunning,
+        lastSamplerTickCompletedAtMs: restored.lastSamplerTickCompletedAtMs,
+      });
+      setV2PersistedOpenPreviewSession(restoredOpenPreviewSession);
+      setV2PersistedRecoveryStatus(restoredRecoveryAssessment.status);
+      setV2PersistedRecoveryMessage(
+        restoredOpenPreviewSession
+          ? restoredRecoveryAssessment.message
+          : restored.lastRecoveryMessage ?? restoredRecoveryAssessment.message,
+      );
+      setV2PersistenceError(nativeRecoveryError);
       setV2HasLoadedPersistedState(true);
-      return;
-    }
+    })();
 
-    if (restored.events.length > 0) {
-      const recoveredSnapshot = buildRecoveredAutoTrackerV2Snapshot(restored.events);
-      setV2Snapshot((current) => current ?? recoveredSnapshot);
-      setV2ProbeStatus((current) => current ?? recoveredSnapshot.status);
-    }
-
-    if (restored.samplerStatus) {
-      setV2SamplerStatus((current) => current ?? restored.samplerStatus);
-    }
-
-    if (restored.continuousWriteStatus) {
-      setV2ContinuousWriteStatus(restored.continuousWriteStatus);
-    }
-
-    if (restored.writtenPreviewSessionIds.length > 0) {
-      setV2WrittenPreviewSessionIds(new Set(restored.writtenPreviewSessionIds));
-    }
-
-    setV2LastPersistedAtMs(restored.lastPersistedAtMs);
-    setV2RecoveredStateSummary({
-      eventsCount: restored.events.length,
-      writtenPreviewSessionIdCount: restored.writtenPreviewSessionIds.length,
-      lastSamplerRunning: restored.lastSamplerRunning,
-      lastSamplerTickCompletedAtMs: restored.lastSamplerTickCompletedAtMs,
-    });
-    setV2PersistedOpenPreviewSession(restored.lastEligibleOpenPreviewSession);
-    setV2PersistedRecoveryStatus(restored.recoveryStatus);
-    setV2PersistedRecoveryMessage(restored.lastRecoveryMessage);
-    setV2HasLoadedPersistedState(true);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const classificationSettings: TfAutotrackerV2ClassificationSettings = {
@@ -1501,7 +1563,10 @@ export function TrackerSettingsPanel() {
     setV2InspectorError(null);
     setV2IsBusy(true);
     try {
-      const status = await clearAutoTrackerV2NativeBuffer();
+      const [status] = await Promise.all([
+        clearAutoTrackerV2NativeBuffer(),
+        clearAutoTrackerV2NativeRecovery(),
+      ]);
       setV2ProbeStatus(status);
       if (FF.autotrackerV2NativeSampler) {
         const samplerStatus = await getAutoTrackerV2NativeSamplerStatus();
@@ -1526,7 +1591,9 @@ export function TrackerSettingsPanel() {
       setV2PersistenceError(null);
     } catch (err) {
       setV2InspectorError(
-        err instanceof Error && err.message ? err.message : "Clear buffer failed.",
+        err instanceof Error && err.message
+          ? err.message
+          : "Clear dev Auto-Tracker state failed.",
       );
     } finally {
       setV2IsBusy(false);
@@ -2243,7 +2310,7 @@ export function TrackerSettingsPanel() {
                   disabled={anyBusy || isSamplerRunning}
                   className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Clear buffer
+                  Clear dev Auto-Tracker state
                 </button>
               </div>
               <div className="max-w-3xl text-[11px] leading-5 text-slate-500">

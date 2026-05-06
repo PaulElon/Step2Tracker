@@ -68,6 +68,18 @@ export type AutoTrackerV2NativeSamplerStatus = {
   bufferCount: number;
 };
 
+export type AutoTrackerV2NativeRecoveryState = {
+  schemaVersion: 1;
+  lastPersistedAtMs: number;
+  lastObservedEventTimestampMs: number | null;
+  lastObservedAppName: string | null;
+  lastObservedBundleId: string | null;
+  lastObservedBrowserTitle: string | null;
+  lastObservedBrowserUrl: string | null;
+  samplerStatus: AutoTrackerV2NativeSamplerStatus;
+  events: AutoTrackerV2NativeEvent[];
+};
+
 export function probeAutoTrackerV2Native(): Promise<AutoTrackerV2NativeStatus> {
   return core.invoke<AutoTrackerV2NativeStatus>("tf_autotracker_v2_native_probe");
 }
@@ -84,6 +96,16 @@ export function captureAutoTrackerV2NativeOnce(): Promise<AutoTrackerV2NativeCap
   return core.invoke<AutoTrackerV2NativeCaptureResult>(
     "tf_autotracker_v2_native_capture_once",
   );
+}
+
+export function readAutoTrackerV2NativeRecovery(): Promise<AutoTrackerV2NativeRecoveryState | null> {
+  return core.invoke<AutoTrackerV2NativeRecoveryState | null>(
+    "tf_autotracker_v2_native_recovery_read",
+  );
+}
+
+export function clearAutoTrackerV2NativeRecovery(): Promise<boolean> {
+  return core.invoke<boolean>("tf_autotracker_v2_native_recovery_clear");
 }
 
 export function getAutoTrackerV2NativeSamplerStatus(): Promise<AutoTrackerV2NativeSamplerStatus> {

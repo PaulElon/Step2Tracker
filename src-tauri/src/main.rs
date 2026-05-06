@@ -474,6 +474,8 @@ fn main() {
             tf_autotracker_v2_native::tf_autotracker_v2_native_snapshot,
             tf_autotracker_v2_native::tf_autotracker_v2_native_clear_buffer,
             tf_autotracker_v2_native::tf_autotracker_v2_native_capture_once,
+            tf_autotracker_v2_native::tf_autotracker_v2_native_recovery_read,
+            tf_autotracker_v2_native::tf_autotracker_v2_native_recovery_clear,
             tf_autotracker_v2_native::tf_autotracker_v2_native_sampler_start,
             tf_autotracker_v2_native::tf_autotracker_v2_native_sampler_stop,
             tf_autotracker_v2_native::tf_autotracker_v2_native_sampler_status,

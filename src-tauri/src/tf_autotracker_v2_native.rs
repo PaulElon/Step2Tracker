@@ -8,19 +8,24 @@
 
 #[cfg(target_os = "macos")]
 use std::process::Command;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, SystemTime};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use tauri::Manager;
 use uuid::Uuid;
 
 const PLATFORM_LABEL: &str = "macos";
 const MAX_BUFFER_LEN: usize = 2_000;
+const MAX_RECOVERY_EVENT_LEN: usize = 400;
 const IDLE_THRESHOLD_SECS: u64 = 60;
 const NATIVE_SAMPLER_INTERVAL_MS: u64 = 3_000;
 const NATIVE_SAMPLER_STOP_POLL_MS: u64 = 100;
+const RECOVERY_FILE_NAME: &str = "autotracker-v2-dev-recovery.json";
 const COMMAND_TIMEOUT_NOTE: &str =
     "lsappinfo/ioreg run synchronously and return promptly on macOS";
 
@@ -28,7 +33,7 @@ const COMMAND_TIMEOUT_NOTE: &str =
 // Event and status types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TfAutotrackerV2NativeEvent {
     pub id: String,
@@ -59,7 +64,7 @@ pub struct TfAutotrackerV2NativeEvent {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TfAutotrackerV2NativeStatus {
     pub platform: String,
@@ -72,21 +77,21 @@ pub struct TfAutotrackerV2NativeStatus {
     pub note: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TfAutotrackerV2NativeSnapshot {
     pub status: TfAutotrackerV2NativeStatus,
     pub events: Vec<TfAutotrackerV2NativeEvent>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TfAutotrackerV2NativeCaptureResult {
     pub status: TfAutotrackerV2NativeStatus,
     pub appended: Vec<TfAutotrackerV2NativeEvent>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TfAutotrackerV2NativeSamplerStatus {
     pub running: bool,
@@ -99,6 +104,20 @@ pub struct TfAutotrackerV2NativeSamplerStatus {
     pub last_observed_app_name: Option<String>,
     pub last_observed_bundle_id: Option<String>,
     pub buffer_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TfAutotrackerV2NativeRecoveryState {
+    pub schema_version: u8,
+    pub last_persisted_at_ms: i64,
+    pub last_observed_event_timestamp_ms: Option<i64>,
+    pub last_observed_app_name: Option<String>,
+    pub last_observed_bundle_id: Option<String>,
+    pub last_observed_browser_title: Option<String>,
+    pub last_observed_browser_url: Option<String>,
+    pub sampler_status: TfAutotrackerV2NativeSamplerStatus,
+    pub events: Vec<TfAutotrackerV2NativeEvent>,
 }
 
 // ---------------------------------------------------------------------------
@@ -361,6 +380,118 @@ fn build_status(
         last_sampled_at_ms: buffer.last_sampled_at_ms,
         note: COMMAND_TIMEOUT_NOTE.to_string(),
     }
+}
+
+fn dev_recovery_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Unable to resolve app data directory: {error}"))?;
+    fs::create_dir_all(&dir)
+        .map_err(|error| format!("Unable to create app data directory {}: {error}", dir.display()))?;
+    Ok(dir.join(RECOVERY_FILE_NAME))
+}
+
+fn select_recovery_events(buffer: &NativeBuffer) -> Vec<TfAutotrackerV2NativeEvent> {
+    let start = buffer.events.len().saturating_sub(MAX_RECOVERY_EVENT_LEN);
+    buffer.events[start..].to_vec()
+}
+
+fn build_recovery_state(
+    buffer: &NativeBuffer,
+    sampler_status: TfAutotrackerV2NativeSamplerStatus,
+    persisted_at_ms: i64,
+) -> TfAutotrackerV2NativeRecoveryState {
+    let events = select_recovery_events(buffer);
+    let mut last_observed_app_name: Option<String> = None;
+    let mut last_observed_bundle_id: Option<String> = None;
+    let mut last_observed_browser_title: Option<String> = None;
+    let mut last_observed_browser_url: Option<String> = None;
+
+    for event in events.iter().rev() {
+        if last_observed_app_name.is_none() {
+            last_observed_app_name = event.app_name.clone();
+        }
+        if last_observed_bundle_id.is_none() {
+            last_observed_bundle_id = event.bundle_id.clone();
+        }
+        if last_observed_browser_title.is_none() {
+            last_observed_browser_title = event.browser_title.clone();
+        }
+        if last_observed_browser_url.is_none() {
+            last_observed_browser_url = event.browser_url.clone();
+        }
+
+        if last_observed_app_name.is_some()
+            && last_observed_bundle_id.is_some()
+            && last_observed_browser_title.is_some()
+            && last_observed_browser_url.is_some()
+        {
+            break;
+        }
+    }
+
+    TfAutotrackerV2NativeRecoveryState {
+        schema_version: 1,
+        last_persisted_at_ms: persisted_at_ms,
+        last_observed_event_timestamp_ms: events.last().map(|event| event.timestamp_ms),
+        last_observed_app_name,
+        last_observed_bundle_id,
+        last_observed_browser_title,
+        last_observed_browser_url,
+        sampler_status,
+        events,
+    }
+}
+
+fn write_recovery_state(
+    app: &tauri::AppHandle,
+    recovery_state: &TfAutotrackerV2NativeRecoveryState,
+) -> Result<(), String> {
+    let path = dev_recovery_path(app)?;
+    let temp_path = path.with_extension("json.tmp");
+    let encoded = serde_json::to_vec_pretty(recovery_state)
+        .map_err(|error| format!("Unable to encode native recovery state: {error}"))?;
+    fs::write(&temp_path, encoded)
+        .map_err(|error| format!("Unable to write native recovery temp file {}: {error}", temp_path.display()))?;
+    fs::rename(&temp_path, &path)
+        .map_err(|error| format!("Unable to move native recovery file into place {}: {error}", path.display()))?;
+    Ok(())
+}
+
+fn persist_sampler_recovery(
+    app: &tauri::AppHandle,
+    sampler_status: TfAutotrackerV2NativeSamplerStatus,
+    persisted_at_ms: i64,
+) -> Result<(), String> {
+    let buffer = lock_buffer();
+    let recovery_state = build_recovery_state(&buffer, sampler_status, persisted_at_ms);
+    drop(buffer);
+    write_recovery_state(app, &recovery_state)
+}
+
+fn read_recovery_state(app: &tauri::AppHandle) -> Result<Option<TfAutotrackerV2NativeRecoveryState>, String> {
+    let path = dev_recovery_path(app)?;
+    if !path.exists() {
+        return Ok(None);
+    }
+
+    let raw = fs::read_to_string(&path)
+        .map_err(|error| format!("Unable to read native recovery file {}: {error}", path.display()))?;
+    let decoded = serde_json::from_str::<TfAutotrackerV2NativeRecoveryState>(&raw)
+        .map_err(|error| format!("Unable to parse native recovery file {}: {error}", path.display()))?;
+    Ok(Some(decoded))
+}
+
+fn clear_recovery_state(app: &tauri::AppHandle) -> Result<bool, String> {
+    let path = dev_recovery_path(app)?;
+    if !path.exists() {
+        return Ok(false);
+    }
+
+    fs::remove_file(&path)
+        .map_err(|error| format!("Unable to remove native recovery file {}: {error}", path.display()))?;
+    Ok(true)
 }
 
 /// Returns true if the foreground app has changed relative to the last capture.
@@ -766,7 +897,7 @@ fn sleep_native_sampler_interval(stop_flag: &Arc<AtomicBool>) {
     }
 }
 
-fn run_native_sampler_loop(stop_flag: Arc<AtomicBool>) {
+fn run_native_sampler_loop(stop_flag: Arc<AtomicBool>, app: tauri::AppHandle) {
     loop {
         if stop_flag.load(Ordering::SeqCst) {
             break;
@@ -782,8 +913,17 @@ fn run_native_sampler_loop(stop_flag: Arc<AtomicBool>) {
         let completed_at_ms = now_ms();
 
         {
-            let mut sampler = lock_sampler();
-            sampler.record_tick_completed(&outcome, completed_at_ms);
+            let buffer_count = current_buffer_count();
+            let sampler_status = {
+                let mut sampler = lock_sampler();
+                sampler.record_tick_completed(&outcome, completed_at_ms);
+                sampler.status(buffer_count)
+            };
+
+            if let Err(error) = persist_sampler_recovery(&app, sampler_status, completed_at_ms) {
+                let mut sampler = lock_sampler();
+                sampler.last_error = Some(error);
+            }
         }
 
         if stop_flag.load(Ordering::SeqCst) {
@@ -842,6 +982,18 @@ pub fn tf_autotracker_v2_native_capture_once() -> TfAutotrackerV2NativeCaptureRe
 }
 
 #[tauri::command]
+pub fn tf_autotracker_v2_native_recovery_read(
+    app: tauri::AppHandle,
+) -> Result<Option<TfAutotrackerV2NativeRecoveryState>, String> {
+    read_recovery_state(&app)
+}
+
+#[tauri::command]
+pub fn tf_autotracker_v2_native_recovery_clear(app: tauri::AppHandle) -> Result<bool, String> {
+    clear_recovery_state(&app)
+}
+
+#[tauri::command]
 pub fn tf_autotracker_v2_native_sampler_status() -> TfAutotrackerV2NativeSamplerStatus {
     let buffer_count = current_buffer_count();
     let mut sampler = lock_sampler();
@@ -850,7 +1002,9 @@ pub fn tf_autotracker_v2_native_sampler_status() -> TfAutotrackerV2NativeSampler
 }
 
 #[tauri::command]
-pub fn tf_autotracker_v2_native_sampler_start() -> Result<TfAutotrackerV2NativeSamplerStatus, String> {
+pub fn tf_autotracker_v2_native_sampler_start(
+    app: tauri::AppHandle,
+) -> Result<TfAutotrackerV2NativeSamplerStatus, String> {
     let stop_flag = Arc::new(AtomicBool::new(false));
     {
         let mut sampler = lock_sampler();
@@ -868,7 +1022,8 @@ pub fn tf_autotracker_v2_native_sampler_start() -> Result<TfAutotrackerV2NativeS
         .name("tf-autotracker-v2-native-sampler".to_string())
         .spawn({
             let stop_flag = stop_flag.clone();
-            move || run_native_sampler_loop(stop_flag)
+            let app = app.clone();
+            move || run_native_sampler_loop(stop_flag, app)
         }) {
         Ok(handle) => {
             let mut sampler = lock_sampler();
@@ -1029,5 +1184,71 @@ mod tests {
         assert!(signaled);
         assert!(stop_flag.load(std::sync::atomic::Ordering::SeqCst));
         assert!(!state.status(0).running);
+    }
+
+    #[test]
+    fn recovery_state_json_round_trip_preserves_schema_and_recent_events() {
+        let recovery = TfAutotrackerV2NativeRecoveryState {
+            schema_version: 1,
+            last_persisted_at_ms: 123_456,
+            last_observed_event_timestamp_ms: Some(120_000),
+            last_observed_app_name: Some("Safari".to_string()),
+            last_observed_bundle_id: Some("com.apple.Safari".to_string()),
+            last_observed_browser_title: Some("UWorld".to_string()),
+            last_observed_browser_url: Some("https://apps.uworld.com/courseapp/step2".to_string()),
+            sampler_status: TfAutotrackerV2NativeSamplerStatus {
+                running: true,
+                interval_ms: NATIVE_SAMPLER_INTERVAL_MS,
+                tick_count: 7,
+                last_tick_started_at_ms: Some(117_000),
+                last_tick_completed_at_ms: Some(120_000),
+                last_appended_count: 1,
+                last_error: None,
+                last_observed_app_name: Some("Safari".to_string()),
+                last_observed_bundle_id: Some("com.apple.Safari".to_string()),
+                buffer_count: 2,
+            },
+            events: vec![
+                TfAutotrackerV2NativeEvent {
+                    id: "event-1".to_string(),
+                    kind: "targetFocused".to_string(),
+                    timestamp_ms: 100_000,
+                    platform: PLATFORM_LABEL.to_string(),
+                    app_name: Some("Safari".to_string()),
+                    bundle_id: Some("com.apple.Safari".to_string()),
+                    window_title: None,
+                    is_idle: None,
+                    browser_title: Some("UWorld".to_string()),
+                    browser_url: Some("https://apps.uworld.com/courseapp/step2".to_string()),
+                    browser_tab_error: None,
+                    error: None,
+                },
+                TfAutotrackerV2NativeEvent {
+                    id: "event-2".to_string(),
+                    kind: "untrackedFocused".to_string(),
+                    timestamp_ms: 120_000,
+                    platform: PLATFORM_LABEL.to_string(),
+                    app_name: Some("Safari".to_string()),
+                    bundle_id: Some("com.apple.Safari".to_string()),
+                    window_title: None,
+                    is_idle: None,
+                    browser_title: Some("Reddit".to_string()),
+                    browser_url: Some("https://www.reddit.com/r/medicine".to_string()),
+                    browser_tab_error: None,
+                    error: None,
+                },
+            ],
+        };
+
+        let json = serde_json::to_string(&recovery).expect("serialize recovery");
+        let restored: TfAutotrackerV2NativeRecoveryState =
+            serde_json::from_str(&json).expect("deserialize recovery");
+
+        assert_eq!(restored.schema_version, 1);
+        assert_eq!(restored.last_persisted_at_ms, 123_456);
+        assert_eq!(restored.last_observed_browser_title.as_deref(), Some("UWorld"));
+        assert_eq!(restored.sampler_status.tick_count, 7);
+        assert_eq!(restored.events.len(), 2);
+        assert_eq!(restored.events[1].browser_url.as_deref(), Some("https://www.reddit.com/r/medicine"));
     }
 }

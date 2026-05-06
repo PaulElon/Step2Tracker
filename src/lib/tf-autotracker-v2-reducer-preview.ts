@@ -9,13 +9,18 @@ import {
   type AutoTrackerV2SessionMachineState,
   type AutoTrackerV2Target,
 } from "./tf-autotracker-v2-session-machine.js";
+import type { AutoTrackerV2NativeRecoveryState } from "./tf-autotracker-v2-native-events.js";
 import { methodKeyFromLabel, roundHours } from "./tf-session-adapters.js";
+import { TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT } from "./tf-storage.js";
 import type {
   TfAutotrackerV2PreviewClassification,
   TfAutotrackerV2PreviewSpan,
 } from "./tf-autotracker-v2-preview-spans.js";
 import type {
+  TfAutoTrackerV2DevPersistedEvent,
+  TfAutoTrackerV2DevPersistedState,
   TfAutoTrackerV2DevPersistedOpenPreviewSession,
+  TfAutoTrackerV2DevPersistedSamplerStatus,
   TfAutoTrackerV2DevRecoveryStatus,
   TfSessionLog,
 } from "../types/models";
@@ -122,6 +127,70 @@ type ReducerPreviewBuildContext = {
   sortedSpans: TfAutotrackerV2PreviewSpan[];
   activePreviewSession: ActiveFinalizedPreviewSession | null;
 };
+
+export function mergeAutoTrackerV2DevRecoveryState({
+  localPersistedState,
+  nativeRecoveryState,
+}: {
+  localPersistedState: TfAutoTrackerV2DevPersistedState | null;
+  nativeRecoveryState: AutoTrackerV2NativeRecoveryState | null;
+}): TfAutoTrackerV2DevPersistedState | null {
+  if (!localPersistedState && !nativeRecoveryState) {
+    return null;
+  }
+
+  const mergedEvents = mergeRecoveryEvents(
+    localPersistedState?.events ?? [],
+    nativeRecoveryState?.events ?? [],
+  );
+  const samplerStatus = selectPreferredRecoverySamplerStatus(
+    localPersistedState?.samplerStatus ?? null,
+    nativeRecoveryState?.samplerStatus ?? null,
+  );
+  const lastPersistedAtMs = Math.max(
+    localPersistedState?.lastPersistedAtMs ?? 0,
+    nativeRecoveryState?.lastPersistedAtMs ?? 0,
+  );
+  const lastSamplerTickCompletedAtMs = Math.max(
+    localPersistedState?.lastSamplerTickCompletedAtMs ?? 0,
+    nativeRecoveryState?.samplerStatus.lastTickCompletedAtMs ??
+      nativeRecoveryState?.lastObservedEventTimestampMs ??
+      0,
+  );
+
+  const mergedState: TfAutoTrackerV2DevPersistedState = {
+    schemaVersion: 1,
+    lastPersistedAtMs,
+    events: mergedEvents,
+    writtenPreviewSessionIds: [...(localPersistedState?.writtenPreviewSessionIds ?? [])],
+    samplerStatus,
+    continuousWriteStatus: localPersistedState?.continuousWriteStatus ?? null,
+    lastSamplerRunning:
+      samplerStatus?.running ?? localPersistedState?.lastSamplerRunning ?? false,
+    lastSamplerTickCompletedAtMs:
+      lastSamplerTickCompletedAtMs > 0 ? lastSamplerTickCompletedAtMs : null,
+    lastEligibleOpenPreviewSession:
+      localPersistedState?.lastEligibleOpenPreviewSession ?? null,
+    recoveryStatus: localPersistedState?.recoveryStatus ?? "noEligibleSession",
+    lastRecoveryMessage: localPersistedState?.lastRecoveryMessage ?? null,
+  };
+
+  if (
+    mergedState.events.length === 0 &&
+    mergedState.writtenPreviewSessionIds.length === 0 &&
+    mergedState.samplerStatus === null &&
+    mergedState.continuousWriteStatus === null &&
+    !mergedState.lastSamplerRunning &&
+    mergedState.lastSamplerTickCompletedAtMs === null &&
+    mergedState.lastEligibleOpenPreviewSession === null &&
+    mergedState.recoveryStatus === "noEligibleSession" &&
+    mergedState.lastRecoveryMessage === null
+  ) {
+    return null;
+  }
+
+  return mergedState;
+}
 
 export function buildAutoTrackerV2ReducerPreview(
   spans: TfAutotrackerV2PreviewSpan[],
@@ -522,6 +591,115 @@ function buildAutoTrackerV2ReducerPreviewContext(
     sortedSpans,
     activePreviewSession,
   };
+}
+
+function mergeRecoveryEvents(
+  localEvents: TfAutoTrackerV2DevPersistedEvent[],
+  nativeEvents: AutoTrackerV2NativeRecoveryState["events"],
+): TfAutoTrackerV2DevPersistedEvent[] {
+  const deduped = new Map<string, TfAutoTrackerV2DevPersistedEvent>();
+
+  for (const event of localEvents) {
+    deduped.set(event.id, { ...event });
+  }
+
+  for (const event of nativeEvents) {
+    deduped.set(event.id, mapNativeRecoveryEvent(event));
+  }
+
+  return [...deduped.values()]
+    .sort((a, b) => {
+      const delta = a.timestampMs - b.timestampMs;
+      return delta !== 0 ? delta : a.id.localeCompare(b.id);
+    })
+    .slice(-TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT);
+}
+
+function mapNativeRecoveryEvent(
+  event: AutoTrackerV2NativeRecoveryState["events"][number],
+): TfAutoTrackerV2DevPersistedEvent {
+  return {
+    id: event.id,
+    kind: event.kind,
+    timestampMs: event.timestampMs,
+    platform: event.platform,
+    appName: event.appName,
+    bundleId: event.bundleId,
+    windowTitle: event.windowTitle,
+    isIdle: event.isIdle,
+    browserTitle: event.browserTitle,
+    browserUrl: event.browserUrl,
+    browserTabError: event.browserTabError,
+    error: event.error,
+  };
+}
+
+function selectPreferredRecoverySamplerStatus(
+  localStatus: TfAutoTrackerV2DevPersistedSamplerStatus | null,
+  nativeStatus: AutoTrackerV2NativeRecoveryState["samplerStatus"] | null,
+): TfAutoTrackerV2DevPersistedSamplerStatus | null {
+  if (!localStatus && !nativeStatus) {
+    return null;
+  }
+
+  const mappedNativeStatus = nativeStatus ? mapNativeRecoverySamplerStatus(nativeStatus) : null;
+  if (!localStatus) {
+    return mappedNativeStatus;
+  }
+  if (!mappedNativeStatus) {
+    return localStatus;
+  }
+
+  const localRecency = samplerStatusRecency(localStatus);
+  const nativeRecency = samplerStatusRecency(mappedNativeStatus);
+  if (nativeRecency > localRecency) {
+    return mappedNativeStatus;
+  }
+  if (localRecency > nativeRecency) {
+    return localStatus;
+  }
+  if (mappedNativeStatus.tickCount > localStatus.tickCount) {
+    return mappedNativeStatus;
+  }
+  if (localStatus.tickCount > mappedNativeStatus.tickCount) {
+    return localStatus;
+  }
+  if (mappedNativeStatus.bufferCount > localStatus.bufferCount) {
+    return mappedNativeStatus;
+  }
+  if (localStatus.bufferCount > mappedNativeStatus.bufferCount) {
+    return localStatus;
+  }
+  if (mappedNativeStatus.running && !localStatus.running) {
+    return mappedNativeStatus;
+  }
+  return localStatus;
+}
+
+function mapNativeRecoverySamplerStatus(
+  status: AutoTrackerV2NativeRecoveryState["samplerStatus"],
+): TfAutoTrackerV2DevPersistedSamplerStatus {
+  return {
+    running: status.running,
+    intervalMs: status.intervalMs,
+    tickCount: status.tickCount,
+    lastTickStartedAtMs: status.lastTickStartedAtMs,
+    lastTickCompletedAtMs: status.lastTickCompletedAtMs,
+    lastAppendedCount: status.lastAppendedCount,
+    lastError: status.lastError,
+    lastObservedAppName: status.lastObservedAppName,
+    lastObservedBundleId: status.lastObservedBundleId,
+    bufferCount: status.bufferCount,
+  };
+}
+
+function samplerStatusRecency(
+  status: Pick<
+    TfAutoTrackerV2DevPersistedSamplerStatus,
+    "lastTickCompletedAtMs" | "tickCount"
+  >,
+): number {
+  return status.lastTickCompletedAtMs ?? status.tickCount ?? 0;
 }
 
 export function mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(

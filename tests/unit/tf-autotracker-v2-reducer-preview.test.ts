@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  mergeAutoTrackerV2DevRecoveryState,
   assessAutoTrackerV2RecoveredPreviewSession,
   buildAutoTrackerV2ReducerPreview,
   finalizeAutoTrackerV2RecoveredPreviewSession,
@@ -11,6 +12,7 @@ import {
   selectAutoTrackerV2StopFinalizePreviewSession,
   type TfAutotrackerV2FinalizedPreviewSession,
 } from "../../src/lib/tf-autotracker-v2-reducer-preview.js";
+import type { AutoTrackerV2NativeRecoveryState } from "../../src/lib/tf-autotracker-v2-native-events.js";
 import type { TfAutotrackerV2PreviewSpan } from "../../src/lib/tf-autotracker-v2-preview-spans.js";
 import type { TfAutoTrackerV2DevPersistedOpenPreviewSession } from "../../src/types/models.js";
 import { normalizeTfAutoTrackerV2DevPersistedState } from "../../src/lib/tf-storage.js";
@@ -687,6 +689,105 @@ test("duplicate guard survives restored written preview session ids", () => {
 
   assert.deepEqual(selection.previewSessions, []);
   assert.equal(selection.skippedDuplicateCount, 1);
+});
+
+test("native recovery merge prefers newer sampler state and preserves local duplicate guards", () => {
+  const localState = normalizeTfAutoTrackerV2DevPersistedState({
+    schemaVersion: 1,
+    lastPersistedAtMs: 100_000,
+    events: [
+      {
+        id: "event-local-1",
+        kind: "targetFocused",
+        timestampMs: 10_000,
+        platform: "macos",
+        browserTitle: "UWorld",
+        browserUrl: "https://apps.uworld.com/courseapp/step2",
+      },
+    ],
+    writtenPreviewSessionIds: ["website:apps.uworld.com/courseapp:0"],
+    samplerStatus: {
+      running: false,
+      intervalMs: 3_000,
+      tickCount: 3,
+      lastTickStartedAtMs: 11_000,
+      lastTickCompletedAtMs: 12_000,
+      lastAppendedCount: 1,
+      lastError: null,
+      lastObservedAppName: "Safari",
+      lastObservedBundleId: "com.apple.Safari",
+      bufferCount: 1,
+    },
+    continuousWriteStatus: {
+      writtenCount: 1,
+      names: ["UWorld"],
+      skippedDuplicateCount: 0,
+      error: null,
+    },
+    lastSamplerRunning: false,
+    lastSamplerTickCompletedAtMs: 12_000,
+    lastEligibleOpenPreviewSession: recoveredTrackedUWorldSession({ lastSeenAtMs: 12_000 }),
+    recoveryStatus: "recoverable",
+    lastRecoveryMessage: "Recovered UWorld locally.",
+  });
+  assert.ok(localState);
+
+  const nativeRecovery: AutoTrackerV2NativeRecoveryState = {
+    schemaVersion: 1,
+    lastPersistedAtMs: 200_000,
+    lastObservedEventTimestampMs: 40_000,
+    lastObservedAppName: "Safari",
+    lastObservedBundleId: "com.apple.Safari",
+    lastObservedBrowserTitle: "Reddit",
+    lastObservedBrowserUrl: "https://www.reddit.com/r/medicine",
+    samplerStatus: {
+      running: true,
+      intervalMs: 3_000,
+      tickCount: 9,
+      lastTickStartedAtMs: 39_000,
+      lastTickCompletedAtMs: 40_000,
+      lastAppendedCount: 1,
+      lastError: null,
+      lastObservedAppName: "Safari",
+      lastObservedBundleId: "com.apple.Safari",
+      bufferCount: 2,
+    },
+    events: [
+      {
+        id: "event-local-1",
+        kind: "targetFocused",
+        timestampMs: 10_000,
+        platform: "macos",
+        browserTitle: "UWorld",
+        browserUrl: "https://apps.uworld.com/courseapp/step2",
+      },
+      {
+        id: "event-native-2",
+        kind: "untrackedFocused",
+        timestampMs: 40_000,
+        platform: "macos",
+        browserTitle: "Reddit",
+        browserUrl: "https://www.reddit.com/r/medicine",
+      },
+    ],
+  };
+
+  const merged = mergeAutoTrackerV2DevRecoveryState({
+    localPersistedState: localState,
+    nativeRecoveryState: nativeRecovery,
+  });
+
+  assert.ok(merged);
+  assert.equal(merged.lastPersistedAtMs, 200_000);
+  assert.deepEqual(merged.writtenPreviewSessionIds, ["website:apps.uworld.com/courseapp:0"]);
+  assert.deepEqual(merged.continuousWriteStatus?.names, ["UWorld"]);
+  assert.equal(merged.lastSamplerRunning, true);
+  assert.equal(merged.lastSamplerTickCompletedAtMs, 40_000);
+  assert.equal(merged.samplerStatus?.tickCount, 9);
+  assert.deepEqual(
+    merged.events.map((event) => event.id),
+    ["event-local-1", "event-native-2"],
+  );
 });
 
 test("recovery assessment returns recoverable when the gap is below 60 seconds", () => {
