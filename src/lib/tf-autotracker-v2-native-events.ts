@@ -66,6 +66,11 @@ export type AutoTrackerV2NativeSamplerStatus = {
   lastObservedAppName: string | null;
   lastObservedBundleId: string | null;
   bufferCount: number;
+  recoveryFilePath: string | null;
+  recoveryWriteCount: number;
+  lastRecoveryWriteAtMs: number | null;
+  lastRecoveryWriteError: string | null;
+  lastRecoveryEventsCount: number;
 };
 
 export type AutoTrackerV2NativeRecoveryState = {
@@ -78,6 +83,26 @@ export type AutoTrackerV2NativeRecoveryState = {
   lastObservedBrowserUrl: string | null;
   samplerStatus: AutoTrackerV2NativeSamplerStatus;
   events: AutoTrackerV2NativeEvent[];
+};
+
+export type AutoTrackerV2NativeRecoveryDiagnostics = {
+  recoveryFilePath: string;
+  exists: boolean;
+  sizeBytes: number | null;
+  modifiedAtMs: number | null;
+  parsedSchemaVersion: number | null;
+  eventsCount: number | null;
+  lastObservedAppName: string | null;
+  lastObservedBundleId: string | null;
+  lastObservedBrowserTitle: string | null;
+  lastObservedBrowserUrl: string | null;
+  readError: string | null;
+};
+
+export type AutoTrackerV2NativeRecoveryClearResult = {
+  deleted: boolean;
+  deletedPaths: string[];
+  recoveryFilePath: string;
 };
 
 export function probeAutoTrackerV2Native(): Promise<AutoTrackerV2NativeStatus> {
@@ -104,8 +129,16 @@ export function readAutoTrackerV2NativeRecovery(): Promise<AutoTrackerV2NativeRe
   );
 }
 
-export function clearAutoTrackerV2NativeRecovery(): Promise<boolean> {
-  return core.invoke<boolean>("tf_autotracker_v2_native_recovery_clear");
+export function readAutoTrackerV2NativeRecoveryDiagnostics(): Promise<AutoTrackerV2NativeRecoveryDiagnostics> {
+  return core.invoke<AutoTrackerV2NativeRecoveryDiagnostics>(
+    "tf_autotracker_v2_native_recovery_diagnostics",
+  );
+}
+
+export function clearAutoTrackerV2NativeRecovery(): Promise<AutoTrackerV2NativeRecoveryClearResult> {
+  return core.invoke<AutoTrackerV2NativeRecoveryClearResult>(
+    "tf_autotracker_v2_native_recovery_clear",
+  );
 }
 
 export function getAutoTrackerV2NativeSamplerStatus(): Promise<AutoTrackerV2NativeSamplerStatus> {
