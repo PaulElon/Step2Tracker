@@ -414,6 +414,58 @@ export interface TfAccountState {
   billingCustomerId: string | null;
 }
 
+export type TfAutoTrackerV2DevEventKind =
+  | "targetFocused"
+  | "untrackedFocused"
+  | "idleChanged"
+  | "appShutdown"
+  | "permissionStatus"
+  | "error";
+
+export interface TfAutoTrackerV2DevPersistedEvent {
+  id: string;
+  kind: TfAutoTrackerV2DevEventKind;
+  timestampMs: number;
+  platform: "macos";
+  appName?: string;
+  bundleId?: string;
+  windowTitle?: string;
+  isIdle?: boolean;
+  browserTitle?: string;
+  browserUrl?: string;
+  browserTabError?: string;
+  error?: string;
+}
+
+export interface TfAutoTrackerV2DevPersistedSamplerStatus {
+  running: boolean;
+  intervalMs: number;
+  tickCount: number;
+  lastTickStartedAtMs: number | null;
+  lastTickCompletedAtMs: number | null;
+  lastAppendedCount: number;
+  lastError: string | null;
+  lastObservedAppName: string | null;
+  lastObservedBundleId: string | null;
+  bufferCount: number;
+}
+
+export interface TfAutoTrackerV2DevContinuousWriteStatus {
+  writtenCount: number;
+  names: string[];
+  skippedDuplicateCount: number;
+  error: string | null;
+}
+
+export interface TfAutoTrackerV2DevPersistedState {
+  schemaVersion: 1;
+  savedAtMs: number;
+  events: TfAutoTrackerV2DevPersistedEvent[];
+  writtenPreviewSessionIds: string[];
+  samplerStatus: TfAutoTrackerV2DevPersistedSamplerStatus | null;
+  continuousWriteStatus: TfAutoTrackerV2DevContinuousWriteStatus | null;
+}
+
 export interface TfAppState {
   tfVersion: number;
   sessionLogs: TfSessionLog[];

@@ -64,6 +64,15 @@ export type TfAutotrackerV2ContinuousWriteSelection = {
   names: string[];
 };
 
+export type TfAutotrackerV2StopFinalizeSelection = {
+  previewSession: TfAutotrackerV2FinalizedPreviewSession | null;
+  reason:
+    | "eligible"
+    | "alreadyWritten"
+    | "noActiveSession"
+    | "unclassifiedActiveSession";
+};
+
 type ActiveFinalizedPreviewSession = {
   previewSessionId: string;
   targetLabel: string;
@@ -94,9 +103,112 @@ type ReducerEventInput =
       nowMs: number;
     };
 
+type ReducerPreviewBuildContext = {
+  preview: TfAutotrackerV2ReducerPreview;
+  sortedSpans: TfAutotrackerV2PreviewSpan[];
+  activePreviewSession: ActiveFinalizedPreviewSession | null;
+};
+
 export function buildAutoTrackerV2ReducerPreview(
   spans: TfAutotrackerV2PreviewSpan[],
 ): TfAutotrackerV2ReducerPreview {
+  return buildAutoTrackerV2ReducerPreviewContext(spans).preview;
+}
+
+export function selectAutoTrackerV2StopFinalizePreviewSession({
+  previewSpans,
+  nowMs,
+  writtenPreviewSessionIds,
+}: {
+  previewSpans: TfAutotrackerV2PreviewSpan[];
+  nowMs: number;
+  writtenPreviewSessionIds: Iterable<string>;
+}): TfAutotrackerV2StopFinalizeSelection {
+  const writtenIds = new Set(writtenPreviewSessionIds);
+  const context = buildAutoTrackerV2ReducerPreviewContext(previewSpans);
+  const lastSpan = context.sortedSpans.at(-1) ?? null;
+
+  if (!lastSpan || !isOpenPreviewSpan(lastSpan)) {
+    return {
+      previewSession: null,
+      reason: "noActiveSession",
+    };
+  }
+
+  if (lastSpan.classification === "unclassified") {
+    return {
+      previewSession: null,
+      reason: "unclassifiedActiveSession",
+    };
+  }
+
+  if (lastSpan.classification === "distraction") {
+    const previewSession = createManualStopDistractionPreviewSession(lastSpan, nowMs);
+    if (!previewSession) {
+      return {
+        previewSession: null,
+        reason: "noActiveSession",
+      };
+    }
+
+    if (writtenIds.has(previewSession.previewSessionId)) {
+      return {
+        previewSession: null,
+        reason: "alreadyWritten",
+      };
+    }
+
+    return {
+      previewSession,
+      reason: "eligible",
+    };
+  }
+
+  if (context.preview.state.status === "idle") {
+    return {
+      previewSession: null,
+      reason: "noActiveSession",
+    };
+  }
+
+  const stopResult = reduceAutoTrackerV2Session(context.preview.state, {
+    type: "manualStop",
+    nowMs,
+  });
+  const previewSession =
+    stopResult.finalizedSessions
+      .map((finalizedSession) =>
+        finalizePreviewSession(context.activePreviewSession, finalizedSession),
+      )
+      .find(
+        (
+          candidate,
+        ): candidate is TfAutotrackerV2FinalizedPreviewSession => candidate !== null,
+      ) ?? null;
+
+  if (!previewSession) {
+    return {
+      previewSession: null,
+      reason: "noActiveSession",
+    };
+  }
+
+  if (writtenIds.has(previewSession.previewSessionId)) {
+    return {
+      previewSession: null,
+      reason: "alreadyWritten",
+    };
+  }
+
+  return {
+    previewSession,
+    reason: "eligible",
+  };
+}
+
+function buildAutoTrackerV2ReducerPreviewContext(
+  spans: TfAutotrackerV2PreviewSpan[],
+): ReducerPreviewBuildContext {
   const sortedSpans = [...spans].sort((a, b) => {
     const delta = a.startedAtMs - b.startedAtMs;
     return delta !== 0 ? delta : a.id.localeCompare(b.id);
@@ -221,11 +333,15 @@ export function buildAutoTrackerV2ReducerPreview(
   });
 
   return {
-    state,
-    reducerEvents,
-    finalizedCount: orderedFinalizedPreviewSessions.length,
-    finalizedPreviewSessions: orderedFinalizedPreviewSessions,
-    ignoredSpans,
+    preview: {
+      state,
+      reducerEvents,
+      finalizedCount: orderedFinalizedPreviewSessions.length,
+      finalizedPreviewSessions: orderedFinalizedPreviewSessions,
+      ignoredSpans,
+    },
+    sortedSpans,
+    activePreviewSession,
   };
 }
 
@@ -685,6 +801,37 @@ function createDistractionPreviewSession(
   };
 }
 
+function createManualStopDistractionPreviewSession(
+  span: TfAutotrackerV2PreviewSpan,
+  nowMs: number,
+): TfAutotrackerV2FinalizedPreviewSession | null {
+  if (span.classification !== "distraction" || !Number.isFinite(nowMs) || nowMs <= span.startedAtMs) {
+    return null;
+  }
+
+  const sourceTargetStableId = getPreviewSpanTargetStableId(span);
+  return {
+    previewSessionId: `${span.kind}:${sourceTargetStableId}:${span.startedAtMs}`,
+    startedAtMs: span.startedAtMs,
+    endedAtMs: nowMs,
+    durationMs: Math.max(0, nowMs - span.startedAtMs),
+    targetLabel: getPreviewSpanTargetLabel(span),
+    matchedRuleName: span.matchedRuleName,
+    matchedRuleTarget: span.matchedRuleTarget,
+    sourceTargetStableId,
+    sourceSpanIds: [span.id],
+    sourceEventIds: [...span.sourceEventIds],
+    appName: span.appName,
+    bundleId: span.bundleId,
+    browserTitle: span.browserTitle,
+    browserUrl: span.browserUrl,
+    classificationReason: span.classificationReason,
+    classification: "distraction",
+    finalizedBy: "manualStop",
+    isDistraction: true,
+  };
+}
+
 function isFinalizedPreviewSpan(span: TfAutotrackerV2PreviewSpan): boolean {
   return (
     Number.isFinite(span.startedAtMs) &&
@@ -692,6 +839,13 @@ function isFinalizedPreviewSpan(span: TfAutotrackerV2PreviewSpan): boolean {
     Number.isFinite(span.durationMs) &&
     (span.durationMs ?? 0) > 0 &&
     (span.endedAtMs ?? 0) > span.startedAtMs
+  );
+}
+
+function isOpenPreviewSpan(span: TfAutotrackerV2PreviewSpan): boolean {
+  return (
+    Number.isFinite(span.startedAtMs) &&
+    (span.endedAtMs === null || span.durationMs === null)
   );
 }
 

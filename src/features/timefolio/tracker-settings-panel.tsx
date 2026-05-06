@@ -26,17 +26,35 @@ import {
   buildAutoTrackerV2ReducerPreview,
   mapAutoTrackerV2FinalizedPreviewSessionToSessionLog,
   selectAutoTrackerV2ContinuousWritePreviewSessions,
+  selectAutoTrackerV2StopFinalizePreviewSession,
   type TfAutotrackerV2FinalizedPreviewSession,
 } from "../../lib/tf-autotracker-v2-reducer-preview";
 import type { NativeTrackerSpanInput } from "../../lib/tf-native-span-reconciler";
-import { deriveTfTrackerRuleName, normalizeTfAppState } from "../../lib/tf-storage";
+import {
+  TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT,
+  TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION,
+  TF_AUTOTRACKER_V2_DEV_WRITTEN_ID_LIMIT,
+  clearTfAutoTrackerV2DevPersistedState,
+  deriveTfTrackerRuleName,
+  loadTfAutoTrackerV2DevPersistedState,
+  normalizeTfAppState,
+  saveTfAutoTrackerV2DevPersistedState,
+} from "../../lib/tf-storage";
 import { cn, fieldClassName, iconButtonClassName, secondaryButtonClassName } from "../../lib/ui";
 import { useTimeFolioStore } from "../../state/tf-store";
-import type { TfAppState, TfTrackerPrefs, TfTrackerRule, TfTrackerRuleKind } from "../../types/models";
+import type {
+  TfAppState,
+  TfAutoTrackerV2DevContinuousWriteStatus,
+  TfTrackerPrefs,
+  TfTrackerRule,
+  TfTrackerRuleKind,
+} from "../../types/models";
 
 type TrackerListKey = keyof TfTrackerPrefs;
 type TrackerGroupKey = "allowed" | "distractions";
 const RESET_CONFIRMATION_TOKEN = "RESET";
+const AUTOTRACKER_V2_RECOVERY_NOTE =
+  "Recovered dev Auto-Tracker preview state from local persistence. Native sampler remains stopped until you start it again.";
 
 type PendingImportPreview = {
   fileName: string;
@@ -271,6 +289,46 @@ function makeAutoTrackerV2PreviewSessionLogId(previewSessionId: string): string 
     `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   return `tf-auto-v2-preview-${normalizedPreviewId}-${uniqueSuffix}`;
+}
+
+function appendWrittenPreviewSessionId(
+  current: Set<string>,
+  previewSessionId: string,
+): Set<string> {
+  if (current.has(previewSessionId)) {
+    return current;
+  }
+
+  const next = new Set(current);
+  next.add(previewSessionId);
+
+  while (next.size > TF_AUTOTRACKER_V2_DEV_WRITTEN_ID_LIMIT) {
+    const oldest = next.values().next().value;
+    if (typeof oldest !== "string") {
+      break;
+    }
+    next.delete(oldest);
+  }
+
+  return next;
+}
+
+function buildRecoveredAutoTrackerV2Snapshot(
+  events: AutoTrackerV2NativeSnapshot["events"],
+): AutoTrackerV2NativeSnapshot {
+  return {
+    status: {
+      platform: "macos",
+      supported: true,
+      foregroundProbeAvailable: true,
+      idleProbeAvailable: true,
+      bufferLen: events.length,
+      bufferCapacity: TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT,
+      lastSampledAtMs: events.at(-1)?.timestampMs ?? null,
+      note: AUTOTRACKER_V2_RECOVERY_NOTE,
+    },
+    events,
+  };
 }
 
 async function getLatestAutoTrackerSpansPlaceholder(): Promise<NativeTrackerSpanInput[]> {
@@ -743,16 +801,25 @@ export function TrackerSettingsPanel() {
     tone: "success" | "error";
     text: string;
   } | null>(null);
-  const [v2ContinuousWriteStatus, setV2ContinuousWriteStatus] = useState<{
-    writtenCount: number;
-    names: string[];
-    skippedDuplicateCount: number;
-    error: string | null;
-  } | null>(null);
+  const [v2ContinuousWriteStatus, setV2ContinuousWriteStatus] =
+    useState<TfAutoTrackerV2DevContinuousWriteStatus | null>(null);
   const [v2IsWritingSelectedSession, setV2IsWritingSelectedSession] = useState(false);
+  const [v2StopFinalizeMessage, setV2StopFinalizeMessage] = useState<{
+    tone: "success" | "error" | "info";
+    text: string;
+  } | null>(null);
+  const [v2IsStopFinalizing, setV2IsStopFinalizing] = useState(false);
+  const [v2LastPersistedAtMs, setV2LastPersistedAtMs] = useState<number | null>(null);
+  const [v2PersistenceError, setV2PersistenceError] = useState<string | null>(null);
+  const [v2RecoveredStateSummary, setV2RecoveredStateSummary] = useState<{
+    eventsCount: number;
+    writtenPreviewSessionIdCount: number;
+  } | null>(null);
+  const [v2HasLoadedPersistedState, setV2HasLoadedPersistedState] = useState(false);
 
   const v2DelayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const v2WritingPreviewSessionIdsRef = useRef<Set<string>>(new Set());
+  const v2DidHydratePersistedStateRef = useRef(false);
 
   useEffect(() => {
     setDraftPrefs(cloneTrackerPrefs(state.trackerPrefs));
@@ -784,6 +851,48 @@ export function TrackerSettingsPanel() {
       });
   }, []);
 
+  useEffect(() => {
+    if (v2DidHydratePersistedStateRef.current) {
+      return;
+    }
+
+    if (!FF.autotrackerV2NativeInspector && !FF.autotrackerV2NativeSampler) {
+      return;
+    }
+
+    v2DidHydratePersistedStateRef.current = true;
+    const restored = loadTfAutoTrackerV2DevPersistedState();
+    if (!restored) {
+      setV2HasLoadedPersistedState(true);
+      return;
+    }
+
+    if (restored.events.length > 0) {
+      const recoveredSnapshot = buildRecoveredAutoTrackerV2Snapshot(restored.events);
+      setV2Snapshot((current) => current ?? recoveredSnapshot);
+      setV2ProbeStatus((current) => current ?? recoveredSnapshot.status);
+    }
+
+    if (restored.samplerStatus) {
+      setV2SamplerStatus((current) => current ?? restored.samplerStatus);
+    }
+
+    if (restored.continuousWriteStatus) {
+      setV2ContinuousWriteStatus(restored.continuousWriteStatus);
+    }
+
+    if (restored.writtenPreviewSessionIds.length > 0) {
+      setV2WrittenPreviewSessionIds(new Set(restored.writtenPreviewSessionIds));
+    }
+
+    setV2LastPersistedAtMs(restored.savedAtMs);
+    setV2RecoveredStateSummary({
+      eventsCount: restored.events.length,
+      writtenPreviewSessionIdCount: restored.writtenPreviewSessionIds.length,
+    });
+    setV2HasLoadedPersistedState(true);
+  }, []);
+
   const classificationSettings: TfAutotrackerV2ClassificationSettings = {
     autoApps: state.trackerPrefs.customAutoApps,
     autoWebsites: state.trackerPrefs.customAutoWebsites,
@@ -813,6 +922,44 @@ export function TrackerSettingsPanel() {
   const reducerPreviewStateKey = `${reducerPreview.state.status}:${reducerPreviewActiveTarget?.stableId ?? ""}`;
   const writtenPreviewSessionIdsKey = Array.from(v2WrittenPreviewSessionIds).sort().join("|");
   const isSamplerRunning = v2SamplerStatus?.running === true;
+
+  useEffect(() => {
+    if (!v2HasLoadedPersistedState) {
+      return;
+    }
+
+    if (!FF.autotrackerV2NativeInspector && !FF.autotrackerV2NativeSampler) {
+      return;
+    }
+
+    try {
+      const savedAtMs = Date.now();
+      const saved = saveTfAutoTrackerV2DevPersistedState({
+        schemaVersion: TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION,
+        savedAtMs,
+        events: v2Snapshot?.events ?? [],
+        writtenPreviewSessionIds: Array.from(v2WrittenPreviewSessionIds),
+        samplerStatus: v2SamplerStatus,
+        continuousWriteStatus: v2ContinuousWriteStatus,
+      });
+      setV2LastPersistedAtMs(saved?.savedAtMs ?? null);
+      setV2PersistenceError(null);
+    } catch (err) {
+      setV2PersistenceError(
+        err instanceof Error && err.message
+          ? `Dev Auto-Tracker preview persistence failed: ${err.message}`
+          : "Dev Auto-Tracker preview persistence failed.",
+      );
+    }
+  }, [
+    FF.autotrackerV2NativeInspector,
+    FF.autotrackerV2NativeSampler,
+    v2ContinuousWriteStatus,
+    v2SamplerStatus,
+    v2HasLoadedPersistedState,
+    v2Snapshot,
+    writtenPreviewSessionIdsKey,
+  ]);
 
   useEffect(() => {
     if (!FF.autotrackerV2ContinuousWrite) {
@@ -1145,7 +1292,10 @@ export function TrackerSettingsPanel() {
     });
   }
 
-  async function refreshV2SnapshotAndSamplerStatus() {
+  async function refreshV2SnapshotAndSamplerStatus(): Promise<{
+    snapshot: AutoTrackerV2NativeSnapshot;
+    samplerStatus: AutoTrackerV2NativeSamplerStatus | null;
+  }> {
     const [snapshot, samplerStatus] = await Promise.all([
       snapshotAutoTrackerV2Native(),
       FF.autotrackerV2NativeSampler ? getAutoTrackerV2NativeSamplerStatus() : Promise.resolve(null),
@@ -1156,6 +1306,11 @@ export function TrackerSettingsPanel() {
     if (samplerStatus) {
       setV2SamplerStatus(samplerStatus);
     }
+
+    return {
+      snapshot,
+      samplerStatus,
+    };
   }
 
   async function handleV2Probe() {
@@ -1220,6 +1375,15 @@ export function TrackerSettingsPanel() {
         prev ? { ...prev, status, events: [] } : null,
       );
       setV2LastCaptureInfo(null);
+      setV2WrittenPreviewSessionIds(new Set());
+      setV2ManualWriteSelectionId("");
+      setV2ManualWriteMessage(null);
+      setV2ContinuousWriteStatus(null);
+      setV2StopFinalizeMessage(null);
+      setV2RecoveredStateSummary(null);
+      clearTfAutoTrackerV2DevPersistedState();
+      setV2LastPersistedAtMs(null);
+      setV2PersistenceError(null);
     } catch (err) {
       setV2InspectorError(
         err instanceof Error && err.message ? err.message : "Clear buffer failed.",
@@ -1310,14 +1474,73 @@ export function TrackerSettingsPanel() {
     );
     await upsertSessionLog(sessionLog);
     setV2WrittenPreviewSessionIds((current) => {
-      if (current.has(previewSession.previewSessionId)) {
-        return current;
-      }
-      const next = new Set(current);
-      next.add(previewSession.previewSessionId);
-      return next;
+      return appendWrittenPreviewSessionId(current, previewSession.previewSessionId);
     });
     return sessionLog.method;
+  }
+
+  async function handleV2StopAndFinalizeCurrentPreviewSession() {
+    if (v2IsStopFinalizing || v2IsWritingSelectedSession) {
+      return;
+    }
+
+    setV2InspectorError(null);
+    setV2StopFinalizeMessage(null);
+    setV2IsStopFinalizing(true);
+
+    try {
+      let effectiveSnapshot = v2Snapshot;
+      let stoppedSampler = false;
+
+      if (isSamplerRunning) {
+        const samplerStatus = await stopAutoTrackerV2NativeSampler();
+        setV2SamplerStatus(samplerStatus);
+        stoppedSampler = true;
+        const refreshed = await refreshV2SnapshotAndSamplerStatus();
+        effectiveSnapshot = refreshed.snapshot;
+      }
+
+      const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+        previewSpans: buildAutoTrackerV2PreviewSpans(
+          effectiveSnapshot?.events ?? [],
+          classificationSettings,
+        ),
+        nowMs: Date.now(),
+        writtenPreviewSessionIds: v2WrittenPreviewSessionIds,
+      });
+
+      if (!selection.previewSession) {
+        const reasonText =
+          selection.reason === "alreadyWritten"
+            ? "That active preview session was already written."
+            : selection.reason === "unclassifiedActiveSession"
+              ? "The active preview session is unclassified, so nothing was written."
+              : "No eligible active tracked or distraction preview session was open.";
+        setV2StopFinalizeMessage({
+          tone: "info",
+          text: stoppedSampler ? `Stopped native sampler. ${reasonText}` : reasonText,
+        });
+        return;
+      }
+
+      const method = await writeAutoTrackerV2PreviewSession(selection.previewSession);
+      setV2StopFinalizeMessage({
+        tone: "success",
+        text: stoppedSampler
+          ? `Stopped native sampler and wrote 1 preview session to Session Log: ${method}.`
+          : `Wrote 1 preview session to Session Log: ${method}.`,
+      });
+    } catch (err) {
+      setV2StopFinalizeMessage({
+        tone: "error",
+        text:
+          err instanceof Error && err.message
+            ? err.message
+            : "Unable to stop and finalize the current preview session.",
+      });
+    } finally {
+      setV2IsStopFinalizing(false);
+    }
   }
 
   async function handleV2WriteSelectedFinalizedPreviewSession(
@@ -1746,10 +1969,10 @@ export function TrackerSettingsPanel() {
                 <div>
                   <h3 className="text-base font-semibold text-slate-100">Auto-Tracker V2 Native Inspector</h3>
                   <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-                    Read-only diagnostic view of the V2 native event buffer. Not wired to the reducer or session creation.
+                    Diagnostic view of the V2 native event buffer that powers the dev preview only. Not wired to production Auto-Tracker mode yet.
                   </p>
                   <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">
-                    Dev inspector state is temporary; buffer/preview resets when leaving this page or restarting.
+                    Dev inspector preview state now recovers locally across reloads. Native sampler does not auto-resume.
                   </p>
                 </div>
                 <div className="inline-flex w-fit rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-amber-200">
@@ -1801,6 +2024,18 @@ export function TrackerSettingsPanel() {
                 ) : null}
                 <button
                   type="button"
+                  onClick={() => {
+                    void handleV2StopAndFinalizeCurrentPreviewSession();
+                  }}
+                  disabled={v2IsBusy || v2SamplerActionBusy || isDelayPending || v2IsStopFinalizing}
+                  className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-100 transition-colors hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {v2IsStopFinalizing
+                    ? "Stopping & finalizing…"
+                    : "Stop & finalize current preview session"}
+                </button>
+                <button
+                  type="button"
                   onClick={handleV2RefreshSnapshot}
                   disabled={anyBusy || isSamplerRunning}
                   className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -1847,6 +2082,35 @@ export function TrackerSettingsPanel() {
                     new Date(v2LastCaptureInfo.capturedAtMs),
                   )}
                 </span>
+              </div>
+            ) : null}
+
+            {v2RecoveredStateSummary ? (
+              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-50">
+                Recovered dev Auto-Tracker preview state. {v2RecoveredStateSummary.eventsCount} event
+                {v2RecoveredStateSummary.eventsCount === 1 ? "" : "s"} and{" "}
+                {v2RecoveredStateSummary.writtenPreviewSessionIdCount} written preview session id
+                {v2RecoveredStateSummary.writtenPreviewSessionIdCount === 1 ? "" : "s"} restored.
+              </div>
+            ) : null}
+
+            {v2PersistenceError ? (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                {v2PersistenceError}
+              </div>
+            ) : null}
+
+            {v2StopFinalizeMessage ? (
+              <div
+                className={`rounded-xl border px-4 py-3 text-sm ${
+                  v2StopFinalizeMessage.tone === "error"
+                    ? "border-rose-500/20 bg-rose-500/10 text-rose-100"
+                    : v2StopFinalizeMessage.tone === "info"
+                      ? "border-slate-600 bg-slate-950/40 text-slate-200"
+                      : "border-emerald-500/20 bg-emerald-500/10 text-emerald-100"
+                }`}
+              >
+                {v2StopFinalizeMessage.text}
               </div>
             ) : null}
 
@@ -1912,6 +2176,17 @@ export function TrackerSettingsPanel() {
                   label="Last sampled"
                   value={formatTimeOfDayFromMs(v2ProbeStatus.lastSampledAtMs)}
                   detail={`Platform: ${v2ProbeStatus.platform}`}
+                />
+                <DataStatCard
+                  label="Persisted Dev State"
+                  value={
+                    v2LastPersistedAtMs
+                      ? v2RecoveredStateSummary
+                        ? "Recovered"
+                        : "Stored"
+                      : "None"
+                  }
+                  detail={`Recovered events: ${v2RecoveredStateSummary?.eventsCount ?? 0} · Written ids: ${v2WrittenPreviewSessionIds.size} · Last saved: ${formatTimeOfDayFromMs(v2LastPersistedAtMs)}`}
                 />
               </div>
             ) : (

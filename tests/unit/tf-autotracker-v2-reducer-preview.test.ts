@@ -5,9 +5,11 @@ import {
   buildAutoTrackerV2ReducerPreview,
   mapAutoTrackerV2FinalizedPreviewSessionToSessionLog,
   selectAutoTrackerV2ContinuousWritePreviewSessions,
+  selectAutoTrackerV2StopFinalizePreviewSession,
   type TfAutotrackerV2FinalizedPreviewSession,
 } from "../../src/lib/tf-autotracker-v2-reducer-preview.js";
 import type { TfAutotrackerV2PreviewSpan } from "../../src/lib/tf-autotracker-v2-preview-spans.js";
+import { normalizeTfAutoTrackerV2DevPersistedState } from "../../src/lib/tf-storage.js";
 
 function makeSpan(
   overrides: Partial<TfAutotrackerV2PreviewSpan> &
@@ -537,6 +539,151 @@ test("continuous write excludes already written preview session ids", () => {
 
   assert.deepEqual(selection.previewSessions, []);
   assert.equal(selection.skippedDuplicateCount, 1);
+});
+
+test("persisted dev state round trip keeps events and written ids", () => {
+  const restored = normalizeTfAutoTrackerV2DevPersistedState(
+    JSON.parse(
+      JSON.stringify({
+        schemaVersion: 1,
+        savedAtMs: 123_456,
+        events: [
+          {
+            id: "event-1",
+            kind: "targetFocused",
+            timestampMs: 1_000,
+            platform: "macos",
+            appName: "Anki",
+            bundleId: "net.ankiweb.dtop",
+          },
+        ],
+        writtenPreviewSessionIds: ["website:apps.uworld.com/courseapp:0"],
+        samplerStatus: {
+          running: false,
+          intervalMs: 3_000,
+          tickCount: 5,
+          lastTickStartedAtMs: 90_000,
+          lastTickCompletedAtMs: 93_000,
+          lastAppendedCount: 1,
+          lastError: null,
+          lastObservedAppName: "Anki",
+          lastObservedBundleId: "net.ankiweb.dtop",
+          bufferCount: 1,
+        },
+        continuousWriteStatus: {
+          writtenCount: 1,
+          names: ["UWorld"],
+          skippedDuplicateCount: 0,
+          error: null,
+        },
+      }),
+    ),
+  );
+
+  assert.ok(restored);
+  assert.equal(restored.schemaVersion, 1);
+  assert.equal(restored.savedAtMs, 123_456);
+  assert.equal(restored.events.length, 1);
+  assert.equal(restored.events[0]?.id, "event-1");
+  assert.deepEqual(restored.writtenPreviewSessionIds, ["website:apps.uworld.com/courseapp:0"]);
+  assert.equal(restored.samplerStatus?.lastObservedAppName, "Anki");
+  assert.deepEqual(restored.continuousWriteStatus?.names, ["UWorld"]);
+});
+
+test("duplicate guard survives restored written preview session ids", () => {
+  const restored = normalizeTfAutoTrackerV2DevPersistedState({
+    schemaVersion: 1,
+    savedAtMs: 123_456,
+    events: [],
+    writtenPreviewSessionIds: ["website:apps.uworld.com/courseapp:0"],
+  });
+  assert.ok(restored);
+
+  const preview = buildAutoTrackerV2ReducerPreview([
+    trackedUWorldSpan({ startedAtMs: 0, endedAtMs: 10_000, durationMs: 10_000 }),
+    distractionRedditSpan({ startedAtMs: 20_000, endedAtMs: 90_000, durationMs: 70_000 }),
+  ]);
+
+  const selection = selectAutoTrackerV2ContinuousWritePreviewSessions({
+    finalizedPreviewSessions: [preview.finalizedPreviewSessions[0]!],
+    state: preview.state,
+    writtenPreviewSessionIds: restored.writtenPreviewSessionIds,
+  });
+
+  assert.deepEqual(selection.previewSessions, []);
+  assert.equal(selection.skippedDuplicateCount, 1);
+});
+
+test("stop-finalize writes the active tracked preview session", () => {
+  const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+    previewSpans: [trackedUWorldSpan({ startedAtMs: 0, endedAtMs: null, durationMs: null })],
+    nowMs: 75_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(selection.reason, "eligible");
+  assert.equal(selection.previewSession?.classification, "tracked");
+  assert.equal(selection.previewSession?.targetLabel, "UWorld");
+  assert.equal(selection.previewSession?.startedAtMs, 0);
+  assert.equal(selection.previewSession?.endedAtMs, 75_000);
+  assert.equal(selection.previewSession?.finalizedBy, "manualStop");
+});
+
+test("stop-finalize writes the active distraction preview session", () => {
+  const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+    previewSpans: [
+      distractionRedditSpan({
+        startedAtMs: 20_000,
+        endedAtMs: null,
+        durationMs: null,
+      }),
+    ],
+    nowMs: 95_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(selection.reason, "eligible");
+  assert.equal(selection.previewSession?.classification, "distraction");
+  assert.equal(selection.previewSession?.targetLabel, "Reddit");
+  assert.equal(selection.previewSession?.startedAtMs, 20_000);
+  assert.equal(selection.previewSession?.endedAtMs, 95_000);
+  assert.equal(selection.previewSession?.finalizedBy, "manualStop");
+});
+
+test("stop-finalize excludes an active unclassified preview session", () => {
+  const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+    previewSpans: [unclassifiedAppSpan({ startedAtMs: 10_000, endedAtMs: null, durationMs: null })],
+    nowMs: 95_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(selection.reason, "unclassifiedActiveSession");
+  assert.equal(selection.previewSession, null);
+});
+
+test("stop-finalize is a no-op when there is no active preview session", () => {
+  const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+    previewSpans: [
+      trackedUWorldSpan({ startedAtMs: 0, endedAtMs: 10_000, durationMs: 10_000 }),
+      distractionRedditSpan({ startedAtMs: 20_000, endedAtMs: 90_000, durationMs: 70_000 }),
+    ],
+    nowMs: 95_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(selection.reason, "noActiveSession");
+  assert.equal(selection.previewSession, null);
+});
+
+test("stop-finalize does not duplicate an already-written preview session id", () => {
+  const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+    previewSpans: [trackedUWorldSpan({ startedAtMs: 0, endedAtMs: null, durationMs: null })],
+    nowMs: 75_000,
+    writtenPreviewSessionIds: ["website:apps.uworld.com/courseapp:0"],
+  });
+
+  assert.equal(selection.reason, "alreadyWritten");
+  assert.equal(selection.previewSession, null);
 });
 
 test("continuous write emits session names for success status", () => {

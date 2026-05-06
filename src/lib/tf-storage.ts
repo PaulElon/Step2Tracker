@@ -4,6 +4,10 @@ import type {
   TfSummaryPayload,
   TfTrackerPrefs,
   TfAccountState,
+  TfAutoTrackerV2DevContinuousWriteStatus,
+  TfAutoTrackerV2DevPersistedEvent,
+  TfAutoTrackerV2DevPersistedSamplerStatus,
+  TfAutoTrackerV2DevPersistedState,
   TfTrackerRule,
   TfTrackerRuleInput,
   TfTrackerRuleKind,
@@ -16,6 +20,11 @@ import {
 
 export const TF_STATE_VERSION = 1;
 export const TF_STORAGE_KEY = "timefolio-tracker:state";
+export const TF_AUTOTRACKER_V2_DEV_STATE_STORAGE_KEY =
+  "timefolio-tracker:autotracker-v2-dev-preview";
+export const TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION = 1;
+export const TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT = 2_000;
+export const TF_AUTOTRACKER_V2_DEV_WRITTEN_ID_LIMIT = 2_000;
 
 // ---------------------------------------------------------------------------
 // Empty / default state
@@ -56,6 +65,15 @@ function safeBoolean(v: unknown, fallback = false): boolean {
 function safeStringArray(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
   return v.filter((x): x is string => typeof x === "string");
+}
+
+function safeNullableString(v: unknown): string | null {
+  return typeof v === "string" ? v : null;
+}
+
+function safeNullableNumber(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 const TRACKER_RULE_NAME_OVERRIDES: Record<string, string> = {
@@ -326,6 +344,193 @@ export function normalizeTfAppState(input: unknown): TfAppState {
   } catch {
     return getEmptyTfAppState();
   }
+}
+
+function normalizeTfAutoTrackerV2DevEvent(
+  value: unknown,
+): TfAutoTrackerV2DevPersistedEvent | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const id = safeString(raw.id).trim();
+  const timestampMs = safeNullableNumber(raw.timestampMs);
+  if (!id || timestampMs === null) {
+    return null;
+  }
+
+  const kind = safeString(raw.kind).trim();
+  if (
+    kind !== "targetFocused" &&
+    kind !== "untrackedFocused" &&
+    kind !== "idleChanged" &&
+    kind !== "appShutdown" &&
+    kind !== "permissionStatus" &&
+    kind !== "error"
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    kind,
+    timestampMs,
+    platform: "macos",
+    appName: safeString(raw.appName).trim() || undefined,
+    bundleId: safeString(raw.bundleId).trim() || undefined,
+    windowTitle: safeString(raw.windowTitle).trim() || undefined,
+    isIdle: typeof raw.isIdle === "boolean" ? raw.isIdle : undefined,
+    browserTitle: safeString(raw.browserTitle).trim() || undefined,
+    browserUrl: safeString(raw.browserUrl).trim() || undefined,
+    browserTabError: safeString(raw.browserTabError).trim() || undefined,
+    error: safeString(raw.error).trim() || undefined,
+  };
+}
+
+function normalizeTfAutoTrackerV2DevSamplerStatus(
+  value: unknown,
+): TfAutoTrackerV2DevPersistedSamplerStatus | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  return {
+    running: safeBoolean(raw.running),
+    intervalMs: Math.max(0, safeNumber(raw.intervalMs, 0)),
+    tickCount: Math.max(0, safeNumber(raw.tickCount, 0)),
+    lastTickStartedAtMs: safeNullableNumber(raw.lastTickStartedAtMs),
+    lastTickCompletedAtMs: safeNullableNumber(raw.lastTickCompletedAtMs),
+    lastAppendedCount: Math.max(0, safeNumber(raw.lastAppendedCount, 0)),
+    lastError: safeNullableString(raw.lastError),
+    lastObservedAppName: safeNullableString(raw.lastObservedAppName),
+    lastObservedBundleId: safeNullableString(raw.lastObservedBundleId),
+    bufferCount: Math.max(0, safeNumber(raw.bufferCount, 0)),
+  };
+}
+
+function normalizeTfAutoTrackerV2DevContinuousWriteStatus(
+  value: unknown,
+): TfAutoTrackerV2DevContinuousWriteStatus | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  return {
+    writtenCount: Math.max(0, safeNumber(raw.writtenCount, 0)),
+    names: safeStringArray(raw.names),
+    skippedDuplicateCount: Math.max(0, safeNumber(raw.skippedDuplicateCount, 0)),
+    error: safeNullableString(raw.error),
+  };
+}
+
+function normalizeTfAutoTrackerV2DevWrittenPreviewSessionIds(value: unknown): string[] {
+  const seen = new Set<string>();
+  const ids = safeStringArray(value)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+    .filter((entry) => {
+      if (seen.has(entry)) {
+        return false;
+      }
+      seen.add(entry);
+      return true;
+    });
+  return ids.slice(-TF_AUTOTRACKER_V2_DEV_WRITTEN_ID_LIMIT);
+}
+
+export function normalizeTfAutoTrackerV2DevPersistedState(
+  input: unknown,
+): TfAutoTrackerV2DevPersistedState | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+
+  const raw = input as Record<string, unknown>;
+  const schemaVersion = safeNumber(
+    raw.schemaVersion,
+    TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION,
+  );
+  if (schemaVersion !== TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION) {
+    return null;
+  }
+
+  const events = Array.isArray(raw.events)
+    ? raw.events
+        .map((entry) => normalizeTfAutoTrackerV2DevEvent(entry))
+        .filter((entry): entry is TfAutoTrackerV2DevPersistedEvent => entry !== null)
+        .slice(-TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT)
+    : [];
+
+  return {
+    schemaVersion: TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION,
+    savedAtMs: Math.max(0, safeNumber(raw.savedAtMs, 0)),
+    events,
+    writtenPreviewSessionIds: normalizeTfAutoTrackerV2DevWrittenPreviewSessionIds(
+      raw.writtenPreviewSessionIds,
+    ),
+    samplerStatus: normalizeTfAutoTrackerV2DevSamplerStatus(raw.samplerStatus),
+    continuousWriteStatus: normalizeTfAutoTrackerV2DevContinuousWriteStatus(
+      raw.continuousWriteStatus,
+    ),
+  };
+}
+
+function hasTfAutoTrackerV2DevPersistedStateData(
+  state: TfAutoTrackerV2DevPersistedState,
+): boolean {
+  return (
+    state.events.length > 0 ||
+    state.writtenPreviewSessionIds.length > 0 ||
+    state.samplerStatus !== null ||
+    state.continuousWriteStatus !== null
+  );
+}
+
+export function loadTfAutoTrackerV2DevPersistedState(): TfAutoTrackerV2DevPersistedState | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(TF_AUTOTRACKER_V2_DEV_STATE_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    return normalizeTfAutoTrackerV2DevPersistedState(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+export function saveTfAutoTrackerV2DevPersistedState(
+  state: TfAutoTrackerV2DevPersistedState,
+): TfAutoTrackerV2DevPersistedState | null {
+  const normalized = normalizeTfAutoTrackerV2DevPersistedState(state);
+  if (typeof window === "undefined" || normalized === null) {
+    return normalized;
+  }
+
+  if (!hasTfAutoTrackerV2DevPersistedStateData(normalized)) {
+    window.localStorage.removeItem(TF_AUTOTRACKER_V2_DEV_STATE_STORAGE_KEY);
+    return null;
+  }
+
+  window.localStorage.setItem(
+    TF_AUTOTRACKER_V2_DEV_STATE_STORAGE_KEY,
+    JSON.stringify(normalized),
+  );
+  return normalized;
+}
+
+export function clearTfAutoTrackerV2DevPersistedState(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(TF_AUTOTRACKER_V2_DEV_STATE_STORAGE_KEY);
 }
 
 // ---------------------------------------------------------------------------
