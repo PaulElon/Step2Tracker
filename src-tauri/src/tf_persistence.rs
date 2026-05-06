@@ -103,10 +103,10 @@ impl Default for TfSummaryPayload {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TfTrackerPrefs {
-    pub custom_auto_apps: Vec<String>,
-    pub custom_auto_websites: Vec<String>,
-    pub custom_distraction_apps: Vec<String>,
-    pub custom_distraction_websites: Vec<String>,
+    pub custom_auto_apps: Vec<TfTrackerRule>,
+    pub custom_auto_websites: Vec<TfTrackerRule>,
+    pub custom_distraction_apps: Vec<TfTrackerRule>,
+    pub custom_distraction_websites: Vec<TfTrackerRule>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -214,6 +214,125 @@ fn safe_string_array(value: Option<&Value>) -> Vec<String> {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TfTrackerRuleKind {
+    #[default]
+    App,
+    Website,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TfTrackerRule {
+    pub id: String,
+    pub name: String,
+    pub target: String,
+    pub kind: TfTrackerRuleKind,
+}
+
+fn titleize_tracker_rule_target(target: &str) -> String {
+    let trimmed = target.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    let candidate = trimmed
+        .trim_end_matches(".app")
+        .rsplit(['/', '.'])
+        .find(|segment| !segment.trim().is_empty())
+        .unwrap_or(trimmed)
+        .replace(['-', '_'], " ");
+
+    candidate
+        .split_whitespace()
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(first) => format!("{}{}", first.to_ascii_uppercase(), chars.as_str()),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn build_tracker_rule_id(kind: &TfTrackerRuleKind, index: usize, target: &str) -> String {
+    let normalized_target = target
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_owned();
+    let kind_label = match kind {
+        TfTrackerRuleKind::App => "app",
+        TfTrackerRuleKind::Website => "website",
+    };
+
+    if normalized_target.is_empty() {
+        format!("tf-rule-{}-{}", kind_label, index)
+    } else {
+        format!("tf-rule-{}-{}-{}", kind_label, index, normalized_target)
+    }
+}
+
+fn normalize_tracker_rule_kind(value: Option<&Value>, fallback: TfTrackerRuleKind) -> TfTrackerRuleKind {
+    match value.and_then(Value::as_str) {
+        Some("website") => TfTrackerRuleKind::Website,
+        Some("app") => TfTrackerRuleKind::App,
+        _ => fallback,
+    }
+}
+
+fn normalize_tracker_rule(value: &Value, kind: TfTrackerRuleKind, index: usize) -> Option<TfTrackerRule> {
+    if let Some(target) = value.as_str().map(str::trim).filter(|target| !target.is_empty()) {
+        return Some(TfTrackerRule {
+            id: build_tracker_rule_id(&kind, index, target),
+            name: titleize_tracker_rule_target(target),
+            target: target.to_owned(),
+            kind,
+        });
+    }
+
+    let object = value.as_object()?;
+    let target = safe_string(object.get("target"));
+    if target.trim().is_empty() {
+        return None;
+    }
+
+    let normalized_kind = normalize_tracker_rule_kind(object.get("kind"), kind);
+    let candidate_id = safe_string(object.get("id"));
+    let candidate_name = safe_string(object.get("name"));
+
+    Some(TfTrackerRule {
+        id: if candidate_id.trim().is_empty() {
+            build_tracker_rule_id(&normalized_kind, index, &target)
+        } else {
+            candidate_id
+        },
+        name: if candidate_name.trim().is_empty() {
+            titleize_tracker_rule_target(&target)
+        } else {
+            candidate_name
+        },
+        target,
+        kind: normalized_kind,
+    })
+}
+
+fn normalize_tracker_rule_array(value: Option<&Value>, kind: TfTrackerRuleKind) -> Vec<TfTrackerRule> {
+    match value.and_then(Value::as_array) {
+        Some(values) => values
+            .iter()
+            .enumerate()
+            .filter_map(|(index, entry)| normalize_tracker_rule(entry, kind.clone(), index))
+            .collect(),
+        None => Vec::new(),
+    }
+}
+
 fn normalize_session(value: &Value) -> Option<TfSessionLog> {
     let object = value.as_object()?;
     let id = safe_string(object.get("id"));
@@ -275,13 +394,21 @@ fn normalize_summary(value: &Value) -> Option<TfSummaryPayload> {
 fn normalize_tracker_prefs(value: Option<&Value>) -> TfTrackerPrefs {
     let object = value.and_then(Value::as_object);
     TfTrackerPrefs {
-        custom_auto_apps: safe_string_array(object.and_then(|entry| entry.get("customAutoApps"))),
-        custom_auto_websites: safe_string_array(object.and_then(|entry| entry.get("customAutoWebsites"))),
-        custom_distraction_apps: safe_string_array(
-            object.and_then(|entry| entry.get("customDistractionApps")),
+        custom_auto_apps: normalize_tracker_rule_array(
+            object.and_then(|entry| entry.get("customAutoApps")),
+            TfTrackerRuleKind::App,
         ),
-        custom_distraction_websites: safe_string_array(
+        custom_auto_websites: normalize_tracker_rule_array(
+            object.and_then(|entry| entry.get("customAutoWebsites")),
+            TfTrackerRuleKind::Website,
+        ),
+        custom_distraction_apps: normalize_tracker_rule_array(
+            object.and_then(|entry| entry.get("customDistractionApps")),
+            TfTrackerRuleKind::App,
+        ),
+        custom_distraction_websites: normalize_tracker_rule_array(
             object.and_then(|entry| entry.get("customDistractionWebsites")),
+            TfTrackerRuleKind::Website,
         ),
     }
 }
@@ -379,4 +506,36 @@ pub fn tf_reset_state(app: tauri::AppHandle) -> Result<TfAppState, String> {
     let empty = TfAppState::default();
     write_tf_state(&path, &empty)?;
     Ok(empty)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn deserializes_tracker_rule_objects_from_tauri_payload() {
+        let value = json!({
+            "tfVersion": 1,
+            "sessionLogs": [],
+            "summaries": [],
+            "trackerPrefs": {
+                "customAutoApps": [
+                    {
+                        "id": "anki-rule",
+                        "name": "Anki",
+                        "target": "/Applications/Anki.app",
+                        "kind": "app"
+                    }
+                ],
+                "customAutoWebsites": [],
+                "customDistractionApps": [],
+                "customDistractionWebsites": []
+            },
+            "account": null
+        });
+
+        let parsed = serde_json::from_value::<TfAppState>(value);
+        assert!(parsed.is_ok(), "expected native TimeFolio payload with tracker rule objects to deserialize");
+    }
 }

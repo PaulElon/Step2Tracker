@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createTfPersistenceApi,
   createQueuedTfStateSaver,
   deleteTfSessionLog,
   getEmptyTfAppState,
@@ -90,6 +91,70 @@ test("delete session log survives a save/load round trip and preserves unrelated
     ["manual-1"],
   );
   assert.equal(loaded.sessionLogs[0]?.method, "Manual Review");
+});
+
+test("native load wins over stale local fallback and refreshes it", async () => {
+  const localStorage = installBrowserStorage();
+  const staleLocalState: TfAppState = {
+    ...getEmptyTfAppState(),
+    sessionLogs: [
+      buildSession("auto-1", "UWorld [Auto]"),
+      buildSession("manual-1", "Manual Review"),
+    ],
+  };
+  localStorage.setItem("timefolio-tracker:state", JSON.stringify(staleLocalState));
+
+  const nativeState: TfAppState = {
+    ...getEmptyTfAppState(),
+    sessionLogs: [buildSession("manual-1", "Manual Review")],
+  };
+
+  const api = createTfPersistenceApi({
+    isNativeRuntime: () => true,
+    localStorage,
+    loadNativeState: async () => nativeState,
+    saveNativeState: async (state) => state,
+    resetNativeState: async () => getEmptyTfAppState(),
+  });
+
+  const loaded = await api.load();
+
+  assert.deepEqual(loaded.sessionLogs.map((session) => session.id), ["manual-1"]);
+  const refreshedLocal = JSON.parse(localStorage.getItem("timefolio-tracker:state") ?? "null") as TfAppState;
+  assert.deepEqual(refreshedLocal.sessionLogs.map((session) => session.id), ["manual-1"]);
+});
+
+test("native save failures surface instead of silently falling back", async () => {
+  const localStorage = installBrowserStorage();
+  const staleLocalState: TfAppState = {
+    ...getEmptyTfAppState(),
+    sessionLogs: [buildSession("auto-1", "UWorld [Auto]")],
+  };
+  localStorage.setItem("timefolio-tracker:state", JSON.stringify(staleLocalState));
+
+  const api = createTfPersistenceApi({
+    isNativeRuntime: () => true,
+    localStorage,
+    loadNativeState: async () => staleLocalState,
+    saveNativeState: async () => {
+      throw new Error("native save failed");
+    },
+    resetNativeState: async () => getEmptyTfAppState(),
+  });
+
+  await assert.rejects(
+    api.save({
+      ...getEmptyTfAppState(),
+      sessionLogs: [buildSession("manual-1", "Manual Review")],
+    }),
+    /native save failed/,
+  );
+  assert.deepEqual(
+    JSON.parse(localStorage.getItem("timefolio-tracker:state") ?? "null").sessionLogs.map(
+      (session: TfSessionLog) => session.id,
+    ),
+    ["auto-1"],
+  );
 });
 
 test("queued saves mark older snapshots stale so a newer delete can win", async () => {

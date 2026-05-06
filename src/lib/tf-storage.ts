@@ -34,6 +34,20 @@ export interface QueuedTfStateSaveResult {
   requestId: number;
 }
 
+export interface TfStorageLike {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+export interface TfPersistenceRuntime {
+  isNativeRuntime(): boolean;
+  localStorage: TfStorageLike | null | (() => TfStorageLike | null);
+  loadNativeState(): Promise<TfAppState>;
+  saveNativeState(state: TfAppState): Promise<TfAppState>;
+  resetNativeState(): Promise<TfAppState>;
+}
+
 export function createQueuedTfStateSaver(
   save: (state: TfAppState) => Promise<TfAppState>,
 ): {
@@ -659,9 +673,26 @@ function isNativeTauriRuntime(): boolean {
   return typeof (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== "undefined";
 }
 
-function loadTfStateFromLocalStorage(): TfAppState {
+function getBrowserStorage(): TfStorageLike | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.localStorage;
+}
+
+function resolveStorage(
+  storage: TfStorageLike | null | (() => TfStorageLike | null),
+): TfStorageLike | null {
+  return typeof storage === "function" ? storage() : storage;
+}
+
+function loadTfStateFromLocalStorage(storage: TfStorageLike | null): TfAppState {
+  if (!storage) {
+    return getEmptyTfAppState();
+  }
+
   try {
-    const raw = window.localStorage.getItem(TF_STORAGE_KEY);
+    const raw = storage.getItem(TF_STORAGE_KEY);
     if (!raw) return getEmptyTfAppState();
     const parsed: unknown = JSON.parse(raw);
     return normalizeTfAppState(parsed);
@@ -670,70 +701,77 @@ function loadTfStateFromLocalStorage(): TfAppState {
   }
 }
 
-function saveTfStateToLocalStorage(state: TfAppState): TfAppState {
+function saveTfStateToLocalStorage(storage: TfStorageLike | null, state: TfAppState): TfAppState {
   const normalized = normalizeTfAppState(state);
-  window.localStorage.setItem(TF_STORAGE_KEY, JSON.stringify(normalized));
+  storage?.setItem(TF_STORAGE_KEY, JSON.stringify(normalized));
   return normalized;
 }
 
-function resetTfStateToLocalStorage(): TfAppState {
+function resetTfStateToLocalStorage(storage: TfStorageLike | null): TfAppState {
   const empty = getEmptyTfAppState();
-  window.localStorage.setItem(TF_STORAGE_KEY, JSON.stringify(empty));
+  storage?.setItem(TF_STORAGE_KEY, JSON.stringify(empty));
   return empty;
 }
 
-export async function loadTfState(): Promise<TfAppState> {
-  if (isNativeTauriRuntime()) {
-    try {
-      const nativeState = await loadNativeTfState();
-      const normalized = normalizeTfAppState(nativeState);
-      saveTfStateToLocalStorage(normalized);
-      return normalized;
-    } catch {
-      return loadTfStateFromLocalStorage();
-    }
-  }
+export function createTfPersistenceApi(runtime: TfPersistenceRuntime): {
+  load(): Promise<TfAppState>;
+  save(state: TfAppState): Promise<TfAppState>;
+  reset(): Promise<TfAppState>;
+} {
+  return {
+    async load(): Promise<TfAppState> {
+      if (runtime.isNativeRuntime()) {
+        const nativeState = await runtime.loadNativeState();
+        const normalized = normalizeTfAppState(nativeState);
+        saveTfStateToLocalStorage(resolveStorage(runtime.localStorage), normalized);
+        return normalized;
+      }
 
-  return loadTfStateFromLocalStorage();
+      return loadTfStateFromLocalStorage(resolveStorage(runtime.localStorage));
+    },
+
+    async save(state: TfAppState): Promise<TfAppState> {
+      if (runtime.isNativeRuntime()) {
+        const nativeState = await runtime.saveNativeState(state);
+        const normalized = normalizeTfAppState(nativeState);
+        saveTfStateToLocalStorage(resolveStorage(runtime.localStorage), normalized);
+        return normalized;
+      }
+
+      return saveTfStateToLocalStorage(resolveStorage(runtime.localStorage), state);
+    },
+
+    async reset(): Promise<TfAppState> {
+      if (runtime.isNativeRuntime()) {
+        const nativeState = await runtime.resetNativeState();
+        const normalized = normalizeTfAppState(nativeState);
+        saveTfStateToLocalStorage(resolveStorage(runtime.localStorage), normalized);
+        return normalized;
+      }
+
+      return resetTfStateToLocalStorage(resolveStorage(runtime.localStorage));
+    },
+  };
+}
+
+const tfPersistenceApi = createTfPersistenceApi({
+  isNativeRuntime: isNativeTauriRuntime,
+  localStorage: getBrowserStorage,
+  loadNativeState: loadNativeTfState,
+  saveNativeState: saveNativeTfState,
+  resetNativeState: resetNativeTfState,
+});
+
+export async function loadTfState(): Promise<TfAppState> {
+  return tfPersistenceApi.load();
 }
 
 export async function saveTfState(state: TfAppState): Promise<TfAppState> {
-  if (isNativeTauriRuntime()) {
-    try {
-      const nativeState = await saveNativeTfState(state);
-      const normalized = normalizeTfAppState(nativeState);
-      saveTfStateToLocalStorage(normalized);
-      return normalized;
-    } catch {
-      return saveTfStateToLocalStorage(state);
-    }
-  }
-
-  return saveTfStateToLocalStorage(state);
+  return tfPersistenceApi.save(state);
 }
 
 export async function resetTfState(): Promise<TfAppState> {
-  const empty = getEmptyTfAppState();
-
-  if (isNativeTauriRuntime()) {
-    try {
-      const nativeState = await resetNativeTfState();
-      const normalized = normalizeTfAppState(nativeState);
-      saveTfStateToLocalStorage(normalized);
-      return normalized;
-    } catch {
-      try {
-        const savedEmpty = await saveNativeTfState(empty);
-        const normalized = normalizeTfAppState(savedEmpty);
-        saveTfStateToLocalStorage(normalized);
-        return normalized;
-      } catch {
-        return resetTfStateToLocalStorage();
-      }
-    }
-  }
-
-  return resetTfStateToLocalStorage();
+  return tfPersistenceApi.reset();
 }
 
 // ---------------------------------------------------------------------------
