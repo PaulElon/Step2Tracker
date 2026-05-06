@@ -104,6 +104,18 @@ export type AutoTrackerV2RecoveryHydration = {
   recoveryDiagnostics: AutoTrackerV2NativeRecoveryDiagnostics | null;
 };
 
+export function shouldStartAutoTrackerV2StartupRecoveryHydration({
+  hasAppliedHydration,
+  nativeInspectorEnabled,
+  nativeSamplerEnabled,
+}: {
+  hasAppliedHydration: boolean;
+  nativeInspectorEnabled: boolean;
+  nativeSamplerEnabled: boolean;
+}): boolean {
+  return !hasAppliedHydration && (nativeInspectorEnabled || nativeSamplerEnabled);
+}
+
 type ActiveFinalizedPreviewSession = {
   previewSessionId: string;
   targetLabel: string;

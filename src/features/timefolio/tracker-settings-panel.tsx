@@ -37,6 +37,7 @@ import {
   selectAutoTrackerV2RecoveredPreviewSession,
   selectAutoTrackerV2ContinuousWritePreviewSessions,
   selectAutoTrackerV2StopFinalizePreviewSession,
+  shouldStartAutoTrackerV2StartupRecoveryHydration,
   type TfAutotrackerV2FinalizedPreviewSession,
 } from "../../lib/tf-autotracker-v2-reducer-preview";
 import type { NativeTrackerSpanInput } from "../../lib/tf-native-span-reconciler";
@@ -892,18 +893,23 @@ export function TrackerSettingsPanel() {
   }, []);
 
   useEffect(() => {
-    if (v2DidHydratePersistedStateRef.current) {
+    if (
+      !shouldStartAutoTrackerV2StartupRecoveryHydration({
+        hasAppliedHydration: v2DidHydratePersistedStateRef.current,
+        nativeInspectorEnabled: FF.autotrackerV2NativeInspector,
+        nativeSamplerEnabled: FF.autotrackerV2NativeSampler,
+      })
+    ) {
       return;
     }
 
-    if (!FF.autotrackerV2NativeInspector && !FF.autotrackerV2NativeSampler) {
-      return;
-    }
-
-    v2DidHydratePersistedStateRef.current = true;
     let cancelled = false;
 
-    void hydrateV2RecoveryFromPersistence(() => cancelled);
+    void hydrateV2RecoveryFromPersistence(() => cancelled).then(() => {
+      if (!cancelled) {
+        v2DidHydratePersistedStateRef.current = true;
+      }
+    });
 
     return () => {
       cancelled = true;

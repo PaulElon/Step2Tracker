@@ -15,6 +15,7 @@ import {
   selectAutoTrackerV2RecoveredPreviewSession,
   selectAutoTrackerV2ContinuousWritePreviewSessions,
   selectAutoTrackerV2StopFinalizePreviewSession,
+  shouldStartAutoTrackerV2StartupRecoveryHydration,
   type TfAutotrackerV2FinalizedPreviewSession,
 } from "../../src/lib/tf-autotracker-v2-reducer-preview.js";
 import type {
@@ -953,6 +954,41 @@ test("startup hydration rebuilds preview from native recovery events", () => {
   assert.equal(previewSpans[0]?.matchedRuleName, "UWorld");
   assert.equal(recovered?.matchedRuleName, "UWorld");
   assert.equal(recovered?.lastSeenAtMs, 61_000);
+});
+
+test("startup hydration gate retries after a StrictMode-cancelled first pass", () => {
+  assert.equal(
+    shouldStartAutoTrackerV2StartupRecoveryHydration({
+      hasAppliedHydration: false,
+      nativeInspectorEnabled: true,
+      nativeSamplerEnabled: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldStartAutoTrackerV2StartupRecoveryHydration({
+      hasAppliedHydration: false,
+      nativeInspectorEnabled: true,
+      nativeSamplerEnabled: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldStartAutoTrackerV2StartupRecoveryHydration({
+      hasAppliedHydration: true,
+      nativeInspectorEnabled: true,
+      nativeSamplerEnabled: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldStartAutoTrackerV2StartupRecoveryHydration({
+      hasAppliedHydration: false,
+      nativeInspectorEnabled: false,
+      nativeSamplerEnabled: false,
+    }),
+    false,
+  );
 });
 
 test("startup hydration does not let empty live sampler status wipe native recovery file metadata", () => {
