@@ -1489,33 +1489,31 @@ export function TrackerSettingsPanel() {
     setV2IsStopFinalizing(true);
 
     try {
-      let effectiveSnapshot = v2Snapshot;
+      const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+        previewSpans: buildAutoTrackerV2PreviewSpans(
+          v2Snapshot?.events ?? [],
+          classificationSettings,
+        ),
+        state: reducerPreview.state,
+        nowMs: Date.now(),
+        writtenPreviewSessionIds: new Set([
+          ...v2WrittenPreviewSessionIds,
+          ...v2WritingPreviewSessionIdsRef.current,
+        ]),
+      });
       let stoppedSampler = false;
 
       if (isSamplerRunning) {
         const samplerStatus = await stopAutoTrackerV2NativeSampler();
         setV2SamplerStatus(samplerStatus);
         stoppedSampler = true;
-        const refreshed = await refreshV2SnapshotAndSamplerStatus();
-        effectiveSnapshot = refreshed.snapshot;
       }
-
-      const selection = selectAutoTrackerV2StopFinalizePreviewSession({
-        previewSpans: buildAutoTrackerV2PreviewSpans(
-          effectiveSnapshot?.events ?? [],
-          classificationSettings,
-        ),
-        nowMs: Date.now(),
-        writtenPreviewSessionIds: v2WrittenPreviewSessionIds,
-      });
 
       if (!selection.previewSession) {
         const reasonText =
           selection.reason === "alreadyWritten"
-            ? "That active preview session was already written."
-            : selection.reason === "unclassifiedActiveSession"
-              ? "The active preview session is unclassified, so nothing was written."
-              : "No eligible active tracked or distraction preview session was open.";
+            ? "That tracked/distraction preview session was already written."
+            : "No eligible active tracked/distraction session was open.";
         setV2StopFinalizeMessage({
           tone: "info",
           text: stoppedSampler ? `Stopped native sampler. ${reasonText}` : reasonText,
@@ -1523,13 +1521,18 @@ export function TrackerSettingsPanel() {
         return;
       }
 
-      const method = await writeAutoTrackerV2PreviewSession(selection.previewSession);
-      setV2StopFinalizeMessage({
-        tone: "success",
-        text: stoppedSampler
-          ? `Stopped native sampler and wrote 1 preview session to Session Log: ${method}.`
-          : `Wrote 1 preview session to Session Log: ${method}.`,
-      });
+      v2WritingPreviewSessionIdsRef.current.add(selection.previewSession.previewSessionId);
+      try {
+        const method = await writeAutoTrackerV2PreviewSession(selection.previewSession);
+        setV2StopFinalizeMessage({
+          tone: "success",
+          text: stoppedSampler
+            ? `Stopped native sampler and wrote ${method} to Session Log.`
+            : `Wrote ${method} to Session Log.`,
+        });
+      } finally {
+        v2WritingPreviewSessionIdsRef.current.delete(selection.previewSession.previewSessionId);
+      }
     } catch (err) {
       setV2StopFinalizeMessage({
         tone: "error",
@@ -2032,7 +2035,7 @@ export function TrackerSettingsPanel() {
                 >
                   {v2IsStopFinalizing
                     ? "Stopping & finalizing…"
-                    : "Stop & finalize current preview session"}
+                    : "Stop & finalize last tracked item"}
                 </button>
                 <button
                   type="button"
@@ -2050,6 +2053,9 @@ export function TrackerSettingsPanel() {
                 >
                   Clear buffer
                 </button>
+              </div>
+              <div className="max-w-3xl text-[11px] leading-5 text-slate-500">
+                Uses the last eligible tracked/distraction preview item so clicking this button does not turn TimeFolio into the final target.
               </div>
             </div>
 

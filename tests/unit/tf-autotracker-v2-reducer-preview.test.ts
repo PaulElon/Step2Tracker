@@ -87,6 +87,19 @@ function unclassifiedAppSpan(
   });
 }
 
+function timeFolioUnclassifiedSpan(
+  overrides: Partial<TfAutotrackerV2PreviewSpan> = {},
+): TfAutotrackerV2PreviewSpan {
+  return unclassifiedAppSpan({
+    label: "TimeFolio",
+    appName: "TimeFolio",
+    startedAtMs: 30_000,
+    endedAtMs: null,
+    durationMs: null,
+    ...overrides,
+  });
+}
+
 test("tracked UWorld open span produces a focused open reducer state", () => {
   const preview = buildAutoTrackerV2ReducerPreview([trackedUWorldSpan({ endedAtMs: null, durationMs: null })]);
 
@@ -615,8 +628,11 @@ test("duplicate guard survives restored written preview session ids", () => {
 });
 
 test("stop-finalize writes the active tracked preview session", () => {
+  const previewSpans = [trackedUWorldSpan({ startedAtMs: 0, endedAtMs: null, durationMs: null })];
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
   const selection = selectAutoTrackerV2StopFinalizePreviewSession({
-    previewSpans: [trackedUWorldSpan({ startedAtMs: 0, endedAtMs: null, durationMs: null })],
+    previewSpans,
+    state: preview.state,
     nowMs: 75_000,
     writtenPreviewSessionIds: [],
   });
@@ -630,20 +646,24 @@ test("stop-finalize writes the active tracked preview session", () => {
 });
 
 test("stop-finalize writes the active distraction preview session", () => {
+  const previewSpans = [
+    distractionRedditSpan({
+      startedAtMs: 20_000,
+      endedAtMs: null,
+      durationMs: null,
+    }),
+  ];
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
   const selection = selectAutoTrackerV2StopFinalizePreviewSession({
-    previewSpans: [
-      distractionRedditSpan({
-        startedAtMs: 20_000,
-        endedAtMs: null,
-        durationMs: null,
-      }),
-    ],
+    previewSpans,
+    state: preview.state,
     nowMs: 95_000,
     writtenPreviewSessionIds: [],
   });
 
   assert.equal(selection.reason, "eligible");
   assert.equal(selection.previewSession?.classification, "distraction");
+  assert.equal(selection.previewSession?.isDistraction, true);
   assert.equal(selection.previewSession?.targetLabel, "Reddit");
   assert.equal(selection.previewSession?.startedAtMs, 20_000);
   assert.equal(selection.previewSession?.endedAtMs, 95_000);
@@ -651,22 +671,28 @@ test("stop-finalize writes the active distraction preview session", () => {
 });
 
 test("stop-finalize excludes an active unclassified preview session", () => {
+  const previewSpans = [timeFolioUnclassifiedSpan({ startedAtMs: 10_000 })];
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
   const selection = selectAutoTrackerV2StopFinalizePreviewSession({
-    previewSpans: [unclassifiedAppSpan({ startedAtMs: 10_000, endedAtMs: null, durationMs: null })],
+    previewSpans,
+    state: preview.state,
     nowMs: 95_000,
     writtenPreviewSessionIds: [],
   });
 
-  assert.equal(selection.reason, "unclassifiedActiveSession");
+  assert.equal(selection.reason, "noActiveSession");
   assert.equal(selection.previewSession, null);
 });
 
 test("stop-finalize is a no-op when there is no active preview session", () => {
+  const previewSpans = [
+    trackedUWorldSpan({ startedAtMs: 0, endedAtMs: 10_000, durationMs: 10_000 }),
+    distractionRedditSpan({ startedAtMs: 20_000, endedAtMs: 90_000, durationMs: 70_000 }),
+  ];
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
   const selection = selectAutoTrackerV2StopFinalizePreviewSession({
-    previewSpans: [
-      trackedUWorldSpan({ startedAtMs: 0, endedAtMs: 10_000, durationMs: 10_000 }),
-      distractionRedditSpan({ startedAtMs: 20_000, endedAtMs: 90_000, durationMs: 70_000 }),
-    ],
+    previewSpans,
+    state: preview.state,
     nowMs: 95_000,
     writtenPreviewSessionIds: [],
   });
@@ -676,14 +702,113 @@ test("stop-finalize is a no-op when there is no active preview session", () => {
 });
 
 test("stop-finalize does not duplicate an already-written preview session id", () => {
+  const previewSpans = [trackedUWorldSpan({ startedAtMs: 0, endedAtMs: null, durationMs: null })];
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
   const selection = selectAutoTrackerV2StopFinalizePreviewSession({
-    previewSpans: [trackedUWorldSpan({ startedAtMs: 0, endedAtMs: null, durationMs: null })],
+    previewSpans,
+    state: preview.state,
     nowMs: 75_000,
     writtenPreviewSessionIds: ["website:apps.uworld.com/courseapp:0"],
   });
 
   assert.equal(selection.reason, "alreadyWritten");
   assert.equal(selection.previewSession, null);
+});
+
+test("stop-finalize picks the last eligible tracked preview session before a newer TimeFolio span", () => {
+  const previewSpans = [
+    trackedUWorldSpan({ startedAtMs: 0, endedAtMs: null, durationMs: null }),
+    timeFolioUnclassifiedSpan({ startedAtMs: 40_000 }),
+  ];
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
+  const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+    previewSpans,
+    state: preview.state,
+    nowMs: 75_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(selection.reason, "eligible");
+  assert.equal(selection.previewSession?.classification, "tracked");
+  assert.equal(selection.previewSession?.targetLabel, "UWorld");
+  assert.equal(selection.previewSession?.endedAtMs, 40_000);
+});
+
+test("stop-finalize picks the last eligible distraction preview session before a newer TimeFolio span", () => {
+  const previewSpans = [
+    distractionRedditSpan({
+      startedAtMs: 20_000,
+      endedAtMs: null,
+      durationMs: null,
+    }),
+    timeFolioUnclassifiedSpan({ startedAtMs: 40_000 }),
+  ];
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
+  const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+    previewSpans,
+    state: preview.state,
+    nowMs: 95_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(selection.reason, "eligible");
+  assert.equal(selection.previewSession?.classification, "distraction");
+  assert.equal(selection.previewSession?.isDistraction, true);
+  assert.equal(selection.previewSession?.targetLabel, "Reddit");
+  assert.equal(selection.previewSession?.endedAtMs, 95_000);
+});
+
+test("stop-finalize skips already-written ids and falls back to the next eligible preview session", () => {
+  const previewSpans = [
+    trackedUWorldSpan({ startedAtMs: 0, endedAtMs: null, durationMs: null }),
+    distractionRedditSpan({
+      startedAtMs: 20_000,
+      endedAtMs: null,
+      durationMs: null,
+    }),
+    timeFolioUnclassifiedSpan({ startedAtMs: 40_000 }),
+  ];
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
+  const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+    previewSpans,
+    state: preview.state,
+    nowMs: 95_000,
+    writtenPreviewSessionIds: ["website:apps.uworld.com/courseapp:0"],
+  });
+
+  assert.equal(selection.reason, "eligible");
+  assert.equal(selection.previewSession?.classification, "distraction");
+  assert.equal(selection.previewSession?.isDistraction, true);
+  assert.equal(selection.previewSession?.targetLabel, "Reddit");
+});
+
+test("visible title remains Resource [Auto]", () => {
+  const previewSession: TfAutotrackerV2FinalizedPreviewSession = {
+    previewSessionId: "website:resource.example.com/course:1746453600000",
+    startedAtMs: Date.parse("2025-05-05T14:00:00.000Z"),
+    endedAtMs: Date.parse("2025-05-05T14:30:00.000Z"),
+    durationMs: 30 * 60_000,
+    targetLabel: "Resource",
+    sourceTargetStableId: "resource.example.com/course",
+    sourceSpanIds: ["span-resource"],
+    sourceEventIds: ["event-resource"],
+    matchedRuleName: "Resource",
+    matchedRuleTarget: "https://resource.example.com",
+    browserTitle: "Resource",
+    browserUrl: "https://resource.example.com/course",
+    classificationReason: 'matched website rule "Resource" (https://resource.example.com) by host resource.example.com',
+    classification: "tracked",
+    finalizedBy: "manualStop",
+    isDistraction: false,
+  };
+
+  const sessionLog = mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
+    previewSession,
+    "tf-auto-v2-preview-write-resource",
+  );
+
+  assert.equal(sessionLog.method, "Resource [Auto]");
+  assert.equal(sessionLog.methodKey, "auto-v2-preview-resource");
 });
 
 test("continuous write emits session names for success status", () => {

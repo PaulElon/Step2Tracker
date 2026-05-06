@@ -117,45 +117,71 @@ export function buildAutoTrackerV2ReducerPreview(
 
 export function selectAutoTrackerV2StopFinalizePreviewSession({
   previewSpans,
+  state,
   nowMs,
   writtenPreviewSessionIds,
 }: {
   previewSpans: TfAutotrackerV2PreviewSpan[];
+  state: AutoTrackerV2SessionMachineState;
   nowMs: number;
   writtenPreviewSessionIds: Iterable<string>;
 }): TfAutotrackerV2StopFinalizeSelection {
   const writtenIds = new Set(writtenPreviewSessionIds);
   const context = buildAutoTrackerV2ReducerPreviewContext(previewSpans);
-  const lastSpan = context.sortedSpans.at(-1) ?? null;
+  const preferredTargetStableId = getOpenPreviewTargetStableId(state);
+  const candidates = selectAutoTrackerV2StopFinalizePreviewSpanCandidates(
+    context.sortedSpans,
+    preferredTargetStableId,
+  );
+  let sawWrittenCandidate = false;
 
-  if (!lastSpan || !isOpenPreviewSpan(lastSpan)) {
-    return {
-      previewSession: null,
-      reason: "noActiveSession",
-    };
-  }
+  for (const candidate of candidates) {
+    if (candidate.classification === "distraction") {
+      const previewSession = createManualStopDistractionPreviewSession(candidate, nowMs);
+      if (!previewSession) {
+        continue;
+      }
 
-  if (lastSpan.classification === "unclassified") {
-    return {
-      previewSession: null,
-      reason: "unclassifiedActiveSession",
-    };
-  }
+      if (writtenIds.has(previewSession.previewSessionId)) {
+        sawWrittenCandidate = true;
+        continue;
+      }
 
-  if (lastSpan.classification === "distraction") {
-    const previewSession = createManualStopDistractionPreviewSession(lastSpan, nowMs);
-    if (!previewSession) {
       return {
-        previewSession: null,
-        reason: "noActiveSession",
+        previewSession,
+        reason: "eligible",
       };
     }
 
+    if (
+      !preferredTargetStableId ||
+      getPreviewSpanTargetStableId(candidate) !== preferredTargetStableId
+    ) {
+      continue;
+    }
+
+    const stopResult = reduceAutoTrackerV2Session(state, {
+      type: "manualStop",
+      nowMs,
+    });
+    const previewSession =
+      stopResult.finalizedSessions
+        .map((finalizedSession) =>
+          finalizePreviewSession(context.activePreviewSession, finalizedSession),
+        )
+        .find(
+          (
+            selected,
+          ): selected is TfAutotrackerV2FinalizedPreviewSession => selected !== null,
+        ) ?? null;
+
+    if (!previewSession) {
+      continue;
+    }
+
     if (writtenIds.has(previewSession.previewSessionId)) {
-      return {
-        previewSession: null,
-        reason: "alreadyWritten",
-      };
+      sawWrittenCandidate = true;
+      continue;
     }
 
     return {
@@ -164,45 +190,9 @@ export function selectAutoTrackerV2StopFinalizePreviewSession({
     };
   }
 
-  if (context.preview.state.status === "idle") {
-    return {
-      previewSession: null,
-      reason: "noActiveSession",
-    };
-  }
-
-  const stopResult = reduceAutoTrackerV2Session(context.preview.state, {
-    type: "manualStop",
-    nowMs,
-  });
-  const previewSession =
-    stopResult.finalizedSessions
-      .map((finalizedSession) =>
-        finalizePreviewSession(context.activePreviewSession, finalizedSession),
-      )
-      .find(
-        (
-          candidate,
-        ): candidate is TfAutotrackerV2FinalizedPreviewSession => candidate !== null,
-      ) ?? null;
-
-  if (!previewSession) {
-    return {
-      previewSession: null,
-      reason: "noActiveSession",
-    };
-  }
-
-  if (writtenIds.has(previewSession.previewSessionId)) {
-    return {
-      previewSession: null,
-      reason: "alreadyWritten",
-    };
-  }
-
   return {
-    previewSession,
-    reason: "eligible",
+    previewSession: null,
+    reason: sawWrittenCandidate ? "alreadyWritten" : "noActiveSession",
   };
 }
 
@@ -429,6 +419,37 @@ export function selectAutoTrackerV2ContinuousWritePreviewSessions({
       deriveAutoTrackerV2PreviewSessionDisplayName(previewSession),
     ),
   };
+}
+
+function selectAutoTrackerV2StopFinalizePreviewSpanCandidates(
+  sortedSpans: TfAutotrackerV2PreviewSpan[],
+  preferredTargetStableId: string | null,
+): TfAutotrackerV2PreviewSpan[] {
+  const openEligibleSpans = sortedSpans
+    .filter(isEligibleStopFinalizePreviewSpan)
+    .slice()
+    .reverse();
+
+  if (!preferredTargetStableId) {
+    return openEligibleSpans;
+  }
+
+  const preferredSpans: TfAutotrackerV2PreviewSpan[] = [];
+  const fallbackSpans: TfAutotrackerV2PreviewSpan[] = [];
+
+  for (const span of openEligibleSpans) {
+    if (getPreviewSpanTargetStableId(span) === preferredTargetStableId) {
+      preferredSpans.push(span);
+    } else {
+      fallbackSpans.push(span);
+    }
+  }
+
+  return [...preferredSpans, ...fallbackSpans];
+}
+
+function isEligibleStopFinalizePreviewSpan(span: TfAutotrackerV2PreviewSpan): boolean {
+  return isOpenPreviewSpan(span) && (span.classification === "tracked" || span.classification === "distraction");
 }
 
 function deriveAutoTrackerV2PreviewSessionDisplayName(
