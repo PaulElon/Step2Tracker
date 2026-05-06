@@ -4,6 +4,7 @@ import {
   reduceAutoTrackerV2Session,
   type AutoTrackerV2FinalizedBy,
   type AutoTrackerV2FinalizedSession,
+  type AutoTrackerV2OpenSession,
   type AutoTrackerV2SessionMachineState,
   type AutoTrackerV2Target,
 } from "./tf-autotracker-v2-session-machine.js";
@@ -128,6 +129,32 @@ export function selectAutoTrackerV2StopFinalizePreviewSession({
 }): TfAutotrackerV2StopFinalizeSelection {
   const writtenIds = new Set(writtenPreviewSessionIds);
   const context = buildAutoTrackerV2ReducerPreviewContext(previewSpans);
+
+  if (state.status !== "idle") {
+    const activeCandidate = selectLatestEligibleStopFinalizePreviewSpan(context.sortedSpans);
+
+    if (activeCandidate) {
+      const previewSession =
+        activeCandidate.classification === "distraction"
+          ? createManualStopDistractionPreviewSession(activeCandidate, nowMs)
+          : finalizePreviewSessionAtStopTime(context.activePreviewSession, state.session, nowMs);
+
+      if (previewSession) {
+        if (writtenIds.has(previewSession.previewSessionId)) {
+          return {
+            previewSession: null,
+            reason: "alreadyWritten",
+          };
+        }
+
+        return {
+          previewSession,
+          reason: "eligible",
+        };
+      }
+    }
+  }
+
   const preferredTargetStableId = getOpenPreviewTargetStableId(state);
   const candidates = selectAutoTrackerV2StopFinalizePreviewSpanCandidates(
     context.sortedSpans,
@@ -446,6 +473,39 @@ function selectAutoTrackerV2StopFinalizePreviewSpanCandidates(
   }
 
   return [...preferredSpans, ...fallbackSpans];
+}
+
+function selectLatestEligibleStopFinalizePreviewSpan(
+  sortedSpans: TfAutotrackerV2PreviewSpan[],
+): TfAutotrackerV2PreviewSpan | null {
+  for (let index = sortedSpans.length - 1; index >= 0; index -= 1) {
+    const span = sortedSpans[index];
+    if (span.classification === "tracked" || span.classification === "distraction") {
+      return span;
+    }
+  }
+
+  return null;
+}
+
+function finalizePreviewSessionAtStopTime(
+  activePreviewSession: ActiveFinalizedPreviewSession | null,
+  session: AutoTrackerV2OpenSession | undefined,
+  nowMs: number,
+): TfAutotrackerV2FinalizedPreviewSession | null {
+  if (!activePreviewSession || !session) {
+    return null;
+  }
+
+  return finalizePreviewSession(activePreviewSession, {
+    sessionId: session.sessionId,
+    target: session.target,
+    startedAtMs: session.startedAtMs,
+    endedAtMs: nowMs,
+    pauseIntervals: [...session.pauseIntervals],
+    finalizedAtMs: nowMs,
+    finalizedBy: "manualStop",
+  });
 }
 
 function isEligibleStopFinalizePreviewSpan(span: TfAutotrackerV2PreviewSpan): boolean {

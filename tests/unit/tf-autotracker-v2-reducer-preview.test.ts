@@ -645,6 +645,28 @@ test("stop-finalize writes the active tracked preview session", () => {
   assert.equal(selection.previewSession?.finalizedBy, "manualStop");
 });
 
+test("stop-finalize writes the awayPending tracked preview session when a newer TimeFolio span is present", () => {
+  const previewSpans = [
+    trackedUWorldSpan({ startedAtMs: 0, endedAtMs: 60_000, durationMs: 60_000 }),
+    timeFolioUnclassifiedSpan({ startedAtMs: 61_000, endedAtMs: null, durationMs: null }),
+  ];
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
+  const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+    previewSpans,
+    state: preview.state,
+    nowMs: 75_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(preview.state.status, "awayPending");
+  assert.equal(selection.reason, "eligible");
+  assert.equal(selection.previewSession?.classification, "tracked");
+  assert.equal(selection.previewSession?.targetLabel, "UWorld");
+  assert.equal(selection.previewSession?.startedAtMs, 0);
+  assert.equal(selection.previewSession?.endedAtMs, 75_000);
+  assert.equal(selection.previewSession?.isDistraction, false);
+});
+
 test("stop-finalize writes the active distraction preview session", () => {
   const previewSpans = [
     distractionRedditSpan({
@@ -670,6 +692,34 @@ test("stop-finalize writes the active distraction preview session", () => {
   assert.equal(selection.previewSession?.finalizedBy, "manualStop");
 });
 
+test("stop-finalize writes the awayPending distraction preview session with isDistraction true", () => {
+  const previewSpans = [
+    trackedUWorldSpan({ startedAtMs: 0, endedAtMs: 10_000, durationMs: 10_000 }),
+    distractionRedditSpan({
+      startedAtMs: 20_000,
+      endedAtMs: null,
+      durationMs: null,
+    }),
+    timeFolioUnclassifiedSpan({ startedAtMs: 40_000, endedAtMs: null, durationMs: null }),
+  ];
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
+  const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+    previewSpans,
+    state: preview.state,
+    nowMs: 95_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(preview.state.status, "awayPending");
+  assert.equal(selection.reason, "eligible");
+  assert.equal(selection.previewSession?.classification, "distraction");
+  assert.equal(selection.previewSession?.isDistraction, true);
+  assert.equal(selection.previewSession?.targetLabel, "Reddit");
+  assert.equal(selection.previewSession?.startedAtMs, 20_000);
+  assert.equal(selection.previewSession?.endedAtMs, 95_000);
+  assert.equal(selection.previewSession?.finalizedBy, "manualStop");
+});
+
 test("stop-finalize excludes an active unclassified preview session", () => {
   const previewSpans = [timeFolioUnclassifiedSpan({ startedAtMs: 10_000 })];
   const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
@@ -681,6 +731,23 @@ test("stop-finalize excludes an active unclassified preview session", () => {
   });
 
   assert.equal(selection.reason, "noActiveSession");
+  assert.equal(selection.previewSession, null);
+});
+
+test("stop-finalize does not write an awayPending tracked preview session twice", () => {
+  const previewSpans = [
+    trackedUWorldSpan({ startedAtMs: 0, endedAtMs: 60_000, durationMs: 60_000 }),
+    timeFolioUnclassifiedSpan({ startedAtMs: 61_000, endedAtMs: null, durationMs: null }),
+  ];
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
+  const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+    previewSpans,
+    state: preview.state,
+    nowMs: 75_000,
+    writtenPreviewSessionIds: ["website:apps.uworld.com/courseapp:0"],
+  });
+
+  assert.equal(selection.reason, "alreadyWritten");
   assert.equal(selection.previewSession, null);
 });
 
@@ -701,20 +768,6 @@ test("stop-finalize is a no-op when there is no active preview session", () => {
   assert.equal(selection.previewSession, null);
 });
 
-test("stop-finalize does not duplicate an already-written preview session id", () => {
-  const previewSpans = [trackedUWorldSpan({ startedAtMs: 0, endedAtMs: null, durationMs: null })];
-  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
-  const selection = selectAutoTrackerV2StopFinalizePreviewSession({
-    previewSpans,
-    state: preview.state,
-    nowMs: 75_000,
-    writtenPreviewSessionIds: ["website:apps.uworld.com/courseapp:0"],
-  });
-
-  assert.equal(selection.reason, "alreadyWritten");
-  assert.equal(selection.previewSession, null);
-});
-
 test("stop-finalize picks the last eligible tracked preview session before a newer TimeFolio span", () => {
   const previewSpans = [
     trackedUWorldSpan({ startedAtMs: 0, endedAtMs: null, durationMs: null }),
@@ -731,7 +784,7 @@ test("stop-finalize picks the last eligible tracked preview session before a new
   assert.equal(selection.reason, "eligible");
   assert.equal(selection.previewSession?.classification, "tracked");
   assert.equal(selection.previewSession?.targetLabel, "UWorld");
-  assert.equal(selection.previewSession?.endedAtMs, 40_000);
+  assert.equal(selection.previewSession?.endedAtMs, 75_000);
 });
 
 test("stop-finalize picks the last eligible distraction preview session before a newer TimeFolio span", () => {
