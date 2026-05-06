@@ -9,7 +9,12 @@ import {
   type AutoTrackerV2SessionMachineState,
   type AutoTrackerV2Target,
 } from "./tf-autotracker-v2-session-machine.js";
-import type { AutoTrackerV2NativeRecoveryState } from "./tf-autotracker-v2-native-events.js";
+import type {
+  AutoTrackerV2NativeRecoveryDiagnostics,
+  AutoTrackerV2NativeRecoveryState,
+  AutoTrackerV2NativeSamplerStatus,
+  AutoTrackerV2NativeSnapshot,
+} from "./tf-autotracker-v2-native-events.js";
 import { methodKeyFromLabel, roundHours } from "./tf-session-adapters.js";
 import { TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT } from "./tf-storage.js";
 import type {
@@ -90,6 +95,13 @@ export type TfAutotrackerV2RecoveredPreviewSessionAssessment = {
   gapMs: number;
   canFinalize: boolean;
   message: string;
+};
+
+export type AutoTrackerV2RecoveryHydration = {
+  restoredState: TfAutoTrackerV2DevPersistedState | null;
+  snapshot: AutoTrackerV2NativeSnapshot | null;
+  samplerStatus: AutoTrackerV2NativeSamplerStatus | null;
+  recoveryDiagnostics: AutoTrackerV2NativeRecoveryDiagnostics | null;
 };
 
 type ActiveFinalizedPreviewSession = {
@@ -190,6 +202,44 @@ export function mergeAutoTrackerV2DevRecoveryState({
   }
 
   return mergedState;
+}
+
+export function deriveAutoTrackerV2RecoveryHydration({
+  localPersistedState = null,
+  liveSamplerStatus,
+  recoveryDiagnostics,
+  recoveryState,
+}: {
+  localPersistedState?: TfAutoTrackerV2DevPersistedState | null;
+  liveSamplerStatus: AutoTrackerV2NativeSamplerStatus | null;
+  recoveryDiagnostics: AutoTrackerV2NativeRecoveryDiagnostics | null;
+  recoveryState: AutoTrackerV2NativeRecoveryState | null;
+}): AutoTrackerV2RecoveryHydration {
+  const shouldPreferNativeRecoveryFile =
+    recoveryDiagnostics?.exists === true &&
+    recoveryDiagnostics.selectedReadSource === "primary";
+  const localStateForHydration = shouldPreferNativeRecoveryFile
+    ? stripLocalFileBackedRecoveryState(localPersistedState)
+    : localPersistedState;
+  const restoredState = mergeAutoTrackerV2DevRecoveryState({
+    localPersistedState: localStateForHydration,
+    nativeRecoveryState: recoveryState,
+  });
+  const snapshotEvents = shouldPreferNativeRecoveryFile
+    ? recoveryState?.events ?? []
+    : restoredState?.events ?? [];
+
+  return {
+    restoredState,
+    snapshot:
+      snapshotEvents.length > 0 ? buildRecoveredAutoTrackerV2Snapshot(snapshotEvents) : null,
+    samplerStatus: mergeNativeRecoverySamplerStatus({
+      liveSamplerStatus,
+      persistedSamplerStatus: recoveryState?.samplerStatus ?? null,
+      recoveryDiagnostics,
+    }),
+    recoveryDiagnostics,
+  };
 }
 
 export function buildAutoTrackerV2ReducerPreview(
@@ -615,6 +665,147 @@ function mergeRecoveryEvents(
     .slice(-TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT);
 }
 
+function buildRecoveredAutoTrackerV2Snapshot(
+  events: AutoTrackerV2NativeRecoveryState["events"],
+): AutoTrackerV2NativeSnapshot {
+  return {
+    status: {
+      platform: "macos",
+      supported: true,
+      foregroundProbeAvailable: true,
+      idleProbeAvailable: true,
+      bufferLen: events.length,
+      bufferCapacity: TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT,
+      lastSampledAtMs: events.at(-1)?.timestampMs ?? null,
+      note:
+        "Recovered dev Auto-Tracker preview state from local/native persistence. Native sampler remains stopped until you start it again.",
+    },
+    events: [...events],
+  };
+}
+
+function stripLocalFileBackedRecoveryState(
+  state: TfAutoTrackerV2DevPersistedState | null,
+): TfAutoTrackerV2DevPersistedState | null {
+  if (!state) {
+    return null;
+  }
+
+  return {
+    ...state,
+    events: [],
+    samplerStatus: null,
+    lastSamplerRunning: false,
+    lastSamplerTickCompletedAtMs: null,
+    lastEligibleOpenPreviewSession: null,
+    recoveryStatus: "noEligibleSession",
+    lastRecoveryMessage: null,
+  };
+}
+
+function mergeNativeRecoverySamplerStatus({
+  liveSamplerStatus,
+  persistedSamplerStatus,
+  recoveryDiagnostics,
+}: {
+  liveSamplerStatus: AutoTrackerV2NativeSamplerStatus | null;
+  persistedSamplerStatus: AutoTrackerV2NativeSamplerStatus | null;
+  recoveryDiagnostics: AutoTrackerV2NativeRecoveryDiagnostics | null;
+}): AutoTrackerV2NativeSamplerStatus | null {
+  if (!liveSamplerStatus && !persistedSamplerStatus && !recoveryDiagnostics) {
+    return null;
+  }
+
+  return {
+    running: liveSamplerStatus?.running ?? persistedSamplerStatus?.running ?? false,
+    intervalMs: pickPreferredPositiveNumber(
+      liveSamplerStatus?.intervalMs,
+      persistedSamplerStatus?.intervalMs,
+    ),
+    tickCount: pickPreferredPositiveNumber(
+      liveSamplerStatus?.tickCount,
+      persistedSamplerStatus?.tickCount,
+    ),
+    lastTickStartedAtMs: pickPreferredNullableNumber(
+      liveSamplerStatus?.lastTickStartedAtMs,
+      persistedSamplerStatus?.lastTickStartedAtMs,
+    ),
+    lastTickCompletedAtMs: pickPreferredNullableNumber(
+      liveSamplerStatus?.lastTickCompletedAtMs,
+      persistedSamplerStatus?.lastTickCompletedAtMs,
+    ),
+    lastAppendedCount: pickPreferredPositiveNumber(
+      liveSamplerStatus?.lastAppendedCount,
+      persistedSamplerStatus?.lastAppendedCount,
+    ),
+    lastError:
+      liveSamplerStatus?.lastError ??
+      persistedSamplerStatus?.lastError ??
+      recoveryDiagnostics?.readError ??
+      null,
+    lastObservedAppName:
+      liveSamplerStatus?.lastObservedAppName ??
+      persistedSamplerStatus?.lastObservedAppName ??
+      recoveryDiagnostics?.lastObservedAppName ??
+      null,
+    lastObservedBundleId:
+      liveSamplerStatus?.lastObservedBundleId ??
+      persistedSamplerStatus?.lastObservedBundleId ??
+      recoveryDiagnostics?.lastObservedBundleId ??
+      null,
+    bufferCount: liveSamplerStatus?.bufferCount ?? persistedSamplerStatus?.bufferCount ?? 0,
+    recoveryFilePath:
+      recoveryDiagnostics?.primaryRecoveryFilePath ??
+      liveSamplerStatus?.recoveryFilePath ??
+      persistedSamplerStatus?.recoveryFilePath ??
+      null,
+    recoveryWritePath:
+      recoveryDiagnostics?.writeFilePath ??
+      liveSamplerStatus?.recoveryWritePath ??
+      persistedSamplerStatus?.recoveryWritePath ??
+      null,
+    recoveryReadPath:
+      recoveryDiagnostics?.readFilePath ??
+      liveSamplerStatus?.recoveryReadPath ??
+      persistedSamplerStatus?.recoveryReadPath ??
+      null,
+    recoveryWriteCount: pickPreferredPositiveNumber(
+      liveSamplerStatus?.recoveryWriteCount,
+      persistedSamplerStatus?.recoveryWriteCount,
+    ),
+    lastRecoveryWriteAtMs: pickPreferredNullableNumber(
+      liveSamplerStatus?.lastRecoveryWriteAtMs,
+      persistedSamplerStatus?.lastRecoveryWriteAtMs,
+      recoveryDiagnostics?.modifiedAtMs,
+    ),
+    lastRecoveryWriteError:
+      recoveryDiagnostics?.readError ??
+      liveSamplerStatus?.lastRecoveryWriteError ??
+      persistedSamplerStatus?.lastRecoveryWriteError ??
+      null,
+    lastRecoveryEventsCount:
+      recoveryDiagnostics?.eventsCount ??
+      pickPreferredPositiveNumber(
+        liveSamplerStatus?.lastRecoveryEventsCount,
+        persistedSamplerStatus?.lastRecoveryEventsCount,
+      ),
+    lastRecoveryWriteByteCount: pickPreferredNullableNumber(
+      liveSamplerStatus?.lastRecoveryWriteByteCount,
+      persistedSamplerStatus?.lastRecoveryWriteByteCount,
+    ),
+    lastRecoveryReadbackEventsCount:
+      liveSamplerStatus?.lastRecoveryReadbackEventsCount ??
+      persistedSamplerStatus?.lastRecoveryReadbackEventsCount ??
+      recoveryDiagnostics?.eventsCount ??
+      null,
+    recoveryFileExistsAfterWrite:
+      recoveryDiagnostics?.exists ??
+      liveSamplerStatus?.recoveryFileExistsAfterWrite ??
+      persistedSamplerStatus?.recoveryFileExistsAfterWrite ??
+      null,
+  };
+}
+
 function mapNativeRecoveryEvent(
   event: AutoTrackerV2NativeRecoveryState["events"][number],
 ): TfAutoTrackerV2DevPersistedEvent {
@@ -700,6 +891,34 @@ function samplerStatusRecency(
   >,
 ): number {
   return status.lastTickCompletedAtMs ?? status.tickCount ?? 0;
+}
+
+function pickPreferredPositiveNumber(...values: Array<number | null | undefined>): number {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+      return value;
+    }
+  }
+
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+      return value;
+    }
+  }
+
+  return 0;
+}
+
+function pickPreferredNullableNumber(
+  ...values: Array<number | null | undefined>
+): number | null {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+  }
+
+  return null;
 }
 
 export function mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(

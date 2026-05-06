@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildAutoTrackerV2PreviewSpans,
+  type TfAutotrackerV2ClassificationSettings,
+} from "../../src/lib/tf-autotracker-v2-preview-spans.js";
+import {
+  deriveAutoTrackerV2RecoveryHydration,
   mergeAutoTrackerV2DevRecoveryState,
   assessAutoTrackerV2RecoveredPreviewSession,
   buildAutoTrackerV2ReducerPreview,
@@ -12,8 +17,11 @@ import {
   selectAutoTrackerV2StopFinalizePreviewSession,
   type TfAutotrackerV2FinalizedPreviewSession,
 } from "../../src/lib/tf-autotracker-v2-reducer-preview.js";
-import type { AutoTrackerV2NativeRecoveryState } from "../../src/lib/tf-autotracker-v2-native-events.js";
-import type { TfAutotrackerV2PreviewSpan } from "../../src/lib/tf-autotracker-v2-preview-spans.js";
+import type {
+  AutoTrackerV2NativeRecoveryDiagnostics,
+  AutoTrackerV2NativeRecoveryState,
+  AutoTrackerV2NativeSamplerStatus,
+} from "../../src/lib/tf-autotracker-v2-native-events.js";
 import type { TfAutoTrackerV2DevPersistedOpenPreviewSession } from "../../src/types/models.js";
 import { normalizeTfAutoTrackerV2DevPersistedState } from "../../src/lib/tf-storage.js";
 
@@ -153,6 +161,87 @@ function recoveredDistractionRedditSession(
     ...overrides,
   };
 }
+
+function makeRecoveryDiagnostics(
+  overrides: Partial<AutoTrackerV2NativeRecoveryDiagnostics> = {},
+): AutoTrackerV2NativeRecoveryDiagnostics {
+  return {
+    source: "primary",
+    recoveryFilePath:
+      "/Users/paul/Library/Application Support/com.paul.step2ckcommandcenter/autotracker-v2-dev-recovery.json",
+    primaryRecoveryFilePath:
+      "/Users/paul/Library/Application Support/com.paul.step2ckcommandcenter/autotracker-v2-dev-recovery.json",
+    writeFilePath:
+      "/Users/paul/Library/Application Support/com.paul.step2ckcommandcenter/autotracker-v2-dev-recovery.json",
+    readFilePath:
+      "/Users/paul/Library/Application Support/com.paul.step2ckcommandcenter/autotracker-v2-dev-recovery.json",
+    selectedReadSource: "primary",
+    exists: true,
+    sizeBytes: 4096,
+    modifiedAtMs: 90_000,
+    parsedSchemaVersion: 1,
+    eventsCount: 2,
+    lastObservedAppName: "Safari",
+    lastObservedBundleId: "com.apple.Safari",
+    lastObservedBrowserTitle: "UWorld",
+    lastObservedBrowserUrl: "https://apps.uworld.com/courseapp/step2",
+    readError: null,
+    fallbackCandidates: [],
+    lastWriteByteCount: null,
+    fileExistsAfterWrite: null,
+    readbackAfterWriteEventsCount: null,
+    ...overrides,
+  };
+}
+
+function makeLiveSamplerStatus(
+  overrides: Partial<AutoTrackerV2NativeSamplerStatus> = {},
+): AutoTrackerV2NativeSamplerStatus {
+  return {
+    running: false,
+    intervalMs: 3_000,
+    tickCount: 0,
+    lastTickStartedAtMs: null,
+    lastTickCompletedAtMs: null,
+    lastAppendedCount: 0,
+    lastError: null,
+    lastObservedAppName: null,
+    lastObservedBundleId: null,
+    bufferCount: 0,
+    recoveryFilePath: null,
+    recoveryWritePath: null,
+    recoveryReadPath: null,
+    recoveryWriteCount: 0,
+    lastRecoveryWriteAtMs: null,
+    lastRecoveryWriteError: null,
+    lastRecoveryEventsCount: 0,
+    lastRecoveryWriteByteCount: null,
+    lastRecoveryReadbackEventsCount: null,
+    recoveryFileExistsAfterWrite: null,
+    ...overrides,
+  };
+}
+
+const defaultClassificationSettings: TfAutotrackerV2ClassificationSettings = {
+  autoApps: [],
+  autoWebsites: [
+    {
+      id: "rule-uworld",
+      name: "UWorld",
+      target: "https://apps.uworld.com",
+      kind: "website",
+    },
+  ],
+  distractionApps: [],
+  distractionWebsites: [
+    {
+      id: "rule-reddit",
+      name: "Reddit",
+      target: "https://www.reddit.com",
+      kind: "website",
+    },
+  ],
+};
 
 test("tracked UWorld open span produces a focused open reducer state", () => {
   const preview = buildAutoTrackerV2ReducerPreview([trackedUWorldSpan({ endedAtMs: null, durationMs: null })]);
@@ -788,6 +877,178 @@ test("native recovery merge prefers newer sampler state and preserves local dupl
     merged.events.map((event) => event.id),
     ["event-local-1", "event-native-2"],
   );
+});
+
+test("startup hydration rebuilds preview from native recovery events", () => {
+  const recoveryState: AutoTrackerV2NativeRecoveryState = {
+    schemaVersion: 1,
+    lastPersistedAtMs: 200_000,
+    lastObservedEventTimestampMs: 61_000,
+    lastObservedAppName: "Safari",
+    lastObservedBundleId: "com.apple.Safari",
+    lastObservedBrowserTitle: "UWorld",
+    lastObservedBrowserUrl: "https://apps.uworld.com/courseapp/step2",
+    samplerStatus: makeLiveSamplerStatus({
+      running: true,
+      tickCount: 4,
+      lastTickStartedAtMs: 58_000,
+      lastTickCompletedAtMs: 61_000,
+      lastObservedAppName: "Safari",
+      lastObservedBundleId: "com.apple.Safari",
+      recoveryFilePath:
+        "/Users/paul/Library/Application Support/com.paul.step2ckcommandcenter/autotracker-v2-dev-recovery.json",
+      recoveryWritePath:
+        "/Users/paul/Library/Application Support/com.paul.step2ckcommandcenter/autotracker-v2-dev-recovery.json",
+      recoveryReadPath:
+        "/Users/paul/Library/Application Support/com.paul.step2ckcommandcenter/autotracker-v2-dev-recovery.json",
+      recoveryWriteCount: 4,
+      lastRecoveryWriteAtMs: 61_000,
+      lastRecoveryEventsCount: 2,
+      lastRecoveryWriteByteCount: 4096,
+      lastRecoveryReadbackEventsCount: 2,
+      recoveryFileExistsAfterWrite: true,
+    }),
+    events: [
+      {
+        id: "event-1",
+        kind: "targetFocused",
+        timestampMs: 0,
+        platform: "macos",
+        browserTitle: "UWorld",
+        browserUrl: "https://apps.uworld.com/courseapp/step2",
+      },
+      {
+        id: "event-2",
+        kind: "targetFocused",
+        timestampMs: 61_000,
+        platform: "macos",
+        browserTitle: "UWorld Review",
+        browserUrl: "https://apps.uworld.com/courseapp/step2/review",
+      },
+    ],
+  };
+
+  const hydration = deriveAutoTrackerV2RecoveryHydration({
+    liveSamplerStatus: makeLiveSamplerStatus(),
+    recoveryDiagnostics: makeRecoveryDiagnostics(),
+    recoveryState,
+  });
+
+  assert.ok(hydration.snapshot);
+  const previewSpans = buildAutoTrackerV2PreviewSpans(
+    hydration.snapshot.events,
+    defaultClassificationSettings,
+  );
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
+  const recovered = selectAutoTrackerV2RecoveredPreviewSession({
+    previewSpans,
+    state: preview.state,
+    lastSeenAtMs: hydration.samplerStatus?.lastTickCompletedAtMs ?? 61_000,
+  });
+
+  assert.deepEqual(
+    hydration.snapshot.events.map((event) => event.id),
+    ["event-1", "event-2"],
+  );
+  assert.equal(previewSpans[0]?.matchedRuleName, "UWorld");
+  assert.equal(recovered?.matchedRuleName, "UWorld");
+  assert.equal(recovered?.lastSeenAtMs, 61_000);
+});
+
+test("startup hydration does not let empty live sampler status wipe native recovery file metadata", () => {
+  const hydration = deriveAutoTrackerV2RecoveryHydration({
+    liveSamplerStatus: makeLiveSamplerStatus(),
+    recoveryDiagnostics: makeRecoveryDiagnostics({
+      eventsCount: 2,
+      modifiedAtMs: 61_000,
+    }),
+    recoveryState: {
+      schemaVersion: 1,
+      lastPersistedAtMs: 200_000,
+      lastObservedEventTimestampMs: 61_000,
+      lastObservedAppName: "Safari",
+      lastObservedBundleId: "com.apple.Safari",
+      lastObservedBrowserTitle: "UWorld",
+      lastObservedBrowserUrl: "https://apps.uworld.com/courseapp/step2",
+      samplerStatus: makeLiveSamplerStatus({
+        running: true,
+        tickCount: 4,
+        lastTickStartedAtMs: 58_000,
+        lastTickCompletedAtMs: 61_000,
+        recoveryFilePath:
+          "/Users/paul/Library/Application Support/com.paul.step2ckcommandcenter/autotracker-v2-dev-recovery.json",
+        recoveryWritePath:
+          "/Users/paul/Library/Application Support/com.paul.step2ckcommandcenter/autotracker-v2-dev-recovery.json",
+        recoveryReadPath:
+          "/Users/paul/Library/Application Support/com.paul.step2ckcommandcenter/autotracker-v2-dev-recovery.json",
+        recoveryWriteCount: 4,
+        lastRecoveryWriteAtMs: 61_000,
+        lastRecoveryEventsCount: 2,
+        lastRecoveryWriteByteCount: 4096,
+        lastRecoveryReadbackEventsCount: 2,
+        recoveryFileExistsAfterWrite: true,
+      }),
+      events: [
+        {
+          id: "event-1",
+          kind: "targetFocused",
+          timestampMs: 0,
+          platform: "macos",
+          browserTitle: "UWorld",
+          browserUrl: "https://apps.uworld.com/courseapp/step2",
+        },
+      ],
+    },
+  });
+
+  assert.equal(hydration.samplerStatus?.running, false);
+  assert.equal(hydration.samplerStatus?.tickCount, 4);
+  assert.equal(hydration.samplerStatus?.recoveryWriteCount, 4);
+  assert.equal(hydration.samplerStatus?.lastRecoveryEventsCount, 2);
+  assert.equal(
+    hydration.samplerStatus?.recoveryFilePath,
+    "/Users/paul/Library/Application Support/com.paul.step2ckcommandcenter/autotracker-v2-dev-recovery.json",
+  );
+  assert.equal(hydration.recoveryDiagnostics?.selectedReadSource, "primary");
+});
+
+test("startup hydration keeps diagnostics for an empty native recovery file without creating a recovered session", () => {
+  const hydration = deriveAutoTrackerV2RecoveryHydration({
+    liveSamplerStatus: makeLiveSamplerStatus(),
+    recoveryDiagnostics: makeRecoveryDiagnostics({
+      eventsCount: 0,
+      sizeBytes: 512,
+      modifiedAtMs: 20_000,
+    }),
+    recoveryState: {
+      schemaVersion: 1,
+      lastPersistedAtMs: 20_000,
+      lastObservedEventTimestampMs: null,
+      lastObservedAppName: null,
+      lastObservedBundleId: null,
+      lastObservedBrowserTitle: null,
+      lastObservedBrowserUrl: null,
+      samplerStatus: makeLiveSamplerStatus({
+        recoveryFilePath:
+          "/Users/paul/Library/Application Support/com.paul.step2ckcommandcenter/autotracker-v2-dev-recovery.json",
+      }),
+      events: [],
+    },
+  });
+
+  const emptyPreview = buildAutoTrackerV2ReducerPreview([]);
+  const recovered = selectAutoTrackerV2RecoveredPreviewSession({
+    previewSpans: [],
+    state: emptyPreview.state,
+    lastSeenAtMs: hydration.samplerStatus?.lastTickCompletedAtMs ?? 0,
+  });
+
+  assert.equal(hydration.snapshot, null);
+  assert.equal(hydration.recoveryDiagnostics?.exists, true);
+  assert.equal(hydration.recoveryDiagnostics?.parsedSchemaVersion, 1);
+  assert.equal(hydration.recoveryDiagnostics?.selectedReadSource, "primary");
+  assert.equal(hydration.samplerStatus?.lastRecoveryEventsCount, 0);
+  assert.equal(recovered, null);
 });
 
 test("recovery assessment returns recoverable when the gap is below 60 seconds", () => {

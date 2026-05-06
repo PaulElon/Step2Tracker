@@ -31,8 +31,8 @@ import {
 import {
   assessAutoTrackerV2RecoveredPreviewSession,
   buildAutoTrackerV2ReducerPreview,
+  deriveAutoTrackerV2RecoveryHydration,
   finalizeAutoTrackerV2RecoveredPreviewSession,
-  mergeAutoTrackerV2DevRecoveryState,
   mapAutoTrackerV2FinalizedPreviewSessionToSessionLog,
   selectAutoTrackerV2RecoveredPreviewSession,
   selectAutoTrackerV2ContinuousWritePreviewSessions,
@@ -41,7 +41,6 @@ import {
 } from "../../lib/tf-autotracker-v2-reducer-preview";
 import type { NativeTrackerSpanInput } from "../../lib/tf-native-span-reconciler";
 import {
-  TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT,
   TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION,
   TF_AUTOTRACKER_V2_DEV_WRITTEN_ID_LIMIT,
   clearTfAutoTrackerV2DevPersistedState,
@@ -65,8 +64,6 @@ import type {
 type TrackerListKey = keyof TfTrackerPrefs;
 type TrackerGroupKey = "allowed" | "distractions";
 const RESET_CONFIRMATION_TOKEN = "RESET";
-const AUTOTRACKER_V2_RECOVERY_NOTE =
-  "Recovered dev Auto-Tracker preview state from local/native persistence. Native sampler remains stopped until you start it again.";
 
 type PendingImportPreview = {
   fileName: string;
@@ -366,24 +363,6 @@ function appendWrittenPreviewSessionId(
   }
 
   return next;
-}
-
-function buildRecoveredAutoTrackerV2Snapshot(
-  events: AutoTrackerV2NativeSnapshot["events"],
-): AutoTrackerV2NativeSnapshot {
-  return {
-    status: {
-      platform: "macos",
-      supported: true,
-      foregroundProbeAvailable: true,
-      idleProbeAvailable: true,
-      bufferLen: events.length,
-      bufferCapacity: TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT,
-      lastSampledAtMs: events.at(-1)?.timestampMs ?? null,
-      note: AUTOTRACKER_V2_RECOVERY_NOTE,
-    },
-    events,
-  };
 }
 
 async function getLatestAutoTrackerSpansPlaceholder(): Promise<NativeTrackerSpanInput[]> {
@@ -913,20 +892,6 @@ export function TrackerSettingsPanel() {
   }, []);
 
   useEffect(() => {
-    if (!FF.autotrackerV2NativeInspector && !FF.autotrackerV2NativeSampler) {
-      return;
-    }
-
-    void getAutoTrackerV2NativeSamplerStatus()
-      .then((status) => {
-        setV2SamplerStatus(status);
-      })
-      .catch(() => {
-        // Leave existing inspector state alone if sampler diagnostics are unavailable.
-      });
-  }, []);
-
-  useEffect(() => {
     if (v2DidHydratePersistedStateRef.current) {
       return;
     }
@@ -938,29 +903,7 @@ export function TrackerSettingsPanel() {
     v2DidHydratePersistedStateRef.current = true;
     let cancelled = false;
 
-    void (async () => {
-      const localPersistedState = loadTfAutoTrackerV2DevPersistedState();
-      const {
-        diagnostics,
-        nativeRecoveryState,
-        recoveryError,
-      } = await loadV2NativeRecoveryBundle();
-
-      const restored = mergeAutoTrackerV2DevRecoveryState({
-        localPersistedState,
-        nativeRecoveryState,
-      });
-
-      if (cancelled) {
-        return;
-      }
-
-      applyHydratedV2RecoveryState({
-        restored,
-        diagnostics,
-        recoveryError,
-      });
-    })();
+    void hydrateV2RecoveryFromPersistence(() => cancelled);
 
     return () => {
       cancelled = true;
@@ -1457,15 +1400,18 @@ export function TrackerSettingsPanel() {
   async function loadV2NativeRecoveryBundle(): Promise<{
     diagnostics: AutoTrackerV2NativeRecoveryDiagnostics | null;
     nativeRecoveryState: Awaited<ReturnType<typeof readAutoTrackerV2NativeRecovery>>;
+    liveSamplerStatus: AutoTrackerV2NativeSamplerStatus | null;
     recoveryError: string | null;
   }> {
     let diagnostics: AutoTrackerV2NativeRecoveryDiagnostics | null = null;
     let nativeRecoveryState: Awaited<ReturnType<typeof readAutoTrackerV2NativeRecovery>> = null;
+    let liveSamplerStatus: AutoTrackerV2NativeSamplerStatus | null = null;
     let recoveryError: string | null = null;
 
-    const [diagnosticsResult, recoveryResult] = await Promise.allSettled([
+    const [diagnosticsResult, recoveryResult, samplerStatusResult] = await Promise.allSettled([
       readAutoTrackerV2NativeRecoveryDiagnostics(),
       readAutoTrackerV2NativeRecovery(),
+      FF.autotrackerV2NativeSampler ? getAutoTrackerV2NativeSamplerStatus() : Promise.resolve(null),
     ]);
 
     if (diagnosticsResult.status === "fulfilled") {
@@ -1487,74 +1433,81 @@ export function TrackerSettingsPanel() {
           : "Native dev Auto-Tracker recovery read failed.";
     }
 
-    return { diagnostics, nativeRecoveryState, recoveryError };
+    if (samplerStatusResult.status === "fulfilled") {
+      liveSamplerStatus = samplerStatusResult.value;
+    }
+
+    return { diagnostics, nativeRecoveryState, liveSamplerStatus, recoveryError };
+  }
+
+  async function hydrateV2RecoveryFromPersistence(
+    isCancelled?: () => boolean,
+  ): Promise<void> {
+    const localPersistedState = loadTfAutoTrackerV2DevPersistedState();
+    const { diagnostics, nativeRecoveryState, liveSamplerStatus, recoveryError } =
+      await loadV2NativeRecoveryBundle();
+
+    if (isCancelled?.()) {
+      return;
+    }
+
+    applyHydratedV2RecoveryState({
+      localPersistedState,
+      diagnostics,
+      nativeRecoveryState,
+      liveSamplerStatus,
+      recoveryError,
+    });
   }
 
   function applyHydratedV2RecoveryState({
-    restored,
+    localPersistedState,
     diagnostics,
+    nativeRecoveryState,
+    liveSamplerStatus,
     recoveryError,
   }: {
-    restored: ReturnType<typeof mergeAutoTrackerV2DevRecoveryState>;
+    localPersistedState: ReturnType<typeof loadTfAutoTrackerV2DevPersistedState>;
     diagnostics: AutoTrackerV2NativeRecoveryDiagnostics | null;
+    nativeRecoveryState: Awaited<ReturnType<typeof readAutoTrackerV2NativeRecovery>>;
+    liveSamplerStatus: AutoTrackerV2NativeSamplerStatus | null;
     recoveryError: string | null;
   }): void {
-    setV2RecoveryDiagnostics(diagnostics);
+    const hydration = deriveAutoTrackerV2RecoveryHydration({
+      localPersistedState,
+      liveSamplerStatus,
+      recoveryDiagnostics: diagnostics,
+      recoveryState: nativeRecoveryState,
+    });
+    const restored = hydration.restoredState;
+
+    setV2RecoveryDiagnostics(hydration.recoveryDiagnostics);
+    setV2SamplerStatus(hydration.samplerStatus);
+    setV2Snapshot(hydration.snapshot);
+    if (hydration.snapshot) {
+      setV2ProbeStatus(hydration.snapshot.status);
+    }
 
     if (!restored) {
+      setV2ContinuousWriteStatus(null);
+      setV2WrittenPreviewSessionIds(new Set());
+      setV2RecoveredStateSummary(null);
+      setV2PersistedOpenPreviewSession(null);
+      setV2PersistedRecoveryStatus("noEligibleSession");
+      setV2PersistedRecoveryMessage(null);
+      setV2LastPersistedAtMs(null);
       setV2PersistenceError(recoveryError);
       setV2HasLoadedPersistedState(true);
       return;
     }
 
-    if (restored.events.length > 0) {
-      const recoveredSnapshot = buildRecoveredAutoTrackerV2Snapshot(restored.events);
-      setV2Snapshot((current) => current ?? recoveredSnapshot);
-      setV2ProbeStatus((current) => current ?? recoveredSnapshot.status);
-    }
-
-    if (restored.samplerStatus) {
-      const restoredSamplerStatus = restored.samplerStatus;
-      const restoredNativeSamplerStatus =
-        restoredSamplerStatus as Partial<AutoTrackerV2NativeSamplerStatus>;
-      setV2SamplerStatus((current) =>
-        current ?? {
-          running: restoredSamplerStatus.running,
-          intervalMs: restoredSamplerStatus.intervalMs,
-          tickCount: restoredSamplerStatus.tickCount,
-          lastTickStartedAtMs: restoredSamplerStatus.lastTickStartedAtMs,
-          lastTickCompletedAtMs: restoredSamplerStatus.lastTickCompletedAtMs,
-          lastAppendedCount: restoredSamplerStatus.lastAppendedCount,
-          lastError: restoredSamplerStatus.lastError,
-          lastObservedAppName: restoredSamplerStatus.lastObservedAppName,
-          lastObservedBundleId: restoredSamplerStatus.lastObservedBundleId,
-          bufferCount: restoredSamplerStatus.bufferCount,
-          recoveryFilePath: diagnostics?.primaryRecoveryFilePath ?? diagnostics?.recoveryFilePath ?? null,
-          recoveryWritePath: diagnostics?.writeFilePath ?? restoredNativeSamplerStatus.recoveryWritePath ?? null,
-          recoveryReadPath: diagnostics?.readFilePath ?? restoredNativeSamplerStatus.recoveryReadPath ?? null,
-          recoveryWriteCount: 0,
-          lastRecoveryWriteAtMs: null,
-          lastRecoveryWriteError: diagnostics?.readError ?? null,
-          lastRecoveryEventsCount: diagnostics?.eventsCount ?? 0,
-          lastRecoveryWriteByteCount:
-            diagnostics?.lastWriteByteCount ?? restoredNativeSamplerStatus.lastRecoveryWriteByteCount ?? null,
-          lastRecoveryReadbackEventsCount:
-            diagnostics?.readbackAfterWriteEventsCount ??
-            restoredNativeSamplerStatus.lastRecoveryReadbackEventsCount ??
-            null,
-          recoveryFileExistsAfterWrite:
-            diagnostics?.fileExistsAfterWrite ?? restoredNativeSamplerStatus.recoveryFileExistsAfterWrite ?? null,
-        },
-      );
-    }
-
     if (restored.continuousWriteStatus) {
       setV2ContinuousWriteStatus(restored.continuousWriteStatus);
+    } else {
+      setV2ContinuousWriteStatus(null);
     }
 
-    if (restored.writtenPreviewSessionIds.length > 0) {
-      setV2WrittenPreviewSessionIds(new Set(restored.writtenPreviewSessionIds));
-    }
+    setV2WrittenPreviewSessionIds(new Set(restored.writtenPreviewSessionIds));
 
     const restoredPreviewSpans = buildAutoTrackerV2PreviewSpans(
       restored.events,
@@ -1668,6 +1621,22 @@ export function TrackerSettingsPanel() {
       await refreshV2SnapshotAndSamplerStatus();
     } catch (err) {
       setV2InspectorError(err instanceof Error && err.message ? err.message : "Capture failed.");
+    } finally {
+      setV2IsBusy(false);
+    }
+  }
+
+  async function handleV2ReloadNativeRecoveryFile() {
+    setV2InspectorError(null);
+    setV2IsBusy(true);
+    try {
+      await hydrateV2RecoveryFromPersistence();
+    } catch (err) {
+      setV2InspectorError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Native recovery reload failed.",
+      );
     } finally {
       setV2IsBusy(false);
     }
@@ -2607,18 +2576,30 @@ export function TrackerSettingsPanel() {
                       Status: {formatRecoveryStatus(recoveredPreviewAssessment.status)}
                     </div>
                   </div>
-                  {recoveredPreviewAssessment.canFinalize ? (
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => {
-                        void handleV2FinalizeRecoveredPreviewSession();
+                        void handleV2ReloadNativeRecoveryFile();
                       }}
-                      disabled={v2IsRecoveryFinalizing || v2IsWritingSelectedSession}
-                      className="rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-50 transition-colors hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={v2IsBusy || v2IsRecoveryFinalizing || v2IsWritingSelectedSession}
+                      className="rounded-lg border border-cyan-400/30 bg-slate-950/30 px-4 py-2 text-sm font-medium text-cyan-50 transition-colors hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {v2IsRecoveryFinalizing ? "Finalizing…" : "Finalize recovered session"}
+                      Reload native recovery file
                     </button>
-                  ) : null}
+                    {recoveredPreviewAssessment.canFinalize ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleV2FinalizeRecoveredPreviewSession();
+                        }}
+                        disabled={v2IsRecoveryFinalizing || v2IsWritingSelectedSession}
+                        className="rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-50 transition-colors hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {v2IsRecoveryFinalizing ? "Finalizing…" : "Finalize recovered session"}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-cyan-50/85">
