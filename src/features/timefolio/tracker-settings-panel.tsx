@@ -9,6 +9,7 @@ import {
   captureAutoTrackerV2NativeOnce,
   clearAutoTrackerV2NativeBuffer,
   clearAutoTrackerV2NativeRecovery,
+  debugWriteAutoTrackerV2NativeRecoveryNow,
   getAutoTrackerV2NativeSamplerStatus,
   probeAutoTrackerV2Native,
   readAutoTrackerV2NativeRecovery,
@@ -18,6 +19,7 @@ import {
   stopAutoTrackerV2NativeSampler,
   type AutoTrackerV2NativeCaptureResult,
   type AutoTrackerV2NativeRecoveryDiagnostics,
+  type AutoTrackerV2NativeRecoveryDebugWriteResult,
   type AutoTrackerV2NativeSamplerStatus,
   type AutoTrackerV2NativeSnapshot,
   type AutoTrackerV2NativeStatus,
@@ -865,6 +867,12 @@ export function TrackerSettingsPanel() {
     tone: "success" | "error" | "info";
     text: string;
   } | null>(null);
+  const [v2RecoveryDebugWriteResult, setV2RecoveryDebugWriteResult] =
+    useState<AutoTrackerV2NativeRecoveryDebugWriteResult | null>(null);
+  const [v2RecoveryDebugMessage, setV2RecoveryDebugMessage] = useState<{
+    tone: "success" | "error" | "info";
+    text: string;
+  } | null>(null);
   const [v2IsStopFinalizing, setV2IsStopFinalizing] = useState(false);
   const [v2IsRecoveryFinalizing, setV2IsRecoveryFinalizing] = useState(false);
   const [v2LastPersistedAtMs, setV2LastPersistedAtMs] = useState<number | null>(null);
@@ -1507,6 +1515,8 @@ export function TrackerSettingsPanel() {
 
     if (restored.samplerStatus) {
       const restoredSamplerStatus = restored.samplerStatus;
+      const restoredNativeSamplerStatus =
+        restoredSamplerStatus as Partial<AutoTrackerV2NativeSamplerStatus>;
       setV2SamplerStatus((current) =>
         current ?? {
           running: restoredSamplerStatus.running,
@@ -1519,11 +1529,21 @@ export function TrackerSettingsPanel() {
           lastObservedAppName: restoredSamplerStatus.lastObservedAppName,
           lastObservedBundleId: restoredSamplerStatus.lastObservedBundleId,
           bufferCount: restoredSamplerStatus.bufferCount,
-          recoveryFilePath: diagnostics?.recoveryFilePath ?? null,
+          recoveryFilePath: diagnostics?.primaryRecoveryFilePath ?? diagnostics?.recoveryFilePath ?? null,
+          recoveryWritePath: diagnostics?.writeFilePath ?? restoredNativeSamplerStatus.recoveryWritePath ?? null,
+          recoveryReadPath: diagnostics?.readFilePath ?? restoredNativeSamplerStatus.recoveryReadPath ?? null,
           recoveryWriteCount: 0,
           lastRecoveryWriteAtMs: null,
           lastRecoveryWriteError: diagnostics?.readError ?? null,
           lastRecoveryEventsCount: diagnostics?.eventsCount ?? 0,
+          lastRecoveryWriteByteCount:
+            diagnostics?.lastWriteByteCount ?? restoredNativeSamplerStatus.lastRecoveryWriteByteCount ?? null,
+          lastRecoveryReadbackEventsCount:
+            diagnostics?.readbackAfterWriteEventsCount ??
+            restoredNativeSamplerStatus.lastRecoveryReadbackEventsCount ??
+            null,
+          recoveryFileExistsAfterWrite:
+            diagnostics?.fileExistsAfterWrite ?? restoredNativeSamplerStatus.recoveryFileExistsAfterWrite ?? null,
         },
       );
     }
@@ -1653,6 +1673,42 @@ export function TrackerSettingsPanel() {
     }
   }
 
+  async function handleV2DebugWriteRecoveryNow() {
+    setV2InspectorError(null);
+    setV2RecoveryDebugMessage(null);
+    setV2IsBusy(true);
+    try {
+      const result = await debugWriteAutoTrackerV2NativeRecoveryNow();
+      const [samplerStatus, recoveryDiagnostics] = await Promise.all([
+        FF.autotrackerV2NativeSampler
+          ? getAutoTrackerV2NativeSamplerStatus()
+          : Promise.resolve(null),
+        readAutoTrackerV2NativeRecoveryDiagnostics().catch(() => null),
+      ]);
+      setV2RecoveryDebugWriteResult(result);
+      if (samplerStatus) {
+        setV2SamplerStatus(samplerStatus);
+      }
+      setV2RecoveryDiagnostics(recoveryDiagnostics);
+      setV2RecoveryDebugMessage({
+        tone: result.writeOk ? "success" : "error",
+        text: result.writeOk
+          ? `Debug recovery write/read complete. Bytes: ${formatFileSize(result.bytesWritten)}. Readback events: ${result.readbackEventsCount ?? 0}. Exists: ${result.exists ? "Yes" : "No"}.`
+          : `Debug recovery write failed: ${result.writeError ?? "Unknown error."}`,
+      });
+    } catch (err) {
+      setV2RecoveryDebugMessage({
+        tone: "error",
+        text:
+          err instanceof Error && err.message
+            ? err.message
+            : "Debug recovery write/read failed.",
+      });
+    } finally {
+      setV2IsBusy(false);
+    }
+  }
+
   async function handleV2ClearBuffer() {
     setV2InspectorError(null);
     setV2IsBusy(true);
@@ -1676,6 +1732,7 @@ export function TrackerSettingsPanel() {
       setV2ContinuousWriteStatus(null);
       setV2StopFinalizeMessage(null);
       setV2RecoveryFinalizeMessage(null);
+      setV2RecoveryDebugWriteResult(null);
       setV2RecoveredStateSummary(null);
       setV2PersistedOpenPreviewSession(null);
       setV2PersistedRecoveryStatus("noEligibleSession");
@@ -1685,6 +1742,11 @@ export function TrackerSettingsPanel() {
       setV2PersistenceError(null);
       setV2RecoveryDiagnostics({
         recoveryFilePath: recoveryClearResult.recoveryFilePath,
+        source: "primary",
+        primaryRecoveryFilePath: recoveryClearResult.recoveryFilePath,
+        writeFilePath: recoveryClearResult.recoveryFilePath,
+        readFilePath: null,
+        selectedReadSource: "none",
         exists: false,
         sizeBytes: null,
         modifiedAtMs: null,
@@ -1695,6 +1757,14 @@ export function TrackerSettingsPanel() {
         lastObservedBrowserTitle: null,
         lastObservedBrowserUrl: null,
         readError: null,
+        fallbackCandidates: [],
+        lastWriteByteCount: null,
+        fileExistsAfterWrite: false,
+        readbackAfterWriteEventsCount: null,
+      });
+      setV2RecoveryDebugMessage({
+        tone: "info",
+        text: `Deleted primary: ${recoveryClearResult.deletedPrimary ? "Yes" : "No"}. Fallback cleanup count: ${recoveryClearResult.fallbackCleanupCount}.`,
       });
       setV2StopFinalizeMessage({
         tone: "info",
@@ -2333,6 +2403,14 @@ export function TrackerSettingsPanel() {
 
         const isDelayPending = v2DelayCountdown !== null;
         const anyBusy = v2IsBusy || v2SamplerActionBusy || isDelayPending;
+        const recoveryTerminalPath =
+          v2RecoveryDiagnostics?.primaryRecoveryFilePath ??
+          v2RecoveryDiagnostics?.recoveryFilePath ??
+          v2SamplerStatus?.recoveryFilePath ??
+          null;
+        const recoveryTerminalCommand = recoveryTerminalPath
+          ? `ls -lh "${recoveryTerminalPath}" && cat "${recoveryTerminalPath}" | head -c 1000`
+          : null;
 
         return (
           <section className="flex flex-col gap-5 rounded-2xl border border-violet-500/20 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
@@ -2419,6 +2497,16 @@ export function TrackerSettingsPanel() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => {
+                    void handleV2DebugWriteRecoveryNow();
+                  }}
+                  disabled={anyBusy || isSamplerRunning}
+                  className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm font-medium text-sky-100 transition-colors hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Debug write/read recovery now
+                </button>
+                <button
+                  type="button"
                   onClick={handleV2ClearBuffer}
                   disabled={anyBusy || isSamplerRunning}
                   className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
@@ -2434,6 +2522,38 @@ export function TrackerSettingsPanel() {
             {v2InspectorError ? (
               <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
                 {v2InspectorError}
+              </div>
+            ) : null}
+
+            {v2RecoveryDebugMessage ? (
+              <div
+                className={`rounded-xl border px-4 py-3 text-sm ${
+                  v2RecoveryDebugMessage.tone === "error"
+                    ? "border-rose-500/20 bg-rose-500/10 text-rose-100"
+                    : v2RecoveryDebugMessage.tone === "info"
+                      ? "border-slate-600 bg-slate-950/40 text-slate-200"
+                      : "border-emerald-500/20 bg-emerald-500/10 text-emerald-100"
+                }`}
+              >
+                {v2RecoveryDebugMessage.text}
+              </div>
+            ) : null}
+
+            {v2RecoveryDebugWriteResult ? (
+              <div className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-xs text-sky-50">
+                <span>Debug write path: {v2RecoveryDebugWriteResult.writePath}</span>
+                <span className="ml-3">
+                  Read path: {v2RecoveryDebugWriteResult.readPath}
+                </span>
+                <span className="ml-3">
+                  Bytes: {formatFileSize(v2RecoveryDebugWriteResult.bytesWritten)}
+                </span>
+                <span className="ml-3">
+                  Readback events: {v2RecoveryDebugWriteResult.readbackEventsCount ?? 0}
+                </span>
+                <span className="ml-3">
+                  Exists: {v2RecoveryDebugWriteResult.exists ? "Yes" : "No"}
+                </span>
               </div>
             ) : null}
 
@@ -2560,7 +2680,16 @@ export function TrackerSettingsPanel() {
                       Native recovery diagnostics
                     </div>
                     <div className="mt-2 grid gap-x-4 gap-y-1 text-xs text-cyan-50/85 sm:grid-cols-2">
-                      <span>Path: {v2RecoveryDiagnostics.recoveryFilePath}</span>
+                      <span className="sm:col-span-2">
+                        Primary path: {v2RecoveryDiagnostics.primaryRecoveryFilePath}
+                      </span>
+                      <span className="sm:col-span-2">
+                        Write path: {v2RecoveryDiagnostics.writeFilePath}
+                      </span>
+                      <span className="sm:col-span-2">
+                        Read path: {v2RecoveryDiagnostics.readFilePath ?? "None"}
+                      </span>
+                      <span>Selected read source: {v2RecoveryDiagnostics.selectedReadSource}</span>
                       <span>Exists: {v2RecoveryDiagnostics.exists ? "Yes" : "No"}</span>
                       <span>Size: {formatFileSize(v2RecoveryDiagnostics.sizeBytes)}</span>
                       <span>Modified: {formatDateTimeFromMs(v2RecoveryDiagnostics.modifiedAtMs)}</span>
@@ -2569,6 +2698,20 @@ export function TrackerSettingsPanel() {
                       </span>
                       <span>
                         Events: {v2RecoveryDiagnostics.eventsCount ?? 0}
+                      </span>
+                      <span>
+                        Last write bytes: {formatFileSize(v2RecoveryDiagnostics.lastWriteByteCount)}
+                      </span>
+                      <span>
+                        Exists after write:{" "}
+                        {v2RecoveryDiagnostics.fileExistsAfterWrite === null
+                          ? "Unknown"
+                          : v2RecoveryDiagnostics.fileExistsAfterWrite
+                            ? "Yes"
+                            : "No"}
+                      </span>
+                      <span>
+                        Readback events: {v2RecoveryDiagnostics.readbackAfterWriteEventsCount ?? 0}
                       </span>
                       <span>
                         Last app: {v2RecoveryDiagnostics.lastObservedAppName ?? "Unknown"}
@@ -2580,6 +2723,33 @@ export function TrackerSettingsPanel() {
                         Last URL: {v2RecoveryDiagnostics.lastObservedBrowserUrl ?? "Unknown"}
                       </span>
                     </div>
+                    <div className="mt-3 rounded-md border border-cyan-400/10 bg-slate-950/40 px-3 py-2 text-[11px] leading-5 text-cyan-50/75">
+                      Terminal verification: {recoveryTerminalCommand}
+                    </div>
+                    {v2RecoveryDiagnostics.fallbackCandidates.length > 0 ? (
+                      <div className="mt-3 flex flex-col gap-2">
+                        <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-cyan-100/80">
+                          Fallback candidates
+                        </div>
+                        {v2RecoveryDiagnostics.fallbackCandidates.map((candidate) => (
+                          <div
+                            key={`${candidate.source}:${candidate.recoveryFilePath}`}
+                            className="rounded-md border border-cyan-400/10 bg-slate-950/30 px-3 py-2 text-[11px] leading-5 text-cyan-50/75"
+                          >
+                            <div className="break-all">{candidate.recoveryFilePath}</div>
+                            <div>
+                              Exists: {candidate.exists ? "Yes" : "No"} · Events:{" "}
+                              {candidate.eventsCount ?? 0} · Parse:{" "}
+                              {candidate.readError
+                                ? candidate.readError
+                                : candidate.exists
+                                  ? "Readable"
+                                  : "Missing"}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                     {v2RecoveryDiagnostics.readError ? (
                       <div className="mt-2 text-xs text-amber-200">
                         Read error: {v2RecoveryDiagnostics.readError}
@@ -2629,7 +2799,13 @@ export function TrackerSettingsPanel() {
                 <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-emerald-100/75">
                   <span>Interval: {v2SamplerStatus.intervalMs}ms</span>
                   {v2SamplerStatus.recoveryFilePath ? (
-                    <span>Recovery path: {v2SamplerStatus.recoveryFilePath}</span>
+                    <span>Primary recovery path: {v2SamplerStatus.recoveryFilePath}</span>
+                  ) : null}
+                  {v2SamplerStatus.recoveryWritePath ? (
+                    <span>Write path: {v2SamplerStatus.recoveryWritePath}</span>
+                  ) : null}
+                  {v2SamplerStatus.recoveryReadPath ? (
+                    <span>Read path: {v2SamplerStatus.recoveryReadPath}</span>
                   ) : null}
                   <span>Recovery writes: {v2SamplerStatus.recoveryWriteCount}</span>
                   <span>
@@ -2637,6 +2813,20 @@ export function TrackerSettingsPanel() {
                   </span>
                   <span>
                     Recovery events: {v2SamplerStatus.lastRecoveryEventsCount}
+                  </span>
+                  <span>
+                    Last write bytes: {formatFileSize(v2SamplerStatus.lastRecoveryWriteByteCount)}
+                  </span>
+                  <span>
+                    Readback events: {v2SamplerStatus.lastRecoveryReadbackEventsCount ?? 0}
+                  </span>
+                  <span>
+                    File exists after write:{" "}
+                    {v2SamplerStatus.recoveryFileExistsAfterWrite === null
+                      ? "Unknown"
+                      : v2SamplerStatus.recoveryFileExistsAfterWrite
+                        ? "Yes"
+                        : "No"}
                   </span>
                   {v2SamplerStatus.lastObservedAppName ? (
                     <span>

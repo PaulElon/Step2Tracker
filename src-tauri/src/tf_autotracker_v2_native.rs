@@ -6,10 +6,11 @@
 // native sampler. Sampling is on-demand via the
 // `tf_autotracker_v2_native_capture_once` command or the background sampler.
 
+use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
 #[cfg(target_os = "macos")]
 use std::process::Command;
-use std::fs;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::thread::{self, JoinHandle};
@@ -26,8 +27,8 @@ const IDLE_THRESHOLD_SECS: u64 = 60;
 const NATIVE_SAMPLER_INTERVAL_MS: u64 = 3_000;
 const NATIVE_SAMPLER_STOP_POLL_MS: u64 = 100;
 const RECOVERY_FILE_NAME: &str = "autotracker-v2-dev-recovery.json";
-const COMMAND_TIMEOUT_NOTE: &str =
-    "lsappinfo/ioreg run synchronously and return promptly on macOS";
+const DEV_RECOVERY_BUNDLE_DIR: &str = "com.paul.step2ckcommandcenter";
+const COMMAND_TIMEOUT_NOTE: &str = "lsappinfo/ioreg run synchronously and return promptly on macOS";
 
 // ---------------------------------------------------------------------------
 // Event and status types
@@ -105,10 +106,15 @@ pub struct TfAutotrackerV2NativeSamplerStatus {
     pub last_observed_bundle_id: Option<String>,
     pub buffer_count: usize,
     pub recovery_file_path: Option<String>,
+    pub recovery_write_path: Option<String>,
+    pub recovery_read_path: Option<String>,
     pub recovery_write_count: u64,
     pub last_recovery_write_at_ms: Option<i64>,
     pub last_recovery_write_error: Option<String>,
     pub last_recovery_events_count: usize,
+    pub last_recovery_write_byte_count: Option<u64>,
+    pub last_recovery_readback_events_count: Option<usize>,
+    pub recovery_file_exists_after_write: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,7 +133,8 @@ pub struct TfAutotrackerV2NativeRecoveryState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TfAutotrackerV2NativeRecoveryDiagnostics {
+pub struct TfAutotrackerV2NativeRecoveryPathDiagnostics {
+    pub source: String,
     pub recovery_file_path: String,
     pub exists: bool,
     pub size_bytes: Option<u64>,
@@ -143,10 +150,50 @@ pub struct TfAutotrackerV2NativeRecoveryDiagnostics {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TfAutotrackerV2NativeRecoveryDiagnostics {
+    pub source: String,
+    pub recovery_file_path: String,
+    pub primary_recovery_file_path: String,
+    pub write_file_path: String,
+    pub read_file_path: Option<String>,
+    pub selected_read_source: String,
+    pub exists: bool,
+    pub size_bytes: Option<u64>,
+    pub modified_at_ms: Option<i64>,
+    pub parsed_schema_version: Option<u8>,
+    pub events_count: Option<usize>,
+    pub last_observed_app_name: Option<String>,
+    pub last_observed_bundle_id: Option<String>,
+    pub last_observed_browser_title: Option<String>,
+    pub last_observed_browser_url: Option<String>,
+    pub read_error: Option<String>,
+    pub fallback_candidates: Vec<TfAutotrackerV2NativeRecoveryPathDiagnostics>,
+    pub last_write_byte_count: Option<u64>,
+    pub file_exists_after_write: Option<bool>,
+    pub readback_after_write_events_count: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TfAutotrackerV2NativeRecoveryClearResult {
     pub deleted: bool,
+    pub deleted_primary: bool,
+    pub fallback_cleanup_count: usize,
     pub deleted_paths: Vec<String>,
     pub recovery_file_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TfAutotrackerV2NativeRecoveryDebugWriteResult {
+    pub write_path: String,
+    pub read_path: String,
+    pub write_ok: bool,
+    pub write_error: Option<String>,
+    pub bytes_written: Option<u64>,
+    pub readback_events_count: Option<usize>,
+    pub exists: bool,
+    pub file_size: Option<u64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -215,10 +262,15 @@ struct NativeSamplerState {
     last_observed_app_name: Option<String>,
     last_observed_bundle_id: Option<String>,
     recovery_file_path: Option<String>,
+    recovery_write_path: Option<String>,
+    recovery_read_path: Option<String>,
     recovery_write_count: u64,
     last_recovery_write_at_ms: Option<i64>,
     last_recovery_write_error: Option<String>,
     last_recovery_events_count: usize,
+    last_recovery_write_byte_count: Option<u64>,
+    last_recovery_readback_events_count: Option<usize>,
+    recovery_file_exists_after_write: Option<bool>,
 }
 
 impl NativeSamplerState {
@@ -236,10 +288,15 @@ impl NativeSamplerState {
             last_observed_app_name: None,
             last_observed_bundle_id: None,
             recovery_file_path: None,
+            recovery_write_path: None,
+            recovery_read_path: None,
             recovery_write_count: 0,
             last_recovery_write_at_ms: None,
             last_recovery_write_error: None,
             last_recovery_events_count: 0,
+            last_recovery_write_byte_count: None,
+            last_recovery_readback_events_count: None,
+            recovery_file_exists_after_write: None,
         }
     }
 
@@ -256,10 +313,15 @@ impl NativeSamplerState {
             last_observed_bundle_id: self.last_observed_bundle_id.clone(),
             buffer_count,
             recovery_file_path: self.recovery_file_path.clone(),
+            recovery_write_path: self.recovery_write_path.clone(),
+            recovery_read_path: self.recovery_read_path.clone(),
             recovery_write_count: self.recovery_write_count,
             last_recovery_write_at_ms: self.last_recovery_write_at_ms,
             last_recovery_write_error: self.last_recovery_write_error.clone(),
             last_recovery_events_count: self.last_recovery_events_count,
+            last_recovery_write_byte_count: self.last_recovery_write_byte_count,
+            last_recovery_readback_events_count: self.last_recovery_readback_events_count,
+            recovery_file_exists_after_write: self.recovery_file_exists_after_write,
         }
     }
 
@@ -284,6 +346,9 @@ impl NativeSamplerState {
         self.last_observed_app_name = None;
         self.last_observed_bundle_id = None;
         self.last_recovery_write_error = None;
+        self.last_recovery_write_byte_count = None;
+        self.last_recovery_readback_events_count = None;
+        self.recovery_file_exists_after_write = None;
         true
     }
 
@@ -340,15 +405,28 @@ impl NativeSamplerState {
         }
     }
 
-    fn record_recovery_write_success(&mut self, persisted_at_ms: i64, events_count: usize) {
+    fn record_recovery_write_success(
+        &mut self,
+        persisted_at_ms: i64,
+        events_count: usize,
+        result: &RecoveryWriteReadResult,
+    ) {
         self.recovery_write_count += 1;
         self.last_recovery_write_at_ms = Some(persisted_at_ms);
-        self.last_recovery_write_error = None;
+        self.last_recovery_write_error = result.read_error.clone();
         self.last_recovery_events_count = events_count;
+        self.recovery_file_path = Some(result.write_path.display().to_string());
+        self.recovery_write_path = Some(result.write_path.display().to_string());
+        self.recovery_read_path = Some(result.read_path.display().to_string());
+        self.last_recovery_write_byte_count = Some(result.bytes_written);
+        self.last_recovery_readback_events_count = result.readback_events_count;
+        self.recovery_file_exists_after_write = Some(result.exists);
     }
 
     fn record_recovery_write_error(&mut self, error: String) {
         self.last_recovery_write_error = Some(error);
+        self.recovery_file_exists_after_write =
+            stable_recovery_path().ok().map(|path| path.exists());
     }
 
     fn mark_exited(&mut self) {
@@ -442,31 +520,30 @@ fn build_status(
     }
 }
 
-fn candidate_recovery_paths(app: &tauri::AppHandle) -> Vec<PathBuf> {
-    let mut paths: Vec<PathBuf> = Vec::new();
-
-    for dir in [
-        app.path().app_local_data_dir().ok(),
-        app.path().app_data_dir().ok(),
-        app.path().app_config_dir().ok(),
-    ]
-    .into_iter()
-    .flatten()
-    {
-        let path = dir.join(RECOVERY_FILE_NAME);
-        if !paths.iter().any(|existing| existing == &path) {
-            paths.push(path);
-        }
-    }
-
-    paths
+#[derive(Debug, Clone)]
+struct RecoveryWriteReadResult {
+    write_path: PathBuf,
+    read_path: PathBuf,
+    write_ok: bool,
+    bytes_written: u64,
+    readback_events_count: Option<usize>,
+    exists: bool,
+    file_size: Option<u64>,
+    read_error: Option<String>,
 }
 
-fn stable_recovery_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let path = candidate_recovery_paths(app)
-        .into_iter()
-        .next()
-        .ok_or_else(|| "Unable to resolve a native recovery file path.".to_string())?;
+fn deterministic_recovery_path_for_home(home: &Path) -> PathBuf {
+    home.join("Library")
+        .join("Application Support")
+        .join(DEV_RECOVERY_BUNDLE_DIR)
+        .join(RECOVERY_FILE_NAME)
+}
+
+fn stable_recovery_path() -> Result<PathBuf, String> {
+    let home = env::var_os("HOME")
+        .map(PathBuf::from)
+        .ok_or_else(|| "Unable to resolve HOME for native recovery file path.".to_string())?;
+    let path = deterministic_recovery_path_for_home(&home);
 
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| {
@@ -478,6 +555,30 @@ fn stable_recovery_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     }
 
     Ok(path)
+}
+
+fn fallback_recovery_paths(app: &tauri::AppHandle) -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = Vec::new();
+    let primary_path = stable_recovery_path().ok();
+
+    for dir in [
+        app.path().app_local_data_dir().ok(),
+        app.path().app_data_dir().ok(),
+        app.path().app_config_dir().ok(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let path = dir.join(RECOVERY_FILE_NAME);
+        if primary_path.as_ref() == Some(&path) {
+            continue;
+        }
+        if !paths.iter().any(|existing| existing == &path) {
+            paths.push(path);
+        }
+    }
+
+    paths
 }
 
 fn select_recovery_events(buffer: &NativeBuffer) -> Vec<TfAutotrackerV2NativeEvent> {
@@ -532,7 +633,10 @@ fn build_recovery_state(
     }
 }
 
-fn inspect_recovery_file_at_path(path: &PathBuf) -> TfAutotrackerV2NativeRecoveryDiagnostics {
+fn inspect_recovery_file_at_path(
+    source: &str,
+    path: &PathBuf,
+) -> TfAutotrackerV2NativeRecoveryPathDiagnostics {
     let metadata = fs::metadata(path).ok();
     let exists = metadata.is_some();
     let size_bytes = metadata.as_ref().map(|value| value.len());
@@ -543,7 +647,8 @@ fn inspect_recovery_file_at_path(path: &PathBuf) -> TfAutotrackerV2NativeRecover
         .map(|value| value.as_millis() as i64);
 
     if !exists {
-        return TfAutotrackerV2NativeRecoveryDiagnostics {
+        return TfAutotrackerV2NativeRecoveryPathDiagnostics {
+            source: source.to_string(),
             recovery_file_path: path.display().to_string(),
             exists: false,
             size_bytes,
@@ -560,7 +665,8 @@ fn inspect_recovery_file_at_path(path: &PathBuf) -> TfAutotrackerV2NativeRecover
 
     match fs::read_to_string(path) {
         Ok(raw) => match serde_json::from_str::<TfAutotrackerV2NativeRecoveryState>(&raw) {
-            Ok(state) => TfAutotrackerV2NativeRecoveryDiagnostics {
+            Ok(state) => TfAutotrackerV2NativeRecoveryPathDiagnostics {
+                source: source.to_string(),
                 recovery_file_path: path.display().to_string(),
                 exists: true,
                 size_bytes,
@@ -573,7 +679,8 @@ fn inspect_recovery_file_at_path(path: &PathBuf) -> TfAutotrackerV2NativeRecover
                 last_observed_browser_url: state.last_observed_browser_url,
                 read_error: None,
             },
-            Err(error) => TfAutotrackerV2NativeRecoveryDiagnostics {
+            Err(error) => TfAutotrackerV2NativeRecoveryPathDiagnostics {
+                source: source.to_string(),
                 recovery_file_path: path.display().to_string(),
                 exists: true,
                 size_bytes,
@@ -587,7 +694,8 @@ fn inspect_recovery_file_at_path(path: &PathBuf) -> TfAutotrackerV2NativeRecover
                 read_error: Some(format!("Unable to parse native recovery file: {error}")),
             },
         },
-        Err(error) => TfAutotrackerV2NativeRecoveryDiagnostics {
+        Err(error) => TfAutotrackerV2NativeRecoveryPathDiagnostics {
+            source: source.to_string(),
             recovery_file_path: path.display().to_string(),
             exists: true,
             size_bytes,
@@ -603,21 +711,65 @@ fn inspect_recovery_file_at_path(path: &PathBuf) -> TfAutotrackerV2NativeRecover
     }
 }
 
-fn inspect_recovery_files(app: &tauri::AppHandle) -> Result<Vec<TfAutotrackerV2NativeRecoveryDiagnostics>, String> {
-    let paths = candidate_recovery_paths(app);
-    if paths.is_empty() {
-        return Err("Unable to resolve any native recovery file paths.".to_string());
-    }
+fn build_recovery_diagnostics(
+    primary: TfAutotrackerV2NativeRecoveryPathDiagnostics,
+    fallback_candidates: Vec<TfAutotrackerV2NativeRecoveryPathDiagnostics>,
+) -> TfAutotrackerV2NativeRecoveryDiagnostics {
+    let selected_read_source = if primary.exists {
+        "primary".to_string()
+    } else {
+        "none".to_string()
+    };
+    let read_file_path = if primary.exists {
+        Some(primary.recovery_file_path.clone())
+    } else {
+        None
+    };
 
-    Ok(paths
-        .iter()
-        .map(inspect_recovery_file_at_path)
-        .collect::<Vec<_>>())
+    let sampler = lock_sampler();
+    let diagnostics = TfAutotrackerV2NativeRecoveryDiagnostics {
+        source: primary.source.clone(),
+        recovery_file_path: primary.recovery_file_path.clone(),
+        primary_recovery_file_path: primary.recovery_file_path.clone(),
+        write_file_path: primary.recovery_file_path.clone(),
+        read_file_path,
+        selected_read_source,
+        exists: primary.exists,
+        size_bytes: primary.size_bytes,
+        modified_at_ms: primary.modified_at_ms,
+        parsed_schema_version: primary.parsed_schema_version,
+        events_count: primary.events_count,
+        last_observed_app_name: primary.last_observed_app_name,
+        last_observed_bundle_id: primary.last_observed_bundle_id,
+        last_observed_browser_title: primary.last_observed_browser_title,
+        last_observed_browser_url: primary.last_observed_browser_url,
+        read_error: primary.read_error,
+        fallback_candidates,
+        last_write_byte_count: sampler.last_recovery_write_byte_count,
+        file_exists_after_write: sampler.recovery_file_exists_after_write,
+        readback_after_write_events_count: sampler.last_recovery_readback_events_count,
+    };
+    drop(sampler);
+    diagnostics
 }
 
+fn inspect_recovery_files(
+    app: &tauri::AppHandle,
+) -> Result<TfAutotrackerV2NativeRecoveryDiagnostics, String> {
+    let primary_path = stable_recovery_path()?;
+    let primary = inspect_recovery_file_at_path("primary", &primary_path);
+    let fallback_candidates = fallback_recovery_paths(app)
+        .iter()
+        .map(|path| inspect_recovery_file_at_path("fallback", path))
+        .collect::<Vec<_>>();
+
+    Ok(build_recovery_diagnostics(primary, fallback_candidates))
+}
+
+#[cfg(test)]
 fn select_recovery_diagnostics(
-    diagnostics: &[TfAutotrackerV2NativeRecoveryDiagnostics],
-) -> Option<TfAutotrackerV2NativeRecoveryDiagnostics> {
+    diagnostics: &[TfAutotrackerV2NativeRecoveryPathDiagnostics],
+) -> Option<TfAutotrackerV2NativeRecoveryPathDiagnostics> {
     diagnostics
         .iter()
         .filter(|entry| entry.exists)
@@ -633,95 +785,172 @@ fn select_recovery_diagnostics(
 }
 
 fn read_recovery_state_from_path(
-    path: &PathBuf,
+    path: &Path,
 ) -> Result<Option<TfAutotrackerV2NativeRecoveryState>, String> {
     if !path.exists() {
         return Ok(None);
     }
 
-    let raw = fs::read_to_string(path)
-        .map_err(|error| format!("Unable to read native recovery file {}: {error}", path.display()))?;
-    let decoded = serde_json::from_str::<TfAutotrackerV2NativeRecoveryState>(&raw)
-        .map_err(|error| format!("Unable to parse native recovery file {}: {error}", path.display()))?;
+    let raw = fs::read_to_string(path).map_err(|error| {
+        format!(
+            "Unable to read native recovery file {}: {error}",
+            path.display()
+        )
+    })?;
+    let decoded =
+        serde_json::from_str::<TfAutotrackerV2NativeRecoveryState>(&raw).map_err(|error| {
+            format!(
+                "Unable to parse native recovery file {}: {error}",
+                path.display()
+            )
+        })?;
     Ok(Some(decoded))
 }
 
 fn write_recovery_state(
-    app: &tauri::AppHandle,
     recovery_state: &TfAutotrackerV2NativeRecoveryState,
-) -> Result<PathBuf, String> {
-    let path = stable_recovery_path(app)?;
+) -> Result<RecoveryWriteReadResult, String> {
+    let path = stable_recovery_path()?;
+    write_recovery_state_to_path(&path, recovery_state)
+}
+
+fn write_recovery_state_to_path(
+    path: &Path,
+    recovery_state: &TfAutotrackerV2NativeRecoveryState,
+) -> Result<RecoveryWriteReadResult, String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "Unable to create native recovery directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+
     let temp_path = path.with_extension("json.tmp");
     let encoded = serde_json::to_vec_pretty(recovery_state)
         .map_err(|error| format!("Unable to encode native recovery state: {error}"))?;
-    fs::write(&temp_path, encoded)
-        .map_err(|error| format!("Unable to write native recovery temp file {}: {error}", temp_path.display()))?;
-    fs::rename(&temp_path, &path)
-        .map_err(|error| format!("Unable to move native recovery file into place {}: {error}", path.display()))?;
-    Ok(path)
+    let bytes_written = encoded.len() as u64;
+    fs::write(&temp_path, encoded).map_err(|error| {
+        format!(
+            "Unable to write native recovery temp file {}: {error}",
+            temp_path.display()
+        )
+    })?;
+    fs::rename(&temp_path, path).map_err(|error| {
+        format!(
+            "Unable to move native recovery file into place {}: {error}",
+            path.display()
+        )
+    })?;
+
+    let metadata = fs::metadata(path).ok();
+    let exists = metadata.is_some();
+    let file_size = metadata.as_ref().map(|value| value.len());
+    let readback = read_recovery_state_from_path(path);
+    let (readback_events_count, read_error) = match readback {
+        Ok(Some(state)) => (Some(state.events.len()), None),
+        Ok(None) => (
+            None,
+            Some(format!(
+                "Native recovery file was missing after write: {}",
+                path.display()
+            )),
+        ),
+        Err(error) => (None, Some(error)),
+    };
+
+    Ok(RecoveryWriteReadResult {
+        write_path: path.to_path_buf(),
+        read_path: path.to_path_buf(),
+        write_ok: true,
+        bytes_written,
+        readback_events_count,
+        exists,
+        file_size,
+        read_error,
+    })
 }
 
 fn persist_sampler_recovery(
-    app: &tauri::AppHandle,
     sampler_status: TfAutotrackerV2NativeSamplerStatus,
     persisted_at_ms: i64,
-) -> Result<(PathBuf, usize), String> {
+) -> Result<(RecoveryWriteReadResult, usize), String> {
     let buffer = lock_buffer();
     let recovery_state = build_recovery_state(&buffer, sampler_status, persisted_at_ms);
     let events_count = recovery_state.events.len();
     drop(buffer);
-    let path = write_recovery_state(app, &recovery_state)?;
-    Ok((path, events_count))
+    let result = write_recovery_state(&recovery_state)?;
+    Ok((result, events_count))
 }
 
-fn read_recovery_state(app: &tauri::AppHandle) -> Result<Option<TfAutotrackerV2NativeRecoveryState>, String> {
+fn read_recovery_state(
+    app: &tauri::AppHandle,
+) -> Result<Option<TfAutotrackerV2NativeRecoveryState>, String> {
     let diagnostics = inspect_recovery_files(app)?;
-    let selected = match select_recovery_diagnostics(&diagnostics) {
-        Some(selected) => selected,
-        None => return Ok(None),
-    };
-
-    if !selected.exists {
+    if !diagnostics.exists {
         return Ok(None);
     }
 
-    let path = PathBuf::from(&selected.recovery_file_path);
+    let path = PathBuf::from(&diagnostics.primary_recovery_file_path);
     read_recovery_state_from_path(&path)
 }
 
 fn read_recovery_diagnostics(
     app: &tauri::AppHandle,
 ) -> Result<TfAutotrackerV2NativeRecoveryDiagnostics, String> {
-    let diagnostics = inspect_recovery_files(app)?;
-    select_recovery_diagnostics(&diagnostics)
-        .ok_or_else(|| "Unable to resolve a native recovery diagnostics path.".to_string())
+    inspect_recovery_files(app)
 }
 
-fn clear_recovery_state(app: &tauri::AppHandle) -> Result<TfAutotrackerV2NativeRecoveryClearResult, String> {
-    let stable_path = stable_recovery_path(app)?;
-    let candidates = candidate_recovery_paths(app);
+fn clear_recovery_state(
+    app: &tauri::AppHandle,
+) -> Result<TfAutotrackerV2NativeRecoveryClearResult, String> {
+    let stable_path = stable_recovery_path()?;
+    let candidates = fallback_recovery_paths(app);
     let mut deleted_paths: Vec<String> = Vec::new();
+    let mut deleted_primary = false;
+
+    if stable_path.exists() {
+        fs::remove_file(&stable_path).map_err(|error| {
+            format!(
+                "Unable to remove native recovery file {}: {error}",
+                stable_path.display()
+            )
+        })?;
+        deleted_paths.push(stable_path.display().to_string());
+        deleted_primary = true;
+    }
 
     for path in candidates {
         if !path.exists() {
             continue;
         }
 
-        fs::remove_file(&path)
-            .map_err(|error| format!("Unable to remove native recovery file {}: {error}", path.display()))?;
+        fs::remove_file(&path).map_err(|error| {
+            format!(
+                "Unable to remove native recovery file {}: {error}",
+                path.display()
+            )
+        })?;
         deleted_paths.push(path.display().to_string());
     }
+    let fallback_cleanup_count =
+        deleted_paths
+            .len()
+            .saturating_sub(if deleted_primary { 1 } else { 0 });
 
     Ok(TfAutotrackerV2NativeRecoveryClearResult {
         deleted: !deleted_paths.is_empty(),
+        deleted_primary,
+        fallback_cleanup_count,
         deleted_paths,
         recovery_file_path: stable_path.display().to_string(),
     })
 }
 
-fn current_sampler_status(app: &tauri::AppHandle) -> TfAutotrackerV2NativeSamplerStatus {
+fn current_sampler_status(_app: &tauri::AppHandle) -> TfAutotrackerV2NativeSamplerStatus {
     let buffer_count = current_buffer_count();
-    let stable_path = stable_recovery_path(app)
+    let stable_path = stable_recovery_path()
         .ok()
         .map(|path| path.display().to_string());
     let mut sampler = lock_sampler();
@@ -911,8 +1140,7 @@ fn read_idle_seconds() -> Result<u64, String> {
     let ioreg = find_ioreg();
     let raw = run_command(ioreg, &["-c", "IOHIDSystem"])
         .map_err(|e| format!("ioreg ({ioreg}) failed: {e}"))?;
-    parse_idle_seconds(&raw)
-        .ok_or_else(|| "ioreg did not include HIDIdleTime.".to_string())
+    parse_idle_seconds(&raw).ok_or_else(|| "ioreg did not include HIDIdleTime.".to_string())
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -951,12 +1179,10 @@ fn try_read_browser_tab(bundle_id: &str) -> Option<BrowserTabInfo> {
         ("title", "active tab")
     };
 
-    let title_script = format!(
-        "tell application \"{app_name}\" to get {title_key} of {tab_ref} of front window"
-    );
-    let url_script = format!(
-        "tell application \"{app_name}\" to get URL of {tab_ref} of front window"
-    );
+    let title_script =
+        format!("tell application \"{app_name}\" to get {title_key} of {tab_ref} of front window");
+    let url_script =
+        format!("tell application \"{app_name}\" to get URL of {tab_ref} of front window");
 
     let title_res = run_command("/usr/bin/osascript", &["-e", &title_script]);
     let url_res = run_command("/usr/bin/osascript", &["-e", &url_script]);
@@ -1135,7 +1361,7 @@ fn sleep_native_sampler_interval(stop_flag: &Arc<AtomicBool>) {
     }
 }
 
-fn run_native_sampler_loop(stop_flag: Arc<AtomicBool>, app: tauri::AppHandle) {
+fn run_native_sampler_loop(stop_flag: Arc<AtomicBool>, _app: tauri::AppHandle) {
     loop {
         if stop_flag.load(Ordering::SeqCst) {
             break;
@@ -1153,18 +1379,17 @@ fn run_native_sampler_loop(stop_flag: Arc<AtomicBool>, app: tauri::AppHandle) {
         {
             let sampler_status = {
                 let mut sampler = lock_sampler();
-                if let Ok(path) = stable_recovery_path(&app) {
+                if let Ok(path) = stable_recovery_path() {
                     sampler.set_recovery_file_path(path.display().to_string());
                 }
                 sampler.record_tick_completed(&outcome, completed_at_ms);
                 sampler.status(current_buffer_count())
             };
 
-            match persist_sampler_recovery(&app, sampler_status, completed_at_ms) {
-                Ok((path, events_count)) => {
+            match persist_sampler_recovery(sampler_status, completed_at_ms) {
+                Ok((result, events_count)) => {
                     let mut sampler = lock_sampler();
-                    sampler.set_recovery_file_path(path.display().to_string());
-                    sampler.record_recovery_write_success(completed_at_ms, events_count);
+                    sampler.record_recovery_write_success(completed_at_ms, events_count, &result);
                 }
                 Err(error) => {
                     let mut sampler = lock_sampler();
@@ -1209,8 +1434,11 @@ pub fn tf_autotracker_v2_native_probe() -> TfAutotrackerV2NativeStatus {
 #[tauri::command]
 pub fn tf_autotracker_v2_native_snapshot() -> TfAutotrackerV2NativeSnapshot {
     let buffer = lock_buffer();
-    let status =
-        build_status(&buffer, cfg!(target_os = "macos"), cfg!(target_os = "macos"));
+    let status = build_status(
+        &buffer,
+        cfg!(target_os = "macos"),
+        cfg!(target_os = "macos"),
+    );
     TfAutotrackerV2NativeSnapshot {
         status,
         events: buffer.events.clone(),
@@ -1221,7 +1449,11 @@ pub fn tf_autotracker_v2_native_snapshot() -> TfAutotrackerV2NativeSnapshot {
 pub fn tf_autotracker_v2_native_clear_buffer() -> TfAutotrackerV2NativeStatus {
     let mut buffer = lock_buffer();
     buffer.clear();
-    build_status(&buffer, cfg!(target_os = "macos"), cfg!(target_os = "macos"))
+    build_status(
+        &buffer,
+        cfg!(target_os = "macos"),
+        cfg!(target_os = "macos"),
+    )
 }
 
 #[tauri::command]
@@ -1251,7 +1483,59 @@ pub fn tf_autotracker_v2_native_recovery_clear(
 }
 
 #[tauri::command]
-pub fn tf_autotracker_v2_native_sampler_status(app: tauri::AppHandle) -> TfAutotrackerV2NativeSamplerStatus {
+pub fn tf_autotracker_v2_native_recovery_debug_write_now(
+    _app: tauri::AppHandle,
+) -> Result<TfAutotrackerV2NativeRecoveryDebugWriteResult, String> {
+    let path = stable_recovery_path()?;
+    let persisted_at_ms = now_ms();
+    let sampler_status = {
+        let mut sampler = lock_sampler();
+        sampler.set_recovery_file_path(path.display().to_string());
+        sampler.status(current_buffer_count())
+    };
+    let buffer = lock_buffer();
+    let recovery_state = build_recovery_state(&buffer, sampler_status, persisted_at_ms);
+    let events_count = recovery_state.events.len();
+    drop(buffer);
+
+    match write_recovery_state_to_path(&path, &recovery_state) {
+        Ok(result) => {
+            let mut sampler = lock_sampler();
+            sampler.record_recovery_write_success(persisted_at_ms, events_count, &result);
+            Ok(TfAutotrackerV2NativeRecoveryDebugWriteResult {
+                write_path: result.write_path.display().to_string(),
+                read_path: result.read_path.display().to_string(),
+                write_ok: result.write_ok,
+                write_error: None,
+                bytes_written: Some(result.bytes_written),
+                readback_events_count: result.readback_events_count,
+                exists: result.exists,
+                file_size: result.file_size,
+            })
+        }
+        Err(error) => {
+            let exists = path.exists();
+            let file_size = fs::metadata(&path).ok().map(|metadata| metadata.len());
+            let mut sampler = lock_sampler();
+            sampler.record_recovery_write_error(error.clone());
+            Ok(TfAutotrackerV2NativeRecoveryDebugWriteResult {
+                write_path: path.display().to_string(),
+                read_path: path.display().to_string(),
+                write_ok: false,
+                write_error: Some(error),
+                bytes_written: None,
+                readback_events_count: None,
+                exists,
+                file_size,
+            })
+        }
+    }
+}
+
+#[tauri::command]
+pub fn tf_autotracker_v2_native_sampler_status(
+    app: tauri::AppHandle,
+) -> TfAutotrackerV2NativeSamplerStatus {
     current_sampler_status(&app)
 }
 
@@ -1263,7 +1547,7 @@ pub fn tf_autotracker_v2_native_sampler_start(
     {
         let mut sampler = lock_sampler();
         sampler.cleanup_finished_thread();
-        if let Ok(path) = stable_recovery_path(&app) {
+        if let Ok(path) = stable_recovery_path() {
             sampler.set_recovery_file_path(path.display().to_string());
         }
         if !sampler.begin_start(stop_flag.clone()) {
@@ -1282,7 +1566,7 @@ pub fn tf_autotracker_v2_native_sampler_start(
         Ok(handle) => {
             let mut sampler = lock_sampler();
             sampler.attach_thread_handle(handle);
-            if let Ok(path) = stable_recovery_path(&app) {
+            if let Ok(path) = stable_recovery_path() {
                 sampler.set_recovery_file_path(path.display().to_string());
             }
             drop(sampler);
@@ -1291,18 +1575,18 @@ pub fn tf_autotracker_v2_native_sampler_start(
         Err(error) => {
             let mut sampler = lock_sampler();
             sampler.abort_start(format!("Failed to start native sampler: {error}"));
-            Err(
-                sampler
-                    .last_error
-                    .clone()
-                    .unwrap_or_else(|| "Failed to start native sampler.".to_string()),
-            )
+            Err(sampler
+                .last_error
+                .clone()
+                .unwrap_or_else(|| "Failed to start native sampler.".to_string()))
         }
     }
 }
 
 #[tauri::command]
-pub fn tf_autotracker_v2_native_sampler_stop(app: tauri::AppHandle) -> TfAutotrackerV2NativeSamplerStatus {
+pub fn tf_autotracker_v2_native_sampler_stop(
+    app: tauri::AppHandle,
+) -> TfAutotrackerV2NativeSamplerStatus {
     let mut sampler = lock_sampler();
     sampler.cleanup_finished_thread();
     let _ = sampler.request_stop();
@@ -1317,6 +1601,7 @@ pub fn tf_autotracker_v2_native_sampler_stop(app: tauri::AppHandle) -> TfAutotra
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
     use tempfile::tempdir;
 
     fn sample_sampler_status() -> TfAutotrackerV2NativeSamplerStatus {
@@ -1332,10 +1617,15 @@ mod tests {
             last_observed_bundle_id: Some("com.apple.Safari".to_string()),
             buffer_count: 2,
             recovery_file_path: Some("/tmp/autotracker-v2-dev-recovery.json".to_string()),
+            recovery_write_path: Some("/tmp/autotracker-v2-dev-recovery.json".to_string()),
+            recovery_read_path: Some("/tmp/autotracker-v2-dev-recovery.json".to_string()),
             recovery_write_count: 3,
             last_recovery_write_at_ms: Some(120_000),
             last_recovery_write_error: None,
             last_recovery_events_count: 2,
+            last_recovery_write_byte_count: Some(2048),
+            last_recovery_readback_events_count: Some(2),
+            recovery_file_exists_after_write: Some(true),
         }
     }
 
@@ -1392,7 +1682,13 @@ mod tests {
 
     #[test]
     fn foreground_changed_by_app_name_fallback() {
-        assert!(foreground_changed(None, Some("Safari"), None, Some("Anki"), Some(1000)));
+        assert!(foreground_changed(
+            None,
+            Some("Safari"),
+            None,
+            Some("Anki"),
+            Some(1000)
+        ));
         assert!(!foreground_changed(
             None,
             Some("Anki"),
@@ -1462,6 +1758,54 @@ mod tests {
     }
 
     #[test]
+    fn deterministic_recovery_path_uses_macos_application_support_bundle_dir() {
+        let path = deterministic_recovery_path_for_home(Path::new("/Users/paul"));
+
+        assert_eq!(
+            path,
+            PathBuf::from(
+                "/Users/paul/Library/Application Support/com.paul.step2ckcommandcenter/autotracker-v2-dev-recovery.json",
+            ),
+        );
+    }
+
+    #[test]
+    fn recovery_payload_write_readback_round_trip_reports_file_metadata() {
+        let temp = tempdir().expect("tempdir");
+        let path = temp.path().join(RECOVERY_FILE_NAME);
+        let recovery = TfAutotrackerV2NativeRecoveryState {
+            schema_version: 1,
+            last_persisted_at_ms: 123_456,
+            last_observed_event_timestamp_ms: Some(120_000),
+            last_observed_app_name: Some("Safari".to_string()),
+            last_observed_bundle_id: Some("com.apple.Safari".to_string()),
+            last_observed_browser_title: Some("UWorld".to_string()),
+            last_observed_browser_url: Some("https://apps.uworld.com/courseapp/step2".to_string()),
+            sampler_status: sample_sampler_status(),
+            events: vec![make_event("targetFocused", 100_000)],
+        };
+
+        let result = write_recovery_state_to_path(&path, &recovery).expect("write/readback");
+        let restored = read_recovery_state_from_path(&path)
+            .expect("read recovery")
+            .expect("recovery exists");
+
+        assert_eq!(result.write_path, path);
+        assert_eq!(result.read_path, result.write_path);
+        assert!(result.write_ok);
+        assert!(result.bytes_written > 0);
+        assert!(result.exists);
+        assert_eq!(result.file_size, Some(result.bytes_written));
+        assert_eq!(result.readback_events_count, Some(1));
+        assert_eq!(result.read_error, None);
+        assert_eq!(restored.events.len(), 1);
+        assert_eq!(
+            restored.last_observed_browser_title.as_deref(),
+            Some("UWorld")
+        );
+    }
+
+    #[test]
     fn recovery_state_json_round_trip_preserves_schema_and_recent_events() {
         let recovery = TfAutotrackerV2NativeRecoveryState {
             schema_version: 1,
@@ -1510,10 +1854,16 @@ mod tests {
 
         assert_eq!(restored.schema_version, 1);
         assert_eq!(restored.last_persisted_at_ms, 123_456);
-        assert_eq!(restored.last_observed_browser_title.as_deref(), Some("UWorld"));
+        assert_eq!(
+            restored.last_observed_browser_title.as_deref(),
+            Some("UWorld")
+        );
         assert_eq!(restored.sampler_status.tick_count, 7);
         assert_eq!(restored.events.len(), 2);
-        assert_eq!(restored.events[1].browser_url.as_deref(), Some("https://www.reddit.com/r/medicine"));
+        assert_eq!(
+            restored.events[1].browser_url.as_deref(),
+            Some("https://www.reddit.com/r/medicine")
+        );
     }
 
     #[test]
@@ -1533,11 +1883,14 @@ mod tests {
         };
         fs::write(&path, serde_json::to_vec(&recovery).expect("serialize")).expect("write");
 
-        let diagnostics = inspect_recovery_file_at_path(&path);
+        let diagnostics = inspect_recovery_file_at_path("primary", &path);
         assert!(diagnostics.exists);
         assert_eq!(diagnostics.parsed_schema_version, Some(1));
         assert_eq!(diagnostics.events_count, Some(1));
-        assert_eq!(diagnostics.last_observed_browser_title.as_deref(), Some("UWorld"));
+        assert_eq!(
+            diagnostics.last_observed_browser_title.as_deref(),
+            Some("UWorld")
+        );
         assert_eq!(diagnostics.read_error, None);
     }
 
@@ -1560,15 +1913,22 @@ mod tests {
             sampler_status: sample_sampler_status(),
             events: vec![make_event("untrackedFocused", 150_000)],
         };
-        fs::write(&second_path, serde_json::to_vec(&recovery).expect("serialize")).expect("write second");
+        fs::write(
+            &second_path,
+            serde_json::to_vec(&recovery).expect("serialize"),
+        )
+        .expect("write second");
 
         let selected = select_recovery_diagnostics(&[
-            inspect_recovery_file_at_path(&first_path),
-            inspect_recovery_file_at_path(&second_path),
+            inspect_recovery_file_at_path("fallback", &first_path),
+            inspect_recovery_file_at_path("fallback", &second_path),
         ])
         .expect("selected");
 
-        assert_eq!(selected.recovery_file_path, second_path.display().to_string());
+        assert_eq!(
+            selected.recovery_file_path,
+            second_path.display().to_string()
+        );
         assert_eq!(selected.read_error, None);
         assert_eq!(selected.events_count, Some(1));
     }

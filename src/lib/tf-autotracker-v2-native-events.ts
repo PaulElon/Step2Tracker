@@ -67,10 +67,15 @@ export type AutoTrackerV2NativeSamplerStatus = {
   lastObservedBundleId: string | null;
   bufferCount: number;
   recoveryFilePath: string | null;
+  recoveryWritePath: string | null;
+  recoveryReadPath: string | null;
   recoveryWriteCount: number;
   lastRecoveryWriteAtMs: number | null;
   lastRecoveryWriteError: string | null;
   lastRecoveryEventsCount: number;
+  lastRecoveryWriteByteCount: number | null;
+  lastRecoveryReadbackEventsCount: number | null;
+  recoveryFileExistsAfterWrite: boolean | null;
 };
 
 export type AutoTrackerV2NativeRecoveryState = {
@@ -85,7 +90,8 @@ export type AutoTrackerV2NativeRecoveryState = {
   events: AutoTrackerV2NativeEvent[];
 };
 
-export type AutoTrackerV2NativeRecoveryDiagnostics = {
+export type AutoTrackerV2NativeRecoveryPathDiagnostics = {
+  source: string;
   recoveryFilePath: string;
   exists: boolean;
   sizeBytes: number | null;
@@ -99,10 +105,34 @@ export type AutoTrackerV2NativeRecoveryDiagnostics = {
   readError: string | null;
 };
 
+export type AutoTrackerV2NativeRecoveryDiagnostics = AutoTrackerV2NativeRecoveryPathDiagnostics & {
+  primaryRecoveryFilePath: string;
+  writeFilePath: string;
+  readFilePath: string | null;
+  selectedReadSource: string;
+  fallbackCandidates: AutoTrackerV2NativeRecoveryPathDiagnostics[];
+  lastWriteByteCount: number | null;
+  fileExistsAfterWrite: boolean | null;
+  readbackAfterWriteEventsCount: number | null;
+};
+
 export type AutoTrackerV2NativeRecoveryClearResult = {
   deleted: boolean;
+  deletedPrimary: boolean;
+  fallbackCleanupCount: number;
   deletedPaths: string[];
   recoveryFilePath: string;
+};
+
+export type AutoTrackerV2NativeRecoveryDebugWriteResult = {
+  writePath: string;
+  readPath: string;
+  writeOk: boolean;
+  writeError: string | null;
+  bytesWritten: number | null;
+  readbackEventsCount: number | null;
+  exists: boolean;
+  fileSize: number | null;
 };
 
 export function probeAutoTrackerV2Native(): Promise<AutoTrackerV2NativeStatus> {
@@ -138,6 +168,12 @@ export function readAutoTrackerV2NativeRecoveryDiagnostics(): Promise<AutoTracke
 export function clearAutoTrackerV2NativeRecovery(): Promise<AutoTrackerV2NativeRecoveryClearResult> {
   return core.invoke<AutoTrackerV2NativeRecoveryClearResult>(
     "tf_autotracker_v2_native_recovery_clear",
+  );
+}
+
+export function debugWriteAutoTrackerV2NativeRecoveryNow(): Promise<AutoTrackerV2NativeRecoveryDebugWriteResult> {
+  return core.invoke<AutoTrackerV2NativeRecoveryDebugWriteResult>(
+    "tf_autotracker_v2_native_recovery_debug_write_now",
   );
 }
 
