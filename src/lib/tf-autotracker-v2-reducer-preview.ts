@@ -1,4 +1,5 @@
 import {
+  AUTO_TRACKER_V2_DEFAULT_AWAY_GRACE_MS,
   areAutoTrackerV2TargetsEqual,
   createAutoTrackerV2InitialState,
   reduceAutoTrackerV2Session,
@@ -13,7 +14,11 @@ import type {
   TfAutotrackerV2PreviewClassification,
   TfAutotrackerV2PreviewSpan,
 } from "./tf-autotracker-v2-preview-spans.js";
-import type { TfSessionLog } from "../types/models";
+import type {
+  TfAutoTrackerV2DevPersistedOpenPreviewSession,
+  TfAutoTrackerV2DevRecoveryStatus,
+  TfSessionLog,
+} from "../types/models";
 
 export type TfAutotrackerV2ReducerPreviewIgnoredSpan = {
   spanId: string;
@@ -72,6 +77,14 @@ export type TfAutotrackerV2StopFinalizeSelection = {
     | "alreadyWritten"
     | "noActiveSession"
     | "unclassifiedActiveSession";
+};
+
+export type TfAutotrackerV2RecoveredPreviewSessionAssessment = {
+  status: TfAutoTrackerV2DevRecoveryStatus;
+  recoveredPreviewSession: TfAutoTrackerV2DevPersistedOpenPreviewSession | null;
+  gapMs: number;
+  canFinalize: boolean;
+  message: string;
 };
 
 type ActiveFinalizedPreviewSession = {
@@ -220,6 +233,155 @@ export function selectAutoTrackerV2StopFinalizePreviewSession({
   return {
     previewSession: null,
     reason: sawWrittenCandidate ? "alreadyWritten" : "noActiveSession",
+  };
+}
+
+export function selectAutoTrackerV2RecoveredPreviewSession({
+  previewSpans,
+  state,
+  lastSeenAtMs,
+}: {
+  previewSpans: TfAutotrackerV2PreviewSpan[];
+  state: AutoTrackerV2SessionMachineState;
+  lastSeenAtMs: number;
+}): TfAutoTrackerV2DevPersistedOpenPreviewSession | null {
+  if (!Number.isFinite(lastSeenAtMs) || lastSeenAtMs <= 0) {
+    return null;
+  }
+
+  const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+    previewSpans,
+    state,
+    nowMs: lastSeenAtMs,
+    writtenPreviewSessionIds: [],
+  });
+
+  if (!selection.previewSession) {
+    return null;
+  }
+
+  return createRecoveredPreviewSessionSummary(selection.previewSession, lastSeenAtMs);
+}
+
+export function assessAutoTrackerV2RecoveredPreviewSession({
+  recoveredPreviewSession,
+  nowMs,
+  writtenPreviewSessionIds,
+  thresholdMs = AUTO_TRACKER_V2_DEFAULT_AWAY_GRACE_MS,
+}: {
+  recoveredPreviewSession: TfAutoTrackerV2DevPersistedOpenPreviewSession | null;
+  nowMs: number;
+  writtenPreviewSessionIds: Iterable<string>;
+  thresholdMs?: number;
+}): TfAutotrackerV2RecoveredPreviewSessionAssessment {
+  if (!recoveredPreviewSession) {
+    return {
+      status: "noEligibleSession",
+      recoveredPreviewSession: null,
+      gapMs: 0,
+      canFinalize: false,
+      message: "No eligible tracked or distraction session was recovered.",
+    };
+  }
+
+  if (
+    recoveredPreviewSession.classification !== "tracked" &&
+    recoveredPreviewSession.classification !== "distraction"
+  ) {
+    return {
+      status: "ignored",
+      recoveredPreviewSession,
+      gapMs: 0,
+      canFinalize: false,
+      message: "Recovered session is unclassified, so no recovery write is allowed.",
+    };
+  }
+
+  if (
+    !Number.isFinite(recoveredPreviewSession.startedAtMs) ||
+    !Number.isFinite(recoveredPreviewSession.lastSeenAtMs) ||
+    recoveredPreviewSession.lastSeenAtMs <= recoveredPreviewSession.startedAtMs
+  ) {
+    return {
+      status: "ignored",
+      recoveredPreviewSession,
+      gapMs: 0,
+      canFinalize: false,
+      message: "Recovered session timestamps are incomplete, so recovery was ignored.",
+    };
+  }
+
+  const writtenIds = new Set(writtenPreviewSessionIds);
+  if (writtenIds.has(recoveredPreviewSession.previewSessionId)) {
+    return {
+      status: "finalized",
+      recoveredPreviewSession,
+      gapMs: Math.max(0, nowMs - recoveredPreviewSession.lastSeenAtMs),
+      canFinalize: false,
+      message: "Recovered session was already written once and will not be duplicated.",
+    };
+  }
+
+  const gapMs = Math.max(0, nowMs - recoveredPreviewSession.lastSeenAtMs);
+  if (gapMs < thresholdMs) {
+    return {
+      status: "recoverable",
+      recoveredPreviewSession,
+      gapMs,
+      canFinalize: false,
+      message: "Recovered session is within the 60-second grace window, so no write is needed yet.",
+    };
+  }
+
+  return {
+    status: "finalizable",
+    recoveredPreviewSession,
+    gapMs,
+    canFinalize: true,
+    message: "Recovered session exceeded the 60-second gap threshold and can be finalized once.",
+  };
+}
+
+export function finalizeAutoTrackerV2RecoveredPreviewSession(
+  recoveredPreviewSession: TfAutoTrackerV2DevPersistedOpenPreviewSession | null,
+): TfAutotrackerV2FinalizedPreviewSession | null {
+  if (!recoveredPreviewSession) {
+    return null;
+  }
+
+  if (
+    (recoveredPreviewSession.classification !== "tracked" &&
+      recoveredPreviewSession.classification !== "distraction") ||
+    !Number.isFinite(recoveredPreviewSession.startedAtMs) ||
+    !Number.isFinite(recoveredPreviewSession.lastSeenAtMs) ||
+    recoveredPreviewSession.lastSeenAtMs <= recoveredPreviewSession.startedAtMs
+  ) {
+    return null;
+  }
+
+  const endedAtMs = recoveredPreviewSession.lastSeenAtMs;
+
+  return {
+    previewSessionId: recoveredPreviewSession.previewSessionId,
+    startedAtMs: recoveredPreviewSession.startedAtMs,
+    // Recovery finalization must stop at the last observed timestamp because sleep,
+    // quit, or reload gaps cannot prove the user stayed on the same target afterward.
+    endedAtMs,
+    durationMs: Math.max(0, endedAtMs - recoveredPreviewSession.startedAtMs),
+    targetLabel: recoveredPreviewSession.targetLabel,
+    matchedRuleName: recoveredPreviewSession.matchedRuleName,
+    matchedRuleTarget: recoveredPreviewSession.matchedRuleTarget,
+    sourceTargetStableId: recoveredPreviewSession.sourceTargetStableId,
+    sourceSpanIds: [...recoveredPreviewSession.sourceSpanIds],
+    sourceEventIds: [...recoveredPreviewSession.sourceEventIds],
+    appName: recoveredPreviewSession.appName,
+    bundleId: recoveredPreviewSession.bundleId,
+    browserTitle: recoveredPreviewSession.browserTitle,
+    browserUrl: recoveredPreviewSession.browserUrl,
+    classificationReason: recoveredPreviewSession.classificationReason,
+    classification: recoveredPreviewSession.classification,
+    finalizedBy: "manualStop",
+    isDistraction: recoveredPreviewSession.isDistraction,
   };
 }
 
@@ -822,6 +984,30 @@ function appendSourceSpan(
     ...activePreviewSession,
     sourceSpanIds: appendUnique(activePreviewSession.sourceSpanIds, span.id),
     sourceEventIds: appendAllUnique(activePreviewSession.sourceEventIds, span.sourceEventIds),
+  };
+}
+
+function createRecoveredPreviewSessionSummary(
+  previewSession: TfAutotrackerV2FinalizedPreviewSession,
+  lastSeenAtMs: number,
+): TfAutoTrackerV2DevPersistedOpenPreviewSession {
+  return {
+    previewSessionId: previewSession.previewSessionId,
+    startedAtMs: previewSession.startedAtMs,
+    lastSeenAtMs,
+    targetLabel: previewSession.targetLabel,
+    matchedRuleName: previewSession.matchedRuleName,
+    matchedRuleTarget: previewSession.matchedRuleTarget,
+    sourceTargetStableId: previewSession.sourceTargetStableId,
+    sourceSpanIds: [...previewSession.sourceSpanIds],
+    sourceEventIds: [...previewSession.sourceEventIds],
+    appName: previewSession.appName,
+    bundleId: previewSession.bundleId,
+    browserTitle: previewSession.browserTitle,
+    browserUrl: previewSession.browserUrl,
+    classificationReason: previewSession.classificationReason,
+    classification: previewSession.classification,
+    isDistraction: previewSession.isDistraction,
   };
 }
 

@@ -23,8 +23,11 @@ import {
   type TfAutotrackerV2ClassificationSettings,
 } from "../../lib/tf-autotracker-v2-preview-spans";
 import {
+  assessAutoTrackerV2RecoveredPreviewSession,
   buildAutoTrackerV2ReducerPreview,
+  finalizeAutoTrackerV2RecoveredPreviewSession,
   mapAutoTrackerV2FinalizedPreviewSessionToSessionLog,
+  selectAutoTrackerV2RecoveredPreviewSession,
   selectAutoTrackerV2ContinuousWritePreviewSessions,
   selectAutoTrackerV2StopFinalizePreviewSession,
   type TfAutotrackerV2FinalizedPreviewSession,
@@ -45,6 +48,8 @@ import { useTimeFolioStore } from "../../state/tf-store";
 import type {
   TfAppState,
   TfAutoTrackerV2DevContinuousWriteStatus,
+  TfAutoTrackerV2DevPersistedOpenPreviewSession,
+  TfAutoTrackerV2DevRecoveryStatus,
   TfTrackerPrefs,
   TfTrackerRule,
   TfTrackerRuleKind,
@@ -275,6 +280,32 @@ function formatTimeOfDayFromMs(value: number | null | undefined): string {
     return "Never";
   }
   return new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(new Date(value));
+}
+
+function formatDateTimeFromMs(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return "Never";
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function formatRecoveryStatus(status: TfAutoTrackerV2DevRecoveryStatus): string {
+  switch (status) {
+    case "recoverable":
+      return "Recoverable";
+    case "finalizable":
+      return "Finalizable";
+    case "finalized":
+      return "Finalized";
+    case "ignored":
+      return "Ignored";
+    case "noEligibleSession":
+    default:
+      return "No eligible session";
+  }
 }
 
 function makeAutoTrackerV2PreviewSessionLogId(previewSessionId: string): string {
@@ -808,13 +839,25 @@ export function TrackerSettingsPanel() {
     tone: "success" | "error" | "info";
     text: string;
   } | null>(null);
+  const [v2RecoveryFinalizeMessage, setV2RecoveryFinalizeMessage] = useState<{
+    tone: "success" | "error" | "info";
+    text: string;
+  } | null>(null);
   const [v2IsStopFinalizing, setV2IsStopFinalizing] = useState(false);
+  const [v2IsRecoveryFinalizing, setV2IsRecoveryFinalizing] = useState(false);
   const [v2LastPersistedAtMs, setV2LastPersistedAtMs] = useState<number | null>(null);
   const [v2PersistenceError, setV2PersistenceError] = useState<string | null>(null);
   const [v2RecoveredStateSummary, setV2RecoveredStateSummary] = useState<{
     eventsCount: number;
     writtenPreviewSessionIdCount: number;
+    lastSamplerRunning: boolean;
+    lastSamplerTickCompletedAtMs: number | null;
   } | null>(null);
+  const [v2PersistedOpenPreviewSession, setV2PersistedOpenPreviewSession] =
+    useState<TfAutoTrackerV2DevPersistedOpenPreviewSession | null>(null);
+  const [v2PersistedRecoveryStatus, setV2PersistedRecoveryStatus] =
+    useState<TfAutoTrackerV2DevRecoveryStatus>("noEligibleSession");
+  const [v2PersistedRecoveryMessage, setV2PersistedRecoveryMessage] = useState<string | null>(null);
   const [v2HasLoadedPersistedState, setV2HasLoadedPersistedState] = useState(false);
 
   const v2DelayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -885,11 +928,16 @@ export function TrackerSettingsPanel() {
       setV2WrittenPreviewSessionIds(new Set(restored.writtenPreviewSessionIds));
     }
 
-    setV2LastPersistedAtMs(restored.savedAtMs);
+    setV2LastPersistedAtMs(restored.lastPersistedAtMs);
     setV2RecoveredStateSummary({
       eventsCount: restored.events.length,
       writtenPreviewSessionIdCount: restored.writtenPreviewSessionIds.length,
+      lastSamplerRunning: restored.lastSamplerRunning,
+      lastSamplerTickCompletedAtMs: restored.lastSamplerTickCompletedAtMs,
     });
+    setV2PersistedOpenPreviewSession(restored.lastEligibleOpenPreviewSession);
+    setV2PersistedRecoveryStatus(restored.recoveryStatus);
+    setV2PersistedRecoveryMessage(restored.lastRecoveryMessage);
     setV2HasLoadedPersistedState(true);
   }, []);
 
@@ -922,6 +970,79 @@ export function TrackerSettingsPanel() {
   const reducerPreviewStateKey = `${reducerPreview.state.status}:${reducerPreviewActiveTarget?.stableId ?? ""}`;
   const writtenPreviewSessionIdsKey = Array.from(v2WrittenPreviewSessionIds).sort().join("|");
   const isSamplerRunning = v2SamplerStatus?.running === true;
+  const currentLastSeenAtMs =
+    reducerPreview.state.status === "awayPending"
+      ? reducerPreview.state.leftAtMs
+      : reducerPreview.state.status === "recoverableOpen" &&
+          reducerPreview.state.openStateBeforeShutdown.status === "awayPending"
+        ? reducerPreview.state.openStateBeforeShutdown.leftAtMs
+        : v2SamplerStatus?.lastTickCompletedAtMs ??
+          v2Snapshot?.status.lastSampledAtMs ??
+          reducerPreview.state.lastEventMs;
+  const currentPersistedOpenPreviewSession = selectAutoTrackerV2RecoveredPreviewSession({
+    previewSpans,
+    state: reducerPreview.state,
+    lastSeenAtMs: currentLastSeenAtMs,
+  });
+  const currentPersistedRecoveryAssessment = assessAutoTrackerV2RecoveredPreviewSession({
+    recoveredPreviewSession: currentPersistedOpenPreviewSession,
+    nowMs: Date.now(),
+    writtenPreviewSessionIds: v2WrittenPreviewSessionIds,
+  });
+  const recoveredPreviewAssessment = assessAutoTrackerV2RecoveredPreviewSession({
+    recoveredPreviewSession: v2PersistedOpenPreviewSession,
+    nowMs: Date.now(),
+    writtenPreviewSessionIds: new Set([
+      ...v2WrittenPreviewSessionIds,
+      ...v2WritingPreviewSessionIdsRef.current,
+    ]),
+  });
+
+  function persistAutoTrackerV2DevState(updateUi = true): void {
+    if (!v2HasLoadedPersistedState) {
+      return;
+    }
+
+    if (!FF.autotrackerV2NativeInspector && !FF.autotrackerV2NativeSampler) {
+      return;
+    }
+
+    try {
+      const lastPersistedAtMs = Date.now();
+      const saved = saveTfAutoTrackerV2DevPersistedState({
+        schemaVersion: TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION,
+        lastPersistedAtMs,
+        events: v2Snapshot?.events ?? [],
+        writtenPreviewSessionIds: Array.from(v2WrittenPreviewSessionIds),
+        samplerStatus: v2SamplerStatus,
+        continuousWriteStatus: v2ContinuousWriteStatus,
+        lastSamplerRunning: v2SamplerStatus?.running === true,
+        lastSamplerTickCompletedAtMs: v2SamplerStatus?.lastTickCompletedAtMs ?? null,
+        lastEligibleOpenPreviewSession: currentPersistedOpenPreviewSession,
+        recoveryStatus: currentPersistedRecoveryAssessment.status,
+        lastRecoveryMessage: currentPersistedRecoveryAssessment.message,
+      });
+
+      if (!updateUi) {
+        return;
+      }
+
+      setV2LastPersistedAtMs(saved?.lastPersistedAtMs ?? null);
+      setV2PersistedOpenPreviewSession(saved?.lastEligibleOpenPreviewSession ?? null);
+      setV2PersistedRecoveryStatus(saved?.recoveryStatus ?? "noEligibleSession");
+      setV2PersistedRecoveryMessage(saved?.lastRecoveryMessage ?? null);
+      setV2PersistenceError(null);
+    } catch (err) {
+      if (!updateUi) {
+        return;
+      }
+      setV2PersistenceError(
+        err instanceof Error && err.message
+          ? `Dev Auto-Tracker preview persistence failed: ${err.message}`
+          : "Dev Auto-Tracker preview persistence failed.",
+      );
+    }
+  }
 
   useEffect(() => {
     if (!v2HasLoadedPersistedState) {
@@ -932,25 +1053,7 @@ export function TrackerSettingsPanel() {
       return;
     }
 
-    try {
-      const savedAtMs = Date.now();
-      const saved = saveTfAutoTrackerV2DevPersistedState({
-        schemaVersion: TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION,
-        savedAtMs,
-        events: v2Snapshot?.events ?? [],
-        writtenPreviewSessionIds: Array.from(v2WrittenPreviewSessionIds),
-        samplerStatus: v2SamplerStatus,
-        continuousWriteStatus: v2ContinuousWriteStatus,
-      });
-      setV2LastPersistedAtMs(saved?.savedAtMs ?? null);
-      setV2PersistenceError(null);
-    } catch (err) {
-      setV2PersistenceError(
-        err instanceof Error && err.message
-          ? `Dev Auto-Tracker preview persistence failed: ${err.message}`
-          : "Dev Auto-Tracker preview persistence failed.",
-      );
-    }
+    persistAutoTrackerV2DevState();
   }, [
     FF.autotrackerV2NativeInspector,
     FF.autotrackerV2NativeSampler,
@@ -959,6 +1062,39 @@ export function TrackerSettingsPanel() {
     v2HasLoadedPersistedState,
     v2Snapshot,
     writtenPreviewSessionIdsKey,
+    reducerPreviewStateKey,
+  ]);
+
+  useEffect(() => {
+    if (!v2HasLoadedPersistedState) {
+      return;
+    }
+
+    if (!FF.autotrackerV2NativeInspector && !FF.autotrackerV2NativeSampler) {
+      return;
+    }
+
+    const handlePersistOnExit = () => {
+      persistAutoTrackerV2DevState(false);
+    };
+
+    window.addEventListener("beforeunload", handlePersistOnExit);
+    window.addEventListener("pagehide", handlePersistOnExit);
+
+    return () => {
+      handlePersistOnExit();
+      window.removeEventListener("beforeunload", handlePersistOnExit);
+      window.removeEventListener("pagehide", handlePersistOnExit);
+    };
+  }, [
+    FF.autotrackerV2NativeInspector,
+    FF.autotrackerV2NativeSampler,
+    v2ContinuousWriteStatus,
+    v2SamplerStatus,
+    v2HasLoadedPersistedState,
+    v2Snapshot,
+    writtenPreviewSessionIdsKey,
+    reducerPreviewStateKey,
   ]);
 
   useEffect(() => {
@@ -1380,7 +1516,11 @@ export function TrackerSettingsPanel() {
       setV2ManualWriteMessage(null);
       setV2ContinuousWriteStatus(null);
       setV2StopFinalizeMessage(null);
+      setV2RecoveryFinalizeMessage(null);
       setV2RecoveredStateSummary(null);
+      setV2PersistedOpenPreviewSession(null);
+      setV2PersistedRecoveryStatus("noEligibleSession");
+      setV2PersistedRecoveryMessage(null);
       clearTfAutoTrackerV2DevPersistedState();
       setV2LastPersistedAtMs(null);
       setV2PersistenceError(null);
@@ -1477,6 +1617,58 @@ export function TrackerSettingsPanel() {
       return appendWrittenPreviewSessionId(current, previewSession.previewSessionId);
     });
     return sessionLog.method;
+  }
+
+  async function handleV2FinalizeRecoveredPreviewSession() {
+    if (v2IsRecoveryFinalizing || v2IsWritingSelectedSession) {
+      return;
+    }
+
+    setV2InspectorError(null);
+    setV2RecoveryFinalizeMessage(null);
+    setV2IsRecoveryFinalizing(true);
+
+    try {
+      if (!recoveredPreviewAssessment.canFinalize) {
+        setV2RecoveryFinalizeMessage({
+          tone: "info",
+          text: recoveredPreviewAssessment.message,
+        });
+        return;
+      }
+
+      const previewSession = finalizeAutoTrackerV2RecoveredPreviewSession(
+        recoveredPreviewAssessment.recoveredPreviewSession,
+      );
+      if (!previewSession) {
+        setV2RecoveryFinalizeMessage({
+          tone: "info",
+          text: "Recovered session could not be finalized safely.",
+        });
+        return;
+      }
+
+      v2WritingPreviewSessionIdsRef.current.add(previewSession.previewSessionId);
+      try {
+        const method = await writeAutoTrackerV2PreviewSession(previewSession);
+        setV2RecoveryFinalizeMessage({
+          tone: "success",
+          text: `Recovered session wrote ${method} to Session Log.`,
+        });
+      } finally {
+        v2WritingPreviewSessionIdsRef.current.delete(previewSession.previewSessionId);
+      }
+    } catch (err) {
+      setV2RecoveryFinalizeMessage({
+        tone: "error",
+        text:
+          err instanceof Error && err.message
+            ? err.message
+            : "Unable to finalize the recovered preview session.",
+      });
+    } finally {
+      setV2IsRecoveryFinalizing(false);
+    }
   }
 
   async function handleV2StopAndFinalizeCurrentPreviewSession() {
@@ -2097,6 +2289,89 @@ export function TrackerSettingsPanel() {
                 {v2RecoveredStateSummary.eventsCount === 1 ? "" : "s"} and{" "}
                 {v2RecoveredStateSummary.writtenPreviewSessionIdCount} written preview session id
                 {v2RecoveredStateSummary.writtenPreviewSessionIdCount === 1 ? "" : "s"} restored.
+              </div>
+            ) : null}
+
+            {v2RecoveredStateSummary ||
+            v2PersistedOpenPreviewSession ||
+            v2PersistedRecoveryMessage ||
+            v2PersistedRecoveryStatus !== "noEligibleSession" ? (
+              <div className="flex flex-col gap-3 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3">
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-100">
+                      Recovery
+                    </div>
+                    <div className="mt-1 text-sm text-cyan-50">
+                      Status: {formatRecoveryStatus(recoveredPreviewAssessment.status)}
+                    </div>
+                  </div>
+                  {recoveredPreviewAssessment.canFinalize ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleV2FinalizeRecoveredPreviewSession();
+                      }}
+                      disabled={v2IsRecoveryFinalizing || v2IsWritingSelectedSession}
+                      className="rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-50 transition-colors hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {v2IsRecoveryFinalizing ? "Finalizing…" : "Finalize recovered session"}
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-cyan-50/85">
+                  <span>
+                    Last persisted: {formatDateTimeFromMs(v2LastPersistedAtMs)}
+                  </span>
+                  <span>
+                    Sampler was {v2RecoveredStateSummary?.lastSamplerRunning ? "running" : "stopped"}
+                  </span>
+                  <span>
+                    Last sampler tick: {formatDateTimeFromMs(v2RecoveredStateSummary?.lastSamplerTickCompletedAtMs ?? null)}
+                  </span>
+                </div>
+
+                {v2PersistedOpenPreviewSession ? (
+                  <div className="rounded-lg border border-cyan-400/20 bg-slate-950/30 px-4 py-3 text-sm text-cyan-50">
+                    <div className="font-medium">
+                      Recovered active session: {v2PersistedOpenPreviewSession.matchedRuleName ?? v2PersistedOpenPreviewSession.targetLabel}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-cyan-50/80">
+                      <span>
+                        Classification: {v2PersistedOpenPreviewSession.classification}
+                      </span>
+                      <span>
+                        Last seen: {formatDateTimeFromMs(v2PersistedOpenPreviewSession.lastSeenAtMs)}
+                      </span>
+                      <span>
+                        Gap: {formatPreviewDuration(recoveredPreviewAssessment.gapMs)}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-cyan-400/20 bg-slate-950/20 px-4 py-3 text-sm text-cyan-50/80">
+                    No eligible tracked or distraction session was persisted for recovery.
+                  </div>
+                )}
+
+                <div className="text-xs leading-5 text-cyan-50/80">
+                  {v2PersistedRecoveryMessage ?? recoveredPreviewAssessment.message}
+                </div>
+
+                {v2RecoveryFinalizeMessage ? (
+                  <div
+                    className={`rounded-lg border px-3 py-2 text-sm ${
+                      v2RecoveryFinalizeMessage.tone === "error"
+                        ? "border-rose-500/20 bg-rose-500/10 text-rose-100"
+                        : v2RecoveryFinalizeMessage.tone === "info"
+                          ? "border-slate-600 bg-slate-950/40 text-slate-200"
+                          : "border-emerald-500/20 bg-emerald-500/10 text-emerald-100"
+                    }`}
+                  >
+                    {v2RecoveryFinalizeMessage.text}
+                  </div>
+                ) : null}
               </div>
             ) : null}
 

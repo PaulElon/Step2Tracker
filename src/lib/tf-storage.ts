@@ -5,7 +5,9 @@ import type {
   TfTrackerPrefs,
   TfAccountState,
   TfAutoTrackerV2DevContinuousWriteStatus,
+  TfAutoTrackerV2DevRecoveryStatus,
   TfAutoTrackerV2DevPersistedEvent,
+  TfAutoTrackerV2DevPersistedOpenPreviewSession,
   TfAutoTrackerV2DevPersistedSamplerStatus,
   TfAutoTrackerV2DevPersistedState,
   TfTrackerRule,
@@ -426,6 +428,71 @@ function normalizeTfAutoTrackerV2DevContinuousWriteStatus(
   };
 }
 
+function normalizeTfAutoTrackerV2DevRecoveryStatus(
+  value: unknown,
+): TfAutoTrackerV2DevRecoveryStatus {
+  return value === "recoverable" ||
+    value === "finalizable" ||
+    value === "finalized" ||
+    value === "ignored" ||
+    value === "noEligibleSession"
+    ? value
+    : "noEligibleSession";
+}
+
+function normalizeTfAutoTrackerV2DevPersistedOpenPreviewSession(
+  value: unknown,
+): TfAutoTrackerV2DevPersistedOpenPreviewSession | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const previewSessionId = safeString(raw.previewSessionId).trim();
+  const sourceTargetStableId = safeString(raw.sourceTargetStableId).trim();
+  const targetLabel = safeString(raw.targetLabel).trim();
+  const classificationReason = safeString(raw.classificationReason).trim();
+  const startedAtMs = safeNullableNumber(raw.startedAtMs);
+  const lastSeenAtMs = safeNullableNumber(raw.lastSeenAtMs);
+  const classification =
+    raw.classification === "tracked" ||
+    raw.classification === "distraction" ||
+    raw.classification === "unclassified"
+      ? raw.classification
+      : null;
+
+  if (
+    !previewSessionId ||
+    !sourceTargetStableId ||
+    !targetLabel ||
+    !classificationReason ||
+    startedAtMs === null ||
+    lastSeenAtMs === null ||
+    classification === null
+  ) {
+    return null;
+  }
+
+  return {
+    previewSessionId,
+    startedAtMs,
+    lastSeenAtMs,
+    targetLabel,
+    matchedRuleName: safeString(raw.matchedRuleName).trim() || undefined,
+    matchedRuleTarget: safeString(raw.matchedRuleTarget).trim() || undefined,
+    sourceTargetStableId,
+    sourceSpanIds: safeStringArray(raw.sourceSpanIds),
+    sourceEventIds: safeStringArray(raw.sourceEventIds),
+    appName: safeString(raw.appName).trim() || undefined,
+    bundleId: safeString(raw.bundleId).trim() || undefined,
+    browserTitle: safeString(raw.browserTitle).trim() || undefined,
+    browserUrl: safeString(raw.browserUrl).trim() || undefined,
+    classificationReason,
+    classification,
+    isDistraction: safeBoolean(raw.isDistraction, classification === "distraction"),
+  };
+}
+
 function normalizeTfAutoTrackerV2DevWrittenPreviewSessionIds(value: unknown): string[] {
   const seen = new Set<string>();
   const ids = safeStringArray(value)
@@ -463,18 +530,32 @@ export function normalizeTfAutoTrackerV2DevPersistedState(
         .filter((entry): entry is TfAutoTrackerV2DevPersistedEvent => entry !== null)
         .slice(-TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT)
     : [];
+  const samplerStatus = normalizeTfAutoTrackerV2DevSamplerStatus(raw.samplerStatus);
 
   return {
     schemaVersion: TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION,
-    savedAtMs: Math.max(0, safeNumber(raw.savedAtMs, 0)),
+    lastPersistedAtMs: Math.max(
+      0,
+      safeNumber(raw.lastPersistedAtMs ?? raw.savedAtMs, 0),
+    ),
     events,
     writtenPreviewSessionIds: normalizeTfAutoTrackerV2DevWrittenPreviewSessionIds(
       raw.writtenPreviewSessionIds,
     ),
-    samplerStatus: normalizeTfAutoTrackerV2DevSamplerStatus(raw.samplerStatus),
+    samplerStatus,
     continuousWriteStatus: normalizeTfAutoTrackerV2DevContinuousWriteStatus(
       raw.continuousWriteStatus,
     ),
+    lastSamplerRunning: safeBoolean(raw.lastSamplerRunning, samplerStatus?.running ?? false),
+    lastSamplerTickCompletedAtMs:
+      safeNullableNumber(raw.lastSamplerTickCompletedAtMs) ??
+      samplerStatus?.lastTickCompletedAtMs ??
+      null,
+    lastEligibleOpenPreviewSession: normalizeTfAutoTrackerV2DevPersistedOpenPreviewSession(
+      raw.lastEligibleOpenPreviewSession,
+    ),
+    recoveryStatus: normalizeTfAutoTrackerV2DevRecoveryStatus(raw.recoveryStatus),
+    lastRecoveryMessage: safeNullableString(raw.lastRecoveryMessage),
   };
 }
 
@@ -485,7 +566,12 @@ function hasTfAutoTrackerV2DevPersistedStateData(
     state.events.length > 0 ||
     state.writtenPreviewSessionIds.length > 0 ||
     state.samplerStatus !== null ||
-    state.continuousWriteStatus !== null
+    state.continuousWriteStatus !== null ||
+    state.lastSamplerRunning ||
+    state.lastSamplerTickCompletedAtMs !== null ||
+    state.lastEligibleOpenPreviewSession !== null ||
+    state.recoveryStatus !== "noEligibleSession" ||
+    state.lastRecoveryMessage !== null
   );
 }
 

@@ -457,13 +457,44 @@ export interface TfAutoTrackerV2DevContinuousWriteStatus {
   error: string | null;
 }
 
+export type TfAutoTrackerV2DevRecoveryStatus =
+  | "recoverable"
+  | "finalizable"
+  | "finalized"
+  | "ignored"
+  | "noEligibleSession";
+
+export interface TfAutoTrackerV2DevPersistedOpenPreviewSession {
+  previewSessionId: string;
+  startedAtMs: number;
+  lastSeenAtMs: number;
+  targetLabel: string;
+  matchedRuleName?: string;
+  matchedRuleTarget?: string;
+  sourceTargetStableId: string;
+  sourceSpanIds: string[];
+  sourceEventIds: string[];
+  appName?: string;
+  bundleId?: string;
+  browserTitle?: string;
+  browserUrl?: string;
+  classificationReason: string;
+  classification: "tracked" | "distraction" | "unclassified";
+  isDistraction: boolean;
+}
+
 export interface TfAutoTrackerV2DevPersistedState {
   schemaVersion: 1;
-  savedAtMs: number;
+  lastPersistedAtMs: number;
   events: TfAutoTrackerV2DevPersistedEvent[];
   writtenPreviewSessionIds: string[];
   samplerStatus: TfAutoTrackerV2DevPersistedSamplerStatus | null;
   continuousWriteStatus: TfAutoTrackerV2DevContinuousWriteStatus | null;
+  lastSamplerRunning: boolean;
+  lastSamplerTickCompletedAtMs: number | null;
+  lastEligibleOpenPreviewSession: TfAutoTrackerV2DevPersistedOpenPreviewSession | null;
+  recoveryStatus: TfAutoTrackerV2DevRecoveryStatus;
+  lastRecoveryMessage: string | null;
 }
 
 export interface TfAppState {

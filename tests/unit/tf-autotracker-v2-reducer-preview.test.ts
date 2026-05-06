@@ -2,13 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  assessAutoTrackerV2RecoveredPreviewSession,
   buildAutoTrackerV2ReducerPreview,
+  finalizeAutoTrackerV2RecoveredPreviewSession,
   mapAutoTrackerV2FinalizedPreviewSessionToSessionLog,
+  selectAutoTrackerV2RecoveredPreviewSession,
   selectAutoTrackerV2ContinuousWritePreviewSessions,
   selectAutoTrackerV2StopFinalizePreviewSession,
   type TfAutotrackerV2FinalizedPreviewSession,
 } from "../../src/lib/tf-autotracker-v2-reducer-preview.js";
 import type { TfAutotrackerV2PreviewSpan } from "../../src/lib/tf-autotracker-v2-preview-spans.js";
+import type { TfAutoTrackerV2DevPersistedOpenPreviewSession } from "../../src/types/models.js";
 import { normalizeTfAutoTrackerV2DevPersistedState } from "../../src/lib/tf-storage.js";
 
 function makeSpan(
@@ -98,6 +102,54 @@ function timeFolioUnclassifiedSpan(
     durationMs: null,
     ...overrides,
   });
+}
+
+function recoveredTrackedUWorldSession(
+  overrides: Partial<TfAutoTrackerV2DevPersistedOpenPreviewSession> = {},
+): TfAutoTrackerV2DevPersistedOpenPreviewSession {
+  return {
+    previewSessionId: "website:apps.uworld.com/courseapp:0",
+    startedAtMs: 0,
+    lastSeenAtMs: 90_000,
+    targetLabel: "UWorld",
+    matchedRuleName: "UWorld",
+    matchedRuleTarget: "https://apps.uworld.com",
+    sourceTargetStableId: "apps.uworld.com/courseapp",
+    sourceSpanIds: ["span-uworld"],
+    sourceEventIds: ["span-uworld"],
+    appName: undefined,
+    bundleId: undefined,
+    browserTitle: "UWorld",
+    browserUrl: "https://apps.uworld.com/courseapp/step2",
+    classificationReason: 'matched website rule "UWorld" (https://apps.uworld.com) by host apps.uworld.com',
+    classification: "tracked",
+    isDistraction: false,
+    ...overrides,
+  };
+}
+
+function recoveredDistractionRedditSession(
+  overrides: Partial<TfAutoTrackerV2DevPersistedOpenPreviewSession> = {},
+): TfAutoTrackerV2DevPersistedOpenPreviewSession {
+  return {
+    previewSessionId: "website:reddit.com/r/medicine:20_000",
+    startedAtMs: 20_000,
+    lastSeenAtMs: 80_000,
+    targetLabel: "Reddit",
+    matchedRuleName: "Reddit",
+    matchedRuleTarget: "https://www.reddit.com",
+    sourceTargetStableId: "reddit.com/r/medicine",
+    sourceSpanIds: ["span-reddit"],
+    sourceEventIds: ["span-reddit"],
+    appName: undefined,
+    bundleId: undefined,
+    browserTitle: "Reddit",
+    browserUrl: "https://www.reddit.com/r/medicine",
+    classificationReason: 'matched distraction website rule "Reddit" (https://www.reddit.com) by host reddit.com',
+    classification: "distraction",
+    isDistraction: true,
+    ...overrides,
+  };
 }
 
 test("tracked UWorld open span produces a focused open reducer state", () => {
@@ -559,7 +611,7 @@ test("persisted dev state round trip keeps events and written ids", () => {
     JSON.parse(
       JSON.stringify({
         schemaVersion: 1,
-        savedAtMs: 123_456,
+        lastPersistedAtMs: 123_456,
         events: [
           {
             id: "event-1",
@@ -589,24 +641,34 @@ test("persisted dev state round trip keeps events and written ids", () => {
           skippedDuplicateCount: 0,
           error: null,
         },
+        lastSamplerRunning: true,
+        lastSamplerTickCompletedAtMs: 93_000,
+        lastEligibleOpenPreviewSession: recoveredTrackedUWorldSession(),
+        recoveryStatus: "recoverable",
+        lastRecoveryMessage: "Recovered active UWorld preview session.",
       }),
     ),
   );
 
   assert.ok(restored);
   assert.equal(restored.schemaVersion, 1);
-  assert.equal(restored.savedAtMs, 123_456);
+  assert.equal(restored.lastPersistedAtMs, 123_456);
   assert.equal(restored.events.length, 1);
   assert.equal(restored.events[0]?.id, "event-1");
   assert.deepEqual(restored.writtenPreviewSessionIds, ["website:apps.uworld.com/courseapp:0"]);
   assert.equal(restored.samplerStatus?.lastObservedAppName, "Anki");
   assert.deepEqual(restored.continuousWriteStatus?.names, ["UWorld"]);
+  assert.equal(restored.lastSamplerRunning, true);
+  assert.equal(restored.lastSamplerTickCompletedAtMs, 93_000);
+  assert.equal(restored.lastEligibleOpenPreviewSession?.matchedRuleName, "UWorld");
+  assert.equal(restored.recoveryStatus, "recoverable");
+  assert.equal(restored.lastRecoveryMessage, "Recovered active UWorld preview session.");
 });
 
 test("duplicate guard survives restored written preview session ids", () => {
   const restored = normalizeTfAutoTrackerV2DevPersistedState({
     schemaVersion: 1,
-    savedAtMs: 123_456,
+    lastPersistedAtMs: 123_456,
     events: [],
     writtenPreviewSessionIds: ["website:apps.uworld.com/courseapp:0"],
   });
@@ -625,6 +687,129 @@ test("duplicate guard survives restored written preview session ids", () => {
 
   assert.deepEqual(selection.previewSessions, []);
   assert.equal(selection.skippedDuplicateCount, 1);
+});
+
+test("recovery assessment returns recoverable when the gap is below 60 seconds", () => {
+  const assessment = assessAutoTrackerV2RecoveredPreviewSession({
+    recoveredPreviewSession: recoveredTrackedUWorldSession({ lastSeenAtMs: 90_000 }),
+    nowMs: 120_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(assessment.status, "recoverable");
+  assert.equal(assessment.canFinalize, false);
+  assert.equal(assessment.gapMs, 30_000);
+});
+
+test("recovery assessment returns finalizable when the gap is at least 60 seconds", () => {
+  const assessment = assessAutoTrackerV2RecoveredPreviewSession({
+    recoveredPreviewSession: recoveredTrackedUWorldSession({ lastSeenAtMs: 90_000 }),
+    nowMs: 150_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(assessment.status, "finalizable");
+  assert.equal(assessment.canFinalize, true);
+  assert.equal(assessment.gapMs, 60_000);
+});
+
+test("recovery assessment ignores an unclassified recovered session", () => {
+  const assessment = assessAutoTrackerV2RecoveredPreviewSession({
+    recoveredPreviewSession: recoveredTrackedUWorldSession({
+      classification: "unclassified",
+      isDistraction: false,
+    }),
+    nowMs: 150_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(assessment.status, "ignored");
+  assert.equal(assessment.canFinalize, false);
+});
+
+test("recovery assessment treats an already written recovered session as finalized", () => {
+  const restored = normalizeTfAutoTrackerV2DevPersistedState({
+    schemaVersion: 1,
+    lastPersistedAtMs: 123_456,
+    events: [],
+    writtenPreviewSessionIds: ["website:apps.uworld.com/courseapp:0"],
+    lastEligibleOpenPreviewSession: recoveredTrackedUWorldSession(),
+  });
+  assert.ok(restored);
+
+  const assessment = assessAutoTrackerV2RecoveredPreviewSession({
+    recoveredPreviewSession: restored.lastEligibleOpenPreviewSession,
+    nowMs: 180_000,
+    writtenPreviewSessionIds: restored.writtenPreviewSessionIds,
+  });
+
+  assert.equal(assessment.status, "finalized");
+  assert.equal(assessment.canFinalize, false);
+});
+
+test("recovery selector extracts the last eligible tracked preview session", () => {
+  const previewSpans = [trackedUWorldSpan({ startedAtMs: 0, endedAtMs: null, durationMs: null })];
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
+
+  const recovered = selectAutoTrackerV2RecoveredPreviewSession({
+    previewSpans,
+    state: preview.state,
+    lastSeenAtMs: 95_000,
+  });
+
+  assert.deepEqual(recovered, recoveredTrackedUWorldSession({ lastSeenAtMs: 95_000 }));
+});
+
+test("recovered tracked session maps to clean UWorld [Auto]", () => {
+  const finalized = finalizeAutoTrackerV2RecoveredPreviewSession(
+    recoveredTrackedUWorldSession({
+      startedAtMs: Date.parse("2025-05-05T14:00:00.000Z"),
+      lastSeenAtMs: Date.parse("2025-05-05T14:30:00.000Z"),
+    }),
+  );
+  assert.ok(finalized);
+
+  const sessionLog = mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
+    finalized,
+    "tf-auto-v2-preview-write-recovered-uworld",
+  );
+
+  assert.equal(finalized.endedAtMs, Date.parse("2025-05-05T14:30:00.000Z"));
+  assert.equal(sessionLog.method, "UWorld [Auto]");
+  assert.equal(sessionLog.isDistraction, false);
+});
+
+test("recovered distraction session maps to clean Reddit [Auto] with distraction preserved", () => {
+  const finalized = finalizeAutoTrackerV2RecoveredPreviewSession(
+    recoveredDistractionRedditSession({
+      startedAtMs: Date.parse("2025-05-05T14:00:00.000Z"),
+      lastSeenAtMs: Date.parse("2025-05-05T14:30:00.000Z"),
+    }),
+  );
+  assert.ok(finalized);
+
+  const sessionLog = mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
+    finalized,
+    "tf-auto-v2-preview-write-recovered-reddit",
+  );
+
+  assert.equal(finalized.endedAtMs, Date.parse("2025-05-05T14:30:00.000Z"));
+  assert.equal(sessionLog.method, "Reddit [Auto]");
+  assert.equal(sessionLog.isDistraction, true);
+});
+
+test("recovered finalization uses lastSeenAtMs instead of the later recovery click time", () => {
+  const finalized = finalizeAutoTrackerV2RecoveredPreviewSession(
+    recoveredTrackedUWorldSession({
+      startedAtMs: 10_000,
+      lastSeenAtMs: 40_000,
+    }),
+  );
+  assert.ok(finalized);
+
+  assert.equal(finalized.endedAtMs, 40_000);
+  assert.equal(finalized.durationMs, 30_000);
+  assert.equal(finalized.finalizedBy, "manualStop");
 });
 
 test("stop-finalize writes the active tracked preview session", () => {
