@@ -1,8 +1,15 @@
 import { useState, useEffect, useRef } from "react";
+import { FF } from "../../lib/feature-flags";
 import { useTimeFolioStore } from "../../state/tf-store";
 import { formatLongDate, formatMinutes } from "../../lib/datetime";
 import { fieldClassName, primaryButtonClassName, secondaryButtonClassName } from "../../lib/ui";
 import type { TfSessionLog } from "../../types/models";
+import {
+  AutoTrackerV2UserControlStrip,
+} from "./autotracker-v2-user-control-card";
+import {
+  useAutoTrackerV2SessionControl,
+} from "./autotracker-v2-session-control";
 
 const EMPTY_FORM = {
   method: "",
@@ -69,6 +76,17 @@ function formatElapsed(ms: number): string {
   const s = totalSec % 60;
   const pad = (n: number) => String(n).padStart(2, "0");
   return h > 0 ? `${h}h ${m}m ${pad(s)}s` : `${m}m ${pad(s)}s`;
+}
+
+function formatDateTimeFromMs(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return "Never";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 function localDateStr(isoStr: string): string {
@@ -162,7 +180,7 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
   }
 
   return (
-    <div className="rounded-lg border border-indigo-700 bg-slate-800/80 p-4 flex flex-col gap-3">
+    <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-950/40 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur">
       <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
         Manual timer
       </div>
@@ -301,7 +319,7 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
         e.preventDefault();
         void submitForm();
       }}
-      className="rounded-lg border border-slate-600 bg-slate-800/80 p-4 flex flex-col gap-3"
+      className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-950/40 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur"
     >
       <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
         {isNew ? "New session" : "Edit session"}
@@ -402,6 +420,7 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
 export function SessionLogPanel() {
   const store = useTimeFolioStore();
   const { state, isLoading, error } = store;
+  const autoTracker = useAutoTrackerV2SessionControl();
   const [showAddForm, setShowAddForm] = useState(false);
   const [showTimer, setShowTimer] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -465,17 +484,95 @@ export function SessionLogPanel() {
   }
 
   return (
-    <div className="p-4 flex flex-col gap-3">
-      {!showAddForm && !showTimer && (
-        <div className="flex justify-end gap-2">
-          <button className={secondaryButtonClassName} onClick={() => setShowTimer(true)}>
-            Start timer
-          </button>
-          <button className={primaryButtonClassName} onClick={() => setShowAddForm(true)}>
-            + Add session
-          </button>
+    <div className="p-4 flex flex-col gap-4">
+      <section className="rounded-3xl border border-slate-700 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-5 shadow-lg shadow-black/20">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-col gap-2">
+            <div className="inline-flex w-fit rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-cyan-300">
+              Session Log
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-slate-100">Timer and Auto-Tracking</h3>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
+                Keep manual sessions, quick adds, and Auto-Tracking controls in one place.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              className={secondaryButtonClassName}
+              onClick={() => setShowTimer(true)}
+            >
+              Start Timer
+            </button>
+            <button className={primaryButtonClassName} onClick={() => setShowAddForm(true)}>
+              + Add session
+            </button>
+            {FF.autotrackerV2UserMode ? (
+              <AutoTrackerV2UserControlStrip
+                isRunning={autoTracker.isRunning}
+                isActionBusy={autoTracker.isActionBusy}
+                onStart={autoTracker.onStart}
+                onStopAndSave={autoTracker.onStopAndSave}
+              />
+            ) : null}
+          </div>
         </div>
-      )}
+
+        {FF.autotrackerV2UserMode ? (
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-3 text-xs leading-5 text-slate-400">
+            <span>
+              <span className={autoTracker.isRunning ? "text-emerald-300" : "text-slate-200"}>
+                {autoTracker.isRunning ? "Running" : "Stopped"}
+              </span>
+            </span>
+            <span>
+              <span className="text-slate-500">Last app:</span>{" "}
+              {autoTracker.lastDetectedAppName ?? "None yet"}
+            </span>
+            <span>
+              <span className="text-slate-500">Last sample:</span>{" "}
+              {formatDateTimeFromMs(autoTracker.lastSampleTimeMs)}
+            </span>
+            {autoTracker.message ? (
+              <span
+                className={`rounded-full border px-2 py-1 ${
+                  autoTracker.message.tone === "error"
+                    ? "border-rose-500/20 bg-rose-500/10 text-rose-200"
+                    : autoTracker.message.tone === "info"
+                      ? "border-slate-600 bg-slate-950/40 text-slate-200"
+                      : "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
+                }`}
+              >
+                {autoTracker.message.text}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
+        {showTimer ? (
+          <div className="mt-4">
+            <ManualTimer
+              onSave={async (session) => {
+                await persistSession(session, "Timer session saved.");
+              }}
+              onDismiss={() => setShowTimer(false)}
+            />
+          </div>
+        ) : null}
+
+        {showAddForm ? (
+          <div className="mt-4">
+            <SessionForm
+              initial={EMPTY_FORM}
+              isNew
+              onSave={handleAdd}
+              onCancel={() => setShowAddForm(false)}
+            />
+          </div>
+        ) : null}
+      </section>
 
       {feedback && (
         <div
@@ -491,26 +588,10 @@ export function SessionLogPanel() {
         </div>
       )}
 
-      {showTimer && (
-        <ManualTimer
-          onSave={async (session) => {
-            await persistSession(session, "Timer session saved.");
-          }}
-          onDismiss={() => setShowTimer(false)}
-        />
-      )}
-
-      {showAddForm && (
-        <SessionForm
-          initial={EMPTY_FORM}
-          isNew
-          onSave={handleAdd}
-          onCancel={() => setShowAddForm(false)}
-        />
-      )}
-
       {sessions.length === 0 && !showAddForm && (
-        <div className="p-4 text-slate-400">No TimeFolio sessions yet.</div>
+        <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/40 p-4 text-slate-400">
+          No TimeFolio sessions yet.
+        </div>
       )}
 
       {sessions.map((s) =>

@@ -40,10 +40,6 @@ import {
   shouldStartAutoTrackerV2StartupRecoveryHydration,
   type TfAutotrackerV2FinalizedPreviewSession,
 } from "../../lib/tf-autotracker-v2-reducer-preview";
-import {
-  AutoTrackerV2UserControlCard,
-  type AutoTrackerV2UserControlMessage,
-} from "./autotracker-v2-user-control-card";
 import type { NativeTrackerSpanInput } from "../../lib/tf-native-span-reconciler";
 import {
   TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION,
@@ -184,24 +180,6 @@ function countTrackerRules(prefs: TfTrackerPrefs): number {
     prefs.customDistractionApps.length +
     prefs.customDistractionWebsites.length
   );
-}
-
-function getAccountSummary(account: TfAppState["account"]): { value: string; detail: string } {
-  if (!account) {
-    return {
-      value: "No account",
-      detail: "TimeFolio data is local only.",
-    };
-  }
-
-  const tier = account.planTier === "pro" ? "Pro" : "Free";
-  const identity = account.username ?? account.email ?? account.userId ?? "linked account";
-  const verification = account.emailVerified ? "verified email" : "email not verified";
-
-  return {
-    value: "Connected",
-    detail: `${tier} account · ${verification} · ${identity}`,
-  };
 }
 
 function formatBackupDate(date = new Date()): string {
@@ -824,9 +802,6 @@ export function TrackerSettingsPanel() {
   const [v2IsBusy, setV2IsBusy] = useState(false);
   const [v2SamplerActionBusy, setV2SamplerActionBusy] = useState(false);
   const [v2DelayCountdown, setV2DelayCountdown] = useState<number | null>(null);
-  const [v2UserModeMessage, setV2UserModeMessage] = useState<AutoTrackerV2UserControlMessage>(
-    null,
-  );
   const [v2SamplerStatus, setV2SamplerStatus] = useState<AutoTrackerV2NativeSamplerStatus | null>(
     null,
   );
@@ -981,21 +956,6 @@ export function TrackerSettingsPanel() {
       ...v2WritingPreviewSessionIdsRef.current,
     ]),
   });
-  const v2UserModeRecoveryAvailable =
-    currentPersistedRecoveryAssessment.status === "recoverable" ||
-    currentPersistedRecoveryAssessment.status === "finalizable" ||
-    recoveredPreviewAssessment.status === "recoverable" ||
-    recoveredPreviewAssessment.status === "finalizable";
-  const v2UserModeRecoveryDetail = currentPersistedRecoveryAssessment.canFinalize
-    ? "The current tracked or distraction session can be saved now."
-    : currentPersistedRecoveryAssessment.status === "recoverable"
-      ? "The current tracked or distraction session is still within the stop-and-save window."
-      : recoveredPreviewAssessment.canFinalize
-        ? "A previously interrupted tracked or distraction session can be saved now."
-        : recoveredPreviewAssessment.status === "recoverable"
-          ? "A previously interrupted tracked or distraction session is still within the recovery window."
-          : "No recoverable session is currently available.";
-
   function persistAutoTrackerV2DevState(updateUi = true): void {
     if (!v2HasLoadedPersistedState) {
       return;
@@ -1819,24 +1779,15 @@ export function TrackerSettingsPanel() {
 
   async function handleV2StartNativeSampler() {
     setV2InspectorError(null);
-    setV2UserModeMessage(null);
     setV2SamplerActionBusy(true);
     try {
       const samplerStatus = await startAutoTrackerV2NativeSampler();
       setV2SamplerStatus(samplerStatus);
       await refreshV2SnapshotAndSamplerStatus();
-      setV2UserModeMessage({
-        tone: "success",
-        text: "Auto-Tracker started.",
-      });
     } catch (err) {
       const message =
         err instanceof Error && err.message ? err.message : "Unable to start Auto-Tracker.";
       setV2InspectorError(message);
-      setV2UserModeMessage({
-        tone: "error",
-        text: message,
-      });
     } finally {
       setV2SamplerActionBusy(false);
     }
@@ -1844,24 +1795,15 @@ export function TrackerSettingsPanel() {
 
   async function handleV2StopNativeSampler() {
     setV2InspectorError(null);
-    setV2UserModeMessage(null);
     setV2SamplerActionBusy(true);
     try {
       const samplerStatus = await stopAutoTrackerV2NativeSampler();
       setV2SamplerStatus(samplerStatus);
       await refreshV2SnapshotAndSamplerStatus();
-      setV2UserModeMessage({
-        tone: "success",
-        text: "Auto-Tracker stopped.",
-      });
     } catch (err) {
       const message =
         err instanceof Error && err.message ? err.message : "Unable to stop Auto-Tracker.";
       setV2InspectorError(message);
-      setV2UserModeMessage({
-        tone: "error",
-        text: message,
-      });
     } finally {
       setV2SamplerActionBusy(false);
     }
@@ -1939,7 +1881,6 @@ export function TrackerSettingsPanel() {
     }
 
     setV2InspectorError(null);
-    setV2UserModeMessage(null);
     setV2StopFinalizeMessage(null);
     setV2IsStopFinalizing(true);
 
@@ -1973,12 +1914,6 @@ export function TrackerSettingsPanel() {
           tone: "info",
           text: stoppedSampler ? `Stopped native sampler. ${reasonText}` : reasonText,
         });
-        setV2UserModeMessage({
-          tone: "info",
-          text: stoppedSampler
-            ? "Stopped Auto-Tracker. No recoverable session was available to save."
-            : "No recoverable session was available to save.",
-        });
         return;
       }
 
@@ -1991,12 +1926,6 @@ export function TrackerSettingsPanel() {
             ? `Stopped native sampler and wrote ${method} to Session Log.`
             : `Wrote ${method} to Session Log.`,
         });
-        setV2UserModeMessage({
-          tone: "success",
-          text: stoppedSampler
-            ? "Stopped Auto-Tracker and saved the current session."
-            : "Saved the current session.",
-        });
       } finally {
         v2WritingPreviewSessionIdsRef.current.delete(selection.previewSession.previewSessionId);
       }
@@ -2006,10 +1935,6 @@ export function TrackerSettingsPanel() {
           ? err.message
           : "Unable to stop and save Auto-Tracker.";
       setV2StopFinalizeMessage({
-        tone: "error",
-        text: message,
-      });
-      setV2UserModeMessage({
         tone: "error",
         text: message,
       });
@@ -2110,10 +2035,6 @@ export function TrackerSettingsPanel() {
     }
   }
 
-  const accountSummary = getAccountSummary(state.account);
-  const trackerRuleCount = countTrackerRules(state.trackerPrefs);
-  const sessionCount = state.sessionLogs.length;
-  const summaryCount = state.summaries.length;
   const canConfirmReset = resetConfirmationToken === RESET_CONFIRMATION_TOKEN;
 
   return (
@@ -2137,6 +2058,52 @@ export function TrackerSettingsPanel() {
         </div>
       </div>
 
+      <div className="grid gap-4 xl:grid-cols-2">
+        {TRACKER_GROUPS.map((config) => {
+          const rulesByKind = {
+            website: draftPrefs[config.listKeys.website],
+            app: draftPrefs[config.listKeys.app],
+          };
+          const originalRulesByKind = {
+            website: state.trackerPrefs[config.listKeys.website],
+            app: state.trackerPrefs[config.listKeys.app],
+          };
+          const sanitizedDraftWebsite = sanitizeTrackerRules(rulesByKind.website, "website");
+          const sanitizedDraftApp = sanitizeTrackerRules(rulesByKind.app, "app");
+          const sanitizedOriginalWebsite = sanitizeTrackerRules(originalRulesByKind.website, "website");
+          const sanitizedOriginalApp = sanitizeTrackerRules(originalRulesByKind.app, "app");
+          const isDirty =
+            !trackerRuleListsMatch(sanitizedDraftWebsite, sanitizedOriginalWebsite) ||
+            !trackerRuleListsMatch(sanitizedDraftApp, sanitizedOriginalApp);
+
+          return (
+            <TrackerGroupCard
+              key={config.key}
+              title={config.title}
+              description={config.description}
+              namePlaceholder={config.namePlaceholder}
+              targetPlaceholders={config.targetPlaceholders}
+              listKeys={config.listKeys}
+              rulesByKind={rulesByKind}
+              onRulesChange={(kind, nextRules) => {
+                setDraftPrefs((prev) => ({
+                  ...prev,
+                  [config.listKeys[kind]]: nextRules,
+                }));
+              }}
+              onSave={() => handleSave(config.key)}
+              isSaving={savingKey === config.key}
+              isDisabled={isDataBusy}
+              isDirty={isDirty}
+            />
+          );
+        })}
+      </div>
+
+      <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-xs leading-5 text-slate-400">
+        All tracker rule edits stay local to this device. No cloud sync or account access is used here.
+      </div>
+
       <section className="flex flex-col gap-5 rounded-2xl border border-slate-700 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
@@ -2150,25 +2117,6 @@ export function TrackerSettingsPanel() {
               </p>
             </div>
           </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <DataStatCard
-            label="Session count"
-            value={String(sessionCount)}
-            detail="Tracked session logs stored in TimeFolio."
-          />
-          <DataStatCard
-            label="Summary count"
-            value={String(summaryCount)}
-            detail="Generated summary cards available locally."
-          />
-          <DataStatCard
-            label="Tracker rule count"
-            value={String(trackerRuleCount)}
-            detail="All auto-track and distraction rules combined."
-          />
-          <DataStatCard label="Account status" value={accountSummary.value} detail={accountSummary.detail} />
         </div>
 
         {dataMessage ? (
@@ -2298,7 +2246,11 @@ export function TrackerSettingsPanel() {
         </div>
       </section>
 
-      <section className="flex flex-col gap-5 rounded-2xl border border-slate-700 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
+      <section
+        className={`flex flex-col gap-5 rounded-2xl border border-slate-700 bg-slate-900/80 p-6 shadow-lg shadow-black/15 ${
+          FF.autotrackerV2UserMode ? "hidden" : ""
+        }`}
+      >
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
             <div className="inline-flex w-fit rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-teal-300">
@@ -2337,28 +2289,6 @@ export function TrackerSettingsPanel() {
           <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
             {autoTrackerImportMessage}
           </div>
-        ) : null}
-
-        {FF.autotrackerV2UserMode ? (
-            <AutoTrackerV2UserControlCard
-            isRunning={isSamplerRunning}
-            isSamplerActionBusy={v2SamplerActionBusy}
-            isStopAndSaveBusy={v2IsBusy || v2IsStopFinalizing || v2IsRecoveryFinalizing || v2IsWritingSelectedSession}
-            lastDetectedAppName={v2SamplerStatus?.lastObservedAppName ?? null}
-            lastSampleTimeMs={v2SamplerStatus?.lastTickCompletedAtMs ?? v2Snapshot?.status.lastSampledAtMs ?? null}
-            recoveryAvailable={v2UserModeRecoveryAvailable}
-            recoveryDetail={v2UserModeRecoveryDetail}
-            message={v2UserModeMessage}
-            onStart={() => {
-              void handleV2StartNativeSampler();
-            }}
-            onStop={() => {
-              void handleV2StopNativeSampler();
-            }}
-            onStopAndSave={() => {
-              void handleV2StopAndFinalizeCurrentPreviewSession();
-            }}
-          />
         ) : null}
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -3396,47 +3326,6 @@ export function TrackerSettingsPanel() {
         );
       })() : null}
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        {TRACKER_GROUPS.map((config) => {
-          const rulesByKind = {
-            website: draftPrefs[config.listKeys.website],
-            app: draftPrefs[config.listKeys.app],
-          };
-          const originalRulesByKind = {
-            website: state.trackerPrefs[config.listKeys.website],
-            app: state.trackerPrefs[config.listKeys.app],
-          };
-          const sanitizedDraftWebsite = sanitizeTrackerRules(rulesByKind.website, "website");
-          const sanitizedDraftApp = sanitizeTrackerRules(rulesByKind.app, "app");
-          const sanitizedOriginalWebsite = sanitizeTrackerRules(originalRulesByKind.website, "website");
-          const sanitizedOriginalApp = sanitizeTrackerRules(originalRulesByKind.app, "app");
-          const isDirty =
-            !trackerRuleListsMatch(sanitizedDraftWebsite, sanitizedOriginalWebsite) ||
-            !trackerRuleListsMatch(sanitizedDraftApp, sanitizedOriginalApp);
-
-          return (
-            <TrackerGroupCard
-              key={config.key}
-              title={config.title}
-              description={config.description}
-              namePlaceholder={config.namePlaceholder}
-              targetPlaceholders={config.targetPlaceholders}
-              listKeys={config.listKeys}
-              rulesByKind={rulesByKind}
-              onRulesChange={(kind, nextRules) => {
-                setDraftPrefs((prev) => ({
-                  ...prev,
-                  [config.listKeys[kind]]: nextRules,
-                }));
-              }}
-              onSave={() => handleSave(config.key)}
-              isSaving={savingKey === config.key}
-              isDisabled={isDataBusy}
-              isDirty={isDirty}
-            />
-          );
-        })}
-      </div>
     </div>
   );
 }
