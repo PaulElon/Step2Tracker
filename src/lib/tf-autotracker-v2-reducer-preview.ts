@@ -108,12 +108,14 @@ export function shouldStartAutoTrackerV2StartupRecoveryHydration({
   hasAppliedHydration,
   nativeInspectorEnabled,
   nativeSamplerEnabled,
+  userModeEnabled,
 }: {
   hasAppliedHydration: boolean;
   nativeInspectorEnabled: boolean;
   nativeSamplerEnabled: boolean;
+  userModeEnabled: boolean;
 }): boolean {
-  return !hasAppliedHydration && (nativeInspectorEnabled || nativeSamplerEnabled);
+  return !hasAppliedHydration && (nativeInspectorEnabled || nativeSamplerEnabled || userModeEnabled);
 }
 
 type ActiveFinalizedPreviewSession = {

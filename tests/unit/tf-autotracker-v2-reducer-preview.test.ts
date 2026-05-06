@@ -962,6 +962,7 @@ test("startup hydration gate retries after a StrictMode-cancelled first pass", (
       hasAppliedHydration: false,
       nativeInspectorEnabled: true,
       nativeSamplerEnabled: true,
+      userModeEnabled: false,
     }),
     true,
   );
@@ -970,6 +971,7 @@ test("startup hydration gate retries after a StrictMode-cancelled first pass", (
       hasAppliedHydration: false,
       nativeInspectorEnabled: true,
       nativeSamplerEnabled: true,
+      userModeEnabled: false,
     }),
     true,
   );
@@ -978,6 +980,7 @@ test("startup hydration gate retries after a StrictMode-cancelled first pass", (
       hasAppliedHydration: true,
       nativeInspectorEnabled: true,
       nativeSamplerEnabled: true,
+      userModeEnabled: false,
     }),
     false,
   );
@@ -986,8 +989,18 @@ test("startup hydration gate retries after a StrictMode-cancelled first pass", (
       hasAppliedHydration: false,
       nativeInspectorEnabled: false,
       nativeSamplerEnabled: false,
+      userModeEnabled: false,
     }),
     false,
+  );
+  assert.equal(
+    shouldStartAutoTrackerV2StartupRecoveryHydration({
+      hasAppliedHydration: false,
+      nativeInspectorEnabled: false,
+      nativeSamplerEnabled: false,
+      userModeEnabled: true,
+    }),
+    true,
   );
 });
 

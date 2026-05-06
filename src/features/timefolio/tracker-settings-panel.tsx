@@ -182,24 +182,6 @@ function countTrackerRules(prefs: TfTrackerPrefs): number {
   );
 }
 
-function getAccountSummary(account: TfAppState["account"]): { value: string; detail: string } {
-  if (!account) {
-    return {
-      value: "No account",
-      detail: "TimeFolio data is local only.",
-    };
-  }
-
-  const tier = account.planTier === "pro" ? "Pro" : "Free";
-  const identity = account.username ?? account.email ?? account.userId ?? "linked account";
-  const verification = account.emailVerified ? "verified email" : "email not verified";
-
-  return {
-    value: "Connected",
-    detail: `${tier} account · ${verification} · ${identity}`,
-  };
-}
-
 function formatBackupDate(date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA").format(date);
 }
@@ -875,12 +857,17 @@ export function TrackerSettingsPanel() {
   const v2DelayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const v2WritingPreviewSessionIdsRef = useRef<Set<string>>(new Set());
   const v2DidHydratePersistedStateRef = useRef(false);
+  const isV2SamplerStatusEnabled = FF.autotrackerV2NativeSampler || FF.autotrackerV2UserMode;
 
   useEffect(() => {
     setDraftPrefs(cloneTrackerPrefs(state.trackerPrefs));
   }, [state.trackerPrefs]);
 
   useEffect(() => {
+    if (FF.autotrackerV2UserMode) {
+      return;
+    }
+
     void handleRefreshAutoTrackerStatus();
   }, []);
 
@@ -898,6 +885,7 @@ export function TrackerSettingsPanel() {
         hasAppliedHydration: v2DidHydratePersistedStateRef.current,
         nativeInspectorEnabled: FF.autotrackerV2NativeInspector,
         nativeSamplerEnabled: FF.autotrackerV2NativeSampler,
+        userModeEnabled: FF.autotrackerV2UserMode,
       })
     ) {
       return;
@@ -972,13 +960,12 @@ export function TrackerSettingsPanel() {
       ...v2WritingPreviewSessionIdsRef.current,
     ]),
   });
-
   function persistAutoTrackerV2DevState(updateUi = true): void {
     if (!v2HasLoadedPersistedState) {
       return;
     }
 
-    if (!FF.autotrackerV2NativeInspector && !FF.autotrackerV2NativeSampler) {
+    if (!FF.autotrackerV2NativeInspector && !isV2SamplerStatusEnabled) {
       return;
     }
 
@@ -1024,14 +1011,14 @@ export function TrackerSettingsPanel() {
       return;
     }
 
-    if (!FF.autotrackerV2NativeInspector && !FF.autotrackerV2NativeSampler) {
+    if (!FF.autotrackerV2NativeInspector && !isV2SamplerStatusEnabled) {
       return;
     }
 
     persistAutoTrackerV2DevState();
   }, [
     FF.autotrackerV2NativeInspector,
-    FF.autotrackerV2NativeSampler,
+    isV2SamplerStatusEnabled,
     v2ContinuousWriteStatus,
     v2SamplerStatus,
     v2HasLoadedPersistedState,
@@ -1045,7 +1032,7 @@ export function TrackerSettingsPanel() {
       return;
     }
 
-    if (!FF.autotrackerV2NativeInspector && !FF.autotrackerV2NativeSampler) {
+    if (!FF.autotrackerV2NativeInspector && !isV2SamplerStatusEnabled) {
       return;
     }
 
@@ -1063,7 +1050,7 @@ export function TrackerSettingsPanel() {
     };
   }, [
     FF.autotrackerV2NativeInspector,
-    FF.autotrackerV2NativeSampler,
+    isV2SamplerStatusEnabled,
     v2ContinuousWriteStatus,
     v2SamplerStatus,
     v2HasLoadedPersistedState,
@@ -1150,7 +1137,7 @@ export function TrackerSettingsPanel() {
   ]);
 
   useEffect(() => {
-    if (!FF.autotrackerV2NativeSampler || !isSamplerRunning) {
+    if (!isV2SamplerStatusEnabled || !isSamplerRunning) {
       return;
     }
 
@@ -1417,7 +1404,7 @@ export function TrackerSettingsPanel() {
     const [diagnosticsResult, recoveryResult, samplerStatusResult] = await Promise.allSettled([
       readAutoTrackerV2NativeRecoveryDiagnostics(),
       readAutoTrackerV2NativeRecovery(),
-      FF.autotrackerV2NativeSampler ? getAutoTrackerV2NativeSamplerStatus() : Promise.resolve(null),
+      isV2SamplerStatusEnabled ? getAutoTrackerV2NativeSamplerStatus() : Promise.resolve(null),
     ]);
 
     if (diagnosticsResult.status === "fulfilled") {
@@ -1564,7 +1551,7 @@ export function TrackerSettingsPanel() {
   }> {
     const [snapshot, samplerStatus, recoveryDiagnostics] = await Promise.all([
       snapshotAutoTrackerV2Native(),
-      FF.autotrackerV2NativeSampler ? getAutoTrackerV2NativeSamplerStatus() : Promise.resolve(null),
+      isV2SamplerStatusEnabled ? getAutoTrackerV2NativeSamplerStatus() : Promise.resolve(null),
       readAutoTrackerV2NativeRecoveryDiagnostics().catch(() => null),
     ]);
 
@@ -1588,9 +1575,7 @@ export function TrackerSettingsPanel() {
     try {
       const [status, samplerStatus, recoveryDiagnostics] = await Promise.all([
         probeAutoTrackerV2Native(),
-        FF.autotrackerV2NativeSampler
-          ? getAutoTrackerV2NativeSamplerStatus()
-          : Promise.resolve(null),
+        isV2SamplerStatusEnabled ? getAutoTrackerV2NativeSamplerStatus() : Promise.resolve(null),
         readAutoTrackerV2NativeRecoveryDiagnostics().catch(() => null),
       ]);
       setV2ProbeStatus(status);
@@ -1655,9 +1640,7 @@ export function TrackerSettingsPanel() {
     try {
       const result = await debugWriteAutoTrackerV2NativeRecoveryNow();
       const [samplerStatus, recoveryDiagnostics] = await Promise.all([
-        FF.autotrackerV2NativeSampler
-          ? getAutoTrackerV2NativeSamplerStatus()
-          : Promise.resolve(null),
+        isV2SamplerStatusEnabled ? getAutoTrackerV2NativeSamplerStatus() : Promise.resolve(null),
         readAutoTrackerV2NativeRecoveryDiagnostics().catch(() => null),
       ]);
       setV2RecoveryDebugWriteResult(result);
@@ -1693,7 +1676,7 @@ export function TrackerSettingsPanel() {
         clearAutoTrackerV2NativeRecovery(),
       ]);
       setV2ProbeStatus(status);
-      if (FF.autotrackerV2NativeSampler) {
+      if (isV2SamplerStatusEnabled) {
         const samplerStatus = await getAutoTrackerV2NativeSamplerStatus();
         setV2SamplerStatus(samplerStatus);
       }
@@ -1806,9 +1789,9 @@ export function TrackerSettingsPanel() {
       setV2SamplerStatus(samplerStatus);
       await refreshV2SnapshotAndSamplerStatus();
     } catch (err) {
-      setV2InspectorError(
-        err instanceof Error && err.message ? err.message : "Unable to start native sampler.",
-      );
+      const message =
+        err instanceof Error && err.message ? err.message : "Unable to start Auto-Tracker.";
+      setV2InspectorError(message);
     } finally {
       setV2SamplerActionBusy(false);
     }
@@ -1822,9 +1805,9 @@ export function TrackerSettingsPanel() {
       setV2SamplerStatus(samplerStatus);
       await refreshV2SnapshotAndSamplerStatus();
     } catch (err) {
-      setV2InspectorError(
-        err instanceof Error && err.message ? err.message : "Unable to stop native sampler.",
-      );
+      const message =
+        err instanceof Error && err.message ? err.message : "Unable to stop Auto-Tracker.";
+      setV2InspectorError(message);
     } finally {
       setV2SamplerActionBusy(false);
     }
@@ -1951,12 +1934,13 @@ export function TrackerSettingsPanel() {
         v2WritingPreviewSessionIdsRef.current.delete(selection.previewSession.previewSessionId);
       }
     } catch (err) {
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : "Unable to stop and save Auto-Tracker.";
       setV2StopFinalizeMessage({
         tone: "error",
-        text:
-          err instanceof Error && err.message
-            ? err.message
-            : "Unable to stop and finalize the current preview session.",
+        text: message,
       });
     } finally {
       setV2IsStopFinalizing(false);
@@ -2055,10 +2039,6 @@ export function TrackerSettingsPanel() {
     }
   }
 
-  const accountSummary = getAccountSummary(state.account);
-  const trackerRuleCount = countTrackerRules(state.trackerPrefs);
-  const sessionCount = state.sessionLogs.length;
-  const summaryCount = state.summaries.length;
   const canConfirmReset = resetConfirmationToken === RESET_CONFIRMATION_TOKEN;
 
   return (
@@ -2072,15 +2052,73 @@ export function TrackerSettingsPanel() {
             <div>
               <h2 className="text-lg font-semibold text-slate-100">Tracker Settings</h2>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-                Manage the app and website labels that TimeFolio stores on this device for tracker classification.
+                Manage which apps and websites count as study time on this device.
               </p>
             </div>
           </div>
           <div className="rounded-xl border border-slate-700 bg-slate-800/70 px-4 py-3 text-xs leading-5 text-slate-400">
-            Changes are saved into the TimeFolio store state only.
+            Changes stay on this device.
           </div>
         </div>
       </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        {TRACKER_GROUPS.map((config) => {
+          const rulesByKind = {
+            website: draftPrefs[config.listKeys.website],
+            app: draftPrefs[config.listKeys.app],
+          };
+          const originalRulesByKind = {
+            website: state.trackerPrefs[config.listKeys.website],
+            app: state.trackerPrefs[config.listKeys.app],
+          };
+          const sanitizedDraftWebsite = sanitizeTrackerRules(rulesByKind.website, "website");
+          const sanitizedDraftApp = sanitizeTrackerRules(rulesByKind.app, "app");
+          const sanitizedOriginalWebsite = sanitizeTrackerRules(originalRulesByKind.website, "website");
+          const sanitizedOriginalApp = sanitizeTrackerRules(originalRulesByKind.app, "app");
+          const isDirty =
+            !trackerRuleListsMatch(sanitizedDraftWebsite, sanitizedOriginalWebsite) ||
+            !trackerRuleListsMatch(sanitizedDraftApp, sanitizedOriginalApp);
+
+          return (
+            <TrackerGroupCard
+              key={config.key}
+              title={config.title}
+              description={config.description}
+              namePlaceholder={config.namePlaceholder}
+              targetPlaceholders={config.targetPlaceholders}
+              listKeys={config.listKeys}
+              rulesByKind={rulesByKind}
+              onRulesChange={(kind, nextRules) => {
+                setDraftPrefs((prev) => ({
+                  ...prev,
+                  [config.listKeys[kind]]: nextRules,
+                }));
+              }}
+              onSave={() => handleSave(config.key)}
+              isSaving={savingKey === config.key}
+              isDisabled={isDataBusy}
+              isDirty={isDirty}
+            />
+          );
+        })}
+      </div>
+
+      {FF.autotrackerV2UserMode ? (
+        <section className="flex flex-col gap-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-5 py-4 shadow-lg shadow-black/10">
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-100">
+            Auto-Tracking setup
+          </div>
+          <p className="text-sm leading-6 text-cyan-50">
+            Add the apps and websites you want counted as study time in Allowed. Put social apps,
+            messaging, and other distractions in Distractions.
+          </p>
+          <p className="text-xs leading-5 text-cyan-50/85">
+            Use Session Log to start or stop Auto-Tracking. Keep this section short and focused on
+            what matters for your studying.
+          </p>
+        </section>
+      ) : null}
 
       <section className="flex flex-col gap-5 rounded-2xl border border-slate-700 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2089,31 +2127,12 @@ export function TrackerSettingsPanel() {
               TimeFolio data
             </div>
             <div>
-              <h3 className="text-base font-semibold text-slate-100">Backup, import, or reset local TimeFolio data</h3>
+              <h3 className="text-base font-semibold text-slate-100">Back up, import, or reset TimeFolio data</h3>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-                These controls only touch the quarantined TimeFolio store used by tracker settings.
+                Use these controls only if you need to move data between devices or restore a copy.
               </p>
             </div>
           </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <DataStatCard
-            label="Session count"
-            value={String(sessionCount)}
-            detail="Tracked session logs stored in TimeFolio."
-          />
-          <DataStatCard
-            label="Summary count"
-            value={String(summaryCount)}
-            detail="Generated summary cards available locally."
-          />
-          <DataStatCard
-            label="Tracker rule count"
-            value={String(trackerRuleCount)}
-            detail="All auto-track and distraction rules combined."
-          />
-          <DataStatCard label="Account status" value={accountSummary.value} detail={accountSummary.detail} />
         </div>
 
         {dataMessage ? (
@@ -2243,133 +2262,138 @@ export function TrackerSettingsPanel() {
         </div>
       </section>
 
-      <section className="flex flex-col gap-5 rounded-2xl border border-slate-700 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-col gap-2">
-            <div className="inline-flex w-fit rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-teal-300">
-              Read-only
+      {!FF.autotrackerV2UserMode ? (
+        <section className="flex flex-col gap-5 rounded-2xl border border-slate-700 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex flex-col gap-2">
+              <div className="inline-flex w-fit rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-teal-300">
+                Local control
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-slate-100">Auto-Tracker Status</h3>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
+                  Production-facing Auto-Tracker controls appear here when enabled. Bootstrap status stays local-only.
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-base font-semibold text-slate-100">Auto-Tracker Status</h3>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-                Read-only scaffold/placeholder for Auto-Tracker status. This card does not perform live ingestion or write any data.
-              </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleRefreshAutoTrackerStatus}
+                disabled={isAutoTrackerRefreshing}
+                className="rounded-lg border border-teal-500/30 bg-teal-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isAutoTrackerRefreshing ? "Refreshing…" : "Refresh status"}
+              </button>
+              <button
+                type="button"
+                onClick={handleImportLatestAutoTrackerSpans}
+                disabled={isAutoTrackerImporting}
+                className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-3 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isAutoTrackerImporting ? "Previewing…" : "Preview placeholder auto-tracker import"}
+              </button>
             </div>
           </div>
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={handleRefreshAutoTrackerStatus}
-              disabled={isAutoTrackerRefreshing}
-              className="rounded-lg border border-teal-500/30 bg-teal-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isAutoTrackerRefreshing ? "Refreshing…" : "Refresh status"}
-            </button>
-            <button
-              type="button"
-              onClick={handleImportLatestAutoTrackerSpans}
-              disabled={isAutoTrackerImporting}
-              className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-3 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isAutoTrackerImporting ? "Previewing…" : "Preview placeholder auto-tracker import"}
-            </button>
+
+          {autoTrackerImportMessage ? (
+            <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
+              {autoTrackerImportMessage}
+            </div>
+          ) : null}
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <DataStatCard
+              label="Tracker service"
+              value={autoTrackerStatus?.detected ? "Detected" : "Offline"}
+              detail={autoTrackerStatus?.error ? autoTrackerStatus.error : "Bootstrap endpoint probe result."}
+            />
+            <DataStatCard
+              label="Installed"
+              value={formatStatusValue(autoTrackerStatus?.installed)}
+              detail="Auto-Tracker installation state."
+            />
+            <DataStatCard label="Paired" value={formatStatusValue(autoTrackerStatus?.paired)} detail="Device pairing state." />
+            <DataStatCard
+              label="Platform"
+              value={formatStatusValue(autoTrackerStatus?.platform)}
+              detail={`Stream port: ${formatStatusValue(autoTrackerStatus?.streamPort)}`}
+            />
           </div>
-        </div>
 
-        {autoTrackerImportMessage ? (
-          <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
-            {autoTrackerImportMessage}
-          </div>
-        ) : null}
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <DataStatCard
-            label="Tracker service"
-            value={autoTrackerStatus?.detected ? "Detected" : "Offline"}
-            detail={autoTrackerStatus?.error ? autoTrackerStatus.error : "Bootstrap endpoint probe result."}
-          />
-          <DataStatCard
-            label="Installed"
-            value={formatStatusValue(autoTrackerStatus?.installed)}
-            detail="Auto-Tracker installation state."
-          />
-          <DataStatCard label="Paired" value={formatStatusValue(autoTrackerStatus?.paired)} detail="Device pairing state." />
-          <DataStatCard
-            label="Platform"
-            value={formatStatusValue(autoTrackerStatus?.platform)}
-            detail={`Stream port: ${formatStatusValue(autoTrackerStatus?.streamPort)}`}
-          />
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <DataStatCard
-            label="Version"
-            value={formatStatusValue(autoTrackerStatus?.appVersion)}
-            detail={`Device ID: ${formatStatusValue(autoTrackerStatus?.deviceId)}`}
-          />
-          <DataStatCard
-            label="Accessibility"
-            value={formatStatusValue(autoTrackerStatus?.accessibility)}
-            detail={`Browser automation: ${formatStatusValue(autoTrackerStatus?.browserAutomation)}`}
-          />
-          <DataStatCard
-            label="Span state"
-            value={`${autoTrackerStatus?.closedSpanCount ?? 0} closed`}
-            detail={`Open span: ${formatStatusValue(autoTrackerStatus?.hasOpenSpan)}`}
-          />
-        </div>
-
-        {autoTrackerStatus?.pendingUserCode ||
-        autoTrackerStatus?.pendingVerificationUrl ||
-        autoTrackerStatus?.pendingTransferDeviceId ||
-        autoTrackerStatus?.pendingReplaceDeviceId ||
-        autoTrackerStatus?.lastPairingError ? (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {autoTrackerStatus?.pendingUserCode ? (
-              <DataStatCard
-                label="Pending user code"
-                value={autoTrackerStatus.pendingUserCode}
-                detail="Complete pairing with this user code."
-              />
-            ) : null}
-            {autoTrackerStatus?.pendingVerificationUrl ? (
-              <DataStatCard
-                label="Verification URL"
-                value={autoTrackerStatus.pendingVerificationUrl}
-                detail="Pending browser verification URL."
-              />
-            ) : null}
-            {autoTrackerStatus?.pendingTransferDeviceId ? (
-              <DataStatCard
-                label="Transfer device"
-                value={autoTrackerStatus.pendingTransferDeviceId}
-                detail="Pending transfer target device ID."
-              />
-            ) : null}
-            {autoTrackerStatus?.pendingReplaceDeviceId ? (
-              <DataStatCard
-                label="Replace device"
-                value={autoTrackerStatus.pendingReplaceDeviceId}
-                detail="Pending replacement device ID."
-              />
-            ) : null}
-            {autoTrackerStatus?.lastPairingError ? (
-              <DataStatCard
-                label="Last pairing error"
-                value={autoTrackerStatus.lastPairingError}
-                detail="Most recent pairing error from bootstrap."
-              />
-            ) : null}
+            <DataStatCard
+              label="Version"
+              value={formatStatusValue(autoTrackerStatus?.appVersion)}
+              detail={`Device ID: ${formatStatusValue(autoTrackerStatus?.deviceId)}`}
+            />
+            <DataStatCard
+              label="Accessibility"
+              value={formatStatusValue(autoTrackerStatus?.accessibility)}
+              detail={`Browser automation: ${formatStatusValue(autoTrackerStatus?.browserAutomation)}`}
+            />
+            <DataStatCard
+              label="Span state"
+              value={`${autoTrackerStatus?.closedSpanCount ?? 0} closed`}
+              detail={`Open span: ${formatStatusValue(autoTrackerStatus?.hasOpenSpan)}`}
+            />
           </div>
-        ) : null}
 
-        <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-xs text-slate-400">
-          Last checked: {formatLastChecked(autoTrackerStatus?.lastCheckedISO)}
-          {autoTrackerStatus?.basePath ? ` · Base path: ${autoTrackerStatus.basePath}` : ""}
-        </div>
-      </section>
+          {autoTrackerStatus?.pendingUserCode ||
+          autoTrackerStatus?.pendingVerificationUrl ||
+          autoTrackerStatus?.pendingTransferDeviceId ||
+          autoTrackerStatus?.pendingReplaceDeviceId ||
+          autoTrackerStatus?.lastPairingError ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {autoTrackerStatus?.pendingUserCode ? (
+                <DataStatCard
+                  label="Pending user code"
+                  value={autoTrackerStatus.pendingUserCode}
+                  detail="Complete pairing with this user code."
+                />
+              ) : null}
+              {autoTrackerStatus?.pendingVerificationUrl ? (
+                <DataStatCard
+                  label="Verification URL"
+                  value={autoTrackerStatus.pendingVerificationUrl}
+                  detail="Pending browser verification URL."
+                />
+              ) : null}
+              {autoTrackerStatus?.pendingTransferDeviceId ? (
+                <DataStatCard
+                  label="Transfer device"
+                  value={autoTrackerStatus.pendingTransferDeviceId}
+                  detail="Pending transfer target device ID."
+                />
+              ) : null}
+              {autoTrackerStatus?.pendingReplaceDeviceId ? (
+                <DataStatCard
+                  label="Replace device"
+                  value={autoTrackerStatus.pendingReplaceDeviceId}
+                  detail="Pending replacement device ID."
+                />
+              ) : null}
+              {autoTrackerStatus?.lastPairingError ? (
+                <DataStatCard
+                  label="Last pairing error"
+                  value={autoTrackerStatus.lastPairingError}
+                  detail="Most recent pairing error from bootstrap."
+                />
+              ) : null}
+            </div>
+          ) : null}
 
-      {FF.autotrackerV2NativeInspector || FF.autotrackerV2NativeSampler ? (() => {
+          <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-xs text-slate-400">
+            Last checked: {formatLastChecked(autoTrackerStatus?.lastCheckedISO)}
+            {autoTrackerStatus?.basePath ? ` · Base path: ${autoTrackerStatus.basePath}` : ""}
+          </div>
+        </section>
+      ) : null}
+
+      {(() => {
+        if (!FF.autotrackerV2NativeInspector && !FF.autotrackerV2NativeSampler) {
+          return null;
+        }
         const lastAppEvent = v2Snapshot
           ? [...v2Snapshot.events]
               .reverse()
@@ -3311,53 +3335,12 @@ export function TrackerSettingsPanel() {
                     )}
                   </div>
                 ) : null}
-              </div>
-            </div>
-          </section>
+          </div>
+        </div>
+        </section>
         );
-      })() : null}
+      })()}
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        {TRACKER_GROUPS.map((config) => {
-          const rulesByKind = {
-            website: draftPrefs[config.listKeys.website],
-            app: draftPrefs[config.listKeys.app],
-          };
-          const originalRulesByKind = {
-            website: state.trackerPrefs[config.listKeys.website],
-            app: state.trackerPrefs[config.listKeys.app],
-          };
-          const sanitizedDraftWebsite = sanitizeTrackerRules(rulesByKind.website, "website");
-          const sanitizedDraftApp = sanitizeTrackerRules(rulesByKind.app, "app");
-          const sanitizedOriginalWebsite = sanitizeTrackerRules(originalRulesByKind.website, "website");
-          const sanitizedOriginalApp = sanitizeTrackerRules(originalRulesByKind.app, "app");
-          const isDirty =
-            !trackerRuleListsMatch(sanitizedDraftWebsite, sanitizedOriginalWebsite) ||
-            !trackerRuleListsMatch(sanitizedDraftApp, sanitizedOriginalApp);
-
-          return (
-            <TrackerGroupCard
-              key={config.key}
-              title={config.title}
-              description={config.description}
-              namePlaceholder={config.namePlaceholder}
-              targetPlaceholders={config.targetPlaceholders}
-              listKeys={config.listKeys}
-              rulesByKind={rulesByKind}
-              onRulesChange={(kind, nextRules) => {
-                setDraftPrefs((prev) => ({
-                  ...prev,
-                  [config.listKeys[kind]]: nextRules,
-                }));
-              }}
-              onSave={() => handleSave(config.key)}
-              isSaving={savingKey === config.key}
-              isDisabled={isDataBusy}
-              isDirty={isDirty}
-            />
-          );
-        })}
-      </div>
     </div>
   );
 }
