@@ -864,6 +864,10 @@ export function TrackerSettingsPanel() {
   }, [state.trackerPrefs]);
 
   useEffect(() => {
+    if (FF.autotrackerV2UserMode) {
+      return;
+    }
+
     void handleRefreshAutoTrackerStatus();
   }, []);
 
@@ -2048,12 +2052,12 @@ export function TrackerSettingsPanel() {
             <div>
               <h2 className="text-lg font-semibold text-slate-100">Tracker Settings</h2>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-                Manage the app and website labels that TimeFolio stores on this device for tracker classification.
+                Manage which apps and websites count as study time on this device.
               </p>
             </div>
           </div>
           <div className="rounded-xl border border-slate-700 bg-slate-800/70 px-4 py-3 text-xs leading-5 text-slate-400">
-            Changes are saved into the TimeFolio store state only.
+            Changes stay on this device.
           </div>
         </div>
       </div>
@@ -2100,9 +2104,21 @@ export function TrackerSettingsPanel() {
         })}
       </div>
 
-      <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-xs leading-5 text-slate-400">
-        All tracker rule edits stay local to this device. No cloud sync or account access is used here.
-      </div>
+      {FF.autotrackerV2UserMode ? (
+        <section className="flex flex-col gap-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-5 py-4 shadow-lg shadow-black/10">
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-100">
+            Auto-Tracking setup
+          </div>
+          <p className="text-sm leading-6 text-cyan-50">
+            Add the apps and websites you want counted as study time in Allowed. Put social apps,
+            messaging, and other distractions in Distractions.
+          </p>
+          <p className="text-xs leading-5 text-cyan-50/85">
+            Use Session Log to start or stop Auto-Tracking. Keep this section short and focused on
+            what matters for your studying.
+          </p>
+        </section>
+      ) : null}
 
       <section className="flex flex-col gap-5 rounded-2xl border border-slate-700 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2111,9 +2127,9 @@ export function TrackerSettingsPanel() {
               TimeFolio data
             </div>
             <div>
-              <h3 className="text-base font-semibold text-slate-100">Backup, import, or reset local TimeFolio data</h3>
+              <h3 className="text-base font-semibold text-slate-100">Back up, import, or reset TimeFolio data</h3>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-                These controls only touch the quarantined TimeFolio store used by tracker settings.
+                Use these controls only if you need to move data between devices or restore a copy.
               </p>
             </div>
           </div>
@@ -2246,33 +2262,29 @@ export function TrackerSettingsPanel() {
         </div>
       </section>
 
-      <section
-        className={`flex flex-col gap-5 rounded-2xl border border-slate-700 bg-slate-900/80 p-6 shadow-lg shadow-black/15 ${
-          FF.autotrackerV2UserMode ? "hidden" : ""
-        }`}
-      >
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-col gap-2">
-            <div className="inline-flex w-fit rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-teal-300">
-              Local control
+      {!FF.autotrackerV2UserMode ? (
+        <section className="flex flex-col gap-5 rounded-2xl border border-slate-700 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex flex-col gap-2">
+              <div className="inline-flex w-fit rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-teal-300">
+                Local control
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-slate-100">Auto-Tracker Status</h3>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
+                  Production-facing Auto-Tracker controls appear here when enabled. Bootstrap status stays local-only.
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-base font-semibold text-slate-100">Auto-Tracker Status</h3>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-                Production-facing Auto-Tracker controls appear here when enabled. Bootstrap status stays local-only.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={handleRefreshAutoTrackerStatus}
-              disabled={isAutoTrackerRefreshing}
-              className="rounded-lg border border-teal-500/30 bg-teal-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isAutoTrackerRefreshing ? "Refreshing…" : "Refresh status"}
-            </button>
-            {!FF.autotrackerV2UserMode ? (
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleRefreshAutoTrackerStatus}
+                disabled={isAutoTrackerRefreshing}
+                className="rounded-lg border border-teal-500/30 bg-teal-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isAutoTrackerRefreshing ? "Refreshing…" : "Refresh status"}
+              </button>
               <button
                 type="button"
                 onClick={handleImportLatestAutoTrackerSpans}
@@ -2281,104 +2293,107 @@ export function TrackerSettingsPanel() {
               >
                 {isAutoTrackerImporting ? "Previewing…" : "Preview placeholder auto-tracker import"}
               </button>
-            ) : null}
+            </div>
           </div>
-        </div>
 
-        {!FF.autotrackerV2UserMode && autoTrackerImportMessage ? (
-          <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
-            {autoTrackerImportMessage}
+          {autoTrackerImportMessage ? (
+            <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
+              {autoTrackerImportMessage}
+            </div>
+          ) : null}
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <DataStatCard
+              label="Tracker service"
+              value={autoTrackerStatus?.detected ? "Detected" : "Offline"}
+              detail={autoTrackerStatus?.error ? autoTrackerStatus.error : "Bootstrap endpoint probe result."}
+            />
+            <DataStatCard
+              label="Installed"
+              value={formatStatusValue(autoTrackerStatus?.installed)}
+              detail="Auto-Tracker installation state."
+            />
+            <DataStatCard label="Paired" value={formatStatusValue(autoTrackerStatus?.paired)} detail="Device pairing state." />
+            <DataStatCard
+              label="Platform"
+              value={formatStatusValue(autoTrackerStatus?.platform)}
+              detail={`Stream port: ${formatStatusValue(autoTrackerStatus?.streamPort)}`}
+            />
           </div>
-        ) : null}
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <DataStatCard
-            label="Tracker service"
-            value={autoTrackerStatus?.detected ? "Detected" : "Offline"}
-            detail={autoTrackerStatus?.error ? autoTrackerStatus.error : "Bootstrap endpoint probe result."}
-          />
-          <DataStatCard
-            label="Installed"
-            value={formatStatusValue(autoTrackerStatus?.installed)}
-            detail="Auto-Tracker installation state."
-          />
-          <DataStatCard label="Paired" value={formatStatusValue(autoTrackerStatus?.paired)} detail="Device pairing state." />
-          <DataStatCard
-            label="Platform"
-            value={formatStatusValue(autoTrackerStatus?.platform)}
-            detail={`Stream port: ${formatStatusValue(autoTrackerStatus?.streamPort)}`}
-          />
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <DataStatCard
-            label="Version"
-            value={formatStatusValue(autoTrackerStatus?.appVersion)}
-            detail={`Device ID: ${formatStatusValue(autoTrackerStatus?.deviceId)}`}
-          />
-          <DataStatCard
-            label="Accessibility"
-            value={formatStatusValue(autoTrackerStatus?.accessibility)}
-            detail={`Browser automation: ${formatStatusValue(autoTrackerStatus?.browserAutomation)}`}
-          />
-          <DataStatCard
-            label="Span state"
-            value={`${autoTrackerStatus?.closedSpanCount ?? 0} closed`}
-            detail={`Open span: ${formatStatusValue(autoTrackerStatus?.hasOpenSpan)}`}
-          />
-        </div>
-
-        {autoTrackerStatus?.pendingUserCode ||
-        autoTrackerStatus?.pendingVerificationUrl ||
-        autoTrackerStatus?.pendingTransferDeviceId ||
-        autoTrackerStatus?.pendingReplaceDeviceId ||
-        autoTrackerStatus?.lastPairingError ? (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {autoTrackerStatus?.pendingUserCode ? (
-              <DataStatCard
-                label="Pending user code"
-                value={autoTrackerStatus.pendingUserCode}
-                detail="Complete pairing with this user code."
-              />
-            ) : null}
-            {autoTrackerStatus?.pendingVerificationUrl ? (
-              <DataStatCard
-                label="Verification URL"
-                value={autoTrackerStatus.pendingVerificationUrl}
-                detail="Pending browser verification URL."
-              />
-            ) : null}
-            {autoTrackerStatus?.pendingTransferDeviceId ? (
-              <DataStatCard
-                label="Transfer device"
-                value={autoTrackerStatus.pendingTransferDeviceId}
-                detail="Pending transfer target device ID."
-              />
-            ) : null}
-            {autoTrackerStatus?.pendingReplaceDeviceId ? (
-              <DataStatCard
-                label="Replace device"
-                value={autoTrackerStatus.pendingReplaceDeviceId}
-                detail="Pending replacement device ID."
-              />
-            ) : null}
-            {autoTrackerStatus?.lastPairingError ? (
-              <DataStatCard
-                label="Last pairing error"
-                value={autoTrackerStatus.lastPairingError}
-                detail="Most recent pairing error from bootstrap."
-              />
-            ) : null}
+            <DataStatCard
+              label="Version"
+              value={formatStatusValue(autoTrackerStatus?.appVersion)}
+              detail={`Device ID: ${formatStatusValue(autoTrackerStatus?.deviceId)}`}
+            />
+            <DataStatCard
+              label="Accessibility"
+              value={formatStatusValue(autoTrackerStatus?.accessibility)}
+              detail={`Browser automation: ${formatStatusValue(autoTrackerStatus?.browserAutomation)}`}
+            />
+            <DataStatCard
+              label="Span state"
+              value={`${autoTrackerStatus?.closedSpanCount ?? 0} closed`}
+              detail={`Open span: ${formatStatusValue(autoTrackerStatus?.hasOpenSpan)}`}
+            />
           </div>
-        ) : null}
 
-        <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-xs text-slate-400">
-          Last checked: {formatLastChecked(autoTrackerStatus?.lastCheckedISO)}
-          {autoTrackerStatus?.basePath ? ` · Base path: ${autoTrackerStatus.basePath}` : ""}
-        </div>
-      </section>
+          {autoTrackerStatus?.pendingUserCode ||
+          autoTrackerStatus?.pendingVerificationUrl ||
+          autoTrackerStatus?.pendingTransferDeviceId ||
+          autoTrackerStatus?.pendingReplaceDeviceId ||
+          autoTrackerStatus?.lastPairingError ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {autoTrackerStatus?.pendingUserCode ? (
+                <DataStatCard
+                  label="Pending user code"
+                  value={autoTrackerStatus.pendingUserCode}
+                  detail="Complete pairing with this user code."
+                />
+              ) : null}
+              {autoTrackerStatus?.pendingVerificationUrl ? (
+                <DataStatCard
+                  label="Verification URL"
+                  value={autoTrackerStatus.pendingVerificationUrl}
+                  detail="Pending browser verification URL."
+                />
+              ) : null}
+              {autoTrackerStatus?.pendingTransferDeviceId ? (
+                <DataStatCard
+                  label="Transfer device"
+                  value={autoTrackerStatus.pendingTransferDeviceId}
+                  detail="Pending transfer target device ID."
+                />
+              ) : null}
+              {autoTrackerStatus?.pendingReplaceDeviceId ? (
+                <DataStatCard
+                  label="Replace device"
+                  value={autoTrackerStatus.pendingReplaceDeviceId}
+                  detail="Pending replacement device ID."
+                />
+              ) : null}
+              {autoTrackerStatus?.lastPairingError ? (
+                <DataStatCard
+                  label="Last pairing error"
+                  value={autoTrackerStatus.lastPairingError}
+                  detail="Most recent pairing error from bootstrap."
+                />
+              ) : null}
+            </div>
+          ) : null}
 
-      {FF.autotrackerV2NativeInspector || FF.autotrackerV2NativeSampler ? (() => {
+          <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-xs text-slate-400">
+            Last checked: {formatLastChecked(autoTrackerStatus?.lastCheckedISO)}
+            {autoTrackerStatus?.basePath ? ` · Base path: ${autoTrackerStatus.basePath}` : ""}
+          </div>
+        </section>
+      ) : null}
+
+      {(() => {
+        if (!FF.autotrackerV2NativeInspector && !FF.autotrackerV2NativeSampler) {
+          return null;
+        }
         const lastAppEvent = v2Snapshot
           ? [...v2Snapshot.events]
               .reverse()
@@ -3320,11 +3335,11 @@ export function TrackerSettingsPanel() {
                     )}
                   </div>
                 ) : null}
-              </div>
-            </div>
-          </section>
+          </div>
+        </div>
+        </section>
         );
-      })() : null}
+      })()}
 
     </div>
   );

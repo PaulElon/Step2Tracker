@@ -31,7 +31,6 @@ export type AutoTrackerV2SessionControl = {
   isActionBusy: boolean;
   isStopAndSaveBusy: boolean;
   lastDetectedAppName: string | null;
-  lastSampleTimeMs: number | null;
   message: AutoTrackerV2UserControlMessage;
   onStart: () => void;
   onStopAndSave: () => void;
@@ -86,8 +85,6 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
   const isRunning = v2SamplerStatus?.running === true;
   const isActionBusy = v2SamplerActionBusy || v2IsStopFinalizing;
   const lastDetectedAppName = v2SamplerStatus?.lastObservedAppName ?? null;
-  const lastSampleTimeMs =
-    v2SamplerStatus?.lastTickCompletedAtMs ?? v2Snapshot?.status.lastSampledAtMs ?? null;
 
   async function refreshSamplerState() {
     try {
@@ -141,10 +138,6 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
       const samplerStatus = await startAutoTrackerV2NativeSampler();
       setV2SamplerStatus(samplerStatus);
       await refreshSamplerState();
-      setV2UserModeMessage({
-        tone: "success",
-        text: "Auto-Tracking started.",
-      });
     } catch (error) {
       const message =
         error instanceof Error && error.message ? error.message : "Unable to start Auto-Tracking.";
@@ -189,7 +182,7 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
         setV2UserModeMessage({
           tone: "info",
           text: stoppedSampler
-            ? "Stopped Auto-Tracker. No eligible session was ready to save."
+            ? "Auto-Tracking stopped. No session was ready to save."
             : "No eligible session was ready to save.",
         });
         return;
@@ -208,10 +201,10 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
           return next;
         });
         setV2UserModeMessage({
-          tone: "success",
+          tone: "info",
           text: stoppedSampler
-            ? "Stopped Auto-Tracker and saved the current session."
-            : "Saved the current session.",
+            ? "Auto-Tracking stopped and saved to Session Log."
+            : "Saved to Session Log.",
         });
         await refreshSamplerState();
       } finally {
@@ -236,7 +229,6 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
     isActionBusy,
     isStopAndSaveBusy: isActionBusy,
     lastDetectedAppName,
-    lastSampleTimeMs,
     message: v2UserModeMessage,
     onStart: () => {
       void handleStart();

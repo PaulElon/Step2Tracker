@@ -4,12 +4,9 @@ import { useTimeFolioStore } from "../../state/tf-store";
 import { formatLongDate, formatMinutes } from "../../lib/datetime";
 import { fieldClassName, primaryButtonClassName, secondaryButtonClassName } from "../../lib/ui";
 import type { TfSessionLog } from "../../types/models";
-import {
-  AutoTrackerV2UserControlStrip,
-} from "./autotracker-v2-user-control-card";
-import {
-  useAutoTrackerV2SessionControl,
-} from "./autotracker-v2-session-control";
+import { AutoTrackerV2UserControlStrip } from "./autotracker-v2-user-control-card";
+import { useAutoTrackerV2SessionControl } from "./autotracker-v2-session-control";
+import { buildAutoTrackerV2UserModeStatusCopy } from "../../lib/tf-autotracker-v2-user-mode-copy";
 
 const EMPTY_FORM = {
   method: "",
@@ -76,17 +73,6 @@ function formatElapsed(ms: number): string {
   const s = totalSec % 60;
   const pad = (n: number) => String(n).padStart(2, "0");
   return h > 0 ? `${h}h ${m}m ${pad(s)}s` : `${m}m ${pad(s)}s`;
-}
-
-function formatDateTimeFromMs(value: number | null | undefined): string {
-  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
-    return "Never";
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 }
 
 function localDateStr(isoStr: string): string {
@@ -521,28 +507,28 @@ export function SessionLogPanel() {
         </div>
 
         {FF.autotrackerV2UserMode ? (
-          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-3 text-xs leading-5 text-slate-400">
-            <span>
-              <span className={autoTracker.isRunning ? "text-emerald-300" : "text-slate-200"}>
-                {autoTracker.isRunning ? "Running" : "Stopped"}
-              </span>
-            </span>
-            <span>
-              <span className="text-slate-500">Last app:</span>{" "}
-              {autoTracker.lastDetectedAppName ?? "None yet"}
-            </span>
-            <span>
-              <span className="text-slate-500">Last sample:</span>{" "}
-              {formatDateTimeFromMs(autoTracker.lastSampleTimeMs)}
-            </span>
-            {autoTracker.message ? (
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-3 text-sm leading-6 text-slate-300">
+            {(() => {
+              const statusCopy = buildAutoTrackerV2UserModeStatusCopy({
+                isRunning: autoTracker.isRunning,
+                lastDetectedAppName: autoTracker.lastDetectedAppName,
+              });
+
+              return (
+                <>
+                  <span className={autoTracker.isRunning ? "font-medium text-emerald-300" : "font-medium text-slate-200"}>
+                    {statusCopy.statusLine}
+                  </span>
+                  <span className="text-slate-400">{statusCopy.lastDetectedLine}</span>
+                </>
+              );
+            })()}
+            {autoTracker.message && autoTracker.message.tone !== "success" ? (
               <span
-                className={`rounded-full border px-2 py-1 ${
+                className={`rounded-full border px-2 py-1 text-xs ${
                   autoTracker.message.tone === "error"
                     ? "border-rose-500/20 bg-rose-500/10 text-rose-200"
-                    : autoTracker.message.tone === "info"
-                      ? "border-slate-600 bg-slate-950/40 text-slate-200"
-                      : "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
+                    : "border-cyan-500/20 bg-cyan-500/10 text-cyan-100"
                 }`}
               >
                 {autoTracker.message.text}
