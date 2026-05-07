@@ -265,6 +265,37 @@ export function NotebookView() {
     }
     return siblingDocuments.filter((document) => isDocumentSearchMatch(document, normalizedSearchQuery));
   }, [normalizedSearchQuery, siblingDocuments]);
+  const favoritedDocuments = useMemo(
+    () => sortedDocuments.filter((document) => document.favorited === true),
+    [sortedDocuments],
+  );
+  const recentDocuments = useMemo(
+    () =>
+      [...sortedDocuments]
+        .sort((a, b) => {
+          const leftStamp = a.updatedAt ?? a.createdAt ?? "";
+          const rightStamp = b.updatedAt ?? b.createdAt ?? "";
+          const updatedCompare = rightStamp.localeCompare(leftStamp);
+          if (updatedCompare !== 0) {
+            return updatedCompare;
+          }
+          return a.order - b.order;
+        })
+        .slice(0, 6),
+    [sortedDocuments],
+  );
+  const railFolders = useMemo(() => {
+    if (!normalizedSearchQuery) {
+      return sortedFolders;
+    }
+    return sortedFolders.filter((folder) => folder.name.toLowerCase().includes(normalizedSearchQuery));
+  }, [normalizedSearchQuery, sortedFolders]);
+  const railDocuments = useMemo(() => {
+    if (!normalizedSearchQuery) {
+      return sortedDocuments;
+    }
+    return sortedDocuments.filter((document) => isDocumentSearchMatch(document, normalizedSearchQuery));
+  }, [normalizedSearchQuery, sortedDocuments]);
 
   const activeDocument = useMemo(
     () => (activeDocumentId ? sortedDocuments.find((document) => document.id === activeDocumentId) ?? null : null),
@@ -1021,19 +1052,17 @@ export function NotebookView() {
   const hasLibraryResults = visibleFolders.length > 0 || visibleDocuments.length > 0;
   const saveIndicatorClass =
     saveStatus === "error"
-      ? "border-rose-400/20 bg-rose-500/8 text-rose-100"
+      ? "border-rose-300/30 bg-rose-50 text-rose-600"
       : saveStatus === "saved"
-        ? "border-emerald-300/20 bg-emerald-400/8 text-emerald-50"
-        : "border-cyan-300/20 bg-cyan-400/8 text-cyan-50";
+        ? "border-emerald-300/30 bg-emerald-50 text-emerald-700"
+        : "border-sky-200/70 bg-sky-50 text-sky-700";
   const saveIndicatorLabel =
     saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : saveStatus === "error" ? "Save failed" : null;
   const statusClass =
     status?.kind === "error"
-      ? "border-rose-400/20 bg-rose-500/8 text-rose-100"
-      : "border-cyan-300/20 bg-cyan-400/8 text-cyan-50";
+      ? "border-rose-300/30 bg-rose-50 text-rose-700"
+      : "border-sky-200/70 bg-sky-50 text-sky-700";
   const compactStatusClass = "inline-flex max-w-full rounded-lg border px-2.5 py-1 text-xs font-medium leading-4";
-  const toolbarButtonClass =
-    "inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3.5 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]";
   const libraryToolbarButtonClass =
     "inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-white/10 bg-white/[0.02] px-4 text-sm text-slate-200 transition hover:border-white/15 hover:bg-white/[0.05]";
   const libraryToolbarPrimaryButtonClass =
@@ -1053,12 +1082,12 @@ export function NotebookView() {
   const libraryEmptyStateClass =
     "max-w-[20rem] rounded-[20px] border border-dashed border-white/10 bg-slate-950/18 px-5 py-6 text-left";
   const editorFieldClass =
-    "h-9 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-400/25";
-  const editorTitleFieldClass = `${editorFieldClass} min-w-0 truncate font-semibold tracking-[-0.02em]`;
+    "notebook-editor-input h-9 w-full rounded-[18px] border px-3.5 text-sm outline-none transition placeholder:text-slate-400 focus:ring-2 focus:ring-sky-300/20";
+  const editorTitleFieldClass = `${editorFieldClass} min-w-0 font-semibold tracking-[-0.02em]`;
   const editorActionButtonClass =
-    "inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-3.5 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06]";
+    "notebook-editor-action-button inline-flex h-9 items-center justify-center rounded-[18px] border px-3.5 text-sm font-medium transition";
   const editorDangerButtonClass =
-    "inline-flex h-9 items-center justify-center rounded-xl border border-rose-300/18 bg-rose-400/6 px-3.5 text-sm text-rose-100 transition hover:border-rose-300/30 hover:bg-rose-400/12";
+    "notebook-editor-action-button notebook-editor-action-button--danger inline-flex h-9 items-center justify-center rounded-[18px] border px-3.5 text-sm font-medium transition";
   const modalActionButtonClass =
     "inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:ring-offset-0";
   const modalPrimaryActionButtonClass =
@@ -1070,9 +1099,21 @@ export function NotebookView() {
   const compactMenuDangerItemClass =
     "flex min-h-8 w-full items-center rounded-lg px-2.5 py-1.5 text-left text-sm font-medium leading-5 text-rose-100 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:ring-offset-0";
   const editorTabStripClass =
-    "flex min-w-0 items-center gap-1 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.02] p-0.5 scrollbar-subtle";
+    "flex min-w-0 items-center gap-1 overflow-x-auto rounded-[20px] border border-white/10 bg-white/[0.36] p-1 scrollbar-subtle";
   const editorTabButtonClass =
-    "inline-flex h-8 max-w-[12rem] shrink-0 items-center overflow-hidden rounded-lg border px-3 text-sm font-medium transition whitespace-nowrap text-ellipsis";
+    "inline-flex h-8 max-w-[12rem] shrink-0 items-center overflow-hidden rounded-[14px] border px-3 text-sm font-medium transition whitespace-nowrap text-ellipsis";
+  const notebookEditorShellClass = "notebook-editor-shell min-h-0 flex-1 overflow-hidden";
+  const notebookRailClass =
+    "notebook-editor-rail flex min-h-0 flex-col gap-3 overflow-hidden rounded-[28px] border p-3";
+  const notebookRailListClass = "space-y-1.5";
+  const notebookRailItemClass =
+    "notebook-editor-rail__item group flex w-full items-start gap-2 rounded-[16px] border border-transparent px-2.5 py-2 text-left transition";
+  const notebookRailIconClass =
+    "notebook-editor-rail__icon flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border text-[11px] font-semibold";
+  const notebookSectionTitleClass = "notebook-editor-section-title";
+  const notebookSectionValueClass = "notebook-editor-section-value";
+  const notebookRailTitleClass = "notebook-editor-rail__title";
+  const notebookRailMetaClass = "notebook-editor-rail__meta";
   const emptyStateMessage = normalizedSearchQuery
     ? `No results for "${searchQuery.trim()}".`
     : currentFolder
@@ -1346,23 +1387,22 @@ export function NotebookView() {
           ) : (
             <>
               {activeDocument ? (
-                <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
-                  <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
-                    <button type="button" onClick={() => void goBackToLibrary()} className={toolbarButtonClass}>
+                <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[288px_minmax(0,1fr)]">
+                  <aside className={notebookRailClass}>
+                    <button type="button" onClick={() => void goBackToLibrary()} className={editorActionButtonClass}>
                       Back to Library
                     </button>
-                    <label className="min-w-0 flex-[2]">
-                      <span className="sr-only">Document title</span>
-                      <input
-                        type="text"
-                        value={activeDocument.title}
-                        onChange={(event) => updateActiveDocumentTitle(event.target.value)}
-                        placeholder="Untitled Document"
-                        className={editorTitleFieldClass}
-                      />
-                    </label>
-                    <label className="min-w-[11rem] flex-[0.95]">
-                      <span className="sr-only">Folder</span>
+
+                    <div className="space-y-1">
+                      <div className={notebookSectionTitleClass}>Library</div>
+                      <div className={notebookSectionValueClass}>{currentFolder ? currentFolder.name.trim() || "Untitled Folder" : "Library"}</div>
+                      <div className={notebookRailMetaClass}>
+                        {currentFolder ? "Current folder context" : "All documents"} · {sortedDocuments.length} documents
+                      </div>
+                    </div>
+
+                    <label className="space-y-1.5">
+                      <span className={notebookSectionTitleClass}>Move document</span>
                       <select
                         value={activeDocument.folderId ?? ""}
                         onChange={(event) => updateActiveDocumentFolder(event.target.value)}
@@ -1376,111 +1416,274 @@ export function NotebookView() {
                         ))}
                       </select>
                     </label>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleDocumentFavorite(activeDocument.id)}
-                        className={`${editorActionButtonClass} ${activeDocument.favorited ? "border-amber-300/30 bg-amber-400/12 text-amber-50 hover:bg-amber-400/22" : ""}`}
-                      >
-                        {activeDocument.favorited ? "Favorited" : "Favorite"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleCleanImages()}
-                        className="inline-flex h-9 items-center justify-center rounded-xl border border-white/8 bg-white/[0.02] px-3.5 text-sm text-slate-400 transition hover:border-white/15 hover:bg-white/[0.04] hover:text-slate-200"
-                      >
-                        Clean Images
-                      </button>
-                      <div ref={exportMenuRef} className="relative">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setStatus(null);
-                            setIsExportMenuOpen((current) => !current);
-                          }}
-                          className={editorActionButtonClass}
-                        >
-                          Export
-                        </button>
-                        {isExportMenuOpen ? (
-                          <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 flex w-36 flex-col gap-1 rounded-2xl border border-white/10 bg-slate-950/96 p-1.5 shadow-[0_18px_40px_rgba(2,6,23,0.45)] backdrop-blur">
+
+                    <label className="space-y-1.5">
+                      <span className={notebookSectionTitleClass}>Search</span>
+                      <input
+                        type="search"
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                        placeholder="Search library"
+                        className={editorFieldClass}
+                      />
+                    </label>
+
+                    <div className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-subtle">
+                      <section className="space-y-2">
+                        <div className={notebookSectionTitleClass}>Pinned</div>
+                        <div className={notebookRailListClass}>
+                          {favoritedDocuments.length > 0 ? (
+                            favoritedDocuments.map((document) => {
+                              const isActive = document.id === activeDocument.id;
+                              return (
+                                <button
+                                  key={document.id}
+                                  type="button"
+                                  onClick={() => {
+                                    void openDocument(document);
+                                  }}
+                                  className={`${notebookRailItemClass} ${isActive ? "notebook-editor-rail__item--active" : ""}`}
+                                >
+                                  <span className={`${notebookRailIconClass} border-amber-200/60 bg-amber-100 text-amber-700`}>★</span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className={notebookRailTitleClass}>
+                                      {document.title.trim() || "Untitled Document"}
+                                    </span>
+                                    <span className={notebookRailMetaClass}>{document.pages.length} pages</span>
+                                  </span>
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <div className={notebookRailMetaClass}>No favorites yet.</div>
+                          )}
+                        </div>
+                      </section>
+
+                      <section className="mt-4 space-y-2">
+                        <div className={notebookSectionTitleClass}>Recent</div>
+                        <div className={notebookRailListClass}>
+                          {recentDocuments.length > 0 ? (
+                            recentDocuments.map((document) => {
+                              const isActive = document.id === activeDocument.id;
+                              return (
+                                <button
+                                  key={document.id}
+                                  type="button"
+                                  onClick={() => {
+                                    void openDocument(document);
+                                  }}
+                                  className={`${notebookRailItemClass} ${isActive ? "notebook-editor-rail__item--active" : ""}`}
+                                >
+                                  <span className={`${notebookRailIconClass} border-slate-200/75 bg-white text-slate-500`}>◌</span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className={notebookRailTitleClass}>
+                                      {document.title.trim() || "Untitled Document"}
+                                    </span>
+                                    <span className={notebookRailMetaClass}>{document.pages.length} pages</span>
+                                  </span>
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <div className={notebookRailMetaClass}>No recent documents.</div>
+                          )}
+                        </div>
+                      </section>
+
+                      <section className="mt-4 space-y-2">
+                        <div className={notebookSectionTitleClass}>Folders</div>
+                        <div className={notebookRailListClass}>
+                          {railFolders.length > 0 ? (
+                            railFolders.map((folder) => (
+                              <button
+                                key={folder.id}
+                                type="button"
+                                onClick={() => {
+                                  setCurrentFolderId(folder.id);
+                                  setSearchQuery("");
+                                  setStatus(null);
+                                }}
+                                className={`${notebookRailItemClass} hover:border-white/10 hover:bg-white/[0.05]`}
+                              >
+                                <span className={`${notebookRailIconClass} border-amber-200/60 bg-amber-100 text-amber-700`}>▣</span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className={notebookRailTitleClass}>
+                                      {folder.name.trim() || "Untitled Folder"}
+                                    </span>
+                                    <span className={notebookRailMetaClass}>
+                                      {sortedDocuments.filter((document) => (document.folderId ?? null) === folder.id).length} docs
+                                    </span>
+                                  </span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className={notebookRailMetaClass}>
+                              {normalizedSearchQuery ? "No folders match this search." : "No folders yet."}
+                            </div>
+                          )}
+                        </div>
+                      </section>
+
+                      <section className="mt-4 space-y-2">
+                        <div className={notebookSectionTitleClass}>Documents</div>
+                        <div className={notebookRailListClass}>
+                          {railDocuments.length > 0 ? (
+                            railDocuments.map((document) => {
+                              const isActive = document.id === activeDocument.id;
+                              return (
+                                <button
+                                  key={document.id}
+                                  type="button"
+                                  onClick={() => {
+                                    void openDocument(document);
+                                  }}
+                                  className={`${notebookRailItemClass} ${isActive ? "notebook-editor-rail__item--active" : ""}`}
+                                >
+                                  <span className={`${notebookRailIconClass} border-slate-200/75 bg-white text-slate-500`}>✎</span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className={notebookRailTitleClass}>
+                                      {document.title.trim() || "Untitled Document"}
+                                    </span>
+                                    <span className={notebookRailMetaClass}>
+                                      {document.pages.length} pages
+                                      {document.favorited === true ? " · Favorited" : ""}
+                                    </span>
+                                  </span>
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <div className={notebookRailMetaClass}>
+                              {normalizedSearchQuery ? `No documents for "${searchQuery.trim()}".` : "No documents yet."}
+                            </div>
+                          )}
+                        </div>
+                      </section>
+                    </div>
+                  </aside>
+
+                  <div className="flex min-h-0 min-w-0 flex-col gap-2">
+                    <div className="grid min-w-0 gap-2 rounded-[28px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] p-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.35fr)_auto]">
+                      <label className="min-w-0">
+                        <span className="sr-only">Document title</span>
+                        <input
+                          type="text"
+                          value={activeDocument.title}
+                          onChange={(event) => updateActiveDocumentTitle(event.target.value)}
+                          placeholder="Untitled Document"
+                          className={`${editorTitleFieldClass} h-10`}
+                        />
+                      </label>
+
+                      {activePages.length > 0 ? (
+                        <div className="min-w-0">
+                          <div className={editorTabStripClass}>
+                            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-subtle">
+                              {activePages.map((page) => {
+                                const isActive = page.id === activePage?.id;
+                                return (
+                                  <button
+                                    key={page.id}
+                                    type="button"
+                                    onClick={() => setActivePageId(page.id)}
+                                    className={`${editorTabButtonClass} ${isActive ? "notebook-editor-tab--active" : "border-transparent bg-transparent text-slate-500 hover:border-white/10 hover:bg-white/60 hover:text-slate-700"}`}
+                                  >
+                                    {page.title.trim() || "Untitled Page"}
+                                  </button>
+                                );
+                              })}
+                            </div>
                             <button
                               type="button"
-                              onClick={() => {
-                                void exportActivePage("txt");
-                              }}
-                              className={compactMenuItemClass}
+                              onClick={() => addPageToDocument(activeDocument)}
+                              className={`${editorTabButtonClass} border-dashed border-sky-200/70 bg-white/60 px-3.5 text-slate-600 hover:border-sky-200/80 hover:bg-sky-50 hover:text-slate-700`}
                             >
-                              TXT
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                void exportActivePage("html");
-                              }}
-                              className={compactMenuItemClass}
-                            >
-                              HTML
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                void exportActivePage("markdown");
-                              }}
-                              className={compactMenuItemClass}
-                            >
-                              Markdown
+                              + Add Page
                             </button>
                           </div>
-                        ) : null}
-                      </div>
-                      <button type="button" onClick={() => void handleDeleteDocument(activeDocument)} className={editorDangerButtonClass}>
-                        Delete Document
-                      </button>
-                    </div>
-                    {saveIndicatorLabel ? (
-                      <div className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none ${saveIndicatorClass}`}>
-                        {saveIndicatorLabel}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {status ? <div className={`self-start ${compactStatusClass} ${statusClass}`}>{status.message}</div> : null}
-
-                  {activePages.length > 0 ? (
-                    <>
-                      <div className={editorTabStripClass}>
-                        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-subtle">
-                          {activePages.map((page) => {
-                            const isActive = page.id === activePage?.id;
-                            return (
-                              <button
-                                key={page.id}
-                                type="button"
-                                onClick={() => setActivePageId(page.id)}
-                                className={`${editorTabButtonClass} ${
-                                  isActive
-                                    ? "border-cyan-300/25 bg-cyan-400/12 text-cyan-50 shadow-[0_1px_0_rgba(255,255,255,0.04)]"
-                                    : "border-transparent bg-transparent text-slate-400 hover:border-white/10 hover:bg-white/[0.05] hover:text-slate-200"
-                                }`}
-                              >
-                                {page.title.trim() || "Untitled Page"}
-                              </button>
-                            );
-                          })}
                         </div>
+                      ) : (
+                        <div className="notebook-editor-empty-copy min-w-0 self-center">This document has no pages yet.</div>
+                      )}
+
+                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                         <button
                           type="button"
-                          onClick={() => addPageToDocument(activeDocument)}
-                          className={`${editorTabButtonClass} border-dashed border-white/12 bg-transparent px-3.5 text-slate-300 hover:border-white/18 hover:bg-white/[0.04] hover:text-slate-100`}
+                          onClick={() => handleToggleDocumentFavorite(activeDocument.id)}
+                          className={`${editorActionButtonClass} ${activeDocument.favorited ? "border-amber-200/70 bg-amber-50 text-amber-700" : "border-[color:var(--panel-border)] bg-white/70 text-slate-600"}`}
                         >
-                          Add Page
+                          {activeDocument.favorited ? "Favorited" : "Favorite"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleCleanImages()}
+                          className={`${editorActionButtonClass} border-[color:var(--panel-border)] bg-white/70 text-slate-600`}
+                        >
+                          Clean Images
+                        </button>
+                        <div ref={exportMenuRef} className="relative">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStatus(null);
+                              setIsExportMenuOpen((current) => !current);
+                            }}
+                            className={`${editorActionButtonClass} border-[color:var(--panel-border)] bg-white/70 text-slate-600`}
+                          >
+                            Export
+                          </button>
+                          {isExportMenuOpen ? (
+                            <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 flex w-36 flex-col gap-1 rounded-2xl border border-white/10 bg-white/96 p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] backdrop-blur">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void exportActivePage("txt");
+                                }}
+                                className={compactMenuItemClass}
+                              >
+                                TXT
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void exportActivePage("html");
+                                }}
+                                className={compactMenuItemClass}
+                              >
+                                HTML
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void exportActivePage("markdown");
+                                }}
+                                className={compactMenuItemClass}
+                              >
+                                Markdown
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                        <button type="button" onClick={() => void handleDeleteDocument(activeDocument)} className={editorDangerButtonClass}>
+                          Delete Document
                         </button>
                       </div>
+                    </div>
 
-                      {activePage ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {saveIndicatorLabel ? (
+                        <div className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none ${saveIndicatorClass}`}>
+                          {saveIndicatorLabel}
+                        </div>
+                      ) : null}
+                      {status ? <div className={`inline-flex shrink-0 items-center ${compactStatusClass} ${statusClass}`}>{status.message}</div> : null}
+                    </div>
+
+                    {activePages.length > 0 ? (
+                      activePage ? (
                         <div className="flex min-h-0 flex-1 flex-col gap-2">
-                          <div className="flex min-w-0 flex-wrap items-center gap-2 md:flex-nowrap">
+                          <div className="flex min-w-0 items-center gap-2">
                             <label className="min-w-0 flex-1">
                               <span className="sr-only">Page title</span>
                               <input
@@ -1494,13 +1697,13 @@ export function NotebookView() {
                                   }))
                                 }
                                 placeholder="Page title"
-                                className={editorTitleFieldClass}
+                                className={editorFieldClass}
                               />
                             </label>
                             <button
                               type="button"
                               onClick={() => void deleteActivePage()}
-                              className="ml-auto inline-flex h-8 shrink-0 items-center justify-center rounded-full border border-transparent bg-transparent px-2 text-xs font-medium text-rose-300 transition hover:border-rose-300/15 hover:bg-rose-400/8 hover:text-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300/20 focus-visible:ring-offset-0"
+                              className="inline-flex h-8 shrink-0 items-center justify-center rounded-full border border-rose-200/60 bg-white/70 px-3 text-xs font-medium text-rose-600 transition hover:border-rose-300/70 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300/20 focus-visible:ring-offset-0"
                             >
                               Delete Page
                             </button>
@@ -1518,28 +1721,28 @@ export function NotebookView() {
                               }
                               editorKey={activePage.id}
                               placeholder="Write inside this document. Each page stays nested under the current document."
-                              className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle"
+                              className={notebookEditorShellClass}
                             />
                           </div>
                         </div>
-                      ) : null}
-                    </>
-                  ) : (
-                    <div className="flex flex-1 flex-col items-start justify-center rounded-[28px] border border-dashed border-white/10 bg-slate-950/20 p-6">
-                      <p className="text-base font-medium text-slate-100">This document has no pages.</p>
-                      <p className="mt-2 max-w-md text-sm text-slate-300">Existing data stays untouched until you explicitly create a new page.</p>
-                      <button
-                        type="button"
-                        onClick={() => addPageToDocument(activeDocument)}
-                        className="mt-4 inline-flex h-10 items-center rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/20"
-                      >
-                        Create First Page
-                      </button>
-                    </div>
-                  )}
+                      ) : null
+                    ) : (
+                      <div className="flex flex-1 flex-col items-start justify-center rounded-[28px] border border-dashed border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] p-6">
+                        <p className="notebook-editor-empty-title">This document has no pages.</p>
+                        <p className="notebook-editor-empty-copy mt-2 max-w-md">Existing data stays untouched until you explicitly create a new page.</p>
+                        <button
+                          type="button"
+                          onClick={() => addPageToDocument(activeDocument)}
+                          className="mt-4 inline-flex h-10 items-center rounded-xl border border-sky-200/70 bg-sky-50 px-4 text-sm font-medium text-sky-700 transition hover:border-sky-200/90 hover:bg-sky-100"
+                        >
+                          Create First Page
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
-                <div className="flex flex-1 items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-slate-950/20 text-sm text-slate-300">
+                <div className="notebook-editor-empty-state flex flex-1 items-center justify-center rounded-[28px] border border-dashed border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] text-sm">
                   This document is no longer available.
                 </div>
               )}
