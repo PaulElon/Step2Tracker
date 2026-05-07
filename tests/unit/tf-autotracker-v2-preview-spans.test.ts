@@ -65,6 +65,40 @@ test("Chrome UWorld URL event produces one open website span", () => {
   assert.deepEqual(span.sourceEventIds, ["ev-1"]);
 });
 
+test("Chrome UWorld URL event matches the UWorld website rule", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "untrackedFocused",
+      timestampMs: 1000,
+      appName: "Google Chrome",
+      bundleId: "com.google.Chrome",
+      browserTitle: "UWorld Step 2 CK",
+      browserUrl: "https://apps.uworld.com/courseapp/step2",
+    }),
+  ];
+  const spans = buildAutoTrackerV2PreviewSpans(events, {
+    autoApps: [],
+    autoWebsites: [
+      {
+        id: "rule-uworld",
+        name: "UWorld",
+        target: "https://apps.uworld.com",
+        kind: "website",
+      },
+    ],
+    distractionApps: [],
+    distractionWebsites: [],
+  });
+  assert.equal(spans.length, 1);
+  const span = spans[0];
+  assert.equal(span.kind, "website");
+  assert.equal(span.label, "apps.uworld.com");
+  assert.equal(span.classification, "tracked");
+  assert.equal(span.matchedRuleName, "UWorld");
+  assert.equal(span.matchedRuleTarget, "https://apps.uworld.com");
+});
+
 test("Chrome UWorld then AMBOSS closes first span and opens second", () => {
   const events = [
     makeEvent({

@@ -1159,19 +1159,44 @@ struct BrowserTabInfo {
     error: Option<String>,
 }
 
+fn resolve_browser_tab_target(
+    bundle_id: Option<&str>,
+    app_name: Option<&str>,
+) -> Option<(&'static str, bool)> {
+    let normalized_app_name = app_name.map(|value| value.trim().to_lowercase());
+
+    let resolve_from_bundle_id = |bundle_id: &str| match bundle_id {
+        "com.google.Chrome" => Some(("Google Chrome", false)),
+        "com.apple.Safari" => Some(("Safari", true)),
+        "com.microsoft.edgemac" => Some(("Microsoft Edge", false)),
+        "com.brave.Browser" => Some(("Brave Browser", false)),
+        "com.operasoftware.Opera" => Some(("Opera", false)),
+        "com.vivaldi.Vivaldi" => Some(("Vivaldi", false)),
+        _ => None,
+    };
+
+    if let Some(bundle_id) = bundle_id {
+        if let Some(target) = resolve_from_bundle_id(bundle_id) {
+            return Some(target);
+        }
+    }
+
+    let normalized_app_name = normalized_app_name.as_deref().unwrap_or_default();
+    match normalized_app_name {
+        "google chrome" => Some(("Google Chrome", false)),
+        "safari" => Some(("Safari", true)),
+        "microsoft edge" => Some(("Microsoft Edge", false)),
+        "brave browser" | "brave" => Some(("Brave Browser", false)),
+        "opera" => Some(("Opera", false)),
+        "vivaldi" => Some(("Vivaldi", false)),
+        _ => None,
+    }
+}
+
 /// Returns Some(BrowserTabInfo) when bundle_id is a known browser, None otherwise.
 #[cfg(target_os = "macos")]
-fn try_read_browser_tab(bundle_id: &str) -> Option<BrowserTabInfo> {
-    // (bundle_id, applescript_app_name, is_safari)
-    let (app_name, is_safari): (&str, bool) = match bundle_id {
-        "com.google.Chrome" => ("Google Chrome", false),
-        "com.apple.Safari" => ("Safari", true),
-        "com.microsoft.edgemac" => ("Microsoft Edge", false),
-        "com.brave.Browser" => ("Brave Browser", false),
-        "com.operasoftware.Opera" => ("Opera", false),
-        "com.vivaldi.Vivaldi" => ("Vivaldi", false),
-        _ => return None,
-    };
+fn try_read_browser_tab(bundle_id: Option<&str>, app_name: Option<&str>) -> Option<BrowserTabInfo> {
+    let (app_name, is_safari) = resolve_browser_tab_target(bundle_id, app_name)?;
 
     let (title_key, tab_ref) = if is_safari {
         ("name", "current tab")
@@ -1221,7 +1246,10 @@ fn try_read_browser_tab(bundle_id: &str) -> Option<BrowserTabInfo> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn try_read_browser_tab(_bundle_id: &str) -> Option<BrowserTabInfo> {
+fn try_read_browser_tab(
+    _bundle_id: Option<&str>,
+    _app_name: Option<&str>,
+) -> Option<BrowserTabInfo> {
     None
 }
 
@@ -1250,13 +1278,11 @@ fn capture_once_internal() -> NativeCaptureOutcome {
             event.bundle_id = bundle_id.clone();
 
             // Enrich foreground event with active browser tab context.
-            if let Some(bid) = &bundle_id {
-                if let Some(tab) = try_read_browser_tab(bid) {
-                    event.browser_title = tab.title;
-                    event.browser_url = tab.url.clone();
-                    event.browser_tab_error = tab.error;
-                    next_browser_url = tab.url;
-                }
+            if let Some(tab) = try_read_browser_tab(bundle_id.as_deref(), app_name.as_deref()) {
+                event.browser_title = tab.title;
+                event.browser_url = tab.url.clone();
+                event.browser_tab_error = tab.error;
+                next_browser_url = tab.url;
             }
 
             next_bundle_id = bundle_id;
@@ -1720,6 +1746,22 @@ mod tests {
             Some("Safari"),
             Some(1000),
         ));
+    }
+
+    #[test]
+    fn resolve_browser_tab_target_falls_back_to_known_app_name() {
+        assert_eq!(
+            resolve_browser_tab_target(None, Some("Google Chrome")),
+            Some(("Google Chrome", false))
+        );
+        assert_eq!(
+            resolve_browser_tab_target(None, Some("Safari")),
+            Some(("Safari", true))
+        );
+        assert_eq!(
+            resolve_browser_tab_target(Some("com.google.Chrome"), None),
+            Some(("Google Chrome", false))
+        );
     }
 
     #[test]
