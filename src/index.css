@@ -904,24 +904,50 @@ button {
 .notebook-editor-shell {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
-  border-radius: 1.75rem;
-  box-shadow: 0 14px 36px var(--panel-shadow);
+  border-radius: 1.5rem;
+  box-shadow: 0 10px 24px var(--panel-shadow);
   color: #241d2a;
 }
 
 .notebook-editor-rail {
   background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
   border-color: var(--panel-border);
   box-shadow: 0 10px 24px var(--panel-shadow);
   color: inherit;
 }
 
-.notebook-editor-rail__item {
+.notebook-editor-rail--collapsed {
+  align-items: center;
+}
+
+.notebook-editor-rail--expanded {
   color: inherit;
 }
 
+.notebook-editor-rail__icon-button {
+  background: var(--surface-muted);
+  border-color: var(--panel-border);
+  color: inherit;
+  box-shadow: none;
+}
+
+.notebook-editor-rail__icon-button:hover {
+  background: var(--field-bg);
+}
+
+.notebook-editor-rail__icon-button--active {
+  background: var(--selection);
+}
+
+.notebook-editor-rail__item {
+  color: inherit;
+  background: transparent;
+  border-color: transparent;
+}
+
 .notebook-editor-rail__item:hover {
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.45);
   border-color: var(--panel-border);
 }
 
@@ -937,9 +963,21 @@ button {
   border-color: rgba(255, 255, 255, 0.08);
 }
 
+:root[data-theme="light"] .notebook-editor-rail--collapsed,
+:root[data-theme="maggiepink"] .notebook-editor-rail--collapsed,
+:root[data-theme="light"] .notebook-editor-rail--expanded,
+:root[data-theme="maggiepink"] .notebook-editor-rail--expanded {
+  color: #241d2a;
+}
+
 :root[data-theme="dark"] .notebook-editor-rail__item:hover,
 :root[data-theme="paulblue"] .notebook-editor-rail__item:hover {
   background: rgba(255, 255, 255, 0.05);
+}
+
+:root[data-theme="dark"] .notebook-editor-rail__icon-button,
+:root[data-theme="paulblue"] .notebook-editor-rail__icon-button {
+  color: rgba(226, 232, 240, 0.92);
 }
 
 .notebook-editor-rail__icon {
@@ -1063,18 +1101,18 @@ button {
   position: sticky;
   top: 0;
   z-index: 30;
-  padding: 0.38rem 0.45rem;
-  gap: 0.18rem;
+  padding: 0.32rem 0.4rem;
+  gap: 0.14rem;
   background: var(--panel-bg);
   border-bottom-color: var(--panel-border);
   backdrop-filter: blur(14px);
 }
 
 .notebook-editor-shell .tiptap-editor__button {
-  height: 1.85rem;
-  min-width: 1.85rem;
-  padding: 0 0.55rem;
-  border-radius: 0.55rem;
+  height: 1.75rem;
+  min-width: 1.75rem;
+  padding: 0 0.5rem;
+  border-radius: 0.5rem;
   background: var(--surface-muted);
   border-color: var(--panel-border);
   color: inherit;
@@ -1105,7 +1143,7 @@ button {
 .notebook-editor-shell .ProseMirror {
   width: 100%;
   max-width: none;
-  padding: 1rem 1.2rem 1.5rem;
+  padding: 0.9rem 1rem 1.2rem;
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -1497,14 +1535,14 @@ button {
 
 .tiptap-editor .ProseMirror ul[data-type="taskList"] {
   list-style: none;
-  padding-left: 1.5em;
+  padding-left: 1.45em;
+  margin: 0.25em 0;
 }
 
 .tiptap-editor .ProseMirror li[data-type="taskItem"] {
-  display: grid;
-  grid-template-columns: 1.1rem minmax(0, 1fr);
+  display: flex;
+  align-items: flex-start;
   gap: 0.55rem;
-  align-items: start;
   list-style: none;
   min-width: 0;
 }
@@ -1516,6 +1554,7 @@ button {
   margin-top: 0.08rem;
   width: 1.1rem;
   min-width: 1.1rem;
+  flex: 0 0 1.1rem;
 }
 
 .tiptap-editor .ProseMirror li[data-type="taskItem"] > label input[type="checkbox"] {
@@ -1533,6 +1572,15 @@ button {
 
 .tiptap-editor .ProseMirror li[data-type="taskItem"] > div {
   min-width: 0;
+  flex: 1 1 auto;
+}
+
+.tiptap-editor .ProseMirror li[data-type="taskItem"] > div > p {
+  margin: 0;
+}
+
+.tiptap-editor .ProseMirror li[data-type="taskItem"] > div > p + p {
+  margin-top: 0.45rem;
 }
 
 .tiptap-editor .ProseMirror table {
