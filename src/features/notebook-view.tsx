@@ -1960,7 +1960,7 @@ export function NotebookView() {
                               …
                             </button>
                             {isEditorOverflowMenuOpen ? (
-                              <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 flex w-40 flex-col gap-1 rounded-2xl border border-white/10 bg-white/96 p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] backdrop-blur">
+                              <div className="absolute bottom-[calc(100%+0.5rem)] right-0 z-50 flex w-40 origin-bottom-right flex-col gap-1 rounded-2xl border border-white/10 bg-white/96 p-1.5 shadow-[0_-18px_40px_rgba(15,23,42,0.12)] backdrop-blur">
                                 <button
                                   type="button"
                                   onClick={() => {
