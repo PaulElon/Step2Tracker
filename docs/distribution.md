@@ -57,7 +57,7 @@ VITE_FF_TIMEFOLIO=true VITE_FF_AUTOTRACKER_V2_USER_MODE=true npm run verify:rele
 For a quick release-style smoke check, run:
 
 ```bash
-VITE_FF_TIMEFOLIO=true VITE_FF_AUTOTRACKER_V2_USER_MODE=true npm run smoke:release
+npm run smoke:release
 ```
 
 ## Current Product Notes

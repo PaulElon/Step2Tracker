@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "verify:release-env": "node scripts/verify-release-env.mjs",
-    "smoke:release": "npm run verify:release-env && npm run build",
+    "smoke:release": "node scripts/smoke-release.mjs",
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "preview": "vite preview",
