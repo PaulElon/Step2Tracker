@@ -1348,6 +1348,12 @@ button {
   box-shadow: 0 12px 28px rgba(2, 6, 23, 0.22);
 }
 
+.tiptap-editor--pageless .ProseMirror mark,
+.tiptap-editor--page.tiptap-editor--pc-theme .ProseMirror mark,
+.tiptap-editor--page.tiptap-editor--pc-black .ProseMirror mark {
+  color: #1e293b !important;
+}
+
 /* Same styling for read-only render of the rich text */
 .rich-text-render ul {
   list-style-type: disc;

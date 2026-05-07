@@ -903,6 +903,7 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
       : notebookPages.length > 0
         ? migrateNotebookPagesToDocuments(notebookPages)
         : [];
+  const notebookPagesForState = notebookDocuments.length > 0 ? [] : notebookPages;
   const notebookFolders = Array.isArray(value?.notebookFolders)
     ? normalizeNotebookFolders(value.notebookFolders)
     : [];
@@ -967,7 +968,7 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
       : [],
     notesHtml,
     notebookFolders,
-    notebookPages,
+    notebookPages: notebookPagesForState,
     notebookDocuments,
     scoreTrendOptions: {
       showConnectionLine: !!value?.scoreTrendOptions?.showConnectionLine,
@@ -1227,17 +1228,19 @@ export async function loadPersistedStateFromDatabase() {
 }
 
 export async function persistState(state: AppState) {
-  snapshotState(state);
-  await writeDatabaseRecord(state);
+  const normalizedState = normalizeAppState(state);
+  snapshotState(normalizedState);
+  await writeDatabaseRecord(normalizedState);
 }
 
 export function exportBackupPayload(state: AppState) {
+  const normalizedState = normalizeAppState(state);
   return JSON.stringify(
     {
       app: "step2-command-center",
       version: APP_STATE_VERSION,
       exportedAt: nowIso(),
-      state,
+      state: normalizedState,
     } satisfies BackupPayload,
     null,
     2,

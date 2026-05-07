@@ -25,6 +25,31 @@ type MenuId = "style" | "textColor" | "highlight" | "align" | "list" | "table" |
 type OpenMenu = MenuId | null;
 type ListItemType = "listItem" | "taskItem";
 
+export function getHighlightHtmlAttributes(attributes: Record<string, unknown>) {
+  const bg = typeof attributes.color === "string" && attributes.color ? attributes.color : null;
+  if (!bg) {
+    return {};
+  }
+
+  return {
+    "data-color": bg,
+    style: `background-color: ${bg}; color: #1e293b`,
+  };
+}
+
+const HighlightWithContrast = Highlight.extend({
+  addAttributes() {
+    return {
+      color: {
+        default: null,
+        parseHTML: (element: HTMLElement) =>
+          element.getAttribute("data-color") || element.style.backgroundColor || null,
+        renderHTML: getHighlightHtmlAttributes,
+      },
+    };
+  },
+});
+
 const TEXT_COLORS: ReadonlyArray<{ label: string; color: string | null }> = [
   { label: "Default", color: null },
   { label: "White", color: "#ffffff" },
@@ -412,7 +437,7 @@ export function TiptapEditor({
       FontSizeExtension,
       TextStyle,
       Color.configure({ types: ["textStyle"] }),
-      Highlight.configure({ multicolor: true }),
+      HighlightWithContrast.configure({ multicolor: true }),
       Table.configure({ resizable: true, allowTableNodeSelection: true }),
       TableRow,
       TableHeader,
