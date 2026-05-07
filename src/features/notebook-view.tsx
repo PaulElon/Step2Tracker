@@ -1210,12 +1210,12 @@ export function NotebookView() {
   const libraryEmptyStateClass =
     "max-w-[20rem] rounded-[20px] border border-dashed border-white/10 bg-slate-950/18 px-5 py-6 text-left";
   const editorFieldClass =
-    "notebook-editor-input h-9 w-full rounded-[18px] border px-3.5 text-sm outline-none transition placeholder:text-slate-400 focus:ring-2 focus:ring-sky-300/20";
-  const editorTitleFieldClass = `${editorFieldClass} min-w-0 font-semibold tracking-[-0.02em]`;
+    "notebook-editor-input h-8 w-full rounded-[14px] border px-3 text-sm outline-none transition placeholder:text-slate-400 focus:ring-2 focus:ring-sky-300/20";
+  const editorTitleFieldClass = `${editorFieldClass} notebook-editor-input--title min-w-0 font-semibold tracking-[-0.03em]`;
   const editorActionButtonClass =
-    "notebook-editor-action-button inline-flex h-9 items-center justify-center rounded-[18px] border px-3.5 text-sm font-medium transition";
+    "notebook-editor-action-button inline-flex h-8 items-center justify-center rounded-[14px] border px-3 text-sm font-medium transition";
   const editorDangerButtonClass =
-    "notebook-editor-action-button notebook-editor-action-button--danger inline-flex h-9 items-center justify-center rounded-[18px] border px-3.5 text-sm font-medium transition";
+    "notebook-editor-action-button notebook-editor-action-button--danger inline-flex h-8 items-center justify-center rounded-[14px] border px-3 text-sm font-medium transition";
   const modalActionButtonClass =
     "inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:ring-offset-0";
   const modalPrimaryActionButtonClass =
@@ -1227,26 +1227,26 @@ export function NotebookView() {
   const compactMenuDangerItemClass =
     "flex min-h-8 w-full items-center rounded-lg px-2.5 py-1.5 text-left text-sm font-medium leading-5 text-rose-100 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:ring-offset-0";
   const editorTabStripClass =
-    "flex min-w-0 items-center gap-1 overflow-x-auto rounded-[18px] border border-[color:var(--panel-border)] bg-[color:var(--surface-muted)] p-1 scrollbar-subtle";
+    "flex min-w-0 items-center gap-1 overflow-x-auto rounded-[18px] border border-[color:var(--panel-border)] bg-[color:var(--surface-muted)] p-0.5 scrollbar-subtle";
   const editorTabButtonClass =
     "inline-flex h-8 max-w-[14rem] shrink-0 items-center overflow-hidden rounded-[14px] border px-3 text-sm font-medium transition whitespace-nowrap text-ellipsis";
   const notebookEditorShellClass = "notebook-editor-shell min-h-0 flex-1 overflow-hidden";
   const notebookWorkspaceClass = isNotebookRailExpanded
-    ? "grid min-h-0 min-w-0 flex-1 gap-2 grid-cols-[56px_248px_minmax(0,1fr)]"
-    : "grid min-h-0 min-w-0 flex-1 gap-2 grid-cols-[56px_minmax(0,1fr)]";
+    ? "grid min-h-0 min-w-0 flex-1 gap-2 grid-cols-[52px_232px_minmax(0,1fr)]"
+    : "grid min-h-0 min-w-0 flex-1 gap-2 grid-cols-[52px_minmax(0,1fr)]";
   const notebookCollapsedRailClass =
-    "notebook-editor-rail notebook-editor-rail--collapsed flex min-h-0 flex-col items-stretch gap-1.5 overflow-hidden rounded-[22px] border p-1.5";
+    "notebook-editor-rail notebook-editor-rail--collapsed flex min-h-0 flex-col items-stretch gap-1 overflow-hidden rounded-[20px] border p-1";
   const notebookCollapsedRailButtonClass =
-    "notebook-editor-rail__icon-button inline-flex h-9 w-9 items-center justify-center rounded-[14px] border text-slate-600 transition";
+    "notebook-editor-rail__icon-button inline-flex h-8 w-8 items-center justify-center rounded-[13px] border text-slate-600 transition";
   const notebookExpandedRailClass =
-    "notebook-editor-rail notebook-editor-rail--expanded flex min-h-0 flex-col gap-2 overflow-hidden rounded-[22px] border p-2.5";
-  const notebookExpandedRailSectionClass = "space-y-1.5";
-  const notebookExpandedRailScrollClass = "flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1 scrollbar-subtle";
+    "notebook-editor-rail notebook-editor-rail--expanded flex min-h-0 flex-col gap-1.5 overflow-hidden rounded-[20px] border p-2";
+  const notebookExpandedRailSectionClass = "space-y-1";
+  const notebookExpandedRailScrollClass = "flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto pr-1 scrollbar-subtle";
   const notebookRailListClass = "space-y-1";
   const notebookRailItemClass =
-    "notebook-editor-rail__item group flex w-full items-start gap-2 rounded-[15px] border border-transparent px-2.5 py-2 text-left transition";
+    "notebook-editor-rail__item group flex w-full items-start gap-1.5 rounded-[14px] border border-transparent px-2 py-1.5 text-left transition";
   const notebookRailIconClass =
-    "notebook-editor-rail__icon flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border text-[11px] font-semibold";
+    "notebook-editor-rail__icon flex h-7 w-7 shrink-0 items-center justify-center rounded-[11px] border text-[11px] font-semibold";
   const notebookSectionTitleClass = "notebook-editor-section-title";
   const notebookSectionValueClass = "notebook-editor-section-value";
   const notebookRailTitleClass = "notebook-editor-rail__title";
@@ -1262,7 +1262,7 @@ export function NotebookView() {
   return (
     <>
       <div className="flex h-full flex-col gap-2 overflow-hidden px-3 pb-3 pt-1.5">
-        <section className="glass-panel flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden p-3.5">
+        <section className="glass-panel flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3">
           {isLibraryMode ? (
             <div className="mx-auto flex min-h-0 w-full max-w-[1480px] flex-1 flex-col gap-2.5">
               <div className="flex items-center justify-between gap-3">
@@ -1781,7 +1781,7 @@ export function NotebookView() {
 
                   <div className="flex min-h-0 min-w-0 flex-col gap-2">
                     <div className="rounded-[22px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] p-3 shadow-[0_8px_24px_var(--panel-shadow)]">
-                      <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center justify-between gap-1.5">
                         <label className="min-w-0 flex-1 basis-[18rem]">
                           <span className="sr-only">Document title</span>
                           <input
@@ -1789,11 +1789,11 @@ export function NotebookView() {
                             value={activeDocument.title}
                             onChange={(event) => updateActiveDocumentTitle(event.target.value)}
                             placeholder="Untitled Document"
-                            className={`${editorTitleFieldClass} h-9`}
+                            className={editorTitleFieldClass}
                           />
                         </label>
 
-                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                           <button
                             type="button"
                             onClick={() => handleToggleDocumentFavorite(activeDocument.id)}
@@ -1857,7 +1857,7 @@ export function NotebookView() {
                         </div>
                       </div>
 
-                      <div className="mt-3 flex min-w-0 items-center gap-2">
+                      <div className="mt-2.5 flex min-w-0 items-center gap-2">
                         {activePages.length > 0 ? (
                           <div className="min-w-0 flex-1">
                             <div className={editorTabStripClass}>
@@ -1904,12 +1904,12 @@ export function NotebookView() {
                     {activePages.length > 0 ? (
                       activePage ? (
                         <div className="flex min-h-0 flex-1 flex-col gap-2">
-                          <div className="flex min-w-0 items-center gap-2 rounded-[20px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] p-2.5">
-                            <label className="min-w-0 flex-1">
-                              <span className="sr-only">Page title</span>
-                              <input
-                                type="text"
-                                value={activePage.title}
+                        <div className="flex min-w-0 items-center gap-2 rounded-[18px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] p-2">
+                          <label className="min-w-0 flex-1">
+                            <span className="sr-only">Page title</span>
+                            <input
+                              type="text"
+                              value={activePage.title}
                                 onChange={(event) =>
                                   updateActivePage((page) => ({
                                     ...page,
@@ -1918,9 +1918,9 @@ export function NotebookView() {
                                   }))
                                 }
                                 placeholder="Page title"
-                                className={`${editorFieldClass} h-8`}
-                              />
-                            </label>
+                              className={editorFieldClass}
+                            />
+                          </label>
                             <button
                               type="button"
                               onClick={() => void deleteActivePage()}
