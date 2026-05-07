@@ -43,7 +43,7 @@ type TileActionMenuState =
 
 type NotebookRailSection = "pinned" | "recent" | "folders" | "documents" | null;
 
-type NotebookOverflowMenuPosition = {
+type NotebookFloatingMenuPosition = {
   top: number;
   left: number;
   placeBelow: boolean;
@@ -141,23 +141,39 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+const NOTEBOOK_FLOATING_MENU_GAP = 8;
+const NOTEBOOK_FLOATING_MENU_VIEWPORT_MARGIN = 8;
+const NOTEBOOK_EXPORT_MENU_WIDTH = 144;
+const NOTEBOOK_EXPORT_MENU_ESTIMATED_HEIGHT = 112;
 const NOTEBOOK_OVERFLOW_MENU_WIDTH = 160;
 const NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT = 96;
-const NOTEBOOK_OVERFLOW_MENU_GAP = 8;
-const NOTEBOOK_OVERFLOW_MENU_VIEWPORT_MARGIN = 8;
 
-function getNotebookOverflowMenuPosition(button: HTMLButtonElement): NotebookOverflowMenuPosition {
+function getNotebookFloatingMenuPosition(
+  button: HTMLButtonElement,
+  menuWidth: number,
+  menuHeight: number,
+): NotebookFloatingMenuPosition {
   const rect = button.getBoundingClientRect();
-  const placeBelow = rect.bottom + NOTEBOOK_OVERFLOW_MENU_GAP + NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT <= window.innerHeight - NOTEBOOK_OVERFLOW_MENU_VIEWPORT_MARGIN;
+  const availableBelow = window.innerHeight - rect.bottom - NOTEBOOK_FLOATING_MENU_VIEWPORT_MARGIN;
+  const availableAbove = rect.top - NOTEBOOK_FLOATING_MENU_VIEWPORT_MARGIN;
+  const placeBelow = availableBelow >= menuHeight || availableBelow >= availableAbove;
+  const maxTop = Math.max(
+    NOTEBOOK_FLOATING_MENU_VIEWPORT_MARGIN,
+    window.innerHeight - menuHeight - NOTEBOOK_FLOATING_MENU_VIEWPORT_MARGIN,
+  );
   const top = placeBelow
-    ? rect.bottom + NOTEBOOK_OVERFLOW_MENU_GAP
+    ? Math.min(rect.bottom + NOTEBOOK_FLOATING_MENU_GAP, maxTop)
     : Math.max(
-        NOTEBOOK_OVERFLOW_MENU_VIEWPORT_MARGIN,
-        rect.top - NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT - NOTEBOOK_OVERFLOW_MENU_GAP,
+        NOTEBOOK_FLOATING_MENU_VIEWPORT_MARGIN,
+        Math.min(rect.top - menuHeight - NOTEBOOK_FLOATING_MENU_GAP, maxTop),
       );
+  const maxLeft = Math.max(
+    NOTEBOOK_FLOATING_MENU_VIEWPORT_MARGIN,
+    window.innerWidth - menuWidth - NOTEBOOK_FLOATING_MENU_VIEWPORT_MARGIN,
+  );
   const left = Math.min(
-    Math.max(rect.right - NOTEBOOK_OVERFLOW_MENU_WIDTH, NOTEBOOK_OVERFLOW_MENU_VIEWPORT_MARGIN),
-    window.innerWidth - NOTEBOOK_OVERFLOW_MENU_WIDTH - NOTEBOOK_OVERFLOW_MENU_VIEWPORT_MARGIN,
+    Math.max(rect.right - menuWidth, NOTEBOOK_FLOATING_MENU_VIEWPORT_MARGIN),
+    maxLeft,
   );
 
   return { top, left, placeBelow };
@@ -323,13 +339,15 @@ export function NotebookView() {
   const [status, setStatus] = useState<ActionStatus>(null);
   const [saveStatus, setSaveStatus] = useState<NotebookSaveStatus>("idle");
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [exportMenuPosition, setExportMenuPosition] = useState<NotebookFloatingMenuPosition | null>(null);
   const [isEditorOverflowMenuOpen, setIsEditorOverflowMenuOpen] = useState(false);
-  const [editorOverflowMenuPosition, setEditorOverflowMenuPosition] = useState<NotebookOverflowMenuPosition | null>(null);
+  const [editorOverflowMenuPosition, setEditorOverflowMenuPosition] = useState<NotebookFloatingMenuPosition | null>(null);
   const [tileActionMenu, setTileActionMenu] = useState<TileActionMenuState | null>(null);
   const [promptState, setPromptState] = useState<PromptState | null>(null);
   const [isNotebookRailExpanded, setIsNotebookRailExpanded] = useState(false);
   const [notebookRailTargetSection, setNotebookRailTargetSection] = useState<NotebookRailSection>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const exportButtonRef = useRef<HTMLButtonElement>(null);
   const tileActionMenuRef = useRef<HTMLDivElement>(null);
   const promptInputRef = useRef<HTMLInputElement>(null);
   const pageTitleInputRef = useRef<HTMLInputElement>(null);
@@ -578,7 +596,7 @@ export function NotebookView() {
       if (activePageId !== null) {
         setActivePageId(null);
       }
-      setIsExportMenuOpen(false);
+      closeExportMenu();
       return;
     }
 
@@ -596,8 +614,11 @@ export function NotebookView() {
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
-      if (!exportMenuRef.current?.contains(event.target as Node)) {
-        setIsExportMenuOpen(false);
+      if (
+        !exportButtonRef.current?.contains(event.target as Node) &&
+        !exportMenuRef.current?.contains(event.target as Node)
+      ) {
+        closeExportMenu();
       }
       if (
         !editorOverflowButtonRef.current?.contains(event.target as Node) &&
@@ -612,7 +633,7 @@ export function NotebookView() {
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setIsExportMenuOpen(false);
+        closeExportMenu();
         closeEditorOverflowMenu();
         setTileActionMenu(null);
         if (editingPageId) {
@@ -622,26 +643,34 @@ export function NotebookView() {
       }
     }
 
-    function updateOverflowPosition() {
-      if (!editorOverflowButtonRef.current) {
-        return;
+    function updateFloatingMenuPositions() {
+      if (isExportMenuOpen && exportButtonRef.current) {
+        setExportMenuPosition(
+          getNotebookFloatingMenuPosition(exportButtonRef.current, NOTEBOOK_EXPORT_MENU_WIDTH, NOTEBOOK_EXPORT_MENU_ESTIMATED_HEIGHT),
+        );
       }
-      setEditorOverflowMenuPosition(getNotebookOverflowMenuPosition(editorOverflowButtonRef.current));
+      if (isEditorOverflowMenuOpen && editorOverflowButtonRef.current) {
+        setEditorOverflowMenuPosition(
+          getNotebookFloatingMenuPosition(
+            editorOverflowButtonRef.current,
+            NOTEBOOK_OVERFLOW_MENU_WIDTH,
+            NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT,
+          ),
+        );
+      }
     }
 
     if (isExportMenuOpen || isEditorOverflowMenuOpen || tileActionMenu) {
       window.addEventListener("mousedown", handleOutsideClick);
       window.addEventListener("keydown", handleEscape);
-      if (isEditorOverflowMenuOpen) {
-        window.addEventListener("resize", updateOverflowPosition);
-        window.addEventListener("scroll", updateOverflowPosition, true);
-      }
-      updateOverflowPosition();
+      window.addEventListener("resize", updateFloatingMenuPositions);
+      window.addEventListener("scroll", updateFloatingMenuPositions, true);
+      updateFloatingMenuPositions();
       return () => {
         window.removeEventListener("mousedown", handleOutsideClick);
         window.removeEventListener("keydown", handleEscape);
-        window.removeEventListener("resize", updateOverflowPosition);
-        window.removeEventListener("scroll", updateOverflowPosition, true);
+        window.removeEventListener("resize", updateFloatingMenuPositions);
+        window.removeEventListener("scroll", updateFloatingMenuPositions, true);
       };
     }
 
@@ -702,13 +731,32 @@ export function NotebookView() {
       return;
     }
 
-    setEditorOverflowMenuPosition(getNotebookOverflowMenuPosition(button));
+    setEditorOverflowMenuPosition(
+      getNotebookFloatingMenuPosition(button, NOTEBOOK_OVERFLOW_MENU_WIDTH, NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT),
+    );
     setIsEditorOverflowMenuOpen(true);
   }
 
   function closeEditorOverflowMenu() {
     setIsEditorOverflowMenuOpen(false);
     setEditorOverflowMenuPosition(null);
+  }
+
+  function openExportMenu() {
+    const button = exportButtonRef.current;
+    if (!button) {
+      setExportMenuPosition(null);
+      setIsExportMenuOpen(true);
+      return;
+    }
+
+    setExportMenuPosition(getNotebookFloatingMenuPosition(button, NOTEBOOK_EXPORT_MENU_WIDTH, NOTEBOOK_EXPORT_MENU_ESTIMATED_HEIGHT));
+    setIsExportMenuOpen(true);
+  }
+
+  function closeExportMenu() {
+    setIsExportMenuOpen(false);
+    setExportMenuPosition(null);
   }
 
   async function ensureLegacyDocumentsMaterialized() {
@@ -738,7 +786,7 @@ export function NotebookView() {
     setActiveDocumentId(document.id);
     setActivePageId(firstPage?.id ?? null);
     collapseNotebookRail();
-    setIsExportMenuOpen(false);
+    closeExportMenu();
     closeTileActionMenu();
     setStatus(null);
   }
@@ -759,7 +807,7 @@ export function NotebookView() {
     setActiveDocumentId(null);
     setActivePageId(null);
     collapseNotebookRail();
-    setIsExportMenuOpen(false);
+    closeExportMenu();
     closeTileActionMenu();
     setStatus(null);
   }
@@ -847,7 +895,7 @@ export function NotebookView() {
 
     setActiveDocumentId(nextDocument.id);
     setActivePageId(firstPage.id);
-    setIsExportMenuOpen(false);
+    closeExportMenu();
     setStatus(null);
     return true;
   }
@@ -935,7 +983,7 @@ export function NotebookView() {
     if (activeDocumentId === document.id) {
       setActiveDocumentId(null);
       setActivePageId(null);
-      setIsExportMenuOpen(false);
+      closeExportMenu();
     }
     setStatus(null);
   }
@@ -1036,7 +1084,7 @@ export function NotebookView() {
     }
 
     closeTileActionMenu();
-    setIsExportMenuOpen(false);
+    closeExportMenu();
     setIsEditorOverflowMenuOpen(false);
     setStatus(null);
     setActivePageId(page.id);
@@ -1154,7 +1202,7 @@ export function NotebookView() {
   }
 
   async function exportActivePage(format: NotebookExportFormat) {
-    setIsExportMenuOpen(false);
+    closeExportMenu();
 
     if (!activeDocument || !activePage) {
       setStatus({ kind: "error", message: "Select a document page to export." });
@@ -1426,17 +1474,64 @@ export function NotebookView() {
     : currentFolder
       ? "This folder is empty."
       : "No documents yet.";
-  const editorOverflowMenuPortalTarget = typeof document !== "undefined" ? document.body : null;
+  const notebookFloatingMenuPortalTarget = typeof document !== "undefined" ? document.body : null;
+  const exportMenuPortal =
+    activeDocument && notebookFloatingMenuPortalTarget && isExportMenuOpen && exportMenuPosition
+      ? createPortal(
+          <div
+            ref={exportMenuRef}
+            className="notebook-floating-menu"
+            style={{
+              position: "fixed",
+              top: `${exportMenuPosition.top}px`,
+              left: `${exportMenuPosition.left}px`,
+              width: `${NOTEBOOK_EXPORT_MENU_WIDTH}px`,
+              zIndex: 9999,
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                void exportActivePage("txt");
+              }}
+              className="notebook-floating-menu__item"
+            >
+              TXT
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void exportActivePage("html");
+              }}
+              className="notebook-floating-menu__item"
+            >
+              HTML
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void exportActivePage("markdown");
+              }}
+              className="notebook-floating-menu__item"
+            >
+              Markdown
+            </button>
+          </div>,
+          notebookFloatingMenuPortalTarget,
+        )
+      : null;
   const editorOverflowMenuPortal =
-    activeDocument && editorOverflowMenuPortalTarget && isEditorOverflowMenuOpen && editorOverflowMenuPosition
+    activeDocument && notebookFloatingMenuPortalTarget && isEditorOverflowMenuOpen && editorOverflowMenuPosition
       ? createPortal(
           <div
             ref={editorOverflowMenuRef}
-            className="flex w-40 flex-col gap-1 rounded-2xl border border-white/10 bg-white/96 p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] backdrop-blur"
+            className="notebook-floating-menu"
             style={{
               position: "fixed",
               top: `${editorOverflowMenuPosition.top}px`,
               left: `${editorOverflowMenuPosition.left}px`,
+              width: `${NOTEBOOK_OVERFLOW_MENU_WIDTH}px`,
               zIndex: 9999,
             }}
             onClick={(event) => event.stopPropagation()}
@@ -1447,7 +1542,7 @@ export function NotebookView() {
                 void handleToggleDocumentFavorite(activeDocument.id);
                 closeEditorOverflowMenu();
               }}
-              className={compactMenuItemClass}
+              className="notebook-floating-menu__item"
             >
               {activeDocument.favorited ? "Unfavorite" : "Favorite"}
             </button>
@@ -1457,17 +1552,19 @@ export function NotebookView() {
                 void handleCleanImages();
                 closeEditorOverflowMenu();
               }}
-              className={compactMenuItemClass}
+              className="notebook-floating-menu__item"
             >
               Clean Images
             </button>
           </div>,
-          editorOverflowMenuPortalTarget,
+          notebookFloatingMenuPortalTarget,
         )
       : null;
 
   return (
     <>
+      {exportMenuPortal}
+      {editorOverflowMenuPortal}
       <div className="flex h-full flex-col gap-2 overflow-hidden px-3 pb-3 pt-1.5">
         <section className="glass-panel flex min-h-0 flex-1 flex-col gap-2 overflow-visible p-3">
           {isLibraryMode ? (
@@ -2007,48 +2104,22 @@ export function NotebookView() {
                             </div>
                           ) : null}
                           {status ? <div className={`inline-flex shrink-0 items-center ${compactStatusClass} ${statusClass}`}>{status.message}</div> : null}
-                          <div ref={exportMenuRef} className="relative">
+                          <div className="relative">
                             <button
+                              ref={exportButtonRef}
                               type="button"
                               onClick={() => {
                                 setStatus(null);
-                                setIsExportMenuOpen((current) => !current);
+                                if (isExportMenuOpen) {
+                                  closeExportMenu();
+                                } else {
+                                  openExportMenu();
+                                }
                               }}
                               className={`${editorActionButtonClass} border-[color:var(--panel-border)] bg-white/70 text-slate-600`}
                             >
                               Export
                             </button>
-                            {isExportMenuOpen ? (
-                              <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 flex w-36 flex-col gap-1 rounded-2xl border border-white/10 bg-white/96 p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] backdrop-blur">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void exportActivePage("txt");
-                                  }}
-                                  className={compactMenuItemClass}
-                                >
-                                  TXT
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void exportActivePage("html");
-                                  }}
-                                  className={compactMenuItemClass}
-                                >
-                                  HTML
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void exportActivePage("markdown");
-                                  }}
-                                  className={compactMenuItemClass}
-                                >
-                                  Markdown
-                                </button>
-                              </div>
-                            ) : null}
                           </div>
                           <div className="relative">
                             <button
