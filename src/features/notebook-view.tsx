@@ -1365,7 +1365,7 @@ export function NotebookView() {
   return (
     <>
       <div className="flex h-full flex-col gap-2 overflow-hidden px-3 pb-3 pt-1.5">
-        <section className="glass-panel flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3">
+        <section className="glass-panel flex min-h-0 flex-1 flex-col gap-2 overflow-visible p-3">
           {isLibraryMode ? (
             <div className="mx-auto flex min-h-0 w-full max-w-[1480px] flex-1 flex-col gap-2.5">
               <div className="flex items-center justify-between gap-3">
@@ -1884,7 +1884,7 @@ export function NotebookView() {
 
                   <div className="flex min-h-0 min-w-0 flex-col gap-2">
                     <div className="rounded-[22px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] p-3 shadow-[0_8px_24px_var(--panel-shadow)]">
-                      <div className="flex min-w-0 flex-wrap items-center justify-between gap-1.5">
+                      <div className="relative z-30 flex min-w-0 flex-wrap items-center justify-between gap-1.5">
                         <label className="min-w-0 flex-1 basis-[18rem]">
                           <span className="sr-only">Document title</span>
                           <input
@@ -1896,7 +1896,7 @@ export function NotebookView() {
                           />
                         </label>
 
-                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                        <div className="relative z-40 flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                           {saveIndicatorLabel ? (
                             <div className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none ${saveIndicatorClass}`}>
                               {saveIndicatorLabel}
@@ -1960,7 +1960,7 @@ export function NotebookView() {
                               …
                             </button>
                             {isEditorOverflowMenuOpen ? (
-                              <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 flex w-40 flex-col gap-1 rounded-2xl border border-white/10 bg-white/96 p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] backdrop-blur">
+                              <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 flex w-40 flex-col gap-1 rounded-2xl border border-white/10 bg-white/96 p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] backdrop-blur">
                                 <button
                                   type="button"
                                   onClick={() => {
