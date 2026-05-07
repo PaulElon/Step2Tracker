@@ -1264,17 +1264,20 @@ button {
 }
 
 .tiptap-editor .ProseMirror li[data-type="taskItem"] {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr);
+  column-gap: 0.5rem;
+  align-items: start;
   list-style: none;
+  min-width: 0;
 }
 
 .tiptap-editor .ProseMirror li[data-type="taskItem"] > label {
-  display: inline-flex;
-  flex: 0 0 auto;
+  display: flex;
   align-items: flex-start;
+  justify-content: center;
   margin-top: 0.18rem;
+  min-width: 0;
 }
 
 .tiptap-editor .ProseMirror li[data-type="taskItem"] > label input[type="checkbox"] {
@@ -1291,7 +1294,6 @@ button {
 }
 
 .tiptap-editor .ProseMirror li[data-type="taskItem"] > div {
-  flex: 1 1 auto;
   min-width: 0;
 }
 
