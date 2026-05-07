@@ -900,6 +900,243 @@ button {
   box-shadow: none;
 }
 
+/* Notebook editor shell: compact chrome, full-width canvas, sticky toolbar */
+.notebook-editor-shell {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 1.75rem;
+  box-shadow: 0 14px 36px var(--panel-shadow);
+  color: #241d2a;
+}
+
+.notebook-editor-rail {
+  background: var(--panel-bg);
+  border-color: var(--panel-border);
+  box-shadow: 0 10px 24px var(--panel-shadow);
+  color: inherit;
+}
+
+.notebook-editor-rail__item {
+  color: inherit;
+}
+
+.notebook-editor-rail__item:hover {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: var(--panel-border);
+}
+
+:root[data-theme="light"] .notebook-editor-rail__item--active,
+:root[data-theme="maggiepink"] .notebook-editor-rail__item--active {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+:root[data-theme="dark"] .notebook-editor-rail__item--active,
+:root[data-theme="paulblue"] .notebook-editor-rail__item--active {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="dark"] .notebook-editor-rail__item:hover,
+:root[data-theme="paulblue"] .notebook-editor-rail__item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.notebook-editor-rail__icon {
+  background: var(--surface-muted);
+  border-color: var(--panel-border);
+  color: inherit;
+}
+
+.notebook-editor-input {
+  background: var(--field-bg);
+  border-color: var(--panel-border);
+  color: inherit;
+  box-shadow: none;
+}
+
+.notebook-editor-input::placeholder {
+  color: rgba(100, 116, 139, 0.78);
+}
+
+.notebook-editor-action-button {
+  background: var(--surface-muted);
+  border-color: var(--panel-border);
+  color: inherit;
+  box-shadow: none;
+}
+
+.notebook-editor-action-button:hover {
+  background: var(--field-bg);
+}
+
+.notebook-editor-action-button--danger {
+  color: #dc2626;
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.notebook-editor-section-title {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(100, 116, 139, 0.88);
+}
+
+.notebook-editor-section-value {
+  font-size: 0.96rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: inherit;
+}
+
+.notebook-editor-rail__title {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: inherit;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+:root[data-theme="dark"] .notebook-editor-rail__title,
+:root[data-theme="paulblue"] .notebook-editor-rail__title {
+  color: rgba(226, 232, 240, 0.96);
+}
+
+.notebook-editor-rail__meta {
+  display: block;
+  font-size: 0.72rem;
+  line-height: 1.25rem;
+  color: rgba(100, 116, 139, 0.82);
+}
+
+:root[data-theme="dark"] .notebook-editor-section-title,
+:root[data-theme="paulblue"] .notebook-editor-section-title {
+  color: rgba(148, 163, 184, 0.82);
+}
+
+:root[data-theme="dark"] .notebook-editor-rail__meta,
+:root[data-theme="paulblue"] .notebook-editor-rail__meta {
+  color: rgba(148, 163, 184, 0.76);
+}
+
+.notebook-editor-rail__title,
+.notebook-editor-rail__meta {
+  min-width: 0;
+}
+
+.notebook-editor-tab--active {
+  background: var(--selection);
+  border-color: var(--panel-border);
+  color: inherit;
+}
+
+.notebook-editor-empty-title {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: inherit;
+}
+
+.notebook-editor-empty-copy {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: rgba(100, 116, 139, 0.92);
+}
+
+.notebook-editor-empty-state {
+  color: rgba(100, 116, 139, 0.92);
+}
+
+:root[data-theme="dark"] .notebook-editor-empty-copy,
+:root[data-theme="dark"] .notebook-editor-empty-state,
+:root[data-theme="paulblue"] .notebook-editor-empty-copy,
+:root[data-theme="paulblue"] .notebook-editor-empty-state {
+  color: rgba(226, 232, 240, 0.72);
+}
+
+.notebook-editor-shell .tiptap-editor__toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: 0.38rem 0.45rem;
+  gap: 0.18rem;
+  background: var(--panel-bg);
+  border-bottom-color: var(--panel-border);
+  backdrop-filter: blur(14px);
+}
+
+.notebook-editor-shell .tiptap-editor__button {
+  height: 1.85rem;
+  min-width: 1.85rem;
+  padding: 0 0.55rem;
+  border-radius: 0.55rem;
+  background: var(--surface-muted);
+  border-color: var(--panel-border);
+  color: inherit;
+}
+
+.notebook-editor-shell .tiptap-editor__button:hover:not(:disabled) {
+  background: var(--field-bg);
+}
+
+.notebook-editor-shell .tiptap-editor__button--active:not(:disabled) {
+  background: var(--selection);
+}
+
+.notebook-editor-shell .tiptap-dd__panel {
+  background: var(--panel-bg);
+  border-color: var(--panel-border);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+}
+
+.notebook-editor-shell .tiptap-editor__content {
+  background: transparent;
+}
+
+.notebook-editor-shell .tiptap {
+  align-items: stretch;
+}
+
+.notebook-editor-shell .ProseMirror {
+  width: 100%;
+  max-width: none;
+  padding: 1rem 1.2rem 1.5rem;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:root[data-theme="light"] .notebook-editor-shell,
+:root[data-theme="maggiepink"] .notebook-editor-shell {
+  color: #241d2a;
+}
+
+:root[data-theme="light"] .notebook-editor-shell .tiptap-editor__button,
+:root[data-theme="maggiepink"] .notebook-editor-shell .tiptap-editor__button {
+  color: #475569;
+}
+
+:root[data-theme="dark"] .notebook-editor-shell,
+:root[data-theme="paulblue"] .notebook-editor-shell {
+  color: rgba(226, 232, 240, 0.96);
+}
+
+:root[data-theme="dark"] .notebook-editor-shell .tiptap-editor__toolbar,
+:root[data-theme="paulblue"] .notebook-editor-shell .tiptap-editor__toolbar {
+  backdrop-filter: blur(16px);
+}
+
+:root[data-theme="dark"] .notebook-editor-shell .tiptap-editor__button,
+:root[data-theme="paulblue"] .notebook-editor-shell .tiptap-editor__button {
+  color: rgba(226, 232, 240, 0.92);
+}
+
 /* ── Page mode layout ── */
 .tiptap-editor--page .tiptap-editor__content {
   padding: clamp(1.25rem, 3vw, 2rem);
@@ -1264,17 +1501,21 @@ button {
 }
 
 .tiptap-editor .ProseMirror li[data-type="taskItem"] {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: 1.1rem minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: start;
   list-style: none;
+  min-width: 0;
 }
 
 .tiptap-editor .ProseMirror li[data-type="taskItem"] > label {
-  display: inline-flex;
-  flex: 0 0 auto;
+  display: flex;
   align-items: flex-start;
-  margin-top: 0.18rem;
+  justify-content: flex-start;
+  margin-top: 0.08rem;
+  width: 1.1rem;
+  min-width: 1.1rem;
 }
 
 .tiptap-editor .ProseMirror li[data-type="taskItem"] > label input[type="checkbox"] {
@@ -1291,7 +1532,6 @@ button {
 }
 
 .tiptap-editor .ProseMirror li[data-type="taskItem"] > div {
-  flex: 1 1 auto;
   min-width: 0;
 }
 
