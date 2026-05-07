@@ -1547,27 +1547,32 @@ button {
   margin: 0.2em 0;
 }
 
-.tiptap-editor .ProseMirror li[data-type="taskItem"] {
-  display: grid;
+.notebook-editor-shell .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"],
+.tiptap-editor .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"] {
+  display: grid !important;
   grid-template-columns: 1.15rem minmax(0, 1fr);
+  grid-template-areas: "checkbox content";
   column-gap: 0.5rem;
   align-items: start;
   list-style: none;
   min-width: 0;
+  padding: 0;
+  margin: 0.125em 0;
 }
 
-.tiptap-editor .ProseMirror li[data-type="taskItem"] > label {
+.notebook-editor-shell .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"] > label,
+.tiptap-editor .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"] > label {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  margin-top: 0.12rem;
+  margin-top: 0.14rem;
   width: 1.15rem;
   min-width: 1.15rem;
-  grid-column: 1;
-  grid-row: 1;
+  grid-area: checkbox;
 }
 
-.tiptap-editor .ProseMirror li[data-type="taskItem"] > label input[type="checkbox"] {
+.notebook-editor-shell .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"] > label input[type="checkbox"],
+.tiptap-editor .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"] > label input[type="checkbox"] {
   width: 1rem;
   height: 1rem;
   margin: 0;
@@ -1576,25 +1581,29 @@ button {
   filter: saturate(1.1) brightness(1.03);
 }
 
-.tiptap-editor .ProseMirror li[data-type="taskItem"] > label span {
+.notebook-editor-shell .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"] > label span,
+.tiptap-editor .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"] > label span {
   display: none;
 }
 
-.tiptap-editor .ProseMirror li[data-type="taskItem"] > div {
+.notebook-editor-shell .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"] > div,
+.tiptap-editor .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"] > div {
   min-width: 0;
-  grid-column: 2;
-  grid-row: 1;
+  grid-area: content;
 }
 
-.tiptap-editor .ProseMirror li[data-type="taskItem"] > div > p {
+.notebook-editor-shell .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"] > div > p,
+.tiptap-editor .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"] > div > p {
   margin: 0;
 }
 
-.tiptap-editor .ProseMirror li[data-type="taskItem"] > div > :first-child {
+.notebook-editor-shell .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"] > div > :first-child,
+.tiptap-editor .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"] > div > :first-child {
   margin-top: 0;
 }
 
-.tiptap-editor .ProseMirror li[data-type="taskItem"] > div > p + p {
+.notebook-editor-shell .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"] > div > p + p,
+.tiptap-editor .ProseMirror ul[data-type="taskList"] > li[data-type="taskItem"] > div > p + p {
   margin-top: 0.45rem;
 }
 
