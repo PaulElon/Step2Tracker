@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { ModalShell } from "../components/modal-shell";
 import { NotebookEditorAdapter } from "../components/notebook-editor-adapter";
@@ -41,6 +42,12 @@ type TileActionMenuState =
     };
 
 type NotebookRailSection = "pinned" | "recent" | "folders" | "documents" | null;
+
+type NotebookOverflowMenuPosition = {
+  top: number;
+  left: number;
+  placeBelow: boolean;
+};
 
 type NotebookRailIconKind = "toggle" | "back" | "favorite" | "recent" | "folder" | "document" | "collapse";
 
@@ -132,6 +139,28 @@ function makeId(prefix: string) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+const NOTEBOOK_OVERFLOW_MENU_WIDTH = 160;
+const NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT = 96;
+const NOTEBOOK_OVERFLOW_MENU_GAP = 8;
+const NOTEBOOK_OVERFLOW_MENU_VIEWPORT_MARGIN = 8;
+
+function getNotebookOverflowMenuPosition(button: HTMLButtonElement): NotebookOverflowMenuPosition {
+  const rect = button.getBoundingClientRect();
+  const placeBelow = rect.bottom + NOTEBOOK_OVERFLOW_MENU_GAP + NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT <= window.innerHeight - NOTEBOOK_OVERFLOW_MENU_VIEWPORT_MARGIN;
+  const top = placeBelow
+    ? rect.bottom + NOTEBOOK_OVERFLOW_MENU_GAP
+    : Math.max(
+        NOTEBOOK_OVERFLOW_MENU_VIEWPORT_MARGIN,
+        rect.top - NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT - NOTEBOOK_OVERFLOW_MENU_GAP,
+      );
+  const left = Math.min(
+    Math.max(rect.right - NOTEBOOK_OVERFLOW_MENU_WIDTH, NOTEBOOK_OVERFLOW_MENU_VIEWPORT_MARGIN),
+    window.innerWidth - NOTEBOOK_OVERFLOW_MENU_WIDTH - NOTEBOOK_OVERFLOW_MENU_VIEWPORT_MARGIN,
+  );
+
+  return { top, left, placeBelow };
 }
 
 function sortByOrder<T extends { order: number; createdAt?: string; id?: string }>(items: T[]) {
@@ -295,12 +324,12 @@ export function NotebookView() {
   const [saveStatus, setSaveStatus] = useState<NotebookSaveStatus>("idle");
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isEditorOverflowMenuOpen, setIsEditorOverflowMenuOpen] = useState(false);
+  const [editorOverflowMenuPosition, setEditorOverflowMenuPosition] = useState<NotebookOverflowMenuPosition | null>(null);
   const [tileActionMenu, setTileActionMenu] = useState<TileActionMenuState | null>(null);
   const [promptState, setPromptState] = useState<PromptState | null>(null);
   const [isNotebookRailExpanded, setIsNotebookRailExpanded] = useState(false);
   const [notebookRailTargetSection, setNotebookRailTargetSection] = useState<NotebookRailSection>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
-  const editorOverflowMenuRef = useRef<HTMLDivElement>(null);
   const tileActionMenuRef = useRef<HTMLDivElement>(null);
   const promptInputRef = useRef<HTMLInputElement>(null);
   const pageTitleInputRef = useRef<HTMLInputElement>(null);
@@ -313,6 +342,8 @@ export function NotebookView() {
   const saveRevisionRef = useRef(0);
   const lastNotebookSaveResultRef = useRef<"idle" | "saved" | "error">("idle");
   const isMountedRef = useRef(true);
+  const editorOverflowButtonRef = useRef<HTMLButtonElement>(null);
+  const editorOverflowMenuRef = useRef<HTMLDivElement>(null);
 
   const notebookFolders = state.preferences.notebookFolders;
   const persistedNotebookDocuments = state.preferences.notebookDocuments;
@@ -568,8 +599,11 @@ export function NotebookView() {
       if (!exportMenuRef.current?.contains(event.target as Node)) {
         setIsExportMenuOpen(false);
       }
-      if (!editorOverflowMenuRef.current?.contains(event.target as Node)) {
-        setIsEditorOverflowMenuOpen(false);
+      if (
+        !editorOverflowButtonRef.current?.contains(event.target as Node) &&
+        !editorOverflowMenuRef.current?.contains(event.target as Node)
+      ) {
+        closeEditorOverflowMenu();
       }
       if (!tileActionMenuRef.current?.contains(event.target as Node)) {
         setTileActionMenu(null);
@@ -579,7 +613,7 @@ export function NotebookView() {
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setIsExportMenuOpen(false);
-        setIsEditorOverflowMenuOpen(false);
+        closeEditorOverflowMenu();
         setTileActionMenu(null);
         if (editingPageId) {
           pageTitleEditSessionRef.current = { pageId: editingPageId, cancelled: true };
@@ -588,12 +622,26 @@ export function NotebookView() {
       }
     }
 
-    if (isExportMenuOpen || tileActionMenu) {
+    function updateOverflowPosition() {
+      if (!editorOverflowButtonRef.current) {
+        return;
+      }
+      setEditorOverflowMenuPosition(getNotebookOverflowMenuPosition(editorOverflowButtonRef.current));
+    }
+
+    if (isExportMenuOpen || isEditorOverflowMenuOpen || tileActionMenu) {
       window.addEventListener("mousedown", handleOutsideClick);
       window.addEventListener("keydown", handleEscape);
+      if (isEditorOverflowMenuOpen) {
+        window.addEventListener("resize", updateOverflowPosition);
+        window.addEventListener("scroll", updateOverflowPosition, true);
+      }
+      updateOverflowPosition();
       return () => {
         window.removeEventListener("mousedown", handleOutsideClick);
         window.removeEventListener("keydown", handleEscape);
+        window.removeEventListener("resize", updateOverflowPosition);
+        window.removeEventListener("scroll", updateOverflowPosition, true);
       };
     }
 
@@ -644,6 +692,23 @@ export function NotebookView() {
   function updateDocument(documentId: string, updater: (document: NotebookDocument) => NotebookDocument) {
     const nextDocuments = notebookDocuments.map((document) => (document.id === documentId ? updater(document) : document));
     replaceNotebookDocuments(nextDocuments);
+  }
+
+  function openEditorOverflowMenu() {
+    const button = editorOverflowButtonRef.current;
+    if (!button) {
+      setEditorOverflowMenuPosition(null);
+      setIsEditorOverflowMenuOpen(true);
+      return;
+    }
+
+    setEditorOverflowMenuPosition(getNotebookOverflowMenuPosition(button));
+    setIsEditorOverflowMenuOpen(true);
+  }
+
+  function closeEditorOverflowMenu() {
+    setIsEditorOverflowMenuOpen(false);
+    setEditorOverflowMenuPosition(null);
   }
 
   async function ensureLegacyDocumentsMaterialized() {
@@ -1361,11 +1426,50 @@ export function NotebookView() {
     : currentFolder
       ? "This folder is empty."
       : "No documents yet.";
+  const editorOverflowMenuPortalTarget = typeof document !== "undefined" ? document.body : null;
+  const editorOverflowMenuPortal =
+    activeDocument && editorOverflowMenuPortalTarget && isEditorOverflowMenuOpen && editorOverflowMenuPosition
+      ? createPortal(
+          <div
+            ref={editorOverflowMenuRef}
+            className="flex w-40 flex-col gap-1 rounded-2xl border border-white/10 bg-white/96 p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] backdrop-blur"
+            style={{
+              position: "fixed",
+              top: `${editorOverflowMenuPosition.top}px`,
+              left: `${editorOverflowMenuPosition.left}px`,
+              zIndex: 9999,
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                void handleToggleDocumentFavorite(activeDocument.id);
+                closeEditorOverflowMenu();
+              }}
+              className={compactMenuItemClass}
+            >
+              {activeDocument.favorited ? "Unfavorite" : "Favorite"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void handleCleanImages();
+                closeEditorOverflowMenu();
+              }}
+              className={compactMenuItemClass}
+            >
+              Clean Images
+            </button>
+          </div>,
+          editorOverflowMenuPortalTarget,
+        )
+      : null;
 
   return (
     <>
       <div className="flex h-full flex-col gap-2 overflow-hidden px-3 pb-3 pt-1.5">
-        <section className="glass-panel flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3">
+        <section className="glass-panel flex min-h-0 flex-1 flex-col gap-2 overflow-visible p-3">
           {isLibraryMode ? (
             <div className="mx-auto flex min-h-0 w-full max-w-[1480px] flex-1 flex-col gap-2.5">
               <div className="flex items-center justify-between gap-3">
@@ -1884,7 +1988,7 @@ export function NotebookView() {
 
                   <div className="flex min-h-0 min-w-0 flex-col gap-2">
                     <div className="rounded-[22px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] p-3 shadow-[0_8px_24px_var(--panel-shadow)]">
-                      <div className="flex min-w-0 flex-wrap items-center justify-between gap-1.5">
+                      <div className="relative z-30 flex min-w-0 flex-wrap items-center justify-between gap-1.5">
                         <label className="min-w-0 flex-1 basis-[18rem]">
                           <span className="sr-only">Document title</span>
                           <input
@@ -1896,7 +2000,7 @@ export function NotebookView() {
                           />
                         </label>
 
-                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                        <div className="relative z-40 flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                           {saveIndicatorLabel ? (
                             <div className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none ${saveIndicatorClass}`}>
                               {saveIndicatorLabel}
@@ -1946,12 +2050,17 @@ export function NotebookView() {
                               </div>
                             ) : null}
                           </div>
-                          <div ref={editorOverflowMenuRef} className="relative">
+                          <div className="relative">
                             <button
+                              ref={editorOverflowButtonRef}
                               type="button"
                               onClick={() => {
                                 setStatus(null);
-                                setIsEditorOverflowMenuOpen((current) => !current);
+                                if (isEditorOverflowMenuOpen) {
+                                  closeEditorOverflowMenu();
+                                } else {
+                                  openEditorOverflowMenu();
+                                }
                               }}
                               aria-label="More notebook actions"
                               title="More notebook actions"
@@ -1959,30 +2068,6 @@ export function NotebookView() {
                             >
                               …
                             </button>
-                            {isEditorOverflowMenuOpen ? (
-                              <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 flex w-40 flex-col gap-1 rounded-2xl border border-white/10 bg-white/96 p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] backdrop-blur">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void handleToggleDocumentFavorite(activeDocument.id);
-                                    setIsEditorOverflowMenuOpen(false);
-                                  }}
-                                  className={compactMenuItemClass}
-                                >
-                                  {activeDocument.favorited ? "Unfavorite" : "Favorite"}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void handleCleanImages();
-                                    setIsEditorOverflowMenuOpen(false);
-                                  }}
-                                  className={compactMenuItemClass}
-                                >
-                                  Clean Images
-                                </button>
-                              </div>
-                            ) : null}
                           </div>
                           <button type="button" onClick={() => void handleDeleteDocument(activeDocument)} className={editorDangerButtonClass}>
                             Delete Document
@@ -2140,6 +2225,7 @@ export function NotebookView() {
           )}
         </section>
       </div>
+      {editorOverflowMenuPortal}
 
       {promptState && promptCopy ? (
         <ModalShell
