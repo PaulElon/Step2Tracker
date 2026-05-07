@@ -9,20 +9,21 @@ import {
   parseBackupPayload,
 } from "../../src/lib/storage.ts";
 
-test("normalizePreferences seeds one notebook page from notesHtml when notebookPages is undefined", () => {
+test("normalizePreferences seeds one notebook document from notesHtml when notebookPages is undefined", () => {
   const normalized = normalizeAppState({
     preferences: {
       notesHtml: "<p>hi</p>",
     },
   });
 
-  assert.equal(normalized.preferences.notebookPages.length, 1);
-  assert.equal(normalized.preferences.notebookPages[0]?.title, "Study Notes");
-  assert.equal(normalized.preferences.notebookPages[0]?.contentHtml, "<p>hi</p>");
-  assert.equal(normalized.preferences.notebookPages[0]?.order, 0);
+  assert.equal(normalized.preferences.notebookPages.length, 0);
+  assert.equal(normalized.preferences.notebookDocuments.length, 1);
+  assert.equal(normalized.preferences.notebookDocuments[0]?.title, "Study Notes");
+  assert.equal(normalized.preferences.notebookDocuments[0]?.pages[0]?.contentHtml, "<p>hi</p>");
+  assert.equal(normalized.preferences.notebookDocuments[0]?.pages[0]?.order, 0);
 });
 
-test("normalizePreferences does not reseed when existing notebookPages are present", () => {
+test("normalizePreferences canonicalizes legacy notebookPages into notebookDocuments", () => {
   const normalized = normalizeAppState({
     preferences: {
       notesHtml: "<p>seed me</p>",
@@ -39,10 +40,11 @@ test("normalizePreferences does not reseed when existing notebookPages are prese
     },
   });
 
-  assert.equal(normalized.preferences.notebookPages.length, 1);
-  assert.equal(normalized.preferences.notebookPages[0]?.id, "existing-1");
-  assert.equal(normalized.preferences.notebookPages[0]?.title, "Existing");
-  assert.equal(normalized.preferences.notebookPages[0]?.contentHtml, "<p>keep me</p>");
+  assert.equal(normalized.preferences.notebookPages.length, 0);
+  assert.equal(normalized.preferences.notebookDocuments.length, 1);
+  assert.equal(normalized.preferences.notebookDocuments[0]?.id, "existing-1");
+  assert.equal(normalized.preferences.notebookDocuments[0]?.title, "Existing");
+  assert.equal(normalized.preferences.notebookDocuments[0]?.pages[0]?.contentHtml, "<p>keep me</p>");
 });
 
 test("normalizePreferences keeps notebookPages empty when malformed and notesHtml is empty", () => {
@@ -56,7 +58,7 @@ test("normalizePreferences keeps notebookPages empty when malformed and notesHtm
   assert.deepEqual(normalized.preferences.notebookPages, []);
 });
 
-test("normalizePreferences sorts notebookPages by ascending order", () => {
+test("normalizePreferences sorts migrated notebookDocuments by ascending order", () => {
   const normalized = normalizeAppState({
     preferences: {
       notebookPages: [
@@ -80,10 +82,8 @@ test("normalizePreferences sorts notebookPages by ascending order", () => {
     },
   });
 
-  assert.deepEqual(
-    normalized.preferences.notebookPages.map((page) => page.id),
-    ["early", "late"],
-  );
+  assert.deepEqual(normalized.preferences.notebookPages, []);
+  assert.deepEqual(normalized.preferences.notebookDocuments.map((document) => document.id), ["early", "late"]);
 });
 
 test("normalizePreferences applies safe defaults for missing notebook page fields", () => {
@@ -93,17 +93,18 @@ test("normalizePreferences applies safe defaults for missing notebook page field
     },
   });
 
-  assert.equal(normalized.preferences.notebookPages.length, 1);
-  const page = normalized.preferences.notebookPages[0];
-  assert.ok(page);
-  assert.equal(page?.title, "Untitled");
-  assert.equal(page?.contentHtml, "");
-  assert.equal(page?.favorited, false);
-  assert.equal(page?.order, 0);
-  assert.ok(page?.id);
-  assert.ok(page?.createdAt);
-  assert.ok(page?.updatedAt);
-  assert.equal(page?.folderId, undefined);
+  assert.equal(normalized.preferences.notebookPages.length, 0);
+  assert.equal(normalized.preferences.notebookDocuments.length, 1);
+  const document = normalized.preferences.notebookDocuments[0];
+  assert.ok(document);
+  assert.equal(document?.title, "Untitled");
+  assert.equal(document?.pages[0]?.contentHtml, "");
+  assert.equal(document?.favorited, false);
+  assert.equal(document?.order, 0);
+  assert.ok(document?.id);
+  assert.ok(document?.createdAt);
+  assert.ok(document?.updatedAt);
+  assert.equal(document?.folderId, undefined);
 });
 
 test("normalizePreferences preserves favorited true on notebook pages", () => {
@@ -123,7 +124,8 @@ test("normalizePreferences preserves favorited true on notebook pages", () => {
     },
   });
 
-  assert.equal(normalized.preferences.notebookPages[0]?.favorited, true);
+  assert.equal(normalized.preferences.notebookPages.length, 0);
+  assert.equal(normalized.preferences.notebookDocuments[0]?.favorited, true);
 });
 
 test("normalizePreferences coerces non-boolean notebook page favorited to false", () => {
@@ -143,7 +145,8 @@ test("normalizePreferences coerces non-boolean notebook page favorited to false"
     },
   });
 
-  assert.equal(normalized.preferences.notebookPages[0]?.favorited, false);
+  assert.equal(normalized.preferences.notebookPages.length, 0);
+  assert.equal(normalized.preferences.notebookDocuments[0]?.favorited, false);
 });
 
 test("DEFAULT_PREFERENCES initializes notebookPages to an empty array", () => {
@@ -326,7 +329,8 @@ test("normalizePreferences preserves valid notebook page folderId values", () =>
     },
   });
 
-  assert.equal(normalized.preferences.notebookPages[0]?.folderId, "folder-1");
+  assert.equal(normalized.preferences.notebookPages.length, 0);
+  assert.equal(normalized.preferences.notebookDocuments[0]?.folderId, "folder-1");
 });
 
 test("normalizePreferences drops missing, null, non-string, or empty notebook page folderId", () => {
@@ -372,10 +376,11 @@ test("normalizePreferences drops missing, null, non-string, or empty notebook pa
     },
   });
 
-  assert.equal(normalized.preferences.notebookPages[0]?.folderId, undefined);
-  assert.equal(normalized.preferences.notebookPages[1]?.folderId, undefined);
-  assert.equal(normalized.preferences.notebookPages[2]?.folderId, undefined);
-  assert.equal(normalized.preferences.notebookPages[3]?.folderId, undefined);
+  assert.equal(normalized.preferences.notebookPages.length, 0);
+  assert.equal(normalized.preferences.notebookDocuments[0]?.folderId, undefined);
+  assert.equal(normalized.preferences.notebookDocuments[1]?.folderId, undefined);
+  assert.equal(normalized.preferences.notebookDocuments[2]?.folderId, undefined);
+  assert.equal(normalized.preferences.notebookDocuments[3]?.folderId, undefined);
 });
 
 test("normalizePreferences preserves notebookDocuments and sorts by ascending order", () => {
@@ -469,6 +474,7 @@ test("normalizePreferences migrates notebookPages to one notebookDocument per pa
   });
 
   assert.equal(normalized.preferences.notebookDocuments.length, 2);
+  assert.equal(normalized.preferences.notebookPages.length, 0);
   assert.deepEqual(
     normalized.preferences.notebookDocuments.map((document) => document.title),
     ["First", "Second"],
@@ -508,9 +514,10 @@ test("normalizePreferences migration copies notebook page title/content/folder/f
   assert.equal(document?.pages[0]?.order, 0);
   assert.equal(document?.pages[0]?.createdAt, "2026-01-07T00:00:00.000Z");
   assert.equal(document?.pages[0]?.updatedAt, "2026-01-08T00:00:00.000Z");
+  assert.equal(normalized.preferences.notebookPages.length, 0);
 });
 
-test("normalizePreferences migration does not clear notebookPages", () => {
+test("normalizePreferences clears notebookPages once documents exist", () => {
   const normalized = normalizeAppState({
     preferences: {
       notebookPages: [
@@ -526,9 +533,9 @@ test("normalizePreferences migration does not clear notebookPages", () => {
     },
   });
 
-  assert.equal(normalized.preferences.notebookPages.length, 1);
-  assert.equal(normalized.preferences.notebookPages[0]?.id, "page-keep");
   assert.equal(normalized.preferences.notebookDocuments.length, 1);
+  assert.equal(normalized.preferences.notebookPages.length, 0);
+  assert.equal(normalized.preferences.notebookDocuments[0]?.id, "page-keep");
 });
 
 test("normalizePreferences keeps existing notebookDocuments instead of reseeding from notebookPages", () => {
@@ -569,6 +576,7 @@ test("normalizePreferences keeps existing notebookDocuments instead of reseeding
   assert.equal(normalized.preferences.notebookDocuments.length, 1);
   assert.equal(normalized.preferences.notebookDocuments[0]?.id, "doc-existing");
   assert.equal(normalized.preferences.notebookDocuments[0]?.title, "Existing Doc");
+  assert.equal(normalized.preferences.notebookPages.length, 0);
 });
 
 test("normalizePreferences notebookDocument fallback creates a default Page 1 when pages are empty or missing", () => {
@@ -667,6 +675,17 @@ test("backup payload round-trips notebook folders, documents, and legacy pages",
     },
   });
 
+  const parsedBackup = JSON.parse(backup) as {
+    state: {
+      preferences: {
+        notebookPages: unknown[];
+        notebookDocuments: unknown[];
+      };
+    };
+  };
+  assert.deepEqual(parsedBackup.state.preferences.notebookPages, []);
+  assert.equal(parsedBackup.state.preferences.notebookDocuments.length, 1);
+
   const restored = parseBackupPayload(backup);
 
   assert.equal(restored.preferences.notebookFolders.length, 1);
@@ -705,12 +724,5 @@ test("backup payload round-trips notebook folders, documents, and legacy pages",
     ],
   );
 
-  assert.equal(restored.preferences.notebookPages.length, 1);
-  const [legacyPage] = restored.preferences.notebookPages;
-  assert.ok(legacyPage);
-  assert.equal(legacyPage.id, "legacy-page-1");
-  assert.equal(legacyPage.folderId, "folder-1");
-  assert.equal(legacyPage.favorited, true);
-  assert.equal(legacyPage.title, "Legacy Notebook Page");
-  assert.equal(legacyPage.contentHtml, "<p>legacy</p>");
+  assert.equal(restored.preferences.notebookPages.length, 0);
 });
