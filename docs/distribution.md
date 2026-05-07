@@ -43,7 +43,13 @@ npm run tauri:dev
 To build a local release artifact:
 
 ```bash
-VITE_FF_TIMEFOLIO=true npm run tauri:build
+VITE_FF_TIMEFOLIO=true VITE_FF_AUTOTRACKER_V2_USER_MODE=true npm run tauri:build
+```
+
+To verify the release feature-flag environment before packaging:
+
+```bash
+VITE_FF_TIMEFOLIO=true VITE_FF_AUTOTRACKER_V2_USER_MODE=true npm run verify:release-env
 ```
 
 ## Current Product Notes
