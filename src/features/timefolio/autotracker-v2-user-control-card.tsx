@@ -70,6 +70,28 @@ function getHostname(value: string | undefined): string | null {
   }
 }
 
+function isSafeVisibleAppLabel(value: string): boolean {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return false;
+  }
+
+  if (trimmed.length > 80) {
+    return false;
+  }
+
+  if (trimmed.includes("/") || trimmed.includes("\\") || trimmed.toLowerCase().includes(".app")) {
+    return false;
+  }
+
+  if (/^[a-z0-9.-]+$/iu.test(trimmed) && trimmed.includes(".")) {
+    return false;
+  }
+
+  return true;
+}
+
 function getPreviewSpanLabel(span: TfAutotrackerV2PreviewSpan): string {
   const matchedRuleName = span.matchedRuleName?.trim();
   if (matchedRuleName) {
@@ -84,17 +106,17 @@ function getPreviewSpanLabel(span: TfAutotrackerV2PreviewSpan): string {
   }
 
   const processIdentityName = span.processIdentityName?.trim();
-  if (processIdentityName) {
+  if (processIdentityName && isSafeVisibleAppLabel(processIdentityName)) {
     return processIdentityName;
   }
 
   const appName = span.appName?.trim();
-  if (appName) {
+  if (appName && isSafeVisibleAppLabel(appName)) {
     return appName;
   }
 
   const label = span.label?.trim();
-  if (label) {
+  if (label && isSafeVisibleAppLabel(label)) {
     return label;
   }
 

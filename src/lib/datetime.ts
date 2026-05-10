@@ -157,6 +157,16 @@ export function formatMinutes(minutes: number) {
   return `${hours}h ${remainder}m`;
 }
 
+export function formatShortMinutes(minutes: number) {
+  const safeMinutes = Math.max(Math.round(minutes), 0);
+
+  if (safeMinutes === 0) {
+    return "<1m";
+  }
+
+  return formatMinutes(safeMinutes);
+}
+
 export function formatHoursValue(minutes: number) {
   const safeMinutes = Math.max(Math.round(minutes), 0);
   const hours = Math.floor(safeMinutes / 60);

@@ -118,7 +118,7 @@ export function buildAutoTrackerV2UserModeSetupCopy({
     return {
       tone: "attention",
       label: "Needs setup",
-      detail: "Grant the required macOS permissions to use Auto-Tracking.",
+      detail: "Turn on macOS Automation and System Events permissions in System Settings.",
     };
   }
 
@@ -126,7 +126,7 @@ export function buildAutoTrackerV2UserModeSetupCopy({
     return {
       tone: "attention",
       label: "Needs setup",
-      detail: "Add allowed apps/sites in Tracker Settings.",
+      detail: "Add at least one allowed app or site in Tracker Settings.",
     };
   }
 
