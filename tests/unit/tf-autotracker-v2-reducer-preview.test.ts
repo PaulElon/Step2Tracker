@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildAutoTrackerV2PreviewSpans,
   type TfAutotrackerV2ClassificationSettings,
+  type TfAutotrackerV2PreviewSpan,
 } from "../../src/lib/tf-autotracker-v2-preview-spans.js";
 import {
   deriveAutoTrackerV2RecoveryHydration,
@@ -20,12 +21,24 @@ import {
   type TfAutotrackerV2FinalizedPreviewSession,
 } from "../../src/lib/tf-autotracker-v2-reducer-preview.js";
 import type {
+  AutoTrackerV2NativeEvent,
   AutoTrackerV2NativeRecoveryDiagnostics,
   AutoTrackerV2NativeRecoveryState,
   AutoTrackerV2NativeSamplerStatus,
 } from "../../src/lib/tf-autotracker-v2-native-events.js";
 import type { TfAutoTrackerV2DevPersistedOpenPreviewSession } from "../../src/types/models.js";
 import { normalizeTfAutoTrackerV2DevPersistedState } from "../../src/lib/tf-storage.js";
+
+function makeEvent(
+  overrides: Partial<AutoTrackerV2NativeEvent> &
+    Pick<AutoTrackerV2NativeEvent, "kind" | "timestampMs">,
+): AutoTrackerV2NativeEvent {
+  return {
+    id: overrides.id ?? `ev-${overrides.timestampMs}`,
+    platform: "macos",
+    ...overrides,
+  };
+}
 
 function makeSpan(
   overrides: Partial<TfAutotrackerV2PreviewSpan> &
@@ -47,6 +60,38 @@ function makeSpan(
     sourceEventIds: overrides.sourceEventIds ?? [overrides.id],
     classification: overrides.classification,
     classificationReason: overrides.classificationReason,
+  };
+}
+
+function finalizedSessionFromSpan(
+  span: TfAutotrackerV2PreviewSpan,
+  overrides: Partial<TfAutotrackerV2FinalizedPreviewSession> = {},
+): TfAutotrackerV2FinalizedPreviewSession {
+  const isWebsite = span.kind === "website";
+  const targetStableId = isWebsite
+    ? span.browserUrl ?? span.label.toLowerCase()
+    : span.bundleId ?? span.appName ?? span.label.toLowerCase();
+
+  return {
+    previewSessionId: `${span.kind}:${targetStableId}:${span.startedAtMs}`,
+    startedAtMs: span.startedAtMs,
+    endedAtMs: span.endedAtMs ?? span.startedAtMs,
+    durationMs: span.durationMs ?? 0,
+    targetLabel: span.matchedRuleName ?? span.label,
+    matchedRuleName: span.matchedRuleName,
+    matchedRuleTarget: span.matchedRuleTarget,
+    sourceTargetStableId: targetStableId,
+    sourceSpanIds: [span.id],
+    sourceEventIds: [...span.sourceEventIds],
+    appName: span.appName,
+    bundleId: span.bundleId,
+    browserTitle: span.browserTitle,
+    browserUrl: span.browserUrl,
+    classificationReason: span.classificationReason,
+    classification: span.classification,
+    finalizedBy: "awayGraceElapsed",
+    isDistraction: span.classification === "distraction",
+    ...overrides,
   };
 }
 
@@ -1243,84 +1288,79 @@ test("stop-finalize writes the active tracked preview session", () => {
 });
 
 test("stop-save selects every eligible span in a multi-app run and finalizes the current active span", () => {
-  const previewSpans = [
-    makeSpan({
-      id: "span-uworld",
-      label: "www.uworld.com",
-      kind: "website",
-      browserTitle: "UWorld",
-      browserUrl: "https://www.uworld.com/qbank",
-      startedAtMs: 0,
-      endedAtMs: null,
-      durationMs: null,
-      classification: "tracked",
-      classificationReason: 'matched website rule "UWorld" (https://www.uworld.com) by host www.uworld.com',
-      matchedRuleName: "UWorld",
-      matchedRuleTarget: "https://www.uworld.com",
-    }),
-    makeSpan({
-      id: "span-goodnotes",
-      label: "GoodNotes",
-      kind: "app",
-      appName: "GoodNotes",
-      startedAtMs: 120_000,
-      endedAtMs: null,
-      durationMs: null,
-      classification: "unclassified",
-      classificationReason: "no matching rule",
-    }),
-    makeSpan({
-      id: "span-anki",
-      label: "Anki",
-      kind: "app",
-      appName: "Anki",
-      bundleId: "net.ankiweb.dtop",
-      startedAtMs: 240_000,
-      endedAtMs: null,
-      durationMs: null,
-      classification: "tracked",
-      classificationReason: 'matched app rule "Anki" (/Applications/Anki.app) by app name Anki',
-      matchedRuleName: "Anki",
-      matchedRuleTarget: "/Applications/Anki.app",
-    }),
-    makeSpan({
-      id: "span-chatgpt",
-      label: "ChatGPT",
-      kind: "app",
-      appName: "ChatGPT",
-      bundleId: "com.openai.chatgpt",
-      startedAtMs: 420_000,
-      endedAtMs: null,
-      durationMs: null,
-      classification: "tracked",
-      classificationReason: 'matched app rule "ChatGPT" (/Applications/ChatGPT.app) by app name ChatGPT',
-      matchedRuleName: "ChatGPT",
-      matchedRuleTarget: "/Applications/ChatGPT.app",
-    }),
-  ];
-  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
+  const previewSpans = buildAutoTrackerV2PreviewSpans(
+    [
+      makeEvent({
+        id: "ev-truelearn",
+        kind: "untrackedFocused",
+        timestampMs: 0,
+        appName: "Google Chrome",
+        bundleId: "com.google.Chrome",
+        browserTitle: "TrueLearn",
+        browserUrl: "https://www.truelearn.com/qbank",
+      }),
+      makeEvent({
+        id: "ev-goodnotes",
+        kind: "targetFocused",
+        timestampMs: 120_000,
+        appName: "Goodnotes.app",
+        bundleId: "com.goodnotesapp.mac",
+      }),
+      makeEvent({
+        id: "ev-anki",
+        kind: "targetFocused",
+        timestampMs: 240_000,
+        appName: "Anki",
+        bundleId: "net.ankiweb.dtop",
+      }),
+      makeEvent({
+        id: "ev-things3",
+        kind: "targetFocused",
+        timestampMs: 360_000,
+        appName: "Things 3",
+        bundleId: "com.culturedcode.ThingsMac",
+      }),
+      makeEvent({
+        id: "ev-chatgpt",
+        kind: "targetFocused",
+        timestampMs: 480_000,
+        appName: "ChatGPT",
+        bundleId: "com.openai.chatgpt",
+      }),
+    ],
+    {
+      autoApps: [
+        { id: "rule-goodnotes", name: "Goodnotes", target: "/Applications/Goodnotes.app", kind: "app" },
+        { id: "rule-anki", name: "Anki", target: "/Applications/Anki.app", kind: "app" },
+        { id: "rule-things3", name: "Things3", target: "/Applications/Things3.app", kind: "app" },
+      ],
+      autoWebsites: [{ id: "rule-truelearn", name: "TrueLearn", target: "https://www.truelearn.com", kind: "website" }],
+      distractionApps: [{ id: "rule-chatgpt", name: "ChatGPT", target: "/Applications/ChatGPT.app", kind: "app" }],
+      distractionWebsites: [],
+    },
+  );
+  const finalizedPreviewSessions = previewSpans.map((span) => finalizedSessionFromSpan(span));
   const selection = selectAutoTrackerV2StopSavePreviewSessions({
-    finalizedPreviewSessions: preview.finalizedPreviewSessions,
+    finalizedPreviewSessions,
     previewSpans,
-    state: preview.state,
+    state: buildAutoTrackerV2ReducerPreview([]).state,
     nowMs: 480_000,
     writtenPreviewSessionIds: [],
   });
 
   assert.equal(selection.reason, "eligible");
-  assert.equal(selection.previewSessions.length, 3);
+  assert.equal(selection.previewSessions.length, 5);
   assert.deepEqual(selection.previewSessions.map((session) => session.targetLabel), [
-    "UWorld",
+    "TrueLearn",
+    "Goodnotes",
     "Anki",
+    "Things3",
     "ChatGPT",
   ]);
-  assert.equal(
-    selection.previewSessions.some((session) => session.targetLabel === "GoodNotes"),
-    false,
-  );
-  assert.equal(selection.previewSessions[2]?.endedAtMs, 480_000);
-  assert.equal(selection.previewSessions[2]?.classification, "tracked");
-  assert.equal(selection.names[2], "ChatGPT");
+  assert.equal(selection.previewSessions[1]?.endedAtMs, 240_000);
+  assert.equal(selection.previewSessions[3]?.endedAtMs, 480_000);
+  assert.equal(selection.previewSessions[4]?.classification, "distraction");
+  assert.equal(selection.names[4], "ChatGPT");
 });
 
 test("stop-save reports alreadyWritten when every eligible span in the run was already saved", () => {

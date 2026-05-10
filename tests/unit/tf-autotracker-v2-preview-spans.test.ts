@@ -492,6 +492,90 @@ test("/Applications/ChatGPT.app matches appName ChatGPT", () => {
   );
 });
 
+test("app rules match Goodnotes and Things3 variants symmetrically for allowed and distraction rules", () => {
+  const goodnotesRule = {
+    id: "rule-goodnotes",
+    name: "Goodnotes",
+    target: "/Applications/Goodnotes.app",
+    kind: "app",
+  };
+  const thingsRule = {
+    id: "rule-things3",
+    name: "Things3",
+    target: "/Applications/Things3.app",
+    kind: "app",
+  };
+
+  const allowedSettings = makeSettings({
+    autoApps: [goodnotesRule, thingsRule],
+  });
+  const distractionSettings = makeSettings({
+    distractionApps: [goodnotesRule, thingsRule],
+  });
+
+  const cases = [
+    {
+      description: "Goodnotes appName",
+      event: makeEvent({
+        id: "ev-goodnotes-name",
+        kind: "targetFocused",
+        timestampMs: 1000,
+        appName: "Goodnotes",
+        bundleId: "com.goodnotesapp.mac",
+      }),
+      expectedRuleName: "Goodnotes",
+    },
+    {
+      description: "Goodnotes.app appName",
+      event: makeEvent({
+        id: "ev-goodnotes-app-name",
+        kind: "targetFocused",
+        timestampMs: 2000,
+        appName: "Goodnotes.app",
+        bundleId: "com.goodnotesapp.mac",
+      }),
+      expectedRuleName: "Goodnotes",
+    },
+    {
+      description: "Things 3 appName",
+      event: makeEvent({
+        id: "ev-things3-name",
+        kind: "targetFocused",
+        timestampMs: 3000,
+        appName: "Things 3",
+        bundleId: "com.culturedcode.ThingsMac",
+      }),
+      expectedRuleName: "Things3",
+    },
+  ] as const;
+
+  for (const testCase of cases) {
+    const allowedSpans = buildAutoTrackerV2PreviewSpans([testCase.event], allowedSettings);
+    assert.equal(
+      allowedSpans[0]?.classification,
+      "tracked",
+      `${testCase.description} should classify as tracked`,
+    );
+    assert.equal(
+      allowedSpans[0]?.matchedRuleName,
+      testCase.expectedRuleName,
+      `${testCase.description} should match the allowed rule`,
+    );
+
+    const distractionSpans = buildAutoTrackerV2PreviewSpans([testCase.event], distractionSettings);
+    assert.equal(
+      distractionSpans[0]?.classification,
+      "distraction",
+      `${testCase.description} should classify as distraction`,
+    );
+    assert.equal(
+      distractionSpans[0]?.matchedRuleName,
+      testCase.expectedRuleName,
+      `${testCase.description} should match the distraction rule`,
+    );
+  }
+});
+
 test("named website rule carries friendly match metadata", () => {
   const events = [
     makeEvent({
