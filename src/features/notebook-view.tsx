@@ -149,8 +149,8 @@ function nowIso() {
 
 const NOTEBOOK_FLOATING_MENU_GAP = 8;
 const NOTEBOOK_FLOATING_MENU_VIEWPORT_MARGIN = 8;
-const NOTEBOOK_EXPORT_MENU_WIDTH = 160;
-const NOTEBOOK_EXPORT_MENU_ESTIMATED_HEIGHT = 144;
+const NOTEBOOK_EXPORT_MENU_WIDTH = 176;
+const NOTEBOOK_EXPORT_MENU_ESTIMATED_HEIGHT = 176;
 const NOTEBOOK_OVERFLOW_MENU_WIDTH = 160;
 const NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT = 96;
 
@@ -1524,7 +1524,7 @@ export function NotebookView() {
               onClick={() => {
                 void exportActivePage("txt");
               }}
-              className="notebook-floating-menu__item"
+              className="notebook-floating-menu__item whitespace-nowrap"
             >
               TXT text
             </button>
@@ -1533,7 +1533,7 @@ export function NotebookView() {
               onClick={() => {
                 void exportActivePage("html");
               }}
-              className="notebook-floating-menu__item"
+              className="notebook-floating-menu__item whitespace-nowrap"
             >
               HTML page
             </button>
@@ -1542,14 +1542,14 @@ export function NotebookView() {
               onClick={() => {
                 void exportActivePage("markdown");
               }}
-              className="notebook-floating-menu__item"
+              className="notebook-floating-menu__item whitespace-nowrap"
             >
               Markdown note
             </button>
             <button
               type="button"
               onClick={openImportPicker}
-              className="notebook-floating-menu__item"
+              className="notebook-floating-menu__item whitespace-nowrap"
             >
               Import file
             </button>
