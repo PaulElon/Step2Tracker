@@ -6,7 +6,6 @@ import { fieldClassName, primaryButtonClassName, secondaryButtonClassName } from
 import type { TfSessionLog } from "../../types/models";
 import { AutoTrackerV2UserControlStrip } from "./autotracker-v2-user-control-card";
 import { useAutoTrackerV2SessionControl } from "./autotracker-v2-session-control";
-import { buildAutoTrackerV2UserModeStatusCopy } from "../../lib/tf-autotracker-v2-user-mode-copy";
 
 const EMPTY_FORM = {
   method: "",
@@ -495,47 +494,11 @@ export function SessionLogPanel() {
             <button className={primaryButtonClassName} onClick={() => setShowAddForm(true)}>
               + Add session
             </button>
-            {FF.autotrackerV2UserMode ? (
-              <AutoTrackerV2UserControlStrip
-                isRunning={autoTracker.isRunning}
-                isActionBusy={autoTracker.isActionBusy}
-                onStart={autoTracker.onStart}
-                onStopAndSave={autoTracker.onStopAndSave}
-              />
-            ) : null}
           </div>
         </div>
 
         {FF.autotrackerV2UserMode ? (
-          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-3 text-sm leading-6 text-slate-300">
-            {(() => {
-              const statusCopy = buildAutoTrackerV2UserModeStatusCopy({
-                isRunning: autoTracker.isRunning,
-                lastDetectedAppName: autoTracker.lastDetectedAppName,
-                runningElapsedLabel: autoTracker.runningElapsedLabel,
-              });
-
-              return (
-                <>
-                  <span className={autoTracker.isRunning ? "font-medium text-emerald-300" : "font-medium text-slate-200"}>
-                    {statusCopy.statusLine}
-                  </span>
-                  <span className="text-slate-400">{statusCopy.lastDetectedLine}</span>
-                </>
-              );
-            })()}
-            {autoTracker.message && autoTracker.message.tone !== "success" ? (
-              <span
-                className={`rounded-full border px-2 py-1 text-xs ${
-                  autoTracker.message.tone === "error"
-                    ? "border-rose-500/20 bg-rose-500/10 text-rose-200"
-                    : "border-cyan-500/20 bg-cyan-500/10 text-cyan-100"
-                }`}
-              >
-                {autoTracker.message.text}
-              </span>
-            ) : null}
-          </div>
+          <AutoTrackerV2UserControlStrip control={autoTracker} />
         ) : null}
 
         {showTimer ? (
