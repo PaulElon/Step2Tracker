@@ -1,14 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { ModalShell } from "../components/modal-shell";
 import { NotebookEditorAdapter } from "../components/notebook-editor-adapter";
 import { richTextToPlain } from "../components/rich-text-editor";
 import { embedNotebookImagesInHtml, purgeOrphanedNotebookImages } from "../lib/notebook-images";
+import {
+  buildNotebookExportFileName,
+  createNotebookHtmlExport,
+  createNotebookMarkdownExport,
+  createNotebookTxtExport,
+  parseNotebookImport,
+  type NotebookExportFormat,
+} from "../lib/notebook-io";
 import { useAppStore } from "../state/app-store";
 import type { NotebookDocument, NotebookFolder, NotebookPage } from "../types/models";
-
-type NotebookExportFormat = "txt" | "html" | "markdown";
 type NotebookSaveStatus = "idle" | "saving" | "saved" | "error";
 type ActionStatus = null | { kind: "success" | "error"; message: string };
 type PromptState =
@@ -143,8 +149,8 @@ function nowIso() {
 
 const NOTEBOOK_FLOATING_MENU_GAP = 8;
 const NOTEBOOK_FLOATING_MENU_VIEWPORT_MARGIN = 8;
-const NOTEBOOK_EXPORT_MENU_WIDTH = 144;
-const NOTEBOOK_EXPORT_MENU_ESTIMATED_HEIGHT = 112;
+const NOTEBOOK_EXPORT_MENU_WIDTH = 176;
+const NOTEBOOK_EXPORT_MENU_ESTIMATED_HEIGHT = 176;
 const NOTEBOOK_OVERFLOW_MENU_WIDTH = 160;
 const NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT = 96;
 
@@ -202,68 +208,6 @@ function createPage(title: string, order: number): NotebookPage {
     createdAt: now,
     updatedAt: now,
   };
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function sanitizeFileNameSegment(value: string) {
-  const fallback = "notebook-page";
-  const cleaned = value
-    .trim()
-    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^[.-]+|[.-]+$/g, "");
-  return cleaned || fallback;
-}
-
-function normalizeExportText(value: string) {
-  return value.replace(/\r\n/g, "\n").replace(/\u00a0/g, " ").trimEnd();
-}
-
-function createTxtExport(document: NotebookDocument, page: NotebookPage) {
-  const documentTitle = document.title.trim() || "Untitled Document";
-  const pageTitle = page.title.trim() || "Page 1";
-  const plainBody = normalizeExportText(richTextToPlain(page.contentHtml));
-  return plainBody ? `${documentTitle}\n${pageTitle}\n\n${plainBody}\n` : `${documentTitle}\n${pageTitle}\n`;
-}
-
-function createMarkdownExport(document: NotebookDocument, page: NotebookPage) {
-  const documentTitle = document.title.trim() || "Untitled Document";
-  const pageTitle = page.title.trim() || "Page 1";
-  const plainBody = normalizeExportText(richTextToPlain(page.contentHtml)).replace(/\n{3,}/g, "\n\n");
-  return plainBody ? `# ${documentTitle}\n\n## ${pageTitle}\n\n${plainBody}\n` : `# ${documentTitle}\n\n## ${pageTitle}\n`;
-}
-
-function createHtmlExport(document: NotebookDocument, page: NotebookPage) {
-  const documentTitle = document.title.trim() || "Untitled Document";
-  const pageTitle = page.title.trim() || "Page 1";
-  const escapedDocumentTitle = escapeHtml(documentTitle);
-  const escapedPageTitle = escapeHtml(pageTitle);
-  const contentHtml = page.contentHtml.trim();
-  const bodyHtml = contentHtml ? contentHtml : "<p></p>";
-  return [
-    "<!doctype html>",
-    "<html lang=\"en\">",
-    "<head>",
-    "  <meta charset=\"utf-8\" />",
-    "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />",
-    `  <title>${escapedDocumentTitle} - ${escapedPageTitle}</title>`,
-    "</head>",
-    "<body>",
-    `  <h1>${escapedDocumentTitle}</h1>`,
-    `  <h2>${escapedPageTitle}</h2>`,
-    `  ${bodyHtml}`,
-    "</body>",
-    "</html>",
-  ].join("\n");
 }
 
 function buildFolderOptionLabels(folders: NotebookFolder[]) {
@@ -348,6 +292,7 @@ export function NotebookView() {
   const [notebookRailTargetSection, setNotebookRailTargetSection] = useState<NotebookRailSection>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const exportButtonRef = useRef<HTMLButtonElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const tileActionMenuRef = useRef<HTMLDivElement>(null);
   const promptInputRef = useRef<HTMLInputElement>(null);
   const pageTitleInputRef = useRef<HTMLInputElement>(null);
@@ -757,6 +702,11 @@ export function NotebookView() {
   function closeExportMenu() {
     setIsExportMenuOpen(false);
     setExportMenuPosition(null);
+  }
+
+  function openImportPicker() {
+    closeExportMenu();
+    importInputRef.current?.click();
   }
 
   async function ensureLegacyDocumentsMaterialized() {
@@ -1210,26 +1160,35 @@ export function NotebookView() {
     }
 
     try {
-      const baseName = sanitizeFileNameSegment(`${activeDocument.title || "Untitled Document"}-${activePage.title || "Page 1"}`);
-
-      let fileName: string;
+      const fileName = buildNotebookExportFileName(activeDocument, activePage, format);
       let content: string;
       let label: string;
       let missingImages: string[] = [];
 
       if (format === "txt") {
-        fileName = `${baseName}.txt`;
-        content = createTxtExport(activeDocument, activePage);
+        content = createNotebookTxtExport(
+          activeDocument.title.trim() || "Untitled Document",
+          activePage.title.trim() || "Page 1",
+          richTextToPlain(activePage.contentHtml),
+        );
         label = "TXT";
       } else if (format === "html") {
-        fileName = `${baseName}.html`;
-        const embedded = await embedNotebookImagesInHtml(createHtmlExport(activeDocument, activePage));
+        const embedded = await embedNotebookImagesInHtml(
+          createNotebookHtmlExport(
+            activeDocument.title.trim() || "Untitled Document",
+            activePage.title.trim() || "Page 1",
+            activePage.contentHtml,
+          ),
+        );
         content = embedded.html;
         missingImages = embedded.missingImages;
         label = "HTML";
       } else {
-        fileName = `${baseName}.md`;
-        content = createMarkdownExport(activeDocument, activePage);
+        content = createNotebookMarkdownExport(
+          activeDocument.title.trim() || "Untitled Document",
+          activePage.title.trim() || "Page 1",
+          richTextToPlain(activePage.contentHtml),
+        );
         label = "Markdown";
       }
 
@@ -1252,6 +1211,76 @@ export function NotebookView() {
           : error instanceof Error && error.message
             ? error.message
             : "Unable to export this notebook page.";
+      setStatus({
+        kind: "error",
+        message,
+      });
+    }
+  }
+
+  async function importNotebookFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    closeExportMenu();
+
+    if (!file) {
+      return;
+    }
+
+    if (!(await ensureLegacyDocumentsMaterialized())) {
+      return;
+    }
+
+    await flushPendingNotebookSave();
+
+    try {
+      const raw = await file.text();
+      const imported = parseNotebookImport(file.name, raw);
+      const targetFolderId = activeDocument?.folderId ?? currentFolderId ?? null;
+      const targetFolderDocuments = notebookDocuments.filter((document) => (document.folderId ?? null) === targetFolderId);
+      const nextOrder = targetFolderDocuments.reduce((maxOrder, document) => Math.max(maxOrder, document.order), -1) + 1;
+      const now = nowIso();
+      const nextDocument: NotebookDocument = {
+        id: makeId("nb-document"),
+        title: imported.documentTitle,
+        folderId: targetFolderId ?? undefined,
+        favorited: false,
+        order: nextOrder,
+        pages: [
+          {
+            id: makeId("nb-page"),
+            title: imported.pageTitle,
+            contentHtml: imported.contentHtml,
+            order: 0,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+        createdAt: now,
+        updatedAt: now,
+      };
+      const saved = await persistNotebookDocuments([...notebookDocuments, nextDocument]);
+      if (!saved) {
+        setStatus({
+          kind: "error",
+          message: "Unable to import the selected notebook file.",
+        });
+        return;
+      }
+
+      setActiveDocumentId(nextDocument.id);
+      setActivePageId(nextDocument.pages[0]?.id ?? null);
+      setStatus({
+        kind: "success",
+        message: `Imported "${nextDocument.title.trim() || "Untitled Document"}" as a new document.`,
+      });
+    } catch (error) {
+      const message =
+        typeof error === "string"
+          ? error
+          : error instanceof Error && error.message
+            ? error.message
+            : "Unable to import the selected notebook file.";
       setStatus({
         kind: "error",
         message,
@@ -1495,27 +1524,34 @@ export function NotebookView() {
               onClick={() => {
                 void exportActivePage("txt");
               }}
-              className="notebook-floating-menu__item"
+              className="notebook-floating-menu__item whitespace-nowrap"
             >
-              TXT
+              TXT text
             </button>
             <button
               type="button"
               onClick={() => {
                 void exportActivePage("html");
               }}
-              className="notebook-floating-menu__item"
+              className="notebook-floating-menu__item whitespace-nowrap"
             >
-              HTML
+              HTML page
             </button>
             <button
               type="button"
               onClick={() => {
                 void exportActivePage("markdown");
               }}
-              className="notebook-floating-menu__item"
+              className="notebook-floating-menu__item whitespace-nowrap"
             >
-              Markdown
+              Markdown note
+            </button>
+            <button
+              type="button"
+              onClick={openImportPicker}
+              className="notebook-floating-menu__item whitespace-nowrap"
+            >
+              Import file
             </button>
           </div>,
           notebookFloatingMenuPortalTarget,
@@ -2118,7 +2154,7 @@ export function NotebookView() {
                               }}
                               className={`${editorActionButtonClass} border-[color:var(--panel-border)] bg-white/70 text-slate-600`}
                             >
-                              Export
+                              Export page
                             </button>
                           </div>
                           <div className="relative">
@@ -2349,6 +2385,15 @@ export function NotebookView() {
           </form>
         </ModalShell>
       ) : null}
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".txt,.md,.markdown,.html,.htm,text/plain,text/markdown,text/html,application/xhtml+xml"
+        className="hidden"
+        onChange={(event) => {
+          void importNotebookFile(event);
+        }}
+      />
     </>
   );
 }
