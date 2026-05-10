@@ -29,6 +29,11 @@ export type AutoTrackerV2UserControlMessage = {
   text: string;
 } | null;
 
+export type AutoTrackerV2LastSavedRunSummary = {
+  entryCount: number;
+  names: string[];
+} | null;
+
 export type AutoTrackerV2SessionControl = {
   isRunning: boolean;
   isActionBusy: boolean;
@@ -42,6 +47,7 @@ export type AutoTrackerV2SessionControl = {
   previewNowMs: number;
   trackedRuleCount: number;
   distractionRuleCount: number;
+  lastSavedRunSummary: AutoTrackerV2LastSavedRunSummary;
   message: AutoTrackerV2UserControlMessage;
   onStart: () => void;
   onStopAndSave: () => void;
@@ -91,6 +97,8 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
   const [v2WrittenPreviewSessionIds, setV2WrittenPreviewSessionIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [v2LastSavedRunSummary, setV2LastSavedRunSummary] =
+    useState<AutoTrackerV2LastSavedRunSummary>(null);
   const [v2RunningStartedAtMs, setV2RunningStartedAtMs] = useState<number | null>(null);
   const [v2RunningNowMs, setV2RunningNowMs] = useState<number>(() => Date.now());
   const v2WritingPreviewSessionIdsRef = useRef<Set<string>>(new Set());
@@ -185,6 +193,7 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
       setV2SamplerStatus(samplerStatus);
       setV2RunningStartedAtMs(startedAtMs);
       setV2RunningNowMs(startedAtMs);
+      setV2LastSavedRunSummary(null);
       await refreshSamplerState();
     } catch (error) {
       const message =
@@ -279,6 +288,10 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
                 selectionCount === 1 ? "entry" : "entries"
               }.`,
         });
+        setV2LastSavedRunSummary({
+          entryCount: selectionCount,
+          names: selection.names,
+        });
         await refreshSamplerState();
       } finally {
         for (const previewSession of selection.previewSessions) {
@@ -312,6 +325,7 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
     previewNowMs,
     trackedRuleCount,
     distractionRuleCount,
+    lastSavedRunSummary: v2LastSavedRunSummary,
     message: v2UserModeMessage,
     onStart: () => {
       void handleStart();

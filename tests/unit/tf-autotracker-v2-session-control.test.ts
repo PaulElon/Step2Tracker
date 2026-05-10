@@ -5,46 +5,79 @@ import {
   buildAutoTrackerV2UserModeStatusCopy,
   buildAutoTrackerV2StopSaveCopy,
   buildAutoTrackerV2UserModeSetupCopy,
+  formatAutoTrackerV2SavedRunSummary,
   formatAutoTrackerV2ApproxDuration,
 } from "../../src/lib/tf-autotracker-v2-user-mode-copy.js";
 
-test("buildAutoTrackerV2UserModeStatusCopy uses concise user-facing wording", () => {
+test("buildAutoTrackerV2UserModeStatusCopy returns compact status labels", () => {
   assert.deepEqual(
     buildAutoTrackerV2UserModeStatusCopy({
       isRunning: false,
-      lastDetectedAppName: null,
+      savedEntryCount: 0,
+      needsSetup: false,
     }),
     {
-      statusLine: "Auto-Tracking is off.",
-      lastDetectedLine: "Last detected: None yet",
+      pillLabel: "Off",
+      metaLabel: null,
+      statusLine: "Off",
     },
   );
 
   assert.deepEqual(
     buildAutoTrackerV2UserModeStatusCopy({
       isRunning: true,
-      lastDetectedAppName: "UWorld",
+      savedEntryCount: 0,
+      needsSetup: false,
     }),
     {
-      statusLine: "Auto-Tracking is running.",
-      lastDetectedLine: "Last detected: UWorld",
+      pillLabel: "Running",
+      metaLabel: null,
+      statusLine: "Running",
     },
   );
 
   assert.deepEqual(
     buildAutoTrackerV2UserModeStatusCopy({
       isRunning: true,
-      lastDetectedAppName: "ChatGPT",
       runningElapsedLabel: "06:42",
+      savedEntryCount: 0,
+      needsSetup: false,
     }),
     {
-      statusLine: "Auto-Tracking is running · 06:42",
-      lastDetectedLine: "Last detected: ChatGPT",
+      pillLabel: "Running",
+      metaLabel: "06:42",
+      statusLine: "Running · 06:42",
+    },
+  );
+
+  assert.deepEqual(
+    buildAutoTrackerV2UserModeStatusCopy({
+      isRunning: false,
+      savedEntryCount: 5,
+      needsSetup: false,
+    }),
+    {
+      pillLabel: "Saved",
+      metaLabel: "5 entries",
+      statusLine: "Saved 5 entries",
+    },
+  );
+
+  assert.deepEqual(
+    buildAutoTrackerV2UserModeStatusCopy({
+      isRunning: false,
+      savedEntryCount: 0,
+      needsSetup: true,
+    }),
+    {
+      pillLabel: "Needs setup",
+      metaLabel: null,
+      statusLine: "Needs setup",
     },
   );
 });
 
-test("buildAutoTrackerV2StopSaveCopy highlights when the current run will save multiple entries", () => {
+test("buildAutoTrackerV2StopSaveCopy uses compact CTA wording", () => {
   assert.deepEqual(
     buildAutoTrackerV2StopSaveCopy({
       isRunning: true,
@@ -55,9 +88,7 @@ test("buildAutoTrackerV2StopSaveCopy highlights when the current run will save m
     }),
     {
       actionLabel: "Stop & Save 5 entries",
-      summaryLine: "Stop & Save will add 5 Session Log entries.",
-      detailLine:
-        "Every classified span in this run will save together. Unclassified activity stays out of the Session Log.",
+      supportingLine: null,
     },
   );
 
@@ -71,9 +102,35 @@ test("buildAutoTrackerV2StopSaveCopy highlights when the current run will save m
     }),
     {
       actionLabel: "Stop Auto-Tracking",
-      summaryLine: "Nothing will save yet.",
-      detailLine:
-        "This run only has unclassified activity so far. Add Allowed or Distraction rules if you want it counted.",
+      supportingLine: "Nothing tracked yet",
+    },
+  );
+
+  assert.deepEqual(
+    buildAutoTrackerV2StopSaveCopy({
+      isRunning: false,
+      saveableCount: 0,
+      hasDetectedActivity: true,
+      hasUnclassifiedActivity: false,
+      alreadyWritten: true,
+    }),
+    {
+      actionLabel: "Start New Run",
+      supportingLine: null,
+    },
+  );
+
+  assert.deepEqual(
+    buildAutoTrackerV2StopSaveCopy({
+      isRunning: false,
+      saveableCount: 0,
+      hasDetectedActivity: false,
+      hasUnclassifiedActivity: false,
+      alreadyWritten: false,
+    }),
+    {
+      actionLabel: "Start Auto-Tracking",
+      supportingLine: null,
     },
   );
 });
@@ -98,7 +155,7 @@ test("buildAutoTrackerV2UserModeSetupCopy reflects readiness vs missing setup", 
     {
       tone: "ready",
       label: "Ready",
-      detail: "Allowed rules: 4. Distraction rules: 1.",
+      detail: null,
     },
   );
 
@@ -120,14 +177,64 @@ test("buildAutoTrackerV2UserModeSetupCopy reflects readiness vs missing setup", 
     }),
     {
       tone: "attention",
-      label: "Setup needed",
-      detail: "Grant the required macOS permissions so foreground and idle detection can run.",
+      label: "Needs setup",
+      detail: "Grant the required macOS permissions to use Auto-Tracking.",
+    },
+  );
+
+  assert.deepEqual(
+    buildAutoTrackerV2UserModeSetupCopy({
+      nativeStatus: {
+        platform: "macos",
+        supported: true,
+        foregroundProbeAvailable: true,
+        idleProbeAvailable: true,
+        bufferLen: 0,
+        bufferCapacity: 500,
+        lastSampledAtMs: null,
+        note: "rules missing",
+      },
+      trackedRuleCount: 0,
+      distractionRuleCount: 0,
+      samplerHasError: false,
+    }),
+    {
+      tone: "attention",
+      label: "Needs setup",
+      detail: "Add allowed apps/sites in Tracker Settings.",
     },
   );
 });
 
 test("formatAutoTrackerV2ApproxDuration keeps timeline labels compact", () => {
-  assert.equal(formatAutoTrackerV2ApproxDuration(11_000), "~11s");
-  assert.equal(formatAutoTrackerV2ApproxDuration(70_000), "~1m 10s");
-  assert.equal(formatAutoTrackerV2ApproxDuration(3_720_000), "~1h 2m");
+  assert.equal(formatAutoTrackerV2ApproxDuration(11_000), "11s");
+  assert.equal(formatAutoTrackerV2ApproxDuration(70_000), "1m");
+  assert.equal(formatAutoTrackerV2ApproxDuration(119_000), "2m");
+  assert.equal(formatAutoTrackerV2ApproxDuration(3_720_000), "1h 2m");
+});
+
+test("formatAutoTrackerV2SavedRunSummary stays compact", () => {
+  assert.equal(
+    formatAutoTrackerV2SavedRunSummary([
+      "Goodnotes",
+      "Anki",
+      "TrueLearn",
+      "UWorld",
+      "ChatGPT",
+    ]),
+    "Goodnotes, Anki, TrueLearn, UWorld, ChatGPT",
+  );
+
+  assert.equal(
+    formatAutoTrackerV2SavedRunSummary([
+      "Goodnotes",
+      "Anki",
+      "TrueLearn",
+      "UWorld",
+      "ChatGPT",
+      "Pathoma",
+      "Boards & Beyond",
+    ]),
+    "Goodnotes, Anki, TrueLearn, UWorld, ChatGPT, +2 more",
+  );
 });
