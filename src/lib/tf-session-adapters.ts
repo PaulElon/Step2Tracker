@@ -13,6 +13,23 @@ export function methodKeyFromLabel(label: string): string {
   return key || "other";
 }
 
+export function splitAutoSessionMethodLabel(method: string): { label: string; isAuto: boolean } {
+  const trimmed = method.trim();
+  const match = trimmed.match(/^(.*)\s+\[Auto\]$/iu);
+
+  if (!match) {
+    return {
+      label: trimmed || "Other",
+      isAuto: false,
+    };
+  }
+
+  return {
+    label: match[1]?.trim() || trimmed,
+    isAuto: true,
+  };
+}
+
 export function studyBlockToSession(block: StudyBlock): TfSessionLog {
   const method = block.category || block.task || "Other";
   const methodKey = methodKeyFromLabel(method);

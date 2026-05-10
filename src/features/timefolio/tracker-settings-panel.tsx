@@ -93,7 +93,7 @@ const TRACKER_GROUPS: Array<{
     },
     namePlaceholder: "e.g. UWorld or Anki",
     targetPlaceholders: {
-      app: "/Applications/Anki.app",
+      app: "Anki.app",
       website: "https://apps.uworld.com",
     },
   },
@@ -107,7 +107,7 @@ const TRACKER_GROUPS: Array<{
     },
     namePlaceholder: "e.g. Reddit or ChatGPT",
     targetPlaceholders: {
-      app: "/Applications/ChatGPT.app",
+      app: "ChatGPT.app",
       website: "https://www.reddit.com",
     },
   },
@@ -277,6 +277,28 @@ function formatDateTimeFromMs(value: number | null | undefined): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function formatTrackerRuleTargetDisplay(target: string, kind: TfTrackerRuleKind): string {
+  const trimmed = target.trim();
+
+  if (kind !== "app") {
+    return trimmed;
+  }
+
+  if (!trimmed) {
+    return "App target";
+  }
+
+  if (trimmed.includes("/") || trimmed.toLowerCase().endsWith(".app")) {
+    return deriveTfTrackerRuleName(trimmed, "app");
+  }
+
+  if (/^[a-z0-9.-]+$/iu.test(trimmed) && trimmed.includes(".")) {
+    return "App identifier";
+  }
+
+  return deriveTfTrackerRuleName(trimmed, "app");
 }
 
 function formatFileSize(value: number | null | undefined): string {
@@ -634,7 +656,9 @@ function TrackerGroupCard({
                   <>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-white">{row.rule.name}</p>
-                      <p className="mt-0.5 truncate text-xs text-slate-400">{row.rule.target}</p>
+                      <p className="mt-0.5 truncate text-xs text-slate-400">
+                        {formatTrackerRuleTargetDisplay(row.rule.target, row.kind)}
+                      </p>
                     </div>
                     <button
                       type="button"
@@ -712,7 +736,9 @@ function TrackerGroupCard({
           </button>
         </div>
         {pendingTarget ? (
-          <p className="truncate px-1 pt-2 text-xs text-slate-400">{pendingTarget}</p>
+          <p className="truncate px-1 pt-2 text-xs text-slate-400">
+            {formatTrackerRuleTargetDisplay(pendingTarget, pendingKind)}
+          </p>
         ) : null}
       </div>
 
@@ -745,7 +771,7 @@ function TrackerGroupCard({
                 <p className="mt-2 text-sm text-slate-200">1. Open Finder.</p>
                 <p className="mt-1 text-sm text-slate-200">2. Open Applications and find the app.</p>
                 <p className="mt-1 text-sm text-slate-200">3. Right click the app and hold the option key.</p>
-                <p className="mt-1 text-sm text-slate-200">4. Choose Copy “App” as Pathname, then paste it below.</p>
+                <p className="mt-1 text-sm text-slate-200">4. Copy the app as a path, then paste it below.</p>
               </>
             ) : (
               <h3 className="text-base font-semibold text-white">
@@ -2125,12 +2151,11 @@ export function TrackerSettingsPanel() {
             Auto-Tracking setup
           </div>
           <p className="text-sm leading-6 text-cyan-50">
-            Add the apps and websites you want counted as study time in Allowed. Put social apps,
-            messaging, and other distractions in Distractions.
+            Add the apps and websites you want counted as study time in Allowed. Put distracting
+            apps and sites in Distractions.
           </p>
           <p className="text-xs leading-5 text-cyan-50/85">
-            Use Session Log to start or stop Auto-Tracking. Keep this section short and focused on
-            what matters for your studying.
+            Use Session Log to start or stop Auto-Tracking.
           </p>
         </section>
       ) : null}
