@@ -838,6 +838,7 @@ function mapNativeRecoveryEvent(
     appName: event.appName,
     bundleId: event.bundleId,
     bundlePath: event.bundlePath,
+    executablePath: event.executablePath,
     windowTitle: event.windowTitle,
     isIdle: event.isIdle,
     browserTitle: event.browserTitle,

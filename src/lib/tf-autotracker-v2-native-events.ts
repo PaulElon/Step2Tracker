@@ -24,6 +24,7 @@ export type AutoTrackerV2NativeEvent = {
   appName?: string;
   bundleId?: string;
   bundlePath?: string;
+  executablePath?: string;
   windowTitle?: string;
   isIdle?: boolean;
   /** Active browser tab title — set when foreground app is a known browser. */
