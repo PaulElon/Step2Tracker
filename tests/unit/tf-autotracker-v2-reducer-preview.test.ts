@@ -14,6 +14,7 @@ import {
   mapAutoTrackerV2FinalizedPreviewSessionToSessionLog,
   selectAutoTrackerV2RecoveredPreviewSession,
   selectAutoTrackerV2ContinuousWritePreviewSessions,
+  selectAutoTrackerV2StopSavePreviewSessions,
   selectAutoTrackerV2StopFinalizePreviewSession,
   shouldStartAutoTrackerV2StartupRecoveryHydration,
   type TfAutotrackerV2FinalizedPreviewSession,
@@ -1239,6 +1240,151 @@ test("stop-finalize writes the active tracked preview session", () => {
   assert.equal(selection.previewSession?.startedAtMs, 0);
   assert.equal(selection.previewSession?.endedAtMs, 75_000);
   assert.equal(selection.previewSession?.finalizedBy, "manualStop");
+});
+
+test("stop-save selects every eligible span in a multi-app run and finalizes the current active span", () => {
+  const previewSpans = [
+    makeSpan({
+      id: "span-uworld",
+      label: "www.uworld.com",
+      kind: "website",
+      browserTitle: "UWorld",
+      browserUrl: "https://www.uworld.com/qbank",
+      startedAtMs: 0,
+      endedAtMs: null,
+      durationMs: null,
+      classification: "tracked",
+      classificationReason: 'matched website rule "UWorld" (https://www.uworld.com) by host www.uworld.com',
+      matchedRuleName: "UWorld",
+      matchedRuleTarget: "https://www.uworld.com",
+    }),
+    makeSpan({
+      id: "span-goodnotes",
+      label: "GoodNotes",
+      kind: "app",
+      appName: "GoodNotes",
+      startedAtMs: 120_000,
+      endedAtMs: null,
+      durationMs: null,
+      classification: "unclassified",
+      classificationReason: "no matching rule",
+    }),
+    makeSpan({
+      id: "span-anki",
+      label: "Anki",
+      kind: "app",
+      appName: "Anki",
+      bundleId: "net.ankiweb.dtop",
+      startedAtMs: 240_000,
+      endedAtMs: null,
+      durationMs: null,
+      classification: "tracked",
+      classificationReason: 'matched app rule "Anki" (/Applications/Anki.app) by app name Anki',
+      matchedRuleName: "Anki",
+      matchedRuleTarget: "/Applications/Anki.app",
+    }),
+    makeSpan({
+      id: "span-chatgpt",
+      label: "ChatGPT",
+      kind: "app",
+      appName: "ChatGPT",
+      bundleId: "com.openai.chatgpt",
+      startedAtMs: 420_000,
+      endedAtMs: null,
+      durationMs: null,
+      classification: "tracked",
+      classificationReason: 'matched app rule "ChatGPT" (/Applications/ChatGPT.app) by app name ChatGPT',
+      matchedRuleName: "ChatGPT",
+      matchedRuleTarget: "/Applications/ChatGPT.app",
+    }),
+  ];
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
+  const selection = selectAutoTrackerV2StopSavePreviewSessions({
+    finalizedPreviewSessions: preview.finalizedPreviewSessions,
+    previewSpans,
+    state: preview.state,
+    nowMs: 480_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(selection.reason, "eligible");
+  assert.equal(selection.previewSessions.length, 3);
+  assert.deepEqual(selection.previewSessions.map((session) => session.targetLabel), [
+    "UWorld",
+    "Anki",
+    "ChatGPT",
+  ]);
+  assert.equal(
+    selection.previewSessions.some((session) => session.targetLabel === "GoodNotes"),
+    false,
+  );
+  assert.equal(selection.previewSessions[2]?.endedAtMs, 480_000);
+  assert.equal(selection.previewSessions[2]?.classification, "tracked");
+  assert.equal(selection.names[2], "ChatGPT");
+});
+
+test("stop-save reports alreadyWritten when every eligible span in the run was already saved", () => {
+  const previewSpans = [
+    makeSpan({
+      id: "span-uworld",
+      label: "www.uworld.com",
+      kind: "website",
+      browserTitle: "UWorld",
+      browserUrl: "https://www.uworld.com/qbank",
+      startedAtMs: 0,
+      endedAtMs: null,
+      durationMs: null,
+      classification: "tracked",
+      classificationReason: 'matched website rule "UWorld" (https://www.uworld.com) by host www.uworld.com',
+      matchedRuleName: "UWorld",
+      matchedRuleTarget: "https://www.uworld.com",
+    }),
+    makeSpan({
+      id: "span-anki",
+      label: "Anki",
+      kind: "app",
+      appName: "Anki",
+      bundleId: "net.ankiweb.dtop",
+      startedAtMs: 240_000,
+      endedAtMs: null,
+      durationMs: null,
+      classification: "tracked",
+      classificationReason: 'matched app rule "Anki" (/Applications/Anki.app) by app name Anki',
+      matchedRuleName: "Anki",
+      matchedRuleTarget: "/Applications/Anki.app",
+    }),
+    makeSpan({
+      id: "span-chatgpt",
+      label: "ChatGPT",
+      kind: "app",
+      appName: "ChatGPT",
+      bundleId: "com.openai.chatgpt",
+      startedAtMs: 420_000,
+      endedAtMs: null,
+      durationMs: null,
+      classification: "tracked",
+      classificationReason: 'matched app rule "ChatGPT" (/Applications/ChatGPT.app) by app name ChatGPT',
+      matchedRuleName: "ChatGPT",
+      matchedRuleTarget: "/Applications/ChatGPT.app",
+    }),
+  ];
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
+  const writtenPreviewSessionIds = new Set([
+    ...preview.finalizedPreviewSessions.map((session) => session.previewSessionId),
+    preview.state.status === "focused" ? preview.state.session.sessionId : "",
+  ]);
+
+  const selection = selectAutoTrackerV2StopSavePreviewSessions({
+    finalizedPreviewSessions: preview.finalizedPreviewSessions,
+    previewSpans,
+    state: preview.state,
+    nowMs: 480_000,
+    writtenPreviewSessionIds,
+  });
+
+  assert.equal(selection.previewSessions.length, 0);
+  assert.equal(selection.reason, "alreadyWritten");
+  assert.ok(selection.skippedDuplicateCount >= 1);
 });
 
 test("stop-finalize writes the awayPending tracked preview session when a newer TimeFolio span is present", () => {

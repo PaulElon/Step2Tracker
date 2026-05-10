@@ -27,4 +27,16 @@ test("buildAutoTrackerV2UserModeStatusCopy uses concise user-facing wording", ()
       lastDetectedLine: "Last detected: UWorld",
     },
   );
+
+  assert.deepEqual(
+    buildAutoTrackerV2UserModeStatusCopy({
+      isRunning: true,
+      lastDetectedAppName: "ChatGPT",
+      runningElapsedLabel: "06:42",
+    }),
+    {
+      statusLine: "Auto-Tracking is running · 06:42",
+      lastDetectedLine: "Last detected: ChatGPT",
+    },
+  );
 });

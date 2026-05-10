@@ -512,6 +512,7 @@ export function SessionLogPanel() {
               const statusCopy = buildAutoTrackerV2UserModeStatusCopy({
                 isRunning: autoTracker.isRunning,
                 lastDetectedAppName: autoTracker.lastDetectedAppName,
+                runningElapsedLabel: autoTracker.runningElapsedLabel,
               });
 
               return (

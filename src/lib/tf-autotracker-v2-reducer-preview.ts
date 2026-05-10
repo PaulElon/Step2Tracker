@@ -80,6 +80,13 @@ export type TfAutotrackerV2ContinuousWriteSelection = {
   names: string[];
 };
 
+export type TfAutotrackerV2StopSaveSelection = {
+  previewSessions: TfAutotrackerV2FinalizedPreviewSession[];
+  skippedDuplicateCount: number;
+  names: string[];
+  reason: "eligible" | "alreadyWritten" | "noEligibleSession";
+};
+
 export type TfAutotrackerV2StopFinalizeSelection = {
   previewSession: TfAutotrackerV2FinalizedPreviewSession | null;
   reason:
@@ -283,7 +290,7 @@ export function selectAutoTrackerV2StopFinalizePreviewSession({
       const previewSession =
         activeCandidate.classification === "distraction"
           ? createManualStopDistractionPreviewSession(activeCandidate, nowMs)
-          : finalizePreviewSessionAtStopTime(context.activePreviewSession, state.session, nowMs);
+          : createManualStopTrackedPreviewSession(activeCandidate, nowMs);
 
       if (previewSession) {
         if (writtenIds.has(previewSession.previewSessionId)) {
@@ -1021,6 +1028,133 @@ export function selectAutoTrackerV2ContinuousWritePreviewSessions({
   };
 }
 
+export function selectAutoTrackerV2StopSavePreviewSessions({
+  finalizedPreviewSessions,
+  previewSpans,
+  state,
+  nowMs,
+  writtenPreviewSessionIds,
+}: {
+  finalizedPreviewSessions: TfAutotrackerV2FinalizedPreviewSession[];
+  previewSpans: TfAutotrackerV2PreviewSpan[];
+  state: AutoTrackerV2SessionMachineState;
+  nowMs: number;
+  writtenPreviewSessionIds: Iterable<string>;
+}): TfAutotrackerV2StopSaveSelection {
+  const context = buildAutoTrackerV2ReducerPreviewContext(previewSpans);
+  const writtenIds = new Set(writtenPreviewSessionIds);
+  const previewSessionMap = new Map<string, TfAutotrackerV2FinalizedPreviewSession>();
+  let skippedDuplicateCount = 0;
+  let sawWrittenCandidate = false;
+
+  for (const previewSession of finalizedPreviewSessions) {
+    if (previewSession.classification === "unclassified") {
+      continue;
+    }
+
+    if (previewSessionMap.has(previewSession.previewSessionId)) {
+      skippedDuplicateCount += 1;
+      continue;
+    }
+
+    if (writtenIds.has(previewSession.previewSessionId)) {
+      skippedDuplicateCount += 1;
+      sawWrittenCandidate = true;
+      continue;
+    }
+
+    previewSessionMap.set(previewSession.previewSessionId, previewSession);
+  }
+
+  const stateSelection =
+    state.status !== "idle"
+      ? finalizePreviewSessionAtStopTime(context.activePreviewSession, state.session, nowMs)
+      : null;
+
+  if (stateSelection) {
+    if (previewSessionMap.has(stateSelection.previewSessionId)) {
+      skippedDuplicateCount += 1;
+    } else if (writtenIds.has(stateSelection.previewSessionId)) {
+      skippedDuplicateCount += 1;
+      sawWrittenCandidate = true;
+    } else {
+      previewSessionMap.set(stateSelection.previewSessionId, stateSelection);
+    }
+  }
+
+  const activeSelection = selectAutoTrackerV2StopFinalizePreviewSession({
+    previewSpans,
+    state,
+    nowMs,
+    writtenPreviewSessionIds,
+  });
+
+  if (activeSelection.previewSession) {
+    if (previewSessionMap.has(activeSelection.previewSession.previewSessionId)) {
+      skippedDuplicateCount += 1;
+      sawWrittenCandidate = sawWrittenCandidate || activeSelection.reason === "alreadyWritten";
+    } else if (writtenIds.has(activeSelection.previewSession.previewSessionId)) {
+      skippedDuplicateCount += 1;
+      sawWrittenCandidate = true;
+    } else {
+      previewSessionMap.set(
+        activeSelection.previewSession.previewSessionId,
+        activeSelection.previewSession,
+      );
+    }
+  } else if (activeSelection.reason === "alreadyWritten") {
+    sawWrittenCandidate = true;
+  }
+
+  const previewSessions = [...previewSessionMap.values()].sort((a, b) => {
+    const startedDelta = a.startedAtMs - b.startedAtMs;
+    if (startedDelta !== 0) {
+      return startedDelta;
+    }
+
+    const endedDelta = a.endedAtMs - b.endedAtMs;
+    if (endedDelta !== 0) {
+      return endedDelta;
+    }
+
+    return a.previewSessionId.localeCompare(b.previewSessionId);
+  });
+
+  return {
+    previewSessions,
+    skippedDuplicateCount,
+    names: previewSessions.map((previewSession) =>
+      deriveAutoTrackerV2PreviewSessionDisplayName(previewSession),
+    ),
+    reason:
+      previewSessions.length > 0
+        ? "eligible"
+        : sawWrittenCandidate
+          ? "alreadyWritten"
+          : "noEligibleSession",
+  };
+}
+
+function finalizePreviewSessionAtStopTime(
+  activePreviewSession: ActiveFinalizedPreviewSession | null,
+  session: AutoTrackerV2OpenSession | undefined,
+  nowMs: number,
+): TfAutotrackerV2FinalizedPreviewSession | null {
+  if (!activePreviewSession || !session) {
+    return null;
+  }
+
+  return finalizePreviewSession(activePreviewSession, {
+    sessionId: session.sessionId,
+    target: session.target,
+    startedAtMs: session.startedAtMs,
+    endedAtMs: nowMs,
+    pauseIntervals: [...session.pauseIntervals],
+    finalizedAtMs: nowMs,
+    finalizedBy: "manualStop",
+  });
+}
+
 function selectAutoTrackerV2StopFinalizePreviewSpanCandidates(
   sortedSpans: TfAutotrackerV2PreviewSpan[],
   preferredTargetStableId: string | null,
@@ -1061,24 +1195,41 @@ function selectLatestEligibleStopFinalizePreviewSpan(
   return null;
 }
 
-function finalizePreviewSessionAtStopTime(
-  activePreviewSession: ActiveFinalizedPreviewSession | null,
-  session: AutoTrackerV2OpenSession | undefined,
+function createManualStopTrackedPreviewSession(
+  span: TfAutotrackerV2PreviewSpan,
   nowMs: number,
 ): TfAutotrackerV2FinalizedPreviewSession | null {
-  if (!activePreviewSession || !session) {
+  if (
+    span.classification !== "tracked" ||
+    !Number.isFinite(nowMs) ||
+    nowMs <= span.startedAtMs
+  ) {
     return null;
   }
 
-  return finalizePreviewSession(activePreviewSession, {
-    sessionId: session.sessionId,
-    target: session.target,
-    startedAtMs: session.startedAtMs,
+  const target = buildReducerTarget(span);
+  const sourceTargetStableId = getPreviewSpanTargetStableId(span);
+
+  return {
+    previewSessionId: `${target.kind}:${sourceTargetStableId}:${span.startedAtMs}`,
+    startedAtMs: span.startedAtMs,
     endedAtMs: nowMs,
-    pauseIntervals: [...session.pauseIntervals],
-    finalizedAtMs: nowMs,
+    durationMs: Math.max(0, nowMs - span.startedAtMs),
+    targetLabel: getPreviewSpanTargetLabel(span),
+    matchedRuleName: span.matchedRuleName,
+    matchedRuleTarget: span.matchedRuleTarget,
+    sourceTargetStableId,
+    sourceSpanIds: [span.id],
+    sourceEventIds: [...span.sourceEventIds],
+    appName: span.appName,
+    bundleId: span.bundleId,
+    browserTitle: span.browserTitle,
+    browserUrl: span.browserUrl,
+    classificationReason: span.classificationReason,
+    classification: "tracked",
     finalizedBy: "manualStop",
-  });
+    isDistraction: false,
+  };
 }
 
 function isEligibleStopFinalizePreviewSpan(span: TfAutotrackerV2PreviewSpan): boolean {

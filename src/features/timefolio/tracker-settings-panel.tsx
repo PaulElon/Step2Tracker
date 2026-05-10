@@ -36,7 +36,7 @@ import {
   mapAutoTrackerV2FinalizedPreviewSessionToSessionLog,
   selectAutoTrackerV2RecoveredPreviewSession,
   selectAutoTrackerV2ContinuousWritePreviewSessions,
-  selectAutoTrackerV2StopFinalizePreviewSession,
+  selectAutoTrackerV2StopSavePreviewSessions,
   shouldStartAutoTrackerV2StartupRecoveryHydration,
   type TfAutotrackerV2FinalizedPreviewSession,
 } from "../../lib/tf-autotracker-v2-reducer-preview";
@@ -1889,19 +1889,22 @@ export function TrackerSettingsPanel() {
     setV2IsStopFinalizing(true);
 
     try {
-      const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+      const nowMs = Date.now();
+      const selection = selectAutoTrackerV2StopSavePreviewSessions({
+        finalizedPreviewSessions,
         previewSpans: buildAutoTrackerV2PreviewSpans(
           v2Snapshot?.events ?? [],
           classificationSettings,
         ),
         state: reducerPreview.state,
-        nowMs: Date.now(),
+        nowMs,
         writtenPreviewSessionIds: new Set([
           ...v2WrittenPreviewSessionIds,
           ...v2WritingPreviewSessionIdsRef.current,
         ]),
       });
       let stoppedSampler = false;
+      const selectionCount = selection.previewSessions.length;
 
       if (isSamplerRunning) {
         const samplerStatus = await stopAutoTrackerV2NativeSampler();
@@ -1909,11 +1912,11 @@ export function TrackerSettingsPanel() {
         stoppedSampler = true;
       }
 
-      if (!selection.previewSession) {
+      if (selectionCount === 0) {
         const reasonText =
           selection.reason === "alreadyWritten"
-            ? "That tracked/distraction preview session was already written."
-            : "No eligible active tracked/distraction session was open.";
+            ? "Those tracked/distraction preview sessions were already written."
+            : "No eligible tracked/distraction session was open.";
         setV2StopFinalizeMessage({
           tone: "info",
           text: stoppedSampler ? `Stopped native sampler. ${reasonText}` : reasonText,
@@ -1921,17 +1924,29 @@ export function TrackerSettingsPanel() {
         return;
       }
 
-      v2WritingPreviewSessionIdsRef.current.add(selection.previewSession.previewSessionId);
+      for (const previewSession of selection.previewSessions) {
+        v2WritingPreviewSessionIdsRef.current.add(previewSession.previewSessionId);
+      }
       try {
-        const method = await writeAutoTrackerV2PreviewSession(selection.previewSession);
+        const names: string[] = [];
+        for (const previewSession of selection.previewSessions) {
+          const method = await writeAutoTrackerV2PreviewSession(previewSession);
+          names.push(method);
+        }
         setV2StopFinalizeMessage({
           tone: "success",
           text: stoppedSampler
-            ? `Stopped native sampler and wrote ${method} to Session Log.`
-            : `Wrote ${method} to Session Log.`,
+            ? selectionCount === 1
+              ? `Stopped native sampler and wrote ${names[0]} to Session Log.`
+              : `Stopped native sampler and wrote ${selectionCount} Session Log entries.`
+            : selectionCount === 1
+              ? `Wrote ${names[0]} to Session Log.`
+              : `Wrote ${selectionCount} Session Log entries.`,
         });
       } finally {
-        v2WritingPreviewSessionIdsRef.current.delete(selection.previewSession.previewSessionId);
+        for (const previewSession of selection.previewSessions) {
+          v2WritingPreviewSessionIdsRef.current.delete(previewSession.previewSessionId);
+        }
       }
     } catch (err) {
       const message =
