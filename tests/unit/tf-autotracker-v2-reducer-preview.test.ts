@@ -15,6 +15,7 @@ import {
   mapAutoTrackerV2FinalizedPreviewSessionToSessionLog,
   selectAutoTrackerV2RecoveredPreviewSession,
   selectAutoTrackerV2ContinuousWritePreviewSessions,
+  selectAutoTrackerV2StopSaveRunSpans,
   selectAutoTrackerV2StopSavePreviewSessions,
   selectAutoTrackerV2StopFinalizePreviewSession,
   shouldStartAutoTrackerV2StartupRecoveryHydration,
@@ -94,6 +95,52 @@ function finalizedSessionFromSpan(
     ...overrides,
   };
 }
+
+const PAUL_RUN_SETTINGS: TfAutotrackerV2ClassificationSettings = {
+  autoApps: [
+    {
+      id: "rule-goodnotes",
+      name: "Goodnotes",
+      target: "/Applications/Goodnotes.app",
+      kind: "app",
+    },
+    {
+      id: "rule-anki",
+      name: "Anki",
+      target: "/Applications/Anki.app",
+      kind: "app",
+    },
+  ],
+  autoWebsites: [
+    {
+      id: "rule-truelearn",
+      name: "TrueLearn",
+      target: "https://www.truelearn.com",
+      kind: "website",
+    },
+    {
+      id: "rule-uworld",
+      name: "UWorld",
+      target: "https://apps.uworld.com",
+      kind: "website",
+    },
+  ],
+  distractionApps: [
+    {
+      id: "rule-chatgpt",
+      name: "ChatGPT",
+      target: "/Applications/ChatGPT.app",
+      kind: "app",
+    },
+    {
+      id: "rule-codex",
+      name: "Codex",
+      target: "/Applications/Codex.app",
+      kind: "app",
+    },
+  ],
+  distractionWebsites: [],
+};
 
 function trackedUWorldSpan(overrides: Partial<TfAutotrackerV2PreviewSpan> = {}): TfAutotrackerV2PreviewSpan {
   return makeSpan({
@@ -1349,7 +1396,7 @@ test("stop-save selects every eligible span in a multi-app run and finalizes the
     finalizedPreviewSessions,
     previewSpans,
     state: buildAutoTrackerV2ReducerPreview([]).state,
-    nowMs: 480_000,
+    nowMs: 540_000,
     writtenPreviewSessionIds: [],
   });
 
@@ -1364,8 +1411,380 @@ test("stop-save selects every eligible span in a multi-app run and finalizes the
   ]);
   assert.equal(selection.previewSessions[1]?.endedAtMs, 240_000);
   assert.equal(selection.previewSessions[3]?.endedAtMs, 480_000);
+  assert.equal(selection.previewSessions[4]?.endedAtMs, 540_000);
   assert.equal(selection.previewSessions[4]?.classification, "distraction");
   assert.equal(selection.names[4], "Codex");
+});
+
+test("stop-save saves every classified span from Paul's exact run even when reducer finalization only exposes a subset", () => {
+  const previewSpans = buildAutoTrackerV2PreviewSpans(
+    [
+      makeEvent({
+        id: "ev-goodnotes",
+        kind: "targetFocused",
+        timestampMs: 0,
+        appName: "Goodnotes 6",
+        bundleId: "com.goodnotesapp.mac",
+        bundlePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+        executablePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+      }),
+      makeEvent({
+        id: "ev-anki",
+        kind: "targetFocused",
+        timestampMs: 70_000,
+        appName: "Python",
+        bundleId: "net.ankiweb.dtop",
+        executablePath: "/Users/paul/Library/Application Support/AnkiProgramFiles/.venv/bin/python",
+        processIdentityName: "Anki",
+      }),
+      makeEvent({
+        id: "ev-truelearn",
+        kind: "untrackedFocused",
+        timestampMs: 140_000,
+        appName: "Google Chrome",
+        bundleId: "com.google.Chrome",
+        browserTitle: "TrueLearn",
+        browserUrl: "https://www.truelearn.com/qbank",
+      }),
+      makeEvent({
+        id: "ev-uworld",
+        kind: "untrackedFocused",
+        timestampMs: 210_000,
+        appName: "Google Chrome",
+        bundleId: "com.google.Chrome",
+        browserTitle: "UWorld",
+        browserUrl: "https://apps.uworld.com/courseapp/step2",
+      }),
+      makeEvent({
+        id: "ev-chatgpt",
+        kind: "targetFocused",
+        timestampMs: 280_000,
+        appName: "ChatGPT",
+        bundleId: "com.openai.chat",
+        bundlePath: "/Applications/ChatGPT.app",
+      }),
+      makeEvent({
+        id: "ev-timefolio",
+        kind: "targetFocused",
+        timestampMs: 350_000,
+        appName: "TimeFolio",
+        bundleId: "com.timefolio.app",
+      }),
+    ],
+    PAUL_RUN_SETTINGS,
+  );
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
+
+  assert.deepEqual(
+    preview.finalizedPreviewSessions.map((session) => session.targetLabel),
+    ["Goodnotes", "TrueLearn", "ChatGPT"],
+  );
+
+  const selection = selectAutoTrackerV2StopSavePreviewSessions({
+    finalizedPreviewSessions: preview.finalizedPreviewSessions,
+    previewSpans,
+    state: preview.state,
+    nowMs: 420_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(selection.reason, "eligible");
+  assert.deepEqual(selection.previewSessions.map((session) => session.targetLabel), [
+    "Goodnotes",
+    "Anki",
+    "TrueLearn",
+    "UWorld",
+    "ChatGPT",
+  ]);
+  assert.deepEqual(selection.previewSessions.map((session) => session.endedAtMs), [
+    70_000,
+    140_000,
+    210_000,
+    280_000,
+    350_000,
+  ]);
+  assert.equal(selection.previewSessions[4]?.classification, "distraction");
+});
+
+test("stop-save saves Codex as the final distraction app in the same five-span run", () => {
+  const previewSpans = buildAutoTrackerV2PreviewSpans(
+    [
+      makeEvent({
+        id: "ev-goodnotes",
+        kind: "targetFocused",
+        timestampMs: 0,
+        appName: "Goodnotes 6",
+        bundleId: "com.goodnotesapp.mac",
+        bundlePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+        executablePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+      }),
+      makeEvent({
+        id: "ev-anki",
+        kind: "targetFocused",
+        timestampMs: 70_000,
+        appName: "Python",
+        bundleId: "net.ankiweb.dtop",
+        executablePath: "/Users/paul/Library/Application Support/AnkiProgramFiles/.venv/bin/python",
+        processIdentityName: "Anki",
+      }),
+      makeEvent({
+        id: "ev-truelearn",
+        kind: "untrackedFocused",
+        timestampMs: 140_000,
+        appName: "Google Chrome",
+        bundleId: "com.google.Chrome",
+        browserTitle: "TrueLearn",
+        browserUrl: "https://www.truelearn.com/qbank",
+      }),
+      makeEvent({
+        id: "ev-uworld",
+        kind: "untrackedFocused",
+        timestampMs: 210_000,
+        appName: "Google Chrome",
+        bundleId: "com.google.Chrome",
+        browserTitle: "UWorld",
+        browserUrl: "https://apps.uworld.com/courseapp/step2",
+      }),
+      makeEvent({
+        id: "ev-codex",
+        kind: "targetFocused",
+        timestampMs: 280_000,
+        appName: "OpenAI Codex",
+        bundleId: "com.openai.codex",
+        bundlePath: "/Applications/Codex.app",
+      }),
+      makeEvent({
+        id: "ev-timefolio",
+        kind: "targetFocused",
+        timestampMs: 350_000,
+        appName: "TimeFolio",
+        bundleId: "com.timefolio.app",
+      }),
+    ],
+    PAUL_RUN_SETTINGS,
+  );
+
+  const selection = selectAutoTrackerV2StopSaveRunSpans({
+    previewSpans,
+    nowMs: 420_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(selection.reason, "eligible");
+  assert.deepEqual(selection.previewSessions.map((session) => session.targetLabel), [
+    "Goodnotes",
+    "Anki",
+    "TrueLearn",
+    "UWorld",
+    "Codex",
+  ]);
+  assert.equal(selection.previewSessions[4]?.classification, "distraction");
+  assert.equal(selection.previewSessions[4]?.isDistraction, true);
+});
+
+test("stop-save run ledger skips only the unclassified middle span without collapsing surrounding classified spans", () => {
+  const previewSpans = buildAutoTrackerV2PreviewSpans(
+    [
+      makeEvent({
+        id: "ev-goodnotes",
+        kind: "targetFocused",
+        timestampMs: 0,
+        appName: "Goodnotes 6",
+        bundleId: "com.goodnotesapp.mac",
+        bundlePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+        executablePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+      }),
+      makeEvent({
+        id: "ev-calculator",
+        kind: "targetFocused",
+        timestampMs: 70_000,
+        appName: "Calculator",
+        bundleId: "com.apple.Calculator",
+      }),
+      makeEvent({
+        id: "ev-anki",
+        kind: "targetFocused",
+        timestampMs: 140_000,
+        appName: "Python",
+        bundleId: "net.ankiweb.dtop",
+        executablePath: "/Users/paul/Library/Application Support/AnkiProgramFiles/.venv/bin/python",
+        processIdentityName: "Anki",
+      }),
+      makeEvent({
+        id: "ev-uworld",
+        kind: "untrackedFocused",
+        timestampMs: 210_000,
+        appName: "Google Chrome",
+        bundleId: "com.google.Chrome",
+        browserTitle: "UWorld",
+        browserUrl: "https://apps.uworld.com/courseapp/step2",
+      }),
+      makeEvent({
+        id: "ev-timefolio",
+        kind: "targetFocused",
+        timestampMs: 280_000,
+        appName: "TimeFolio",
+        bundleId: "com.timefolio.app",
+      }),
+    ],
+    PAUL_RUN_SETTINGS,
+  );
+
+  const selection = selectAutoTrackerV2StopSaveRunSpans({
+    previewSpans,
+    nowMs: 320_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.deepEqual(selection.previewSessions.map((session) => session.targetLabel), [
+    "Goodnotes",
+    "Anki",
+    "UWorld",
+  ]);
+  assert.deepEqual(selection.previewSessions.map((session) => session.endedAtMs), [
+    70_000,
+    210_000,
+    280_000,
+  ]);
+});
+
+test("stop-save run ledger saves the final active app at Stop and Save time even when it was never reducer-finalized", () => {
+  const previewSpans = buildAutoTrackerV2PreviewSpans(
+    [
+      makeEvent({
+        id: "ev-goodnotes",
+        kind: "targetFocused",
+        timestampMs: 0,
+        appName: "Goodnotes 6",
+        bundleId: "com.goodnotesapp.mac",
+        bundlePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+        executablePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+      }),
+      makeEvent({
+        id: "ev-anki",
+        kind: "targetFocused",
+        timestampMs: 70_000,
+        appName: "Python",
+        bundleId: "net.ankiweb.dtop",
+        executablePath: "/Users/paul/Library/Application Support/AnkiProgramFiles/.venv/bin/python",
+        processIdentityName: "Anki",
+      }),
+    ],
+    PAUL_RUN_SETTINGS,
+  );
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
+
+  assert.equal(preview.finalizedPreviewSessions.length, 0);
+
+  const selection = selectAutoTrackerV2StopSavePreviewSessions({
+    finalizedPreviewSessions: preview.finalizedPreviewSessions,
+    previewSpans,
+    state: preview.state,
+    nowMs: 140_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.deepEqual(selection.previewSessions.map((session) => session.targetLabel), [
+    "Goodnotes",
+    "Anki",
+  ]);
+  assert.equal(selection.previewSessions[1]?.endedAtMs, 140_000);
+});
+
+test("stop-save run ledger does not dedupe different resources that share the same name shape and duration", () => {
+  const previewSpans = [
+    makeSpan({
+      id: "span-truelearn",
+      label: "www.truelearn.com",
+      kind: "website",
+      browserTitle: "Question Bank",
+      browserUrl: "https://www.truelearn.com/qbank",
+      startedAtMs: 0,
+      endedAtMs: 70_000,
+      durationMs: 70_000,
+      classification: "tracked",
+      classificationReason: 'matched website rule "Question Bank" (https://www.truelearn.com) by host truelearn.com',
+      matchedRuleName: "Question Bank",
+      matchedRuleTarget: "https://www.truelearn.com",
+    }),
+    makeSpan({
+      id: "span-uworld",
+      label: "apps.uworld.com",
+      kind: "website",
+      browserTitle: "Question Bank",
+      browserUrl: "https://apps.uworld.com/courseapp/step2",
+      startedAtMs: 70_000,
+      endedAtMs: 140_000,
+      durationMs: 70_000,
+      classification: "tracked",
+      classificationReason: 'matched website rule "Question Bank" (https://apps.uworld.com) by host apps.uworld.com',
+      matchedRuleName: "Question Bank",
+      matchedRuleTarget: "https://apps.uworld.com",
+    }),
+  ];
+
+  const selection = selectAutoTrackerV2StopSaveRunSpans({
+    previewSpans,
+    nowMs: 140_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(selection.previewSessions.length, 2);
+  assert.notEqual(
+    selection.previewSessions[0]?.previewSessionId,
+    selection.previewSessions[1]?.previewSessionId,
+  );
+  assert.deepEqual(
+    selection.previewSessions.map((session) => session.sourceTargetStableId),
+    ["www.truelearn.com/qbank", "apps.uworld.com/courseapp"],
+  );
+});
+
+test("stop-save run ledger excludes already written preview session ids without deduping distinct later spans", () => {
+  const previewSpans = buildAutoTrackerV2PreviewSpans(
+    [
+      makeEvent({
+        id: "ev-goodnotes-1",
+        kind: "targetFocused",
+        timestampMs: 0,
+        appName: "Goodnotes 6",
+        bundleId: "com.goodnotesapp.mac",
+        bundlePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+        executablePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+      }),
+      makeEvent({
+        id: "ev-anki",
+        kind: "targetFocused",
+        timestampMs: 70_000,
+        appName: "Python",
+        bundleId: "net.ankiweb.dtop",
+        executablePath: "/Users/paul/Library/Application Support/AnkiProgramFiles/.venv/bin/python",
+        processIdentityName: "Anki",
+      }),
+      makeEvent({
+        id: "ev-goodnotes-2",
+        kind: "targetFocused",
+        timestampMs: 140_000,
+        appName: "Goodnotes 6",
+        bundleId: "com.goodnotesapp.mac",
+        bundlePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+        executablePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+      }),
+    ],
+    PAUL_RUN_SETTINGS,
+  );
+
+  const selection = selectAutoTrackerV2StopSaveRunSpans({
+    previewSpans,
+    nowMs: 210_000,
+    writtenPreviewSessionIds: ["app:com.goodnotesapp.mac:0"],
+  });
+
+  assert.deepEqual(selection.previewSessions.map((session) => session.targetLabel), [
+    "Anki",
+    "Goodnotes",
+  ]);
+  assert.equal(selection.skippedDuplicateCount, 1);
 });
 
 test("stop-save writes Goodnotes, Anki launcher, Stickies, Sticky Notepad, ChatGPT, and Codex from realistic identities", () => {
@@ -1527,11 +1946,12 @@ test("stop-save reports alreadyWritten when every eligible span in the run was a
       matchedRuleTarget: "/Applications/ChatGPT.app",
     }),
   ];
-  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
   const writtenPreviewSessionIds = new Set([
-    ...preview.finalizedPreviewSessions.map((session) => session.previewSessionId),
-    preview.state.status === "focused" ? preview.state.session.sessionId : "",
+    "website:www.uworld.com/qbank:0",
+    "app:net.ankiweb.dtop:240000",
+    "app:com.openai.chatgpt:420000",
   ]);
+  const preview = buildAutoTrackerV2ReducerPreview(previewSpans);
 
   const selection = selectAutoTrackerV2StopSavePreviewSessions({
     finalizedPreviewSessions: preview.finalizedPreviewSessions,
