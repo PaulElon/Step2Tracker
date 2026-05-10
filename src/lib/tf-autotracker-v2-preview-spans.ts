@@ -24,6 +24,7 @@ export type TfAutotrackerV2PreviewSpan = {
   bundleId?: string;
   bundlePath?: string;
   executablePath?: string;
+  processIdentityName?: string;
   browserTitle?: string;
   browserUrl?: string;
   startedAtMs: number;
@@ -82,11 +83,17 @@ function getAppIdentity(event: AutoTrackerV2NativeEvent): string {
   if (typeof event.bundleId === "string" && event.bundleId) return event.bundleId;
   if (typeof event.bundlePath === "string" && event.bundlePath) return event.bundlePath;
   if (typeof event.executablePath === "string" && event.executablePath) return event.executablePath;
+  if (typeof event.processIdentityName === "string" && event.processIdentityName) {
+    return event.processIdentityName;
+  }
   if (typeof event.appName === "string" && event.appName) return event.appName;
   return "unknown-app";
 }
 
 function getAppLabel(event: AutoTrackerV2NativeEvent): string {
+  if (typeof event.processIdentityName === "string" && event.processIdentityName) {
+    return event.processIdentityName;
+  }
   if (typeof event.appName === "string" && event.appName) return event.appName;
   if (typeof event.bundlePath === "string" && event.bundlePath) {
     const pathLabel = extractAppNameFromPath(event.bundlePath);
@@ -412,10 +419,12 @@ function collectEventAppIdentityCandidates(
   bundleId: string | undefined,
   bundlePath: string | undefined,
   executablePath: string | undefined,
+  processIdentityName: string | undefined,
   appName: string | undefined,
 ): AppIdentityCandidates {
   return {
     names: uniqueStrings([
+      ...(processIdentityName ? collectAppNameCandidates(processIdentityName) : []),
       ...(appName ? collectAppNameCandidates(appName) : []),
       ...(bundlePath ? collectAppNameCandidates(bundlePath) : []),
       ...(executablePath ? collectAppNameCandidates(executablePath) : []),
@@ -466,6 +475,7 @@ function matchesAppRule(
   bundleId: string | undefined,
   bundlePath: string | undefined,
   executablePath: string | undefined,
+  processIdentityName: string | undefined,
   appName: string | undefined,
   ruleInput: TfTrackerRuleInput,
   reasonPrefix: "matched app rule" | "matched distraction app rule" = "matched app rule",
@@ -480,6 +490,7 @@ function matchesAppRule(
     bundleId,
     bundlePath,
     executablePath,
+    processIdentityName,
     appName,
   );
 
@@ -547,6 +558,7 @@ function classifyPreviewSpan(
   bundleId: string | undefined,
   bundlePath: string | undefined,
   executablePath: string | undefined,
+  processIdentityName: string | undefined,
   appName: string | undefined,
   browserUrl: string | undefined,
   settings: TfAutotrackerV2ClassificationSettings,
@@ -607,13 +619,21 @@ function classifyPreviewSpan(
 
   if (kind === "app") {
     for (const rule of settings.autoApps) {
-      const matchReason = matchesAppRule(bundleId, bundlePath, executablePath, appName, rule);
+      const matchReason = matchesAppRule(
+        bundleId,
+        bundlePath,
+        executablePath,
+        processIdentityName,
+        appName,
+        rule,
+      );
       if (matchReason) {
         for (const distractionRule of settings.distractionApps) {
           const distractionMatchReason = matchesAppRule(
             bundleId,
             bundlePath,
             executablePath,
+            processIdentityName,
             appName,
             distractionRule,
             "matched distraction app rule",
@@ -641,6 +661,7 @@ function classifyPreviewSpan(
         bundleId,
         bundlePath,
         executablePath,
+        processIdentityName,
         appName,
         rule,
         "matched distraction app rule",
@@ -714,6 +735,7 @@ export function buildAutoTrackerV2PreviewSpans(
       ev.bundleId,
       ev.bundlePath,
       ev.executablePath,
+      ev.processIdentityName,
       ev.appName,
       ev.browserUrl,
       effectiveSettings,
@@ -729,6 +751,7 @@ export function buildAutoTrackerV2PreviewSpans(
       bundleId: ev.bundleId,
       bundlePath: ev.bundlePath,
       executablePath: ev.executablePath,
+      processIdentityName: ev.processIdentityName,
       browserTitle: ev.browserTitle,
       browserUrl: ev.browserUrl,
       startedAtMs: ev.timestampMs,

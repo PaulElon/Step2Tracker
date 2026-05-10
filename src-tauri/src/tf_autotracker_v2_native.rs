@@ -52,6 +52,8 @@ pub struct TfAutotrackerV2NativeEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub executable_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub process_identity_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub window_title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_idle: Option<bool>,
@@ -243,6 +245,16 @@ impl NativeBuffer {
         self.last_idle = None;
         self.last_browser_url = None;
     }
+}
+
+#[derive(Debug, Clone)]
+struct ForegroundAppInfo {
+    app_name: Option<String>,
+    bundle_id: Option<String>,
+    bundle_path: Option<String>,
+    executable_path: Option<String>,
+    process_identity_name: Option<String>,
+    pid: Option<i64>,
 }
 
 static BUFFER: Mutex<NativeBuffer> = Mutex::new(NativeBuffer::new());
@@ -482,6 +494,7 @@ fn make_event(kind: &str, timestamp_ms: i64) -> TfAutotrackerV2NativeEvent {
         bundle_id: None,
         bundle_path: None,
         executable_path: None,
+        process_identity_name: None,
         window_title: None,
         is_idle: None,
         browser_title: None,
@@ -1032,11 +1045,12 @@ fn run_command(_program: &str, _args: &[&str]) -> Result<String, String> {
 #[cfg(target_os = "macos")]
 fn parse_lsappinfo_info(
     raw: &str,
-) -> Option<(Option<String>, Option<String>, Option<String>, Option<String>)> {
+) -> Option<ForegroundAppInfo> {
     let mut app_name: Option<String> = None;
     let mut bundle_id: Option<String> = None;
     let mut bundle_path: Option<String> = None;
     let mut executable_path: Option<String> = None;
+    let mut pid: Option<i64> = None;
 
     let trimmed = raw.trim_start();
     if let Some(first_line) = trimmed.lines().next() {
@@ -1063,6 +1077,11 @@ fn parse_lsappinfo_info(
                 "bundleid" => bundle_id = Some(cleaned.to_string()),
                 "bundlepath" => bundle_path = Some(cleaned.to_string()),
                 "executablepath" => executable_path = Some(cleaned.to_string()),
+                "pid" | "processid" => {
+                    if let Ok(parsed_pid) = cleaned.parse::<i64>() {
+                        pid = Some(parsed_pid);
+                    }
+                }
                 _ => {}
             }
         }
@@ -1075,12 +1094,85 @@ fn parse_lsappinfo_info(
     {
         return None;
     }
-    Some((app_name, bundle_id, bundle_path, executable_path))
+    Some(ForegroundAppInfo {
+        app_name,
+        bundle_id,
+        bundle_path,
+        executable_path,
+        process_identity_name: None,
+        pid,
+    })
 }
 
 #[cfg(target_os = "macos")]
-fn read_foreground_app(
-) -> Result<(Option<String>, Option<String>, Option<String>, Option<String>), String> {
+fn extract_safe_process_identity_name(command: &str) -> Option<String> {
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    for needle in ["sys.argv[0]", "argv[0]"] {
+        let Some(needle_index) = trimmed.find(needle) else {
+            continue;
+        };
+        let after_needle = &trimmed[needle_index + needle.len()..];
+        let Some(eq_index) = after_needle.find('=') else {
+            continue;
+        };
+        let after_eq = after_needle[eq_index + 1..].trim_start();
+        let Some(quote) = after_eq.chars().next() else {
+            continue;
+        };
+        if quote != '\'' && quote != '"' {
+            continue;
+        }
+
+        let rest = &after_eq[quote.len_utf8()..];
+        let Some(end_index) = rest.find(quote) else {
+            continue;
+        };
+        let candidate = rest[..end_index].trim();
+        if is_safe_process_identity_candidate(candidate) {
+            return Some(candidate.to_string());
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn is_safe_process_identity_candidate(candidate: &str) -> bool {
+    if candidate.is_empty() || candidate.len() > 128 {
+        return false;
+    }
+    if candidate.contains('/') || candidate.contains('\\') {
+        return false;
+    }
+    if candidate.chars().any(|character| character.is_control()) {
+        return false;
+    }
+
+    candidate.chars().any(|character| character.is_ascii_alphanumeric())
+}
+
+#[cfg(target_os = "macos")]
+fn read_process_identity_name_from_pid(pid: i64) -> Option<String> {
+    let pid_string = pid.to_string();
+    let raw = run_command("/bin/ps", &["-p", &pid_string, "-o", "command="]).ok()?;
+    extract_safe_process_identity_name(&raw)
+}
+
+#[cfg(target_os = "macos")]
+fn enrich_foreground_app_info(mut info: ForegroundAppInfo) -> ForegroundAppInfo {
+    if info.process_identity_name.is_none() {
+        let pid = info.pid.or_else(|| read_foreground_app_osascript().ok().and_then(|fallback| fallback.pid));
+        info.process_identity_name = pid.and_then(read_process_identity_name_from_pid);
+    }
+    info
+}
+
+#[cfg(target_os = "macos")]
+fn read_foreground_app() -> Result<ForegroundAppInfo, String> {
     // `lsappinfo info front` returns empty output on macOS 14+.
     // Reliable pattern: get ASN from `lsappinfo front`, then query `lsappinfo info <ASN>`.
     let asn_raw = run_command("/usr/bin/lsappinfo", &["front"])
@@ -1092,17 +1184,17 @@ fn read_foreground_app(
     let info_raw = run_command("/usr/bin/lsappinfo", &["info", asn])
         .map_err(|e| format!("lsappinfo info {asn} failed: {e}"))?;
     match parse_lsappinfo_info(&info_raw) {
-        Some(result) => Ok(result),
+        Some(result) => Ok(enrich_foreground_app_info(result)),
         None => read_foreground_app_osascript()
+            .map(enrich_foreground_app_info)
             .map_err(|_| format!("lsappinfo info {asn} returned no parseable app data.")),
     }
 }
 
-/// osascript fallback: returns app name only (no bundle ID).
+/// osascript fallback: returns app name and best-effort pid (no bundle ID).
 #[cfg(target_os = "macos")]
-fn read_foreground_app_osascript(
-) -> Result<(Option<String>, Option<String>, Option<String>, Option<String>), String> {
-    let raw = run_command(
+fn read_foreground_app_osascript() -> Result<ForegroundAppInfo, String> {
+    let name_raw = run_command(
         "/usr/bin/osascript",
         &[
             "-e",
@@ -1110,16 +1202,33 @@ fn read_foreground_app_osascript(
         ],
     )
     .map_err(|e| format!("osascript foreground fallback failed: {e}"))?;
-    let name = raw.trim();
+    let pid_raw = run_command(
+        "/usr/bin/osascript",
+        &[
+            "-e",
+            "tell application \"System Events\" to get unix id of first application process whose frontmost is true",
+        ],
+    )
+    .ok();
+    let name = name_raw.trim();
     if name.is_empty() {
         return Err("osascript returned an empty app name.".to_string());
     }
-    Ok((Some(name.to_string()), None, None, None))
+    let pid = pid_raw
+        .as_deref()
+        .and_then(|value| value.trim().parse::<i64>().ok());
+    Ok(ForegroundAppInfo {
+        app_name: Some(name.to_string()),
+        bundle_id: None,
+        bundle_path: None,
+        executable_path: None,
+        process_identity_name: None,
+        pid,
+    })
 }
 
 #[cfg(not(target_os = "macos"))]
-fn read_foreground_app(
-) -> Result<(Option<String>, Option<String>, Option<String>, Option<String>), String> {
+fn read_foreground_app() -> Result<ForegroundAppInfo, String> {
     Err("Foreground app probe is only implemented for macOS in this slice.".to_string())
 }
 
@@ -1295,24 +1404,27 @@ fn capture_once_internal() -> NativeCaptureOutcome {
     let mut next_browser_url: Option<String> = None;
 
     match read_foreground_app() {
-        Ok((app_name, bundle_id, bundle_path, executable_path)) => {
+        Ok(foreground) => {
             foreground_ok = true;
             let mut event = make_event("untrackedFocused", timestamp_ms);
-            event.app_name = app_name.clone();
-            event.bundle_id = bundle_id.clone();
-            event.bundle_path = bundle_path.clone();
-            event.executable_path = executable_path.clone();
+            event.app_name = foreground.app_name.clone();
+            event.bundle_id = foreground.bundle_id.clone();
+            event.bundle_path = foreground.bundle_path.clone();
+            event.executable_path = foreground.executable_path.clone();
+            event.process_identity_name = foreground.process_identity_name.clone();
 
             // Enrich foreground event with active browser tab context.
-            if let Some(tab) = try_read_browser_tab(bundle_id.as_deref(), app_name.as_deref()) {
+            if let Some(tab) =
+                try_read_browser_tab(foreground.bundle_id.as_deref(), foreground.app_name.as_deref())
+            {
                 event.browser_title = tab.title;
                 event.browser_url = tab.url.clone();
                 event.browser_tab_error = tab.error;
                 next_browser_url = tab.url;
             }
 
-            next_bundle_id = bundle_id;
-            next_app_name = app_name;
+            next_bundle_id = foreground.bundle_id;
+            next_app_name = foreground.app_name;
             foreground_event = Some(event);
         }
         Err(error) => {
@@ -1685,18 +1797,36 @@ mod tests {
     #[test]
     fn parses_lsappinfo_info_output() {
         let raw = r#""Safari" ASN:0x0-0x12345:
+    pid=86724
     bundleID="com.apple.Safari"
     bundlepath="/Applications/Safari.app"
     executablepath="/Applications/Safari.app/Contents/MacOS/Safari"
 "#;
         let parsed = parse_lsappinfo_info(raw).expect("should parse");
-        assert_eq!(parsed.0.as_deref(), Some("Safari"));
-        assert_eq!(parsed.1.as_deref(), Some("com.apple.Safari"));
-        assert_eq!(parsed.2.as_deref(), Some("/Applications/Safari.app"));
+        assert_eq!(parsed.app_name.as_deref(), Some("Safari"));
+        assert_eq!(parsed.bundle_id.as_deref(), Some("com.apple.Safari"));
+        assert_eq!(parsed.bundle_path.as_deref(), Some("/Applications/Safari.app"));
         assert_eq!(
-            parsed.3.as_deref(),
+            parsed.executable_path.as_deref(),
             Some("/Applications/Safari.app/Contents/MacOS/Safari")
         );
+        assert_eq!(parsed.pid, Some(86724));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn extracts_safe_process_identity_from_sys_argv_assignment() {
+        let command = "/Users/paul/Library/Application Support/AnkiProgramFiles/.venv/bin/python -c import aqt, sys; sys.argv[0] = 'Anki'; aqt.run()";
+
+        assert_eq!(extract_safe_process_identity_name(command), Some("Anki".to_string()));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn does_not_expose_raw_paths_from_process_identity_helper() {
+        let command = "/Users/paul/Library/Application Support/AnkiProgramFiles/.venv/bin/python -c import aqt, sys; sys.argv[0] = '/Users/paul/Documents/Anki.apkg'; aqt.run()";
+
+        assert_eq!(extract_safe_process_identity_name(command), None);
     }
 
     #[cfg(target_os = "macos")]
@@ -1900,6 +2030,7 @@ mod tests {
                     bundle_id: Some("com.apple.Safari".to_string()),
                     bundle_path: Some("/Applications/Safari.app".to_string()),
                     executable_path: Some("/Applications/Safari.app/Contents/MacOS/Safari".to_string()),
+                    process_identity_name: None,
                     window_title: None,
                     is_idle: None,
                     browser_title: Some("UWorld".to_string()),
@@ -1916,6 +2047,7 @@ mod tests {
                     bundle_id: Some("com.apple.Safari".to_string()),
                     bundle_path: Some("/Applications/Safari.app".to_string()),
                     executable_path: Some("/Applications/Safari.app/Contents/MacOS/Safari".to_string()),
+                    process_identity_name: None,
                     window_title: None,
                     is_idle: None,
                     browser_title: Some("Reddit".to_string()),

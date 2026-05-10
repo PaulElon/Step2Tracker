@@ -428,6 +428,7 @@ function normalizeTfAutoTrackerV2DevEvent(
     bundleId: safeString(raw.bundleId).trim() || undefined,
     bundlePath: safeString(raw.bundlePath).trim() || undefined,
     executablePath: safeString(raw.executablePath).trim() || undefined,
+    processIdentityName: safeString(raw.processIdentityName).trim() || undefined,
     windowTitle: safeString(raw.windowTitle).trim() || undefined,
     isIdle: typeof raw.isIdle === "boolean" ? raw.isIdle : undefined,
     browserTitle: safeString(raw.browserTitle).trim() || undefined,

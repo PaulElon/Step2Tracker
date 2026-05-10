@@ -839,6 +839,7 @@ function mapNativeRecoveryEvent(
     bundleId: event.bundleId,
     bundlePath: event.bundlePath,
     executablePath: event.executablePath,
+    processIdentityName: event.processIdentityName,
     windowTitle: event.windowTitle,
     isIdle: event.isIdle,
     browserTitle: event.browserTitle,
@@ -1748,6 +1749,11 @@ function getAppStableId(span: TfAutotrackerV2PreviewSpan): string {
     return bundleId;
   }
 
+  const processIdentityName = span.processIdentityName?.trim();
+  if (processIdentityName) {
+    return processIdentityName;
+  }
+
   const appName = span.appName?.trim();
   if (appName) {
     return appName;
@@ -1760,6 +1766,11 @@ function getAppLabel(span: TfAutotrackerV2PreviewSpan): string {
   const matchedRuleName = span.matchedRuleName?.trim();
   if (matchedRuleName) {
     return matchedRuleName;
+  }
+
+  const processIdentityName = span.processIdentityName?.trim();
+  if (processIdentityName) {
+    return processIdentityName;
   }
 
   const appName = span.appName?.trim();

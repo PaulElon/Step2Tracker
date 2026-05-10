@@ -1368,6 +1368,120 @@ test("stop-save selects every eligible span in a multi-app run and finalizes the
   assert.equal(selection.names[4], "Codex");
 });
 
+test("stop-save writes Goodnotes, Anki launcher, Stickies, Sticky Notepad, ChatGPT, and Codex from realistic identities", () => {
+  const previewSpans = buildAutoTrackerV2PreviewSpans(
+    [
+      makeEvent({
+        id: "ev-goodnotes",
+        kind: "targetFocused",
+        timestampMs: 0,
+        appName: "Goodnotes 6",
+        bundleId: "com.goodnotesapp.mac",
+        bundlePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+        executablePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+      }),
+      makeEvent({
+        id: "ev-anki",
+        kind: "targetFocused",
+        timestampMs: 60_000,
+        appName: "Python",
+        bundleId: "net.ankiweb.dtop",
+        executablePath: "/Users/paul/Library/Application Support/AnkiProgramFiles/.venv/bin/python",
+        processIdentityName: "Anki",
+      }),
+      makeEvent({
+        id: "ev-stickies",
+        kind: "targetFocused",
+        timestampMs: 120_000,
+        appName: "Stickies",
+        bundleId: "com.apple.Stickies",
+        bundlePath: "/System/Applications/Stickies.app/Contents/MacOS/Stickies",
+        executablePath: "/System/Applications/Stickies.app/Contents/MacOS/Stickies",
+      }),
+      makeEvent({
+        id: "ev-sticky-notepad",
+        kind: "targetFocused",
+        timestampMs: 180_000,
+        appName: "Sticky Notepad",
+        bundleId: "com.example.sticky-notepad",
+        bundlePath: "/Applications/Sticky Notepad.app/Contents/MacOS/Sticky Notepad",
+        executablePath: "/Applications/Sticky Notepad.app/Contents/MacOS/Sticky Notepad",
+      }),
+      makeEvent({
+        id: "ev-chatgpt",
+        kind: "targetFocused",
+        timestampMs: 240_000,
+        appName: "ChatGPT",
+        bundleId: "com.openai.chat",
+      }),
+      makeEvent({
+        id: "ev-codex",
+        kind: "targetFocused",
+        timestampMs: 300_000,
+        appName: "OpenAI Codex",
+        bundleId: "com.openai.codex",
+        bundlePath: "/Applications/Codex.app",
+      }),
+      makeEvent({
+        id: "ev-calculator",
+        kind: "targetFocused",
+        timestampMs: 360_000,
+        appName: "Calculator",
+        bundleId: "com.apple.Calculator",
+      }),
+    ],
+    {
+      autoApps: [
+        { id: "rule-goodnotes", name: "Goodnotes", target: "/Applications/Goodnotes.app", kind: "app" },
+        { id: "rule-anki", name: "Anki", target: "/Applications/Anki.app", kind: "app" },
+        { id: "rule-stickies", name: "Stickies", target: "/System/Applications/Stickies.app", kind: "app" },
+        {
+          id: "rule-sticky-notepad",
+          name: "Sticky Notepad",
+          target: "/Applications/Sticky Notepad.app",
+          kind: "app",
+        },
+      ],
+      autoWebsites: [],
+      distractionApps: [
+        { id: "rule-chatgpt", name: "ChatGPT", target: "/Applications/ChatGPT.app", kind: "app" },
+        { id: "rule-codex", name: "Codex", target: "/Applications/Codex.app", kind: "app" },
+      ],
+      distractionWebsites: [],
+    },
+  );
+  const finalizedPreviewSessions = previewSpans.map((span) => finalizedSessionFromSpan(span));
+  const selection = selectAutoTrackerV2StopSavePreviewSessions({
+    finalizedPreviewSessions,
+    previewSpans,
+    state: { status: "idle", lastEventMs: 360_000 },
+    nowMs: 360_000,
+    writtenPreviewSessionIds: [],
+  });
+
+  assert.equal(selection.reason, "eligible");
+  assert.equal(selection.previewSessions.length, 6);
+  assert.deepEqual(selection.previewSessions.map((session) => session.targetLabel), [
+    "Goodnotes",
+    "Anki",
+    "Stickies",
+    "Sticky Notepad",
+    "ChatGPT",
+    "Codex",
+  ]);
+  assert.deepEqual(selection.names, [
+    "Goodnotes",
+    "Anki",
+    "Stickies",
+    "Sticky Notepad",
+    "ChatGPT",
+    "Codex",
+  ]);
+  assert.equal(selection.previewSessions[1]?.matchedRuleName, "Anki");
+  assert.equal(selection.previewSessions[4]?.classification, "distraction");
+  assert.equal(selection.previewSessions[5]?.classification, "distraction");
+});
+
 test("stop-save reports alreadyWritten when every eligible span in the run was already saved", () => {
   const previewSpans = [
     makeSpan({

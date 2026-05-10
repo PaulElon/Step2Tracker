@@ -473,6 +473,28 @@ test("/Applications/Anki.app matches appName Anki", () => {
   assert.equal(spans[0].matchedRuleTarget, "/Applications/Anki.app");
 });
 
+test("/Applications/Anki.app matches derived processIdentityName Anki from the python launcher", () => {
+  const events = [
+    makeEvent({
+      id: "ev-1",
+      kind: "targetFocused",
+      timestampMs: 1000,
+      appName: "Python",
+      bundleId: "net.ankiweb.dtop",
+      executablePath: "/Users/paul/Library/Application Support/AnkiProgramFiles/.venv/bin/python",
+      processIdentityName: "Anki",
+    }),
+  ];
+  const settings = makeSettings({ autoApps: ["/Applications/Anki.app"] });
+  const spans = buildAutoTrackerV2PreviewSpans(events, settings);
+  assert.equal(spans[0].classification, "tracked");
+  assert.equal(
+    spans[0].classificationReason,
+    'matched app rule "Anki" (/Applications/Anki.app) by app name Anki',
+  );
+  assert.equal(spans[0].processIdentityName, "Anki");
+});
+
 test("/Applications/ChatGPT.app matches appName ChatGPT", () => {
   const events = [
     makeEvent({
