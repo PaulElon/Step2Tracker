@@ -7,7 +7,7 @@ import {
 import {
   buildAutoTrackerV2ReducerPreview,
   mapAutoTrackerV2FinalizedPreviewSessionToSessionLog,
-  selectAutoTrackerV2StopFinalizePreviewSession,
+  selectAutoTrackerV2StopSavePreviewSessions,
   type TfAutotrackerV2FinalizedPreviewSession,
 } from "../../lib/tf-autotracker-v2-reducer-preview";
 import {
@@ -31,6 +31,7 @@ export type AutoTrackerV2SessionControl = {
   isActionBusy: boolean;
   isStopAndSaveBusy: boolean;
   lastDetectedAppName: string | null;
+  runningElapsedLabel: string | null;
   message: AutoTrackerV2UserControlMessage;
   onStart: () => void;
   onStopAndSave: () => void;
@@ -59,6 +60,14 @@ function toSessionLog(
   );
 }
 
+function formatElapsedLabel(elapsedMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${pad(minutes)}:${pad(seconds)}`;
+}
+
 export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
   const { state, upsertSessionLog } = useTimeFolioStore();
   const [v2SamplerStatus, setV2SamplerStatus] = useState<AutoTrackerV2NativeSamplerStatus | null>(
@@ -72,6 +81,8 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
   const [v2WrittenPreviewSessionIds, setV2WrittenPreviewSessionIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [v2RunningStartedAtMs, setV2RunningStartedAtMs] = useState<number | null>(null);
+  const [v2RunningNowMs, setV2RunningNowMs] = useState<number>(() => Date.now());
   const v2WritingPreviewSessionIdsRef = useRef<Set<string>>(new Set());
 
   const classificationSettings: TfAutotrackerV2ClassificationSettings = {
@@ -85,6 +96,10 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
   const isRunning = v2SamplerStatus?.running === true;
   const isActionBusy = v2SamplerActionBusy || v2IsStopFinalizing;
   const lastDetectedAppName = v2SamplerStatus?.lastObservedAppName ?? null;
+  const runningElapsedLabel =
+    isRunning && v2RunningStartedAtMs !== null
+      ? formatElapsedLabel(v2RunningNowMs - v2RunningStartedAtMs)
+      : null;
 
   async function refreshSamplerState() {
     try {
@@ -118,12 +133,16 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
       return;
     }
 
-    const intervalId = window.setInterval(() => {
+    const refreshIntervalId = window.setInterval(() => {
       void refreshSamplerState();
     }, 1500);
+    const clockIntervalId = window.setInterval(() => {
+      setV2RunningNowMs(Date.now());
+    }, 1000);
 
     return () => {
-      window.clearInterval(intervalId);
+      window.clearInterval(refreshIntervalId);
+      window.clearInterval(clockIntervalId);
     };
   }, [isRunning]);
 
@@ -136,7 +155,10 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
     setV2SamplerActionBusy(true);
     try {
       const samplerStatus = await startAutoTrackerV2NativeSampler();
+      const startedAtMs = Date.now();
       setV2SamplerStatus(samplerStatus);
+      setV2RunningStartedAtMs(startedAtMs);
+      setV2RunningNowMs(startedAtMs);
       await refreshSamplerState();
     } catch (error) {
       const message =
@@ -159,16 +181,19 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
     setV2IsStopFinalizing(true);
 
     try {
-      const selection = selectAutoTrackerV2StopFinalizePreviewSession({
+      const nowMs = Date.now();
+      const selection = selectAutoTrackerV2StopSavePreviewSessions({
+        finalizedPreviewSessions: reducerPreview.finalizedPreviewSessions,
         previewSpans,
         state: reducerPreview.state,
-        nowMs: Date.now(),
+        nowMs,
         writtenPreviewSessionIds: new Set([
           ...v2WrittenPreviewSessionIds,
           ...v2WritingPreviewSessionIdsRef.current,
         ]),
       });
       let stoppedSampler = false;
+      const selectionCount = selection.previewSessions.length;
 
       if (isRunning) {
         const samplerStatus = await stopAutoTrackerV2NativeSampler();
@@ -176,39 +201,51 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
         stoppedSampler = true;
       }
 
-      const previewSession = selection.previewSession;
-
-      if (!previewSession) {
+      if (selectionCount === 0) {
         setV2UserModeMessage({
           tone: "info",
           text: stoppedSampler
-            ? "Auto-Tracking stopped. No session was ready to save."
-            : "No eligible session was ready to save.",
+            ? selection.reason === "alreadyWritten"
+              ? "Auto-Tracking stopped. Those sessions were already saved."
+              : "Auto-Tracking stopped. No session was ready to save."
+            : selection.reason === "alreadyWritten"
+              ? "Those sessions were already saved."
+              : "No eligible session was ready to save.",
         });
         return;
       }
 
-      v2WritingPreviewSessionIdsRef.current.add(previewSession.previewSessionId);
+      for (const previewSession of selection.previewSessions) {
+        v2WritingPreviewSessionIdsRef.current.add(previewSession.previewSessionId);
+      }
       try {
-        const sessionLog = toSessionLog(previewSession);
-        await upsertSessionLog(sessionLog);
-        setV2WrittenPreviewSessionIds((current) => {
-          if (current.has(previewSession.previewSessionId)) {
-            return current;
-          }
-          const next = new Set(current);
-          next.add(previewSession.previewSessionId);
-          return next;
-        });
+        for (const previewSession of selection.previewSessions) {
+          const sessionLog = toSessionLog(previewSession);
+          await upsertSessionLog(sessionLog);
+          setV2WrittenPreviewSessionIds((current) => {
+            if (current.has(previewSession.previewSessionId)) {
+              return current;
+            }
+            const next = new Set(current);
+            next.add(previewSession.previewSessionId);
+            return next;
+          });
+        }
         setV2UserModeMessage({
           tone: "info",
           text: stoppedSampler
-            ? "Auto-Tracking stopped and saved to Session Log."
-            : "Saved to Session Log.",
+            ? selectionCount === 1
+              ? "Auto-Tracking stopped and saved to Session Log."
+              : `Auto-Tracking stopped and saved ${selectionCount} Session Log entries.`
+            : selectionCount === 1
+              ? "Saved to Session Log."
+              : `Saved ${selectionCount} Session Log entries.`,
         });
         await refreshSamplerState();
       } finally {
-        v2WritingPreviewSessionIdsRef.current.delete(previewSession.previewSessionId);
+        for (const previewSession of selection.previewSessions) {
+          v2WritingPreviewSessionIdsRef.current.delete(previewSession.previewSessionId);
+        }
       }
     } catch (error) {
       const message =
@@ -229,6 +266,7 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
     isActionBusy,
     isStopAndSaveBusy: isActionBusy,
     lastDetectedAppName,
+    runningElapsedLabel,
     message: v2UserModeMessage,
     onStart: () => {
       void handleStart();

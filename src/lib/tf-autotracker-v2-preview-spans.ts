@@ -237,6 +237,43 @@ function normalizeAppValue(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function normalizeAppNameForComparison(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\.app$/u, "")
+    .replace(/[^a-z0-9]+/gu, "");
+}
+
+function stripTrailingVersionDigits(value: string): string {
+  return value.replace(/\d+$/u, "");
+}
+
+function appNamesMatch(candidate: string, appName: string): boolean {
+  const normalizedCandidate = normalizeAppNameForComparison(candidate);
+  const normalizedAppName = normalizeAppNameForComparison(appName);
+
+  if (!normalizedCandidate || !normalizedAppName) {
+    return false;
+  }
+
+  if (normalizedCandidate === normalizedAppName) {
+    return true;
+  }
+
+  const candidateWithoutVersion = stripTrailingVersionDigits(normalizedCandidate);
+  const appNameWithoutVersion = stripTrailingVersionDigits(normalizedAppName);
+
+  return (
+    (candidateWithoutVersion.length > 0 &&
+      candidateWithoutVersion === normalizedAppName) ||
+    (appNameWithoutVersion.length > 0 && appNameWithoutVersion === normalizedCandidate) ||
+    (candidateWithoutVersion.length > 0 &&
+      appNameWithoutVersion.length > 0 &&
+      candidateWithoutVersion === appNameWithoutVersion)
+  );
+}
+
 function extractAppNameCandidate(rule: string): string | null {
   const trimmed = rule.trim();
   if (!trimmed) {
@@ -307,7 +344,7 @@ function matchesAppRule(
 
   for (const candidate of ruleCandidates) {
     const normalizedCandidate = normalizeAppValue(candidate);
-    if (normalizedAppName && normalizedAppName === normalizedCandidate) {
+    if (normalizedAppName && appNamesMatch(candidate, appName ?? "")) {
       return {
         matchedRuleName: rule.name,
         matchedRuleTarget: rule.target,
