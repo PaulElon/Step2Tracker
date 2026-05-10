@@ -5,7 +5,6 @@ import {
   reduceAutoTrackerV2Session,
   type AutoTrackerV2FinalizedBy,
   type AutoTrackerV2FinalizedSession,
-  type AutoTrackerV2OpenSession,
   type AutoTrackerV2SessionMachineState,
   type AutoTrackerV2Target,
 } from "./tf-autotracker-v2-session-machine.js";
@@ -1032,9 +1031,9 @@ export function selectAutoTrackerV2ContinuousWritePreviewSessions({
 }
 
 export function selectAutoTrackerV2StopSavePreviewSessions({
-  finalizedPreviewSessions,
+  finalizedPreviewSessions: _finalizedPreviewSessions,
   previewSpans,
-  state,
+  state: _state,
   nowMs,
   writtenPreviewSessionIds,
 }: {
@@ -1044,21 +1043,51 @@ export function selectAutoTrackerV2StopSavePreviewSessions({
   nowMs: number;
   writtenPreviewSessionIds: Iterable<string>;
 }): TfAutotrackerV2StopSaveSelection {
-  const context = buildAutoTrackerV2ReducerPreviewContext(previewSpans);
+  void _finalizedPreviewSessions;
+  void _state;
+
+  return selectAutoTrackerV2StopSaveRunSpans({
+    previewSpans,
+    nowMs,
+    writtenPreviewSessionIds,
+  });
+}
+
+export function selectAutoTrackerV2StopSaveRunSpans({
+  previewSpans,
+  nowMs,
+  writtenPreviewSessionIds,
+}: {
+  previewSpans: TfAutotrackerV2PreviewSpan[];
+  nowMs: number;
+  writtenPreviewSessionIds: Iterable<string>;
+}): TfAutotrackerV2StopSaveSelection {
   const writtenIds = new Set(writtenPreviewSessionIds);
-  const previewSessionMap = new Map<string, TfAutotrackerV2FinalizedPreviewSession>();
+  const previewSessions: TfAutotrackerV2FinalizedPreviewSession[] = [];
+  const seenPreviewSessionIds = new Set<string>();
   let skippedDuplicateCount = 0;
   let sawWrittenCandidate = false;
 
-  for (const previewSession of finalizedPreviewSessions) {
-    if (previewSession.classification === "unclassified") {
+  const sortedPreviewSpans = [...previewSpans].sort((a, b) => {
+    const startedDelta = a.startedAtMs - b.startedAtMs;
+    if (startedDelta !== 0) {
+      return startedDelta;
+    }
+
+    return a.id.localeCompare(b.id);
+  });
+
+  for (const span of sortedPreviewSpans) {
+    const previewSession = createStopSavePreviewSessionFromSpan(span, nowMs);
+    if (!previewSession) {
       continue;
     }
 
-    if (previewSessionMap.has(previewSession.previewSessionId)) {
+    if (seenPreviewSessionIds.has(previewSession.previewSessionId)) {
       skippedDuplicateCount += 1;
       continue;
     }
+    seenPreviewSessionIds.add(previewSession.previewSessionId);
 
     if (writtenIds.has(previewSession.previewSessionId)) {
       skippedDuplicateCount += 1;
@@ -1066,62 +1095,8 @@ export function selectAutoTrackerV2StopSavePreviewSessions({
       continue;
     }
 
-    previewSessionMap.set(previewSession.previewSessionId, previewSession);
+    previewSessions.push(previewSession);
   }
-
-  const stateSelection =
-    state.status !== "idle"
-      ? finalizePreviewSessionAtStopTime(context.activePreviewSession, state.session, nowMs)
-      : null;
-
-  if (stateSelection) {
-    if (previewSessionMap.has(stateSelection.previewSessionId)) {
-      skippedDuplicateCount += 1;
-    } else if (writtenIds.has(stateSelection.previewSessionId)) {
-      skippedDuplicateCount += 1;
-      sawWrittenCandidate = true;
-    } else {
-      previewSessionMap.set(stateSelection.previewSessionId, stateSelection);
-    }
-  }
-
-  const activeSelection = selectAutoTrackerV2StopFinalizePreviewSession({
-    previewSpans,
-    state,
-    nowMs,
-    writtenPreviewSessionIds,
-  });
-
-  if (activeSelection.previewSession) {
-    if (previewSessionMap.has(activeSelection.previewSession.previewSessionId)) {
-      skippedDuplicateCount += 1;
-      sawWrittenCandidate = sawWrittenCandidate || activeSelection.reason === "alreadyWritten";
-    } else if (writtenIds.has(activeSelection.previewSession.previewSessionId)) {
-      skippedDuplicateCount += 1;
-      sawWrittenCandidate = true;
-    } else {
-      previewSessionMap.set(
-        activeSelection.previewSession.previewSessionId,
-        activeSelection.previewSession,
-      );
-    }
-  } else if (activeSelection.reason === "alreadyWritten") {
-    sawWrittenCandidate = true;
-  }
-
-  const previewSessions = [...previewSessionMap.values()].sort((a, b) => {
-    const startedDelta = a.startedAtMs - b.startedAtMs;
-    if (startedDelta !== 0) {
-      return startedDelta;
-    }
-
-    const endedDelta = a.endedAtMs - b.endedAtMs;
-    if (endedDelta !== 0) {
-      return endedDelta;
-    }
-
-    return a.previewSessionId.localeCompare(b.previewSessionId);
-  });
 
   return {
     previewSessions,
@@ -1138,24 +1113,49 @@ export function selectAutoTrackerV2StopSavePreviewSessions({
   };
 }
 
-function finalizePreviewSessionAtStopTime(
-  activePreviewSession: ActiveFinalizedPreviewSession | null,
-  session: AutoTrackerV2OpenSession | undefined,
+function createStopSavePreviewSessionFromSpan(
+  span: TfAutotrackerV2PreviewSpan,
   nowMs: number,
 ): TfAutotrackerV2FinalizedPreviewSession | null {
-  if (!activePreviewSession || !session) {
+  if (
+    (span.classification !== "tracked" && span.classification !== "distraction") ||
+    !Number.isFinite(span.startedAtMs)
+  ) {
     return null;
   }
 
-  return finalizePreviewSession(activePreviewSession, {
-    sessionId: session.sessionId,
-    target: session.target,
-    startedAtMs: session.startedAtMs,
-    endedAtMs: nowMs,
-    pauseIntervals: [...session.pauseIntervals],
-    finalizedAtMs: nowMs,
+  const endedAtMs =
+    Number.isFinite(span.endedAtMs) && (span.endedAtMs ?? 0) > span.startedAtMs
+      ? (span.endedAtMs as number)
+      : Number.isFinite(nowMs) && nowMs > span.startedAtMs
+        ? nowMs
+        : null;
+
+  if (endedAtMs === null) {
+    return null;
+  }
+
+  const sourceTargetStableId = getPreviewSpanTargetStableId(span);
+  return {
+    previewSessionId: `${span.kind}:${sourceTargetStableId}:${span.startedAtMs}`,
+    startedAtMs: span.startedAtMs,
+    endedAtMs,
+    durationMs: Math.max(0, endedAtMs - span.startedAtMs),
+    targetLabel: getPreviewSpanTargetLabel(span),
+    matchedRuleName: span.matchedRuleName,
+    matchedRuleTarget: span.matchedRuleTarget,
+    sourceTargetStableId,
+    sourceSpanIds: [span.id],
+    sourceEventIds: [...span.sourceEventIds],
+    appName: span.appName,
+    bundleId: span.bundleId,
+    browserTitle: span.browserTitle,
+    browserUrl: span.browserUrl,
+    classificationReason: span.classificationReason,
+    classification: span.classification,
     finalizedBy: "manualStop",
-  });
+    isDistraction: span.classification === "distraction",
+  };
 }
 
 function selectAutoTrackerV2StopFinalizePreviewSpanCandidates(
