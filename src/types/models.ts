@@ -431,6 +431,7 @@ export interface TfAutoTrackerV2DevPersistedEvent {
   bundleId?: string;
   bundlePath?: string;
   executablePath?: string;
+  processIdentityName?: string;
   windowTitle?: string;
   isIdle?: boolean;
   browserTitle?: string;
