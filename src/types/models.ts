@@ -429,6 +429,7 @@ export interface TfAutoTrackerV2DevPersistedEvent {
   platform: "macos";
   appName?: string;
   bundleId?: string;
+  bundlePath?: string;
   windowTitle?: string;
   isIdle?: boolean;
   browserTitle?: string;

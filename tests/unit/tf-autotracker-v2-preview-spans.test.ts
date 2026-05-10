@@ -499,53 +499,80 @@ test("app rules match Goodnotes and Things3 variants symmetrically for allowed a
     target: "/Applications/Goodnotes.app",
     kind: "app",
   };
+  const ankiRule = {
+    id: "rule-anki",
+    name: "Anki",
+    target: "/Applications/Anki.app",
+    kind: "app",
+  };
   const thingsRule = {
     id: "rule-things3",
     name: "Things3",
     target: "/Applications/Things3.app",
     kind: "app",
   };
+  const codexRule = {
+    id: "rule-codex",
+    name: "Codex",
+    target: "/Applications/Codex.app",
+    kind: "app",
+  };
 
   const allowedSettings = makeSettings({
-    autoApps: [goodnotesRule, thingsRule],
+    autoApps: [goodnotesRule, ankiRule, thingsRule, codexRule],
   });
   const distractionSettings = makeSettings({
-    distractionApps: [goodnotesRule, thingsRule],
+    distractionApps: [goodnotesRule, ankiRule, thingsRule, codexRule],
   });
 
   const cases = [
     {
-      description: "Goodnotes appName",
+      description: "Goodnotes bundlePath",
       event: makeEvent({
         id: "ev-goodnotes-name",
         kind: "targetFocused",
         timestampMs: 1000,
-        appName: "Goodnotes",
+        appName: "Goodnotes 6",
         bundleId: "com.goodnotesapp.mac",
+        bundlePath: "/Applications/Goodnotes.app",
       }),
       expectedRuleName: "Goodnotes",
     },
     {
-      description: "Goodnotes.app appName",
+      description: "Anki bundlePath",
       event: makeEvent({
-        id: "ev-goodnotes-app-name",
+        id: "ev-anki-name",
         kind: "targetFocused",
         timestampMs: 2000,
-        appName: "Goodnotes.app",
-        bundleId: "com.goodnotesapp.mac",
+        appName: "Anki Desktop",
+        bundleId: "net.ankiweb.dtop",
+        bundlePath: "/Applications/Anki.app",
       }),
-      expectedRuleName: "Goodnotes",
+      expectedRuleName: "Anki",
     },
     {
-      description: "Things 3 appName",
+      description: "Things3 bundlePath",
       event: makeEvent({
         id: "ev-things3-name",
         kind: "targetFocused",
         timestampMs: 3000,
         appName: "Things 3",
         bundleId: "com.culturedcode.ThingsMac",
+        bundlePath: "/Applications/Things3.app",
       }),
       expectedRuleName: "Things3",
+    },
+    {
+      description: "Codex bundlePath",
+      event: makeEvent({
+        id: "ev-codex-name",
+        kind: "targetFocused",
+        timestampMs: 4000,
+        appName: "OpenAI Codex",
+        bundleId: "com.openai.codex",
+        bundlePath: "/Applications/Codex.app",
+      }),
+      expectedRuleName: "Codex",
     },
   ] as const;
 

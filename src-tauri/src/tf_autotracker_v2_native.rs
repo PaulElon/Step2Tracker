@@ -48,6 +48,8 @@ pub struct TfAutotrackerV2NativeEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bundle_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub bundle_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub window_title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_idle: Option<bool>,
@@ -476,6 +478,7 @@ fn make_event(kind: &str, timestamp_ms: i64) -> TfAutotrackerV2NativeEvent {
         platform: PLATFORM_LABEL.to_string(),
         app_name: None,
         bundle_id: None,
+        bundle_path: None,
         window_title: None,
         is_idle: None,
         browser_title: None,
@@ -1024,9 +1027,10 @@ fn run_command(_program: &str, _args: &[&str]) -> Result<String, String> {
 // ---------------------------------------------------------------------------
 
 #[cfg(target_os = "macos")]
-fn parse_lsappinfo_info(raw: &str) -> Option<(Option<String>, Option<String>)> {
+fn parse_lsappinfo_info(raw: &str) -> Option<(Option<String>, Option<String>, Option<String>)> {
     let mut app_name: Option<String> = None;
     let mut bundle_id: Option<String> = None;
+    let mut bundle_path: Option<String> = None;
 
     let trimmed = raw.trim_start();
     if let Some(first_line) = trimmed.lines().next() {
@@ -1046,19 +1050,23 @@ fn parse_lsappinfo_info(raw: &str) -> Option<(Option<String>, Option<String>)> {
             let cleaned = rest.trim().trim_matches('"');
             if !cleaned.is_empty() {
                 bundle_id = Some(cleaned.to_string());
-                break;
+            }
+        } else if let Some(rest) = line.strip_prefix("bundle path=") {
+            let cleaned = rest.trim().trim_matches('"');
+            if !cleaned.is_empty() {
+                bundle_path = Some(cleaned.to_string());
             }
         }
     }
 
-    if app_name.is_none() && bundle_id.is_none() {
+    if app_name.is_none() && bundle_id.is_none() && bundle_path.is_none() {
         return None;
     }
-    Some((app_name, bundle_id))
+    Some((app_name, bundle_id, bundle_path))
 }
 
 #[cfg(target_os = "macos")]
-fn read_foreground_app() -> Result<(Option<String>, Option<String>), String> {
+fn read_foreground_app() -> Result<(Option<String>, Option<String>, Option<String>), String> {
     // `lsappinfo info front` returns empty output on macOS 14+.
     // Reliable pattern: get ASN from `lsappinfo front`, then query `lsappinfo info <ASN>`.
     let asn_raw = run_command("/usr/bin/lsappinfo", &["front"])
@@ -1078,7 +1086,8 @@ fn read_foreground_app() -> Result<(Option<String>, Option<String>), String> {
 
 /// osascript fallback: returns app name only (no bundle ID).
 #[cfg(target_os = "macos")]
-fn read_foreground_app_osascript() -> Result<(Option<String>, Option<String>), String> {
+fn read_foreground_app_osascript(
+) -> Result<(Option<String>, Option<String>, Option<String>), String> {
     let raw = run_command(
         "/usr/bin/osascript",
         &[
@@ -1091,11 +1100,11 @@ fn read_foreground_app_osascript() -> Result<(Option<String>, Option<String>), S
     if name.is_empty() {
         return Err("osascript returned an empty app name.".to_string());
     }
-    Ok((Some(name.to_string()), None))
+    Ok((Some(name.to_string()), None, None))
 }
 
 #[cfg(not(target_os = "macos"))]
-fn read_foreground_app() -> Result<(Option<String>, Option<String>), String> {
+fn read_foreground_app() -> Result<(Option<String>, Option<String>, Option<String>), String> {
     Err("Foreground app probe is only implemented for macOS in this slice.".to_string())
 }
 
@@ -1271,11 +1280,12 @@ fn capture_once_internal() -> NativeCaptureOutcome {
     let mut next_browser_url: Option<String> = None;
 
     match read_foreground_app() {
-        Ok((app_name, bundle_id)) => {
+        Ok((app_name, bundle_id, bundle_path)) => {
             foreground_ok = true;
             let mut event = make_event("untrackedFocused", timestamp_ms);
             event.app_name = app_name.clone();
             event.bundle_id = bundle_id.clone();
+            event.bundle_path = bundle_path.clone();
 
             // Enrich foreground event with active browser tab context.
             if let Some(tab) = try_read_browser_tab(bundle_id.as_deref(), app_name.as_deref()) {
@@ -1665,6 +1675,7 @@ mod tests {
         let parsed = parse_lsappinfo_info(raw).expect("should parse");
         assert_eq!(parsed.0.as_deref(), Some("Safari"));
         assert_eq!(parsed.1.as_deref(), Some("com.apple.Safari"));
+        assert_eq!(parsed.2.as_deref(), Some("/Applications/Safari.app"));
     }
 
     #[cfg(target_os = "macos")]
@@ -1866,6 +1877,7 @@ mod tests {
                     platform: PLATFORM_LABEL.to_string(),
                     app_name: Some("Safari".to_string()),
                     bundle_id: Some("com.apple.Safari".to_string()),
+                    bundle_path: Some("/Applications/Safari.app".to_string()),
                     window_title: None,
                     is_idle: None,
                     browser_title: Some("UWorld".to_string()),
@@ -1880,6 +1892,7 @@ mod tests {
                     platform: PLATFORM_LABEL.to_string(),
                     app_name: Some("Safari".to_string()),
                     bundle_id: Some("com.apple.Safari".to_string()),
+                    bundle_path: Some("/Applications/Safari.app".to_string()),
                     window_title: None,
                     is_idle: None,
                     browser_title: Some("Reddit".to_string()),

@@ -426,6 +426,7 @@ function normalizeTfAutoTrackerV2DevEvent(
     platform: "macos",
     appName: safeString(raw.appName).trim() || undefined,
     bundleId: safeString(raw.bundleId).trim() || undefined,
+    bundlePath: safeString(raw.bundlePath).trim() || undefined,
     windowTitle: safeString(raw.windowTitle).trim() || undefined,
     isIdle: typeof raw.isIdle === "boolean" ? raw.isIdle : undefined,
     browserTitle: safeString(raw.browserTitle).trim() || undefined,

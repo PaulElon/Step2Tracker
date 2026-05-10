@@ -22,6 +22,7 @@ export type TfAutotrackerV2PreviewSpan = {
   kind: "app" | "website";
   appName?: string;
   bundleId?: string;
+  bundlePath?: string;
   browserTitle?: string;
   browserUrl?: string;
   startedAtMs: number;
@@ -78,12 +79,17 @@ function getWebsiteLabel(
 
 function getAppIdentity(event: AutoTrackerV2NativeEvent): string {
   if (typeof event.bundleId === "string" && event.bundleId) return event.bundleId;
+  if (typeof event.bundlePath === "string" && event.bundlePath) return event.bundlePath;
   if (typeof event.appName === "string" && event.appName) return event.appName;
   return "unknown-app";
 }
 
 function getAppLabel(event: AutoTrackerV2NativeEvent): string {
   if (typeof event.appName === "string" && event.appName) return event.appName;
+  if (typeof event.bundlePath === "string" && event.bundlePath) {
+    const pathLabel = extractAppNameFromPath(event.bundlePath);
+    if (pathLabel) return pathLabel;
+  }
   if (typeof event.bundleId === "string" && event.bundleId) return event.bundleId;
   return "Unknown app";
 }
@@ -237,6 +243,10 @@ function normalizeAppValue(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function normalizeAppPathValue(value: string): string {
+  return value.trim().toLowerCase().replace(/\/+$/u, "");
+}
+
 function normalizeAppNameForComparison(value: string): string {
   return value
     .trim()
@@ -293,6 +303,24 @@ function extractAppNameCandidate(rule: string): string | null {
   return null;
 }
 
+function extractAppNameFromPath(value: string): string {
+  const normalizedPath = normalizeAppPathValue(value);
+  if (!normalizedPath) {
+    return "";
+  }
+
+  const lastSegment = normalizedPath.split("/").filter((part) => part.length > 0).pop();
+  if (!lastSegment) {
+    return "";
+  }
+
+  if (lastSegment.toLowerCase().endsWith(".app")) {
+    return lastSegment.slice(0, -4);
+  }
+
+  return lastSegment;
+}
+
 function containsWithBoundary(haystack: string, needle: string): boolean {
   if (!needle || needle.length < 3) {
     return false;
@@ -314,6 +342,7 @@ function containsWithBoundary(haystack: string, needle: string): boolean {
 
 function matchesAppRule(
   bundleId: string | undefined,
+  bundlePath: string | undefined,
   appName: string | undefined,
   ruleInput: TfTrackerRuleInput,
   reasonPrefix: "matched app rule" | "matched distraction app rule" = "matched app rule",
@@ -329,7 +358,12 @@ function matchesAppRule(
   );
 
   const normalizedBundleId = bundleId ? normalizeAppValue(bundleId) : "";
+  const normalizedBundlePath = bundlePath ? normalizeAppPathValue(bundlePath) : "";
   const normalizedAppName = appName ? normalizeAppValue(appName) : "";
+  const bundlePathName = bundlePath ? extractAppNameFromPath(bundlePath) : "";
+  const bundlePathCandidates = [bundlePath, bundlePathName].filter(
+    (candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0,
+  );
 
   for (const candidate of ruleCandidates) {
     const normalizedCandidate = normalizeAppValue(candidate);
@@ -339,6 +373,29 @@ function matchesAppRule(
         matchedRuleTarget: rule.target,
         classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by bundle id ${bundleId?.trim() ?? normalizedCandidate}`,
       };
+    }
+  }
+
+  for (const candidate of ruleCandidates) {
+    const normalizedCandidate = normalizeAppPathValue(candidate);
+    if (normalizedBundlePath && normalizedBundlePath === normalizedCandidate) {
+      return {
+        matchedRuleName: rule.name,
+        matchedRuleTarget: rule.target,
+        classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by app path ${bundlePath?.trim() ?? normalizedCandidate}`,
+      };
+    }
+  }
+
+  for (const candidate of ruleCandidates) {
+    for (const bundlePathCandidate of bundlePathCandidates) {
+      if (appNamesMatch(candidate, bundlePathCandidate)) {
+        return {
+          matchedRuleName: rule.name,
+          matchedRuleTarget: rule.target,
+          classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by app path ${bundlePath?.trim() ?? bundlePathCandidate}`,
+        };
+      }
     }
   }
 
@@ -374,6 +431,7 @@ function matchesAppRule(
 function classifyPreviewSpan(
   kind: "app" | "website",
   bundleId: string | undefined,
+  bundlePath: string | undefined,
   appName: string | undefined,
   browserUrl: string | undefined,
   settings: TfAutotrackerV2ClassificationSettings,
@@ -434,11 +492,12 @@ function classifyPreviewSpan(
 
   if (kind === "app") {
     for (const rule of settings.autoApps) {
-      const matchReason = matchesAppRule(bundleId, appName, rule);
+      const matchReason = matchesAppRule(bundleId, bundlePath, appName, rule);
       if (matchReason) {
         for (const distractionRule of settings.distractionApps) {
           const distractionMatchReason = matchesAppRule(
             bundleId,
+            bundlePath,
             appName,
             distractionRule,
             "matched distraction app rule",
@@ -462,7 +521,13 @@ function classifyPreviewSpan(
     }
 
     for (const rule of settings.distractionApps) {
-      const matchReason = matchesAppRule(bundleId, appName, rule, "matched distraction app rule");
+      const matchReason = matchesAppRule(
+        bundleId,
+        bundlePath,
+        appName,
+        rule,
+        "matched distraction app rule",
+      );
       if (matchReason) {
         return {
           classification: "distraction",
@@ -530,6 +595,7 @@ export function buildAutoTrackerV2PreviewSpans(
     const { classification, classificationReason, matchedRuleName, matchedRuleTarget } = classifyPreviewSpan(
       kind,
       ev.bundleId,
+      ev.bundlePath,
       ev.appName,
       ev.browserUrl,
       effectiveSettings,
@@ -543,6 +609,7 @@ export function buildAutoTrackerV2PreviewSpans(
       kind,
       appName: ev.appName,
       bundleId: ev.bundleId,
+      bundlePath: ev.bundlePath,
       browserTitle: ev.browserTitle,
       browserUrl: ev.browserUrl,
       startedAtMs: ev.timestampMs,

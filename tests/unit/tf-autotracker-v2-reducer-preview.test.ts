@@ -1303,15 +1303,17 @@ test("stop-save selects every eligible span in a multi-app run and finalizes the
         id: "ev-goodnotes",
         kind: "targetFocused",
         timestampMs: 120_000,
-        appName: "Goodnotes.app",
+        appName: "Goodnotes 6",
         bundleId: "com.goodnotesapp.mac",
+        bundlePath: "/Applications/Goodnotes.app",
       }),
       makeEvent({
         id: "ev-anki",
         kind: "targetFocused",
         timestampMs: 240_000,
-        appName: "Anki",
+        appName: "Anki Desktop",
         bundleId: "net.ankiweb.dtop",
+        bundlePath: "/Applications/Anki.app",
       }),
       makeEvent({
         id: "ev-things3",
@@ -1319,13 +1321,15 @@ test("stop-save selects every eligible span in a multi-app run and finalizes the
         timestampMs: 360_000,
         appName: "Things 3",
         bundleId: "com.culturedcode.ThingsMac",
+        bundlePath: "/Applications/Things3.app",
       }),
       makeEvent({
-        id: "ev-chatgpt",
+        id: "ev-codex",
         kind: "targetFocused",
         timestampMs: 480_000,
-        appName: "ChatGPT",
-        bundleId: "com.openai.chatgpt",
+        appName: "OpenAI Codex",
+        bundleId: "com.openai.codex",
+        bundlePath: "/Applications/Codex.app",
       }),
     ],
     {
@@ -1335,7 +1339,7 @@ test("stop-save selects every eligible span in a multi-app run and finalizes the
         { id: "rule-things3", name: "Things3", target: "/Applications/Things3.app", kind: "app" },
       ],
       autoWebsites: [{ id: "rule-truelearn", name: "TrueLearn", target: "https://www.truelearn.com", kind: "website" }],
-      distractionApps: [{ id: "rule-chatgpt", name: "ChatGPT", target: "/Applications/ChatGPT.app", kind: "app" }],
+      distractionApps: [{ id: "rule-codex", name: "Codex", target: "/Applications/Codex.app", kind: "app" }],
       distractionWebsites: [],
     },
   );
@@ -1355,12 +1359,12 @@ test("stop-save selects every eligible span in a multi-app run and finalizes the
     "Goodnotes",
     "Anki",
     "Things3",
-    "ChatGPT",
+    "Codex",
   ]);
   assert.equal(selection.previewSessions[1]?.endedAtMs, 240_000);
   assert.equal(selection.previewSessions[3]?.endedAtMs, 480_000);
   assert.equal(selection.previewSessions[4]?.classification, "distraction");
-  assert.equal(selection.names[4], "ChatGPT");
+  assert.equal(selection.names[4], "Codex");
 });
 
 test("stop-save reports alreadyWritten when every eligible span in the run was already saved", () => {
