@@ -3,28 +3,54 @@ import type { AutoTrackerV2NativeStatus } from "./tf-autotracker-v2-native-event
 export type AutoTrackerV2UserModeSetupCopy = {
   tone: "ready" | "attention" | "unsupported";
   label: string;
-  detail: string;
+  detail: string | null;
 };
 
 export function buildAutoTrackerV2UserModeStatusCopy({
   isRunning,
-  lastDetectedAppName,
   runningElapsedLabel,
+  savedEntryCount = 0,
+  needsSetup = false,
 }: {
   isRunning: boolean;
-  lastDetectedAppName: string | null;
   runningElapsedLabel?: string | null;
+  savedEntryCount?: number;
+  needsSetup?: boolean;
 }): {
+  pillLabel: string;
+  metaLabel: string | null;
   statusLine: string;
-  lastDetectedLine: string;
 } {
-  const runningSuffix = isRunning && runningElapsedLabel ? ` · ${runningElapsedLabel}` : "";
+  if (needsSetup) {
+    return {
+      pillLabel: "Needs setup",
+      metaLabel: null,
+      statusLine: "Needs setup",
+    };
+  }
+
+  if (isRunning) {
+    return {
+      pillLabel: "Running",
+      metaLabel: runningElapsedLabel ?? null,
+      statusLine: runningElapsedLabel ? `Running · ${runningElapsedLabel}` : "Running",
+    };
+  }
+
+  if (savedEntryCount > 0) {
+    const entryLabel = savedEntryCount === 1 ? "entry" : "entries";
+
+    return {
+      pillLabel: "Saved",
+      metaLabel: `${savedEntryCount} ${entryLabel}`,
+      statusLine: `Saved ${savedEntryCount} ${entryLabel}`,
+    };
+  }
 
   return {
-    statusLine: isRunning
-      ? `Auto-Tracking is running${runningSuffix || "."}`
-      : "Auto-Tracking is off.",
-    lastDetectedLine: `Last detected: ${lastDetectedAppName?.trim() || "None yet"}`,
+    pillLabel: "Off",
+    metaLabel: null,
+    statusLine: "Off",
   };
 }
 
@@ -35,14 +61,30 @@ export function formatAutoTrackerV2ApproxDuration(durationMs: number): string {
   const seconds = totalSeconds % 60;
 
   if (hours > 0) {
-    return `~${hours}h ${minutes}m`;
+    return `${hours}h ${minutes}m`;
   }
 
-  if (minutes > 0) {
-    return `~${minutes}m ${seconds}s`;
+  if (totalSeconds >= 60) {
+    return `${Math.max(1, Math.round(totalSeconds / 60))}m`;
   }
 
-  return `~${seconds}s`;
+  return `${seconds}s`;
+}
+
+export function formatAutoTrackerV2SavedRunSummary(names: string[]): string {
+  const compactNames = names
+    .map((name) => name.trim())
+    .filter((name, index, allNames) => name.length > 0 && allNames.indexOf(name) === index);
+
+  if (compactNames.length === 0) {
+    return "Latest run saved.";
+  }
+
+  if (compactNames.length <= 5) {
+    return compactNames.join(", ");
+  }
+
+  return `${compactNames.slice(0, 5).join(", ")}, +${compactNames.length - 5} more`;
 }
 
 export function buildAutoTrackerV2UserModeSetupCopy({
@@ -60,14 +102,14 @@ export function buildAutoTrackerV2UserModeSetupCopy({
     return {
       tone: "attention",
       label: "Checking setup",
-      detail: "Reading the local Auto-Tracking sampler status.",
+      detail: "Checking Auto-Tracking setup.",
     };
   }
 
   if (!nativeStatus.supported) {
     return {
       tone: "unsupported",
-      label: "Not supported",
+      label: "Needs setup",
       detail: "Auto-Tracking is not available on this Mac.",
     };
   }
@@ -75,16 +117,16 @@ export function buildAutoTrackerV2UserModeSetupCopy({
   if (!nativeStatus.foregroundProbeAvailable || !nativeStatus.idleProbeAvailable) {
     return {
       tone: "attention",
-      label: "Setup needed",
-      detail: "Grant the required macOS permissions so foreground and idle detection can run.",
+      label: "Needs setup",
+      detail: "Grant the required macOS permissions to use Auto-Tracking.",
     };
   }
 
   if (trackedRuleCount + distractionRuleCount === 0) {
     return {
       tone: "attention",
-      label: "Rules needed",
-      detail: "Add Allowed or Distraction apps/sites in Tracker Settings before relying on Auto-Tracking.",
+      label: "Needs setup",
+      detail: "Add allowed apps/sites in Tracker Settings.",
     };
   }
 
@@ -92,21 +134,21 @@ export function buildAutoTrackerV2UserModeSetupCopy({
     return {
       tone: "attention",
       label: "Needs attention",
-      detail: "The sampler reported a local issue. Stop and restart Auto-Tracking if detections stall.",
+      detail: "Auto-Tracking hit a local issue. Stop and restart it if detections stall.",
     };
   }
 
   return {
     tone: "ready",
     label: "Ready",
-    detail: `Allowed rules: ${trackedRuleCount}. Distraction rules: ${distractionRuleCount}.`,
+    detail: null,
   };
 }
 
 export function buildAutoTrackerV2StopSaveCopy({
   isRunning,
   saveableCount,
-  hasDetectedActivity,
+  hasDetectedActivity: _hasDetectedActivity,
   hasUnclassifiedActivity,
   alreadyWritten,
 }: {
@@ -117,52 +159,34 @@ export function buildAutoTrackerV2StopSaveCopy({
   alreadyWritten: boolean;
 }): {
   actionLabel: string;
-  summaryLine: string;
-  detailLine: string;
+  supportingLine: string | null;
 } {
+  void _hasDetectedActivity;
   const entryLabel = saveableCount === 1 ? "entry" : "entries";
 
   if (isRunning && saveableCount > 0) {
     return {
       actionLabel: `Stop & Save ${saveableCount} ${entryLabel}`,
-      summaryLine: `Stop & Save will add ${saveableCount} Session Log ${entryLabel}.`,
-      detailLine: hasUnclassifiedActivity
-        ? "Every classified span in this run will save together. Unclassified activity stays out of the Session Log."
-        : "Every classified span in this run will save together.",
+      supportingLine: null,
     };
   }
 
   if (isRunning) {
     return {
       actionLabel: "Stop Auto-Tracking",
-      summaryLine: "Nothing will save yet.",
-      detailLine: hasUnclassifiedActivity
-        ? "This run only has unclassified activity so far. Add Allowed or Distraction rules if you want it counted."
-        : hasDetectedActivity
-          ? "Detected activity is not ready to save yet."
-          : "No activity has been detected yet.",
+      supportingLine: hasUnclassifiedActivity ? "Nothing tracked yet" : null,
     };
   }
 
   if (alreadyWritten) {
     return {
-      actionLabel: "Start Auto-Tracking",
-      summaryLine: "Last run already saved.",
-      detailLine: "Start Auto-Tracking to capture a new run.",
-    };
-  }
-
-  if (saveableCount > 0) {
-    return {
-      actionLabel: "Start Auto-Tracking",
-      summaryLine: `${saveableCount} Session Log ${entryLabel} still appear ready to save.`,
-      detailLine: "Review the run preview below, then start a new run when you are ready.",
+      actionLabel: "Start New Run",
+      supportingLine: null,
     };
   }
 
   return {
     actionLabel: "Start Auto-Tracking",
-    summaryLine: "Auto-Tracking is off.",
-    detailLine: "Start a run to see the live timeline and save preview here.",
+    supportingLine: null,
   };
 }
