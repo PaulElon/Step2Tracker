@@ -23,6 +23,7 @@ export type TfAutotrackerV2PreviewSpan = {
   appName?: string;
   bundleId?: string;
   bundlePath?: string;
+  executablePath?: string;
   browserTitle?: string;
   browserUrl?: string;
   startedAtMs: number;
@@ -80,6 +81,7 @@ function getWebsiteLabel(
 function getAppIdentity(event: AutoTrackerV2NativeEvent): string {
   if (typeof event.bundleId === "string" && event.bundleId) return event.bundleId;
   if (typeof event.bundlePath === "string" && event.bundlePath) return event.bundlePath;
+  if (typeof event.executablePath === "string" && event.executablePath) return event.executablePath;
   if (typeof event.appName === "string" && event.appName) return event.appName;
   return "unknown-app";
 }
@@ -88,6 +90,10 @@ function getAppLabel(event: AutoTrackerV2NativeEvent): string {
   if (typeof event.appName === "string" && event.appName) return event.appName;
   if (typeof event.bundlePath === "string" && event.bundlePath) {
     const pathLabel = extractAppNameFromPath(event.bundlePath);
+    if (pathLabel) return pathLabel;
+  }
+  if (typeof event.executablePath === "string" && event.executablePath) {
+    const pathLabel = extractAppNameFromPath(event.executablePath);
     if (pathLabel) return pathLabel;
   }
   if (typeof event.bundleId === "string" && event.bundleId) return event.bundleId;
@@ -251,6 +257,7 @@ function normalizeAppNameForComparison(value: string): string {
   return value
     .trim()
     .toLowerCase()
+    .replace(/\s*\(\d+\)\s*$/u, "")
     .replace(/\.app$/u, "")
     .replace(/[^a-z0-9]+/gu, "");
 }
@@ -284,32 +291,39 @@ function appNamesMatch(candidate: string, appName: string): boolean {
   );
 }
 
-function extractAppNameCandidate(rule: string): string | null {
-  const trimmed = rule.trim();
-  if (!trimmed) {
-    return null;
-  }
+type AppIdentityCandidates = {
+  names: string[];
+  paths: string[];
+  bundleIds: string[];
+};
 
-  const cleaned = trimmed.split(/[?#]/u)[0].replace(/\/+$/u, "");
-  const lastSegment = cleaned.split("/").filter((part) => part.length > 0).pop();
-  if (!lastSegment) {
-    return null;
-  }
-
-  if (lastSegment.toLowerCase().endsWith(".app")) {
-    return lastSegment.slice(0, -4);
-  }
-
-  return null;
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter((value) => value.length > 0))];
 }
 
-function extractAppNameFromPath(value: string): string {
+function extractNearestAppBundlePath(value: string): string {
   const normalizedPath = normalizeAppPathValue(value);
-  if (!normalizedPath) {
+  if (!normalizedPath || !normalizedPath.includes("/")) {
     return "";
   }
 
-  const lastSegment = normalizedPath.split("/").filter((part) => part.length > 0).pop();
+  const segments = normalizedPath.split("/").filter((part) => part.length > 0);
+  const appIndex = segments.findIndex((part) => part.toLowerCase().endsWith(".app"));
+  if (appIndex === -1) {
+    return "";
+  }
+
+  return `/${segments.slice(0, appIndex + 1).join("/")}`;
+}
+
+function extractAppNameFromPath(value: string): string {
+  const bundlePath = extractNearestAppBundlePath(value);
+  const sourcePath = bundlePath || normalizeAppPathValue(value);
+  if (!sourcePath) {
+    return "";
+  }
+
+  const lastSegment = sourcePath.split("/").filter((part) => part.length > 0).pop();
   if (!lastSegment) {
     return "";
   }
@@ -319,6 +333,114 @@ function extractAppNameFromPath(value: string): string {
   }
 
   return lastSegment;
+}
+
+function collectAppNameCandidates(value: string): string[] {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const candidates = new Set<string>();
+  const add = (candidate: string) => {
+    const normalized = candidate.trim();
+    if (normalized) {
+      candidates.add(normalized);
+    }
+  };
+
+  add(trimmed);
+
+  const withoutPidSuffix = trimmed.replace(/\s*\(\d+\)\s*$/u, "");
+  add(withoutPidSuffix);
+
+  const withoutAppSuffix = withoutPidSuffix.replace(/\.app$/iu, "");
+  add(withoutAppSuffix);
+
+  const fromPath = extractAppNameFromPath(trimmed);
+  if (fromPath) {
+    add(fromPath);
+  }
+
+  const tokens = withoutAppSuffix.split(/[\s._-]+/u).filter((part) => part.length > 0);
+  for (const token of tokens) {
+    add(token);
+  }
+  if (tokens.length > 1) {
+    add(tokens.slice(-2).join(" "));
+  }
+  if (tokens.length > 1 && /^\d+$/u.test(tokens[tokens.length - 1])) {
+    add(tokens.slice(0, -1).join(" "));
+  }
+
+  return [...candidates];
+}
+
+function collectAppPathCandidates(value: string): string[] {
+  const trimmed = normalizeAppPathValue(value);
+  if (!trimmed) {
+    return [];
+  }
+
+  const candidates = new Set<string>();
+  const add = (candidate: string) => {
+    const normalized = normalizeAppPathValue(candidate);
+    if (normalized) {
+      candidates.add(normalized);
+    }
+  };
+
+  add(trimmed);
+
+  const bundlePath = extractNearestAppBundlePath(trimmed);
+  if (bundlePath) {
+    add(bundlePath);
+  }
+
+  return [...candidates];
+}
+
+function collectAppIdentityCandidates(value: string): AppIdentityCandidates {
+  return {
+    names: collectAppNameCandidates(value),
+    paths: collectAppPathCandidates(value),
+    bundleIds: uniqueStrings([value]),
+  };
+}
+
+function collectEventAppIdentityCandidates(
+  bundleId: string | undefined,
+  bundlePath: string | undefined,
+  executablePath: string | undefined,
+  appName: string | undefined,
+): AppIdentityCandidates {
+  return {
+    names: uniqueStrings([
+      ...(appName ? collectAppNameCandidates(appName) : []),
+      ...(bundlePath ? collectAppNameCandidates(bundlePath) : []),
+      ...(executablePath ? collectAppNameCandidates(executablePath) : []),
+    ]),
+    paths: uniqueStrings([
+      ...(bundlePath ? collectAppPathCandidates(bundlePath) : []),
+      ...(executablePath ? collectAppPathCandidates(executablePath) : []),
+    ]),
+    bundleIds: uniqueStrings([bundleId ?? ""]),
+  };
+}
+
+function appPathsMatch(candidate: string, appPath: string): boolean {
+  const normalizedCandidate = normalizeAppPathValue(candidate);
+  const normalizedAppPath = normalizeAppPathValue(appPath);
+
+  if (!normalizedCandidate || !normalizedAppPath) {
+    return false;
+  }
+
+  return (
+    normalizedCandidate === normalizedAppPath ||
+    normalizedCandidate.startsWith(`${normalizedAppPath}/`) ||
+    normalizedAppPath.startsWith(`${normalizedCandidate}/`)
+  );
 }
 
 function containsWithBoundary(haystack: string, needle: string): boolean {
@@ -343,6 +465,7 @@ function containsWithBoundary(haystack: string, needle: string): boolean {
 function matchesAppRule(
   bundleId: string | undefined,
   bundlePath: string | undefined,
+  executablePath: string | undefined,
   appName: string | undefined,
   ruleInput: TfTrackerRuleInput,
   reasonPrefix: "matched app rule" | "matched distraction app rule" = "matched app rule",
@@ -352,76 +475,67 @@ function matchesAppRule(
     return null;
   }
 
-  const appNameCandidate = extractAppNameCandidate(rule.target);
-  const ruleCandidates = [rule.target, appNameCandidate].filter(
-    (candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0,
+  const ruleCandidates = collectAppIdentityCandidates(rule.target);
+  const eventCandidates = collectEventAppIdentityCandidates(
+    bundleId,
+    bundlePath,
+    executablePath,
+    appName,
   );
 
-  const normalizedBundleId = bundleId ? normalizeAppValue(bundleId) : "";
-  const normalizedBundlePath = bundlePath ? normalizeAppPathValue(bundlePath) : "";
-  const normalizedAppName = appName ? normalizeAppValue(appName) : "";
-  const bundlePathName = bundlePath ? extractAppNameFromPath(bundlePath) : "";
-  const bundlePathCandidates = [bundlePath, bundlePathName].filter(
-    (candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0,
-  );
-
-  for (const candidate of ruleCandidates) {
+  for (const candidate of ruleCandidates.bundleIds) {
     const normalizedCandidate = normalizeAppValue(candidate);
-    if (normalizedBundleId && normalizedBundleId === normalizedCandidate) {
-      return {
-        matchedRuleName: rule.name,
-        matchedRuleTarget: rule.target,
-        classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by bundle id ${bundleId?.trim() ?? normalizedCandidate}`,
-      };
-    }
-  }
-
-  for (const candidate of ruleCandidates) {
-    const normalizedCandidate = normalizeAppPathValue(candidate);
-    if (normalizedBundlePath && normalizedBundlePath === normalizedCandidate) {
-      return {
-        matchedRuleName: rule.name,
-        matchedRuleTarget: rule.target,
-        classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by app path ${bundlePath?.trim() ?? normalizedCandidate}`,
-      };
-    }
-  }
-
-  for (const candidate of ruleCandidates) {
-    for (const bundlePathCandidate of bundlePathCandidates) {
-      if (appNamesMatch(candidate, bundlePathCandidate)) {
+    for (const eventBundleId of eventCandidates.bundleIds) {
+      if (normalizeAppValue(eventBundleId) === normalizedCandidate) {
         return {
           matchedRuleName: rule.name,
           matchedRuleTarget: rule.target,
-          classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by app path ${bundlePath?.trim() ?? bundlePathCandidate}`,
+          classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by bundle id ${bundleId?.trim() ?? normalizedCandidate}`,
         };
       }
     }
   }
 
-  for (const candidate of ruleCandidates) {
-    const normalizedCandidate = normalizeAppValue(candidate);
-    if (normalizedAppName && appNamesMatch(candidate, appName ?? "")) {
-      return {
-        matchedRuleName: rule.name,
-        matchedRuleTarget: rule.target,
-        classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by app name ${appName?.trim() ?? normalizedCandidate}`,
-      };
+  for (const candidate of ruleCandidates.paths) {
+    for (const eventPath of eventCandidates.paths) {
+      if (appPathsMatch(candidate, eventPath)) {
+        return {
+          matchedRuleName: rule.name,
+          matchedRuleTarget: rule.target,
+          classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by app path ${eventPath}`,
+        };
+      }
     }
   }
 
-  for (const candidate of ruleCandidates) {
+  for (const candidate of ruleCandidates.names) {
+    for (const eventName of eventCandidates.names) {
+      if (appNamesMatch(candidate, eventName)) {
+        return {
+          matchedRuleName: rule.name,
+          matchedRuleTarget: rule.target,
+          classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by app name ${eventName}`,
+        };
+      }
+    }
+  }
+
+  for (const candidate of ruleCandidates.names) {
     const normalizedCandidate = normalizeAppValue(candidate);
-    if (
-      normalizedAppName &&
-      (containsWithBoundary(normalizedAppName, normalizedCandidate) ||
-        containsWithBoundary(normalizedCandidate, normalizedAppName))
-    ) {
-      return {
-        matchedRuleName: rule.name,
-        matchedRuleTarget: rule.target,
-        classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by app name ${appName?.trim() ?? normalizedCandidate}`,
-      };
+    for (const eventName of eventCandidates.names) {
+      const normalizedEventName = normalizeAppValue(eventName);
+      if (
+        normalizedCandidate &&
+        normalizedEventName &&
+        (containsWithBoundary(normalizedCandidate, normalizedEventName) ||
+          containsWithBoundary(normalizedEventName, normalizedCandidate))
+      ) {
+        return {
+          matchedRuleName: rule.name,
+          matchedRuleTarget: rule.target,
+          classificationReason: `${reasonPrefix} "${rule.name}" (${rule.target}) by app name ${eventName}`,
+        };
+      }
     }
   }
 
@@ -432,6 +546,7 @@ function classifyPreviewSpan(
   kind: "app" | "website",
   bundleId: string | undefined,
   bundlePath: string | undefined,
+  executablePath: string | undefined,
   appName: string | undefined,
   browserUrl: string | undefined,
   settings: TfAutotrackerV2ClassificationSettings,
@@ -492,12 +607,13 @@ function classifyPreviewSpan(
 
   if (kind === "app") {
     for (const rule of settings.autoApps) {
-      const matchReason = matchesAppRule(bundleId, bundlePath, appName, rule);
+      const matchReason = matchesAppRule(bundleId, bundlePath, executablePath, appName, rule);
       if (matchReason) {
         for (const distractionRule of settings.distractionApps) {
           const distractionMatchReason = matchesAppRule(
             bundleId,
             bundlePath,
+            executablePath,
             appName,
             distractionRule,
             "matched distraction app rule",
@@ -524,6 +640,7 @@ function classifyPreviewSpan(
       const matchReason = matchesAppRule(
         bundleId,
         bundlePath,
+        executablePath,
         appName,
         rule,
         "matched distraction app rule",
@@ -596,6 +713,7 @@ export function buildAutoTrackerV2PreviewSpans(
       kind,
       ev.bundleId,
       ev.bundlePath,
+      ev.executablePath,
       ev.appName,
       ev.browserUrl,
       effectiveSettings,
@@ -610,6 +728,7 @@ export function buildAutoTrackerV2PreviewSpans(
       appName: ev.appName,
       bundleId: ev.bundleId,
       bundlePath: ev.bundlePath,
+      executablePath: ev.executablePath,
       browserTitle: ev.browserTitle,
       browserUrl: ev.browserUrl,
       startedAtMs: ev.timestampMs,

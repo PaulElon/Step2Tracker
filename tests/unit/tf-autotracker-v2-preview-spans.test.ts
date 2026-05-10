@@ -492,7 +492,7 @@ test("/Applications/ChatGPT.app matches appName ChatGPT", () => {
   );
 });
 
-test("app rules match Goodnotes and Things3 variants symmetrically for allowed and distraction rules", () => {
+test("app rules match Goodnotes, Anki, Things3, and Codex variants symmetrically for allowed and distraction rules", () => {
   const goodnotesRule = {
     id: "rule-goodnotes",
     name: "Goodnotes",
@@ -527,31 +527,32 @@ test("app rules match Goodnotes and Things3 variants symmetrically for allowed a
 
   const cases = [
     {
-      description: "Goodnotes bundlePath",
+      description: "Goodnotes executable-style bundle path",
       event: makeEvent({
         id: "ev-goodnotes-name",
         kind: "targetFocused",
         timestampMs: 1000,
         appName: "Goodnotes 6",
         bundleId: "com.goodnotesapp.mac",
-        bundlePath: "/Applications/Goodnotes.app",
+        bundlePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+        executablePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
       }),
       expectedRuleName: "Goodnotes",
     },
     {
-      description: "Anki bundlePath",
+      description: "Anki PID-suffixed app name",
       event: makeEvent({
         id: "ev-anki-name",
         kind: "targetFocused",
         timestampMs: 2000,
-        appName: "Anki Desktop",
+        appName: "Anki (86724)",
         bundleId: "net.ankiweb.dtop",
-        bundlePath: "/Applications/Anki.app",
+        executablePath: "/Users/paul/Library/Application Support/AnkiProgramFiles/.venv/bin/python",
       }),
       expectedRuleName: "Anki",
     },
     {
-      description: "Things3 bundlePath",
+      description: "Things3 bundle path",
       event: makeEvent({
         id: "ev-things3-name",
         kind: "targetFocused",
@@ -563,7 +564,7 @@ test("app rules match Goodnotes and Things3 variants symmetrically for allowed a
       expectedRuleName: "Things3",
     },
     {
-      description: "Codex bundlePath",
+      description: "Codex bundle path",
       event: makeEvent({
         id: "ev-codex-name",
         kind: "targetFocused",
@@ -588,6 +589,12 @@ test("app rules match Goodnotes and Things3 variants symmetrically for allowed a
       testCase.expectedRuleName,
       `${testCase.description} should match the allowed rule`,
     );
+    if (testCase.description === "Goodnotes executable-style bundle path") {
+      assert.equal(
+        allowedSpans[0]?.classificationReason?.toLowerCase(),
+        'matched app rule "goodnotes" (/applications/goodnotes.app) by app path /applications/goodnotes.app/contents/macos/goodnotes',
+      );
+    }
 
     const distractionSpans = buildAutoTrackerV2PreviewSpans([testCase.event], distractionSettings);
     assert.equal(
@@ -669,7 +676,7 @@ test("Anki classified tracked when app rule is Anki", () => {
       id: "ev-1",
       kind: "targetFocused",
       timestampMs: 1000,
-      appName: "Anki",
+      appName: "Anki (86724)",
       bundleId: "net.ankiweb.dtop",
     }),
   ];

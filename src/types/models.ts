@@ -430,6 +430,7 @@ export interface TfAutoTrackerV2DevPersistedEvent {
   appName?: string;
   bundleId?: string;
   bundlePath?: string;
+  executablePath?: string;
   windowTitle?: string;
   isIdle?: boolean;
   browserTitle?: string;
@@ -477,6 +478,8 @@ export interface TfAutoTrackerV2DevPersistedOpenPreviewSession {
   sourceEventIds: string[];
   appName?: string;
   bundleId?: string;
+  bundlePath?: string;
+  executablePath?: string;
   browserTitle?: string;
   browserUrl?: string;
   classificationReason: string;
