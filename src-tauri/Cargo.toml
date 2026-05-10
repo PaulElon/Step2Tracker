@@ -1,6 +1,6 @@
 [package]
 name = "step2_ck_command_center"
-version = "0.0.114"
+version = "0.0.118"
 description = "TimeFolio Study Tracker desktop shell"
 authors = ["Paul"]
 edition = "2021"
