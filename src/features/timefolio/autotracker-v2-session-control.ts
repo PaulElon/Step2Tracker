@@ -3,12 +3,14 @@ import { FF } from "../../lib/feature-flags";
 import {
   buildAutoTrackerV2PreviewSpans,
   type TfAutotrackerV2ClassificationSettings,
+  type TfAutotrackerV2PreviewSpan,
 } from "../../lib/tf-autotracker-v2-preview-spans";
 import {
   buildAutoTrackerV2ReducerPreview,
   mapAutoTrackerV2FinalizedPreviewSessionToSessionLog,
   selectAutoTrackerV2StopSavePreviewSessions,
   type TfAutotrackerV2FinalizedPreviewSession,
+  type TfAutotrackerV2StopSaveSelection,
 } from "../../lib/tf-autotracker-v2-reducer-preview";
 import {
   getAutoTrackerV2NativeSamplerStatus,
@@ -17,6 +19,7 @@ import {
   stopAutoTrackerV2NativeSampler,
   type AutoTrackerV2NativeSamplerStatus,
   type AutoTrackerV2NativeSnapshot,
+  type AutoTrackerV2NativeStatus,
 } from "../../lib/tf-autotracker-v2-native-events";
 import { useTimeFolioStore } from "../../state/tf-store";
 import type { TfSessionLog } from "../../types/models";
@@ -32,6 +35,13 @@ export type AutoTrackerV2SessionControl = {
   isStopAndSaveBusy: boolean;
   lastDetectedAppName: string | null;
   runningElapsedLabel: string | null;
+  nativeStatus: AutoTrackerV2NativeStatus | null;
+  previewSpans: TfAutotrackerV2PreviewSpan[];
+  currentPreviewSpan: TfAutotrackerV2PreviewSpan | null;
+  stopSaveSelection: TfAutotrackerV2StopSaveSelection;
+  previewNowMs: number;
+  trackedRuleCount: number;
+  distractionRuleCount: number;
   message: AutoTrackerV2UserControlMessage;
   onStart: () => void;
   onStopAndSave: () => void;
@@ -91,11 +101,27 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
     distractionApps: state.trackerPrefs.customDistractionApps,
     distractionWebsites: state.trackerPrefs.customDistractionWebsites,
   };
+  const trackedRuleCount =
+    classificationSettings.autoApps.length + classificationSettings.autoWebsites.length;
+  const distractionRuleCount =
+    classificationSettings.distractionApps.length + classificationSettings.distractionWebsites.length;
   const previewSpans = buildAutoTrackerV2PreviewSpans(v2Snapshot?.events ?? [], classificationSettings);
   const reducerPreview = buildAutoTrackerV2ReducerPreview(previewSpans);
   const isRunning = v2SamplerStatus?.running === true;
   const isActionBusy = v2SamplerActionBusy || v2IsStopFinalizing;
   const lastDetectedAppName = v2SamplerStatus?.lastObservedAppName ?? null;
+  const previewNowMs = isRunning ? v2RunningNowMs : Date.now();
+  const stopSaveSelection = selectAutoTrackerV2StopSavePreviewSessions({
+    finalizedPreviewSessions: reducerPreview.finalizedPreviewSessions,
+    previewSpans,
+    state: reducerPreview.state,
+    nowMs: previewNowMs,
+    writtenPreviewSessionIds: new Set([
+      ...v2WrittenPreviewSessionIds,
+      ...v2WritingPreviewSessionIdsRef.current,
+    ]),
+  });
+  const currentPreviewSpan = previewSpans.at(-1) ?? null;
   const runningElapsedLabel =
     isRunning && v2RunningStartedAtMs !== null
       ? formatElapsedLabel(v2RunningNowMs - v2RunningStartedAtMs)
@@ -194,6 +220,10 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
       });
       let stoppedSampler = false;
       const selectionCount = selection.previewSessions.length;
+      const hasDetectedActivity = previewSpans.length > 0;
+      const hasUnclassifiedActivity = previewSpans.some(
+        (span) => span.classification === "unclassified",
+      );
 
       if (isRunning) {
         const samplerStatus = await stopAutoTrackerV2NativeSampler();
@@ -206,11 +236,19 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
           tone: "info",
           text: stoppedSampler
             ? selection.reason === "alreadyWritten"
-              ? "Auto-Tracking stopped. Those sessions were already saved."
-              : "Auto-Tracking stopped. No session was ready to save."
+              ? "Auto-Tracking stopped. All classified spans from this run were already saved."
+              : hasUnclassifiedActivity
+                ? "Auto-Tracking stopped. Nothing was saved because this run only had unclassified activity."
+                : hasDetectedActivity
+                  ? "Auto-Tracking stopped. No classified spans were ready to save."
+                  : "Auto-Tracking stopped. No activity was detected."
             : selection.reason === "alreadyWritten"
-              ? "Those sessions were already saved."
-              : "No eligible session was ready to save.",
+              ? "Those classified spans were already saved."
+              : hasUnclassifiedActivity
+                ? "Nothing is ready to save yet because this run is still unclassified."
+                : hasDetectedActivity
+                  ? "No classified spans are ready to save yet."
+                  : "No activity is ready to save yet.",
         });
         return;
       }
@@ -232,14 +270,14 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
           });
         }
         setV2UserModeMessage({
-          tone: "info",
+          tone: "success",
           text: stoppedSampler
-            ? selectionCount === 1
-              ? "Auto-Tracking stopped and saved to Session Log."
-              : `Auto-Tracking stopped and saved ${selectionCount} Session Log entries.`
-            : selectionCount === 1
-              ? "Saved to Session Log."
-              : `Saved ${selectionCount} Session Log entries.`,
+            ? `Auto-Tracking stopped and saved ${selectionCount} Session Log ${
+                selectionCount === 1 ? "entry" : "entries"
+              }.`
+            : `Saved ${selectionCount} Session Log ${
+                selectionCount === 1 ? "entry" : "entries"
+              }.`,
         });
         await refreshSamplerState();
       } finally {
@@ -267,6 +305,13 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
     isStopAndSaveBusy: isActionBusy,
     lastDetectedAppName,
     runningElapsedLabel,
+    nativeStatus: v2Snapshot?.status ?? null,
+    previewSpans,
+    currentPreviewSpan,
+    stopSaveSelection,
+    previewNowMs,
+    trackedRuleCount,
+    distractionRuleCount,
     message: v2UserModeMessage,
     onStart: () => {
       void handleStart();
