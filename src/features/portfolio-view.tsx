@@ -1,9 +1,10 @@
-import { AlertCircle, ClipboardCheck, Clock, Flame } from "lucide-react";
+import { AlertCircle, BarChart3, ClipboardCheck, Clock, Flame } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { startTransition } from "react";
+import { startTransition, useEffect, useState } from "react";
 import type { JSX } from "react";
 import { ErrorLogView } from "./error-log-view";
 import { PracticeTestsView } from "./practice-tests-view";
+import { PortfolioOverview } from "./portfolio/portfolio-overview";
 import { TimeFolioView } from "./timefolio-view";
 import { WeakTopicsView } from "./weak-topics-view";
 import { FF } from "../lib/feature-flags";
@@ -11,6 +12,7 @@ import { cn } from "../lib/ui";
 import type { SectionId } from "../types/models";
 
 export type PortfolioSectionId = "tests" | "weakTopics" | "errorLog" | "timefolio";
+type PortfolioTabId = PortfolioSectionId | "overview";
 
 export function isPortfolioSection(section: SectionId): section is PortfolioSectionId {
   if (section === "tests" || section === "weakTopics" || section === "errorLog") {
@@ -22,10 +24,11 @@ export function isPortfolioSection(section: SectionId): section is PortfolioSect
   return false;
 }
 
-type PortfolioTab = { id: PortfolioSectionId; label: string; icon: LucideIcon };
+type PortfolioTab = { id: PortfolioTabId; label: string; icon: LucideIcon };
 
 function getPortfolioTabs(): PortfolioTab[] {
   const tabs: PortfolioTab[] = [
+    { id: "overview", label: "Overview", icon: BarChart3 },
     { id: "tests", label: "Practice Tests", icon: ClipboardCheck },
     { id: "weakTopics", label: "Weak Topics", icon: Flame },
     { id: "errorLog", label: "Error Log", icon: AlertCircle },
@@ -44,10 +47,29 @@ export function PortfolioView({
   onSelectSection: (section: PortfolioSectionId) => void;
 }) {
   const tabs = getPortfolioTabs();
-  const activeTab = tabs.find((tab) => tab.id === activeSection);
+  const [localTab, setLocalTab] = useState<"overview" | null>(null);
+
+  useEffect(() => {
+    setLocalTab(null);
+  }, [activeSection]);
+
+  const effectiveTab: PortfolioTabId = localTab ?? activeSection;
+  const activeTab = tabs.find((tab) => tab.id === effectiveTab);
 
   let content: JSX.Element;
-  switch (activeSection) {
+  switch (effectiveTab) {
+    case "overview":
+      content = (
+        <PortfolioOverview
+          onNavigate={(section) => {
+            setLocalTab(null);
+            startTransition(() => {
+              onSelectSection(section);
+            });
+          }}
+        />
+      );
+      break;
     case "tests":
       content = <PracticeTestsView />;
       break;
@@ -76,12 +98,17 @@ export function PortfolioView({
         </div>
         <div className="flex gap-1 overflow-x-auto">
           {tabs.map(({ id, label, icon: Icon }) => {
-            const active = id === activeSection;
+            const active = id === effectiveTab;
             return (
               <button
                 key={id}
                 type="button"
                 onClick={() => {
+                  if (id === "overview") {
+                    setLocalTab("overview");
+                    return;
+                  }
+                  setLocalTab(null);
                   startTransition(() => {
                     onSelectSection(id);
                   });
