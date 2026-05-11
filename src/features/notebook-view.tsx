@@ -1526,7 +1526,7 @@ export function NotebookView() {
               }}
               className="notebook-floating-menu__item whitespace-nowrap"
             >
-              TXT text
+              Text (.txt)
             </button>
             <button
               type="button"
@@ -1535,7 +1535,7 @@ export function NotebookView() {
               }}
               className="notebook-floating-menu__item whitespace-nowrap"
             >
-              HTML page
+              HTML (.html)
             </button>
             <button
               type="button"
@@ -1544,14 +1544,14 @@ export function NotebookView() {
               }}
               className="notebook-floating-menu__item whitespace-nowrap"
             >
-              Markdown note
+              Markdown (.md)
             </button>
             <button
               type="button"
               onClick={openImportPicker}
               className="notebook-floating-menu__item whitespace-nowrap"
             >
-              Import file
+              Import notebook file
             </button>
           </div>,
           notebookFloatingMenuPortalTarget,
