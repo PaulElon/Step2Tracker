@@ -22,13 +22,10 @@ import { listen } from "@tauri-apps/api/event";
 import { ModalShell } from "./components/modal-shell";
 import { MobileNav, NavigationButton } from "./components/ui";
 import { DashboardView } from "./features/dashboard-view";
-import { ErrorLogView } from "./features/error-log-view";
 import { NotebookView } from "./features/notebook-view";
 import { PlannerView } from "./features/planner-view";
-import { PracticeTestsView } from "./features/practice-tests-view";
+import { PortfolioView, isPortfolioSection } from "./features/portfolio-view";
 import { SettingsView } from "./features/settings-view";
-import { TimeFolioView } from "./features/timefolio-view";
-import { WeakTopicsView } from "./features/weak-topics-view";
 import { getDateRange, sumStudyMinutes } from "./lib/analytics";
 import { daysBetween, formatHoursValue, formatLongDate, formatSavedAt } from "./lib/datetime";
 import {
@@ -506,7 +503,9 @@ export default function App() {
       : !FF.notebook && activeSection === "notebook"
         ? "dashboard"
         : activeSection;
+  const portfolioActive = isPortfolioSection(resolvedSection);
   const sectionMeta = sectionCopy[resolvedSection];
+  const headerTitle = portfolioActive ? "Portfolio" : sectionMeta.title;
   const totalMinutes = sumStudyMinutes(state.studyBlocks);
   const dateRange = getDateRange(state.studyBlocks);
   const persistenceCopy =
@@ -767,21 +766,21 @@ export default function App() {
   }
 
   let sectionContent: JSX.Element | null;
-  switch (resolvedSection) {
+  if (portfolioActive) {
+    sectionContent = (
+      <PortfolioView
+        activeSection={resolvedSection}
+        onSelectSection={(section) => {
+          void setActiveSection(section);
+        }}
+      />
+    );
+  } else switch (resolvedSection) {
     case "dashboard":
       sectionContent = <DashboardView onOpenNotebook={() => void setActiveSection("notebook")} />;
       break;
     case "planner":
       sectionContent = <PlannerView />;
-      break;
-    case "weakTopics":
-      sectionContent = <WeakTopicsView />;
-      break;
-    case "tests":
-      sectionContent = <PracticeTestsView />;
-      break;
-    case "errorLog":
-      sectionContent = <ErrorLogView />;
       break;
     case "settings":
       sectionContent = (
@@ -837,9 +836,6 @@ export default function App() {
           }}
         />
       );
-      break;
-    case "timefolio":
-      sectionContent = <TimeFolioView />;
       break;
     case "notebook":
       sectionContent = <NotebookView />;
@@ -1016,7 +1012,7 @@ export default function App() {
           <header className="glass-panel px-5 py-4">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <h2 className="text-2xl font-semibold tracking-[-0.04em] text-white md:text-[1.75rem]">
-                {sectionMeta.title}
+                {headerTitle}
               </h2>
               <p className="text-[11px] text-slate-500">{persistenceCopy}</p>
             </div>
