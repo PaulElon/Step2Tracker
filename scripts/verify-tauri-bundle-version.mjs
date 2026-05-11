@@ -40,6 +40,8 @@ const bundleDir = resolve(root, "src-tauri/target/release/bundle/macos");
 const packageJson = readJson(pkgPath);
 const tauriConfig = readJson(tauriPath);
 const cargoVersion = readTomlVersion(cargoPath);
+const canonicalBundleName = `${tauriConfig.productName}.app`;
+const canonicalBundlePath = join(bundleDir, canonicalBundleName);
 const sourceVersion = packageJson.version;
 const tauriVersion = tauriConfig.version;
 
@@ -69,25 +71,27 @@ if (!statSync(bundleDir, { throwIfNoEntry: false })) {
 
 const bundleApps = readdirSync(bundleDir, { withFileTypes: true })
   .filter((entry) => entry.isDirectory() && entry.name.endsWith(".app"))
-  .map((entry) => join(bundleDir, entry.name));
+  .map((entry) => entry.name);
 
 if (bundleApps.length === 0) {
   throw new Error(`No .app bundles were found in ${bundleDir}`);
 }
 
-const bundleSummaries = [];
-for (const appPath of bundleApps) {
-  const plistPath = join(appPath, "Contents", "Info.plist");
-  const { shortVersion, bundleVersion } = readPlistVersion(plistPath);
-  bundleSummaries.push({ appPath, shortVersion, bundleVersion });
+if (!bundleApps.includes(canonicalBundleName)) {
+  throw new Error(
+    `Canonical bundle not found: ${canonicalBundlePath}. Available bundles: ${bundleApps.join(", ")}`,
+  );
+}
 
-  if (shortVersion !== sourceVersion || bundleVersion !== sourceVersion) {
-    console.error(`Version mismatch in ${plistPath}`);
-    console.error(`- source version: ${sourceVersion}`);
-    console.error(`- CFBundleShortVersionString: ${shortVersion}`);
-    console.error(`- CFBundleVersion: ${bundleVersion}`);
-    process.exit(1);
-  }
+const plistPath = join(canonicalBundlePath, "Contents", "Info.plist");
+const { shortVersion, bundleVersion } = readPlistVersion(plistPath);
+
+if (shortVersion !== sourceVersion || bundleVersion !== sourceVersion) {
+  console.error(`Version mismatch in ${plistPath}`);
+  console.error(`- source version: ${sourceVersion}`);
+  console.error(`- CFBundleShortVersionString: ${shortVersion}`);
+  console.error(`- CFBundleVersion: ${bundleVersion}`);
+  process.exit(1);
 }
 
 console.log(
@@ -96,7 +100,12 @@ console.log(
       sourceVersion,
       cargoVersion,
       tauriVersion,
-      bundles: bundleSummaries,
+      bundle: {
+        appPath: canonicalBundlePath,
+        shortVersion,
+        bundleVersion,
+      },
+      ignoredBundles: bundleApps.filter((bundleName) => bundleName !== canonicalBundleName),
     },
     null,
     2,
