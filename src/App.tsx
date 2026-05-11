@@ -1,9 +1,10 @@
 import {
   AlertCircle,
   BookOpen,
-  Briefcase,
   CalendarDays,
+  ChevronDown,
   ClipboardCheck,
+  Clock,
   Database,
   Flame,
   House,
@@ -51,53 +52,29 @@ import type {
   TrashItem,
 } from "./types/models";
 
-const navigationItems = [
-  {
-    id: "dashboard" as const,
-    label: "Today",
-    icon: House,
-  },
-  {
-    id: "planner" as const,
-    label: "Planner",
-    icon: CalendarDays,
-  },
-  {
-    id: "weakTopics" as const,
-    label: "Weak Topics",
-    icon: Flame,
-  },
-  {
-    id: "tests" as const,
-    label: "Practice Tests",
-    icon: ClipboardCheck,
-  },
-  {
-    id: "errorLog" as const,
-    label: "Exam Error Log",
-    icon: AlertCircle,
-  },
-  {
-    id: "settings" as const,
-    label: "Settings",
-    icon: Settings2,
-  },
+const mobileNavigationItems = [
+  { id: "dashboard" as const, label: "Today", icon: House },
+  { id: "planner" as const, label: "Plan", icon: CalendarDays },
+  { id: "tests" as const, label: "Practice Tests", icon: ClipboardCheck },
+  { id: "weakTopics" as const, label: "Weak Topics", icon: Flame },
+  { id: "errorLog" as const, label: "Error Log", icon: AlertCircle },
   ...(FF.timefolio
-    ? [{ id: "timefolio" as const, label: "TimeFolio", icon: Briefcase }]
+    ? [{ id: "timefolio" as const, label: "Study Time", icon: Clock }]
     : []),
   ...(FF.notebook
     ? [{ id: "notebook" as const, label: "Notebook", icon: BookOpen }]
     : []),
+  { id: "settings" as const, label: "Settings", icon: Settings2 },
 ];
 
 const sectionCopy: Record<SectionId, { title: string }> = {
   dashboard: { title: "Today" },
-  planner: { title: "Planner" },
+  planner: { title: "Plan" },
   weakTopics: { title: "Weak Topics" },
   tests: { title: "Practice Tests" },
-  errorLog: { title: "Exam Error Log" },
+  errorLog: { title: "Error Log" },
   settings: { title: "Settings" },
-  timefolio: { title: "TimeFolio" },
+  timefolio: { title: "Study Time" },
   notebook: { title: "Notebook" },
 };
 
@@ -370,41 +347,41 @@ function SidebarCountdown() {
 
   return (
     <>
-      <div className="panel-subtle p-3">
-        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Countdown</p>
+      <div className="px-1">
+        <p className="text-[0.62rem] uppercase tracking-[0.2em] text-slate-500">Countdown</p>
         {activeTimers.length === 0 ? (
           <button
             type="button"
             onClick={() => setShowModal(true)}
-            className="mt-2 flex w-full items-center gap-2 rounded-[14px] border border-dashed border-white/10 p-3 text-sm text-slate-500 transition-colors hover:border-white/20 hover:text-slate-400"
+            className="mt-1.5 flex w-full items-center gap-1.5 rounded-[10px] border border-dashed border-white/10 px-2 py-1.5 text-xs text-slate-500 transition-colors hover:border-white/15 hover:text-slate-400"
           >
-            <Plus className="h-4 w-4" />
-            Add Countdown
+            <Plus className="h-3 w-3" />
+            Add countdown
           </button>
         ) : (
-          <div className="mt-2 space-y-2">
+          <div className="mt-1.5 space-y-1.5">
             {activeTimers.map((t) => (
-              <div key={t.id} className="rounded-[14px] border border-white/10 bg-slate-950/45 p-3">
-                <div className="flex items-center justify-between gap-1">
-                  <p className="truncate text-xs text-slate-400">{t.label}</p>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(t.id)}
-                    className="shrink-0 text-slate-600 transition-colors hover:text-rose-400"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+              <div key={t.id} className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[11px] text-slate-500">{t.label}</p>
+                  <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-slate-200">
+                    {computeCountdown(t)}
+                  </p>
                 </div>
-                <p className="mt-1 font-bold tabular-nums text-white" style={{ fontSize: "0.95rem" }}>
-                  {computeCountdown(t)}
-                </p>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(t.id)}
+                  className="shrink-0 text-slate-600 transition-colors hover:text-rose-400"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
               </div>
             ))}
             {allTimers.length < 5 ? (
               <button
                 type="button"
                 onClick={() => setShowModal(true)}
-                className="flex w-full items-center gap-2 rounded-[14px] border border-dashed border-white/10 p-2 text-xs text-slate-500 transition-colors hover:text-slate-400"
+                className="flex w-full items-center gap-1.5 text-[11px] text-slate-500 transition-colors hover:text-slate-400"
               >
                 <Plus className="h-3 w-3" />
                 Add
@@ -903,71 +880,150 @@ export default function App() {
       />
 
       <div className="relative mx-auto flex h-full max-w-[1760px] gap-4 px-4 py-4 md:px-6 xl:px-8">
-        <aside className="hidden w-[252px] shrink-0 xl:flex">
-          <div className="glass-panel flex h-full w-full flex-col gap-6 p-4">
-            <div className="rounded-[24px] border border-cyan-300/15 bg-gradient-to-br from-cyan-300/10 to-blue-400/5 p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-slate-900/65">
-                  <ShieldPlus className="h-6 w-6 text-cyan-100" />
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400">TimeFolio</p>
-                  <h1 className="mt-1 text-2xl font-semibold text-white">TimeFolio Study Tracker</h1>
-                </div>
+        <aside className="hidden w-[236px] shrink-0 xl:flex">
+          <div className="glass-panel flex h-full w-full flex-col gap-5 p-3">
+            <div className="flex items-center gap-2.5 px-2 pt-1">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.04]">
+                <ShieldPlus className="h-4 w-4 text-cyan-200" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[0.6rem] uppercase tracking-[0.2em] text-slate-500">TimeFolio</p>
+                <h1 className="truncate text-[13px] font-semibold text-white">Study Tracker</h1>
               </div>
             </div>
 
-            <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 scrollbar-subtle">
-              {navigationItems.map((item) => (
+            <nav className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1 scrollbar-subtle">
+              <div className="space-y-0.5">
+                <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">Core</p>
                 <NavigationButton
-                  key={item.id}
-                  icon={item.icon}
-                  label={item.label}
-                  active={item.id === resolvedSection}
+                  icon={House}
+                  label="Today"
+                  active={resolvedSection === "dashboard"}
                   onClick={() => {
                     startTransition(() => {
-                      void setActiveSection(item.id);
+                      void setActiveSection("dashboard");
                     });
                   }}
                 />
-              ))}
+                <NavigationButton
+                  icon={CalendarDays}
+                  label="Plan"
+                  active={resolvedSection === "planner"}
+                  onClick={() => {
+                    startTransition(() => {
+                      void setActiveSection("planner");
+                    });
+                  }}
+                />
+              </div>
+
+              <div className="space-y-0.5">
+                <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">Review</p>
+                <div className="flex items-center gap-1.5 px-3 pb-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
+                  <ChevronDown className="h-3 w-3" aria-hidden="true" />
+                  Portfolio
+                </div>
+                <NavigationButton
+                  icon={ClipboardCheck}
+                  label="Practice Tests"
+                  active={resolvedSection === "tests"}
+                  onClick={() => {
+                    startTransition(() => {
+                      void setActiveSection("tests");
+                    });
+                  }}
+                />
+                <NavigationButton
+                  icon={Flame}
+                  label="Weak Topics"
+                  active={resolvedSection === "weakTopics"}
+                  onClick={() => {
+                    startTransition(() => {
+                      void setActiveSection("weakTopics");
+                    });
+                  }}
+                />
+                <NavigationButton
+                  icon={AlertCircle}
+                  label="Error Log"
+                  active={resolvedSection === "errorLog"}
+                  onClick={() => {
+                    startTransition(() => {
+                      void setActiveSection("errorLog");
+                    });
+                  }}
+                />
+                {FF.timefolio ? (
+                  <NavigationButton
+                    icon={Clock}
+                    label="Study Time"
+                    active={resolvedSection === "timefolio"}
+                    onClick={() => {
+                      startTransition(() => {
+                        void setActiveSection("timefolio");
+                      });
+                    }}
+                  />
+                ) : null}
+              </div>
+
+              {FF.notebook ? (
+                <div className="space-y-0.5">
+                  <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">Workspace</p>
+                  <NavigationButton
+                    icon={BookOpen}
+                    label="Notebook"
+                    active={resolvedSection === "notebook"}
+                    onClick={() => {
+                      startTransition(() => {
+                        void setActiveSection("notebook");
+                      });
+                    }}
+                  />
+                </div>
+              ) : null}
+
+              <div className="space-y-0.5">
+                <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">System</p>
+                <NavigationButton
+                  icon={Settings2}
+                  label="Settings"
+                  active={resolvedSection === "settings"}
+                  onClick={() => {
+                    startTransition(() => {
+                      void setActiveSection("settings");
+                    });
+                  }}
+                />
+              </div>
             </nav>
 
-            <SidebarCountdown />
-
-            <div className="panel-subtle p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Schedule</p>
-              <p className="mt-2 text-2xl font-semibold text-white">{formatHoursValue(totalMinutes)}</p>
-              <p className="mt-1 text-sm text-slate-300">{dateRangeMeta}</p>
+            <div className="space-y-3 border-t border-white/5 pt-3">
+              <SidebarCountdown />
+              <div className="px-1">
+                <p className="text-[0.6rem] uppercase tracking-[0.2em] text-slate-500">Schedule</p>
+                <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-slate-200">
+                  {formatHoursValue(totalMinutes)}
+                </p>
+                <p className="text-[11px] text-slate-500">{dateRangeMeta}</p>
+              </div>
+              <p className="px-1 text-[11px] text-slate-500">{persistenceCopy}</p>
             </div>
           </div>
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
-          <header className="glass-panel p-4 md:p-5">
-            <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-slate-400">TimeFolio</p>
-                <h2 className="mt-1 text-3xl font-semibold tracking-[-0.05em] text-white md:text-4xl">
-                  {sectionMeta.title}
-                </h2>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 2xl:min-w-[480px]">
-                <div className="muted-surface px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Planned</p>
-                  <p className="mt-2 text-sm font-semibold text-white">{formatHoursValue(totalMinutes)}</p>
-                </div>
-                <div className="muted-surface px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Saved</p>
-                  <p className="mt-2 text-sm font-semibold text-white">{persistenceCopy}</p>
-                </div>
-              </div>
+          <header className="glass-panel px-5 py-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <h2 className="text-2xl font-semibold tracking-[-0.04em] text-white md:text-[1.75rem]">
+                {sectionMeta.title}
+              </h2>
+              <p className="text-[11px] text-slate-500">{persistenceCopy}</p>
             </div>
           </header>
 
           <MobileNav
-            items={navigationItems}
+            items={mobileNavigationItems}
             activeSection={resolvedSection}
             onSelect={(section) => {
               startTransition(() => {
