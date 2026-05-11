@@ -2,12 +2,12 @@ import {
   AlertCircle,
   BookOpen,
   CalendarDays,
-  ChevronDown,
   ClipboardCheck,
   Clock,
   Database,
   Flame,
   House,
+  LayoutDashboard,
   Plus,
   RotateCcw,
   Settings2,
@@ -491,6 +491,7 @@ export default function App() {
   } = useAppStore();
   const restoreInputRef = useRef<HTMLInputElement | null>(null);
   const [showRecoveryCenter, setShowRecoveryCenter] = useState(false);
+  const [portfolioOverviewActive, setPortfolioOverviewActive] = useState(false);
   const [pendingArtifactRaw, setPendingArtifactRaw] = useState<string | null>(null);
   const [pendingArtifactPreview, setPendingArtifactPreview] = useState<BackupArtifactPreview | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("unsupported");
@@ -505,7 +506,7 @@ export default function App() {
         : activeSection;
   const portfolioActive = isPortfolioSection(resolvedSection);
   const sectionMeta = sectionCopy[resolvedSection];
-  const headerTitle = portfolioActive ? "Portfolio" : sectionMeta.title;
+  const headerTitle = (portfolioActive || portfolioOverviewActive) ? "Portfolio" : sectionMeta.title;
   const totalMinutes = sumStudyMinutes(state.studyBlocks);
   const dateRange = getDateRange(state.studyBlocks);
   const persistenceCopy =
@@ -766,11 +767,13 @@ export default function App() {
   }
 
   let sectionContent: JSX.Element | null;
-  if (portfolioActive) {
+  if (portfolioActive || portfolioOverviewActive) {
     sectionContent = (
       <PortfolioView
-        activeSection={resolvedSection}
+        activeSection={portfolioActive ? resolvedSection : "tests"}
+        showOverview={portfolioOverviewActive}
         onSelectSection={(section) => {
+          setPortfolioOverviewActive(false);
           void setActiveSection(section);
         }}
       />
@@ -897,6 +900,7 @@ export default function App() {
                   active={resolvedSection === "dashboard"}
                   onClick={() => {
                     startTransition(() => {
+                      setPortfolioOverviewActive(false);
                       void setActiveSection("dashboard");
                     });
                   }}
@@ -907,6 +911,7 @@ export default function App() {
                   active={resolvedSection === "planner"}
                   onClick={() => {
                     startTransition(() => {
+                      setPortfolioOverviewActive(false);
                       void setActiveSection("planner");
                     });
                   }}
@@ -914,17 +919,24 @@ export default function App() {
               </div>
 
               <div className="space-y-0.5">
-                <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">Review</p>
-                <div className="flex items-center gap-1.5 px-3 pb-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
-                  <ChevronDown className="h-3 w-3" aria-hidden="true" />
-                  Portfolio
-                </div>
+                <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">Portfolio</p>
+                <NavigationButton
+                  icon={LayoutDashboard}
+                  label="Overview"
+                  active={portfolioOverviewActive}
+                  onClick={() => {
+                    startTransition(() => {
+                      setPortfolioOverviewActive(true);
+                    });
+                  }}
+                />
                 <NavigationButton
                   icon={ClipboardCheck}
                   label="Practice Tests"
-                  active={resolvedSection === "tests"}
+                  active={!portfolioOverviewActive && resolvedSection === "tests"}
                   onClick={() => {
                     startTransition(() => {
+                      setPortfolioOverviewActive(false);
                       void setActiveSection("tests");
                     });
                   }}
@@ -932,9 +944,10 @@ export default function App() {
                 <NavigationButton
                   icon={Flame}
                   label="Weak Topics"
-                  active={resolvedSection === "weakTopics"}
+                  active={!portfolioOverviewActive && resolvedSection === "weakTopics"}
                   onClick={() => {
                     startTransition(() => {
+                      setPortfolioOverviewActive(false);
                       void setActiveSection("weakTopics");
                     });
                   }}
@@ -942,9 +955,10 @@ export default function App() {
                 <NavigationButton
                   icon={AlertCircle}
                   label="Error Log"
-                  active={resolvedSection === "errorLog"}
+                  active={!portfolioOverviewActive && resolvedSection === "errorLog"}
                   onClick={() => {
                     startTransition(() => {
+                      setPortfolioOverviewActive(false);
                       void setActiveSection("errorLog");
                     });
                   }}
@@ -953,9 +967,10 @@ export default function App() {
                   <NavigationButton
                     icon={Clock}
                     label="Study Time"
-                    active={resolvedSection === "timefolio"}
+                    active={!portfolioOverviewActive && resolvedSection === "timefolio"}
                     onClick={() => {
                       startTransition(() => {
+                        setPortfolioOverviewActive(false);
                         void setActiveSection("timefolio");
                       });
                     }}
@@ -972,6 +987,7 @@ export default function App() {
                     active={resolvedSection === "notebook"}
                     onClick={() => {
                       startTransition(() => {
+                        setPortfolioOverviewActive(false);
                         void setActiveSection("notebook");
                       });
                     }}
@@ -987,6 +1003,7 @@ export default function App() {
                   active={resolvedSection === "settings"}
                   onClick={() => {
                     startTransition(() => {
+                      setPortfolioOverviewActive(false);
                       void setActiveSection("settings");
                     });
                   }}
