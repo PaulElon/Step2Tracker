@@ -1160,12 +1160,21 @@ export function NotebookView() {
       const exportResult = await createNotebookPdfExport(activePage, editorElement);
       const savedPath = await exportNotebookPdfBytes(fileName, exportResult.bytes);
 
+      const extras: string[] = [];
+      if (exportResult.embeddedHighlights > 0) {
+        extras.push(`${exportResult.embeddedHighlights} highlight(s)`);
+      }
+      if (exportResult.embeddedBookmarks > 0) {
+        extras.push(`${exportResult.embeddedBookmarks} bookmark(s)`);
+      }
+      if (exportResult.missingImages.length > 0) {
+        extras.push(`${exportResult.missingImages.length} local image(s) could not be embedded`);
+      }
       setStatus({
         kind: "success",
-        message:
-          exportResult.missingImages.length > 0
-            ? `PDF export saved to ${savedPath}. ${exportResult.missingImages.length} local image(s) could not be embedded.`
-            : `PDF export saved to ${savedPath}.`,
+        message: extras.length > 0
+          ? `PDF export saved to ${savedPath}. ${extras.join(", ")}.`
+          : `PDF export saved to ${savedPath}.`,
       });
     } catch (error) {
       const message =
