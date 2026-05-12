@@ -1,6 +1,6 @@
 import type { NotebookDocument, NotebookPage } from "../types/models";
 
-export type NotebookExportFormat = "txt" | "html" | "markdown";
+export type NotebookExportFormat = "txt" | "html" | "markdown" | "pdf";
 
 export interface NotebookImportedPageDraft {
   documentTitle: string;

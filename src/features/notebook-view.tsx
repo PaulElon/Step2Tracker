@@ -1,21 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
-import { invoke } from "@tauri-apps/api/core";
 import { Maximize2, Minimize2, PanelLeftOpen } from "lucide-react";
 import { ModalShell } from "../components/modal-shell";
 import { NotebookEditorAdapter } from "../components/notebook-editor-adapter";
 import { NotebookPdfViewer } from "../components/notebook-pdf-viewer";
 import { richTextToPlain } from "../components/rich-text-editor";
-import { embedNotebookImagesInHtml, purgeOrphanedNotebookImages } from "../lib/notebook-images";
-import { uploadNotebookPdf } from "../lib/notebook-pdf";
+import { purgeOrphanedNotebookImages } from "../lib/notebook-images";
+import { createNotebookPdfExport } from "../lib/notebook-pdf-export";
+import { exportNotebookPdfBytes, uploadNotebookPdf } from "../lib/notebook-pdf";
 import {
   buildNotebookExportFileName,
-  createNotebookHtmlExport,
-  createNotebookMarkdownExport,
-  createNotebookTxtExport,
   parseNotebookImport,
   validateNotebookImportFile,
-  type NotebookExportFormat,
 } from "../lib/notebook-io";
 import { useAppStore } from "../state/app-store";
 import type { NotebookDocument, NotebookFolder, NotebookPage } from "../types/models";
@@ -168,10 +164,8 @@ function nowIso() {
 
 const NOTEBOOK_FLOATING_MENU_GAP = 8;
 const NOTEBOOK_FLOATING_MENU_VIEWPORT_MARGIN = 8;
-const NOTEBOOK_EXPORT_MENU_WIDTH = 176;
-const NOTEBOOK_EXPORT_MENU_ESTIMATED_HEIGHT = 176;
 const NOTEBOOK_OVERFLOW_MENU_WIDTH = 176;
-const NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT = 144;
+const NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT = 176;
 
 function getNotebookFloatingMenuPosition(
   button: HTMLButtonElement,
@@ -301,8 +295,6 @@ export function NotebookView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [status, setStatus] = useState<ActionStatus>(null);
   const [saveStatus, setSaveStatus] = useState<NotebookSaveStatus>("idle");
-  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
-  const [exportMenuPosition, setExportMenuPosition] = useState<NotebookFloatingMenuPosition | null>(null);
   const [isEditorOverflowMenuOpen, setIsEditorOverflowMenuOpen] = useState(false);
   const [editorOverflowMenuPosition, setEditorOverflowMenuPosition] = useState<NotebookFloatingMenuPosition | null>(null);
   const [tileActionMenu, setTileActionMenu] = useState<TileActionMenuState | null>(null);
@@ -310,8 +302,6 @@ export function NotebookView() {
   const [isNotebookRailExpanded, setIsNotebookRailExpanded] = useState(false);
   const [notebookRailTargetSection, setNotebookRailTargetSection] = useState<NotebookRailSection>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const exportMenuRef = useRef<HTMLDivElement>(null);
-  const exportButtonRef = useRef<HTMLButtonElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const tileActionMenuRef = useRef<HTMLDivElement>(null);
   const promptInputRef = useRef<HTMLInputElement>(null);
@@ -561,7 +551,6 @@ export function NotebookView() {
       if (activePageId !== null) {
         setActivePageId(null);
       }
-      closeExportMenu();
       return;
     }
 
@@ -580,12 +569,6 @@ export function NotebookView() {
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
       if (
-        !exportButtonRef.current?.contains(event.target as Node) &&
-        !exportMenuRef.current?.contains(event.target as Node)
-      ) {
-        closeExportMenu();
-      }
-      if (
         !editorOverflowButtonRef.current?.contains(event.target as Node) &&
         !editorOverflowMenuRef.current?.contains(event.target as Node)
       ) {
@@ -598,7 +581,6 @@ export function NotebookView() {
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        closeExportMenu();
         closeEditorOverflowMenu();
         setTileActionMenu(null);
         if (editingPageId) {
@@ -609,11 +591,6 @@ export function NotebookView() {
     }
 
     function updateFloatingMenuPositions() {
-      if (isExportMenuOpen && exportButtonRef.current) {
-        setExportMenuPosition(
-          getNotebookFloatingMenuPosition(exportButtonRef.current, NOTEBOOK_EXPORT_MENU_WIDTH, NOTEBOOK_EXPORT_MENU_ESTIMATED_HEIGHT),
-        );
-      }
       if (isEditorOverflowMenuOpen && editorOverflowButtonRef.current) {
         setEditorOverflowMenuPosition(
           getNotebookFloatingMenuPosition(
@@ -625,7 +602,7 @@ export function NotebookView() {
       }
     }
 
-    if (isExportMenuOpen || isEditorOverflowMenuOpen || tileActionMenu) {
+    if (isEditorOverflowMenuOpen || tileActionMenu) {
       window.addEventListener("mousedown", handleOutsideClick);
       window.addEventListener("keydown", handleEscape);
       window.addEventListener("resize", updateFloatingMenuPositions);
@@ -640,7 +617,7 @@ export function NotebookView() {
     }
 
     return undefined;
-  }, [editingPageId, isEditorOverflowMenuOpen, isExportMenuOpen, tileActionMenu]);
+  }, [editingPageId, isEditorOverflowMenuOpen, tileActionMenu]);
 
   useEffect(() => {
     if (!isNotebookRailExpanded || !notebookRailTargetSection) {
@@ -711,25 +688,13 @@ export function NotebookView() {
     setEditorOverflowMenuPosition(null);
   }
 
-  function openExportMenu() {
-    const button = exportButtonRef.current;
-    if (!button) {
-      setExportMenuPosition(null);
-      setIsExportMenuOpen(true);
-      return;
-    }
-
-    setExportMenuPosition(getNotebookFloatingMenuPosition(button, NOTEBOOK_EXPORT_MENU_WIDTH, NOTEBOOK_EXPORT_MENU_ESTIMATED_HEIGHT));
-    setIsExportMenuOpen(true);
-  }
-
   function closeExportMenu() {
-    setIsExportMenuOpen(false);
-    setExportMenuPosition(null);
+    return;
   }
 
   function openImportPicker() {
     closeExportMenu();
+    closeEditorOverflowMenu();
     importInputRef.current?.click();
   }
 
@@ -1177,7 +1142,7 @@ export function NotebookView() {
     }
   }
 
-  async function exportActivePage(format: NotebookExportFormat) {
+  async function exportActivePageAsPdf() {
     closeExportMenu();
 
     if (!activeDocument || !activePage) {
@@ -1186,49 +1151,21 @@ export function NotebookView() {
     }
 
     try {
-      const fileName = buildNotebookExportFileName(activeDocument, activePage, format);
-      let content: string;
-      let label: string;
-      let missingImages: string[] = [];
-
-      if (format === "txt") {
-        content = createNotebookTxtExport(
-          activeDocument.title.trim() || "Untitled Document",
-          activePage.title.trim() || "Page 1",
-          richTextToPlain(activePage.contentHtml),
-        );
-        label = "TXT";
-      } else if (format === "html") {
-        const embedded = await embedNotebookImagesInHtml(
-          createNotebookHtmlExport(
-            activeDocument.title.trim() || "Untitled Document",
-            activePage.title.trim() || "Page 1",
-            activePage.contentHtml,
-          ),
-        );
-        content = embedded.html;
-        missingImages = embedded.missingImages;
-        label = "HTML";
-      } else {
-        content = createNotebookMarkdownExport(
-          activeDocument.title.trim() || "Untitled Document",
-          activePage.title.trim() || "Page 1",
-          richTextToPlain(activePage.contentHtml),
-        );
-        label = "Markdown";
-      }
-
-      const savedPath = await invoke<string>("export_notebook_page", {
-        suggestedFileName: fileName,
-        contents: content,
-      });
+      await flushPendingNotebookSave();
+      const fileName = buildNotebookExportFileName(activeDocument, activePage, "pdf");
+      const editorElement =
+        activePage.kind === "pdf"
+          ? null
+          : document.querySelector<HTMLElement>(".notebook-editor-shell .ProseMirror");
+      const exportResult = await createNotebookPdfExport(activePage, editorElement);
+      const savedPath = await exportNotebookPdfBytes(fileName, exportResult.bytes);
 
       setStatus({
         kind: "success",
         message:
-          missingImages.length > 0
-            ? `${label} export saved to ${savedPath}. ${missingImages.length} local image(s) could not be embedded.`
-            : `${label} export saved to ${savedPath}.`,
+          exportResult.missingImages.length > 0
+            ? `PDF export saved to ${savedPath}. ${exportResult.missingImages.length} local image(s) could not be embedded.`
+            : `PDF export saved to ${savedPath}.`,
       });
     } catch (error) {
       const message =
@@ -1607,65 +1544,12 @@ export function NotebookView() {
   const notebookSectionValueClass = "notebook-editor-section-value";
   const notebookRailTitleClass = "notebook-editor-rail__title";
   const notebookRailMetaClass = "notebook-editor-rail__meta";
-const emptyStateMessage = normalizedSearchQuery
+  const emptyStateMessage = normalizedSearchQuery
     ? `No results for "${searchQuery.trim()}".`
     : currentFolder
       ? "This folder is empty."
       : "No documents yet.";
   const notebookFloatingMenuPortalTarget = typeof document !== "undefined" ? document.body : null;
-  const exportMenuPortal =
-    activeDocument && notebookFloatingMenuPortalTarget && isExportMenuOpen && exportMenuPosition
-      ? createPortal(
-          <div
-            ref={exportMenuRef}
-            className="notebook-floating-menu"
-            style={{
-              position: "fixed",
-              top: `${exportMenuPosition.top}px`,
-              left: `${exportMenuPosition.left}px`,
-              width: `${NOTEBOOK_EXPORT_MENU_WIDTH}px`,
-              zIndex: 9999,
-            }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                void exportActivePage("txt");
-              }}
-              className="notebook-floating-menu__item whitespace-nowrap"
-            >
-              Text (.txt)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void exportActivePage("html");
-              }}
-              className="notebook-floating-menu__item whitespace-nowrap"
-            >
-              HTML (.html)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void exportActivePage("markdown");
-              }}
-              className="notebook-floating-menu__item whitespace-nowrap"
-            >
-              Markdown (.md)
-            </button>
-            <button
-              type="button"
-              onClick={openImportPicker}
-              className="notebook-floating-menu__item whitespace-nowrap"
-            >
-              Import notebook file
-            </button>
-          </div>,
-          notebookFloatingMenuPortalTarget,
-        )
-      : null;
   const editorOverflowMenuPortal =
     activeDocument && notebookFloatingMenuPortalTarget && isEditorOverflowMenuOpen && editorOverflowMenuPosition
       ? createPortal(
@@ -1690,6 +1574,15 @@ const emptyStateMessage = normalizedSearchQuery
               className="notebook-floating-menu__item"
             >
               {activeDocument.favorited ? "Unfavorite" : "Favorite"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                openImportPicker();
+              }}
+              className="notebook-floating-menu__item"
+            >
+              Import notebook file
             </button>
             <button
               type="button"
@@ -1723,7 +1616,6 @@ const emptyStateMessage = normalizedSearchQuery
 
   return (
     <>
-      {exportMenuPortal}
       {editorOverflowMenuPortal}
       <div className={notebookRootClass}>
         {!isFullscreen ? (
@@ -2266,19 +2158,14 @@ const emptyStateMessage = normalizedSearchQuery
                           {status ? <div className={`inline-flex shrink-0 items-center ${compactStatusClass} ${statusClass}`}>{status.message}</div> : null}
                           <div className="relative">
                             <button
-                              ref={exportButtonRef}
                               type="button"
                               onClick={() => {
                                 setStatus(null);
-                                if (isExportMenuOpen) {
-                                  closeExportMenu();
-                                } else {
-                                  openExportMenu();
-                                }
+                                void exportActivePageAsPdf();
                               }}
                               className={`${editorActionButtonClass} border-[color:var(--panel-border)] bg-white/70 text-slate-600`}
                             >
-                              Export page
+                              Export PDF
                             </button>
                           </div>
                           <div className="relative">

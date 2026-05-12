@@ -37,6 +37,13 @@ export async function readNotebookPdfBytes(filename: string): Promise<Uint8Array
   return base64ToBytes(data_b64);
 }
 
+export async function exportNotebookPdfBytes(suggestedFileName: string, bytes: Uint8Array): Promise<string> {
+  return core.invoke<string>("export_notebook_pdf", {
+    suggestedFileName,
+    dataB64: bytesToBase64(bytes),
+  });
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   const CHUNK_SIZE = 8192;
   let binary = "";
