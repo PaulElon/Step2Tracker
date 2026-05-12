@@ -1,9 +1,9 @@
 import html2canvas from "html2canvas";
-import { PDFDocument, rgb } from "pdf-lib";
-import type { RGB } from "pdf-lib";
+import { PDFDocument, PDFDict, PDFName, PDFNumber, PDFString, PDFArray, rgb } from "pdf-lib";
+import type { PDFRef, RGB } from "pdf-lib";
 import { embedNotebookImagesInHtml } from "./notebook-images";
 import { readNotebookPdfBytes } from "./notebook-pdf";
-import type { NotebookPage } from "../types/models";
+import type { NotebookPage, PdfOutlineItem } from "../types/models";
 
 const PDF_PAGE_WIDTH = 612;
 const PDF_PAGE_HEIGHT = 792;
@@ -14,6 +14,7 @@ export interface NotebookPdfExportResult {
   bytes: Uint8Array;
   missingImages: string[];
   embeddedHighlights: number;
+  embeddedBookmarks: number;
 }
 
 export async function createNotebookPdfExport(
@@ -36,9 +37,11 @@ async function createImportedPdfExport(page: NotebookPage): Promise<NotebookPdfE
   const annotations = (page.pdfAnnotations ?? []).filter(
     (annotation) => annotation.kind === "highlight" && annotation.quads.length > 0,
   );
+  const outlineItems = flattenOutlineItems(page.pdfOutline ?? []);
+  const hasWork = annotations.length > 0 || outlineItems.length > 0;
 
-  if (annotations.length === 0) {
-    return { bytes: sourceBytes, missingImages: [], embeddedHighlights: 0 };
+  if (!hasWork) {
+    return { bytes: sourceBytes, missingImages: [], embeddedHighlights: 0, embeddedBookmarks: 0 };
   }
 
   const pdf = await PDFDocument.load(sourceBytes, { ignoreEncryption: true });
@@ -75,10 +78,13 @@ async function createImportedPdfExport(page: NotebookPage): Promise<NotebookPdfE
     }
   }
 
+  const embeddedBookmarks = embedPdfOutline(pdf, outlineItems);
+
   return {
     bytes: await pdf.save(),
     missingImages: [],
     embeddedHighlights,
+    embeddedBookmarks,
   };
 }
 
@@ -111,6 +117,7 @@ async function createTiptapPdfExport(
       bytes: await buildPdfFromCanvas(canvas),
       missingImages: embedded.missingImages,
       embeddedHighlights: highlightOverlayCount,
+      embeddedBookmarks: 0,
     };
   } finally {
     renderRoot.remove();
@@ -383,6 +390,91 @@ function dataUrlToBytes(dataUrl: string): Uint8Array {
     bytes[index] = binary.charCodeAt(index);
   }
   return bytes;
+}
+
+interface FlatOutlineEntry {
+  title: string;
+  pageIndex: number;
+}
+
+function flattenOutlineItems(items: PdfOutlineItem[]): FlatOutlineEntry[] {
+  const result: FlatOutlineEntry[] = [];
+
+  function walk(list: PdfOutlineItem[]) {
+    for (const item of list) {
+      const isNote = item.kind === "note";
+      const title = isNote
+        ? `Note: ${(item.noteText ?? item.title).split("\n")[0].slice(0, 120)}`
+        : item.title;
+      if (title.trim() && Number.isFinite(item.pageIndex) && item.pageIndex >= 0) {
+        result.push({ title: title.trim(), pageIndex: item.pageIndex });
+      }
+      if (item.children && item.children.length > 0) {
+        walk(item.children);
+      }
+    }
+  }
+
+  walk(items);
+  return result;
+}
+
+function embedPdfOutline(pdf: PDFDocument, entries: FlatOutlineEntry[]): number {
+  if (entries.length === 0) {
+    return 0;
+  }
+
+  const ctx = pdf.context;
+  const pages = pdf.getPages();
+  const validEntries = entries.filter((e) => e.pageIndex < pages.length);
+  if (validEntries.length === 0) {
+    return 0;
+  }
+
+  const pageRefs: PDFRef[] = [];
+  for (let i = 0; i < pages.length; i++) {
+    pageRefs.push(pages[i].ref);
+  }
+
+  const itemRefs: PDFRef[] = validEntries.map(() => ctx.nextRef());
+  const outlinesDict = ctx.obj({
+    Type: "Outlines",
+    First: itemRefs[0],
+    Last: itemRefs[validEntries.length - 1],
+    Count: PDFNumber.of(validEntries.length),
+  });
+  const outlinesRef = ctx.register(outlinesDict);
+
+  for (let i = 0; i < validEntries.length; i++) {
+    const entry = validEntries[i];
+    const pageHeight = pages[entry.pageIndex].getHeight();
+
+    const dest = PDFArray.withContext(ctx);
+    dest.push(pageRefs[entry.pageIndex]);
+    dest.push(PDFName.of("XYZ"));
+    dest.push(PDFNumber.of(0));
+    dest.push(PDFNumber.of(pageHeight));
+    dest.push(PDFNumber.of(0));
+
+    const itemDict = new Map<PDFName, PDFDict | PDFRef | PDFString | PDFArray | PDFName>();
+    itemDict.set(PDFName.of("Title"), PDFString.of(entry.title));
+    itemDict.set(PDFName.of("Parent"), outlinesRef);
+    itemDict.set(PDFName.of("Dest"), dest);
+    if (i > 0) {
+      itemDict.set(PDFName.of("Prev"), itemRefs[i - 1]);
+    }
+    if (i < validEntries.length - 1) {
+      itemDict.set(PDFName.of("Next"), itemRefs[i + 1]);
+    }
+
+    ctx.assign(itemRefs[i], PDFDict.fromMapWithContext(itemDict, ctx));
+  }
+
+  const catalog = ctx.lookup(ctx.trailerInfo.Root) as PDFDict;
+  catalog.set(PDFName.of("Outlines"), outlinesRef);
+  catalog.set(PDFName.of("PageMode"), PDFName.of("UseOutlines"));
+
+  return validEntries.length;
 }
 
 function parseHighlightColor(value: string): RGB {
