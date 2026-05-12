@@ -926,18 +926,20 @@ button {
 }
 
 .notebook-editor-rail__icon-button {
-  background: var(--surface-muted);
-  border-color: var(--panel-border);
+  background: transparent;
+  border-color: transparent;
   color: inherit;
   box-shadow: none;
 }
 
 .notebook-editor-rail__icon-button:hover {
-  background: var(--field-bg);
+  background: var(--surface-muted);
+  border-color: var(--panel-border);
 }
 
 .notebook-editor-rail__icon-button--active {
   background: var(--selection);
+  border-color: var(--panel-border);
 }
 
 .notebook-editor-rail__item {
@@ -1016,9 +1018,30 @@ button {
   background: var(--field-bg);
 }
 
-.notebook-editor-action-button--danger {
-  color: #dc2626;
-  border-color: rgba(248, 113, 113, 0.3);
+.notebook-fullscreen-shell {
+  background: linear-gradient(180deg, var(--app-bg-1) 0%, var(--app-bg-2) 52%, var(--app-bg-3) 100%);
+}
+
+.notebook-navigator {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  box-shadow: 0 8px 18px var(--panel-shadow);
+  color: inherit;
+}
+
+:root[data-theme="light"] .notebook-navigator,
+:root[data-theme="maggiepink"] .notebook-navigator {
+  color: #241d2a;
+}
+
+.notebook-navigator__divider {
+  background: var(--panel-border);
+  opacity: 0.7;
+}
+
+.notebook-navigator__panel {
+  min-width: 0;
 }
 
 .notebook-floating-menu {
@@ -1076,7 +1099,7 @@ button {
 .notebook-editor-section-title {
   font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: rgba(100, 116, 139, 0.88);
 }
@@ -1107,9 +1130,12 @@ button {
 
 .notebook-editor-rail__meta {
   display: block;
-  font-size: 0.72rem;
-  line-height: 1.25rem;
+  font-size: 0.7rem;
+  line-height: 1rem;
   color: rgba(100, 116, 139, 0.82);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 :root[data-theme="dark"] .notebook-editor-section-title,
