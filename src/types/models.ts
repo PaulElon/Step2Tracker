@@ -164,6 +164,8 @@ export interface NotebookFolder {
   updatedAt: string;
 }
 
+export type NotebookPageKind = "tiptap" | "pdf";
+
 export interface NotebookPage {
   id: string;
   title: string;
@@ -173,6 +175,11 @@ export interface NotebookPage {
   order: number;
   createdAt: string;
   updatedAt: string;
+  // Stage B (PDF). Absent kind = "tiptap" page (existing native behavior).
+  kind?: NotebookPageKind;
+  pdfFilename?: string;
+  pdfOriginalName?: string;
+  pdfPageCount?: number;
 }
 
 export interface NotebookDocument {

@@ -4,8 +4,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { Maximize2, Minimize2, PanelLeftOpen } from "lucide-react";
 import { ModalShell } from "../components/modal-shell";
 import { NotebookEditorAdapter } from "../components/notebook-editor-adapter";
+import { NotebookPdfViewer } from "../components/notebook-pdf-viewer";
 import { richTextToPlain } from "../components/rich-text-editor";
 import { embedNotebookImagesInHtml, purgeOrphanedNotebookImages } from "../lib/notebook-images";
+import { uploadNotebookPdf } from "../lib/notebook-pdf";
 import {
   buildNotebookExportFileName,
   createNotebookHtmlExport,
@@ -136,6 +138,21 @@ function NotebookRailIcon({ kind }: { kind: NotebookRailIconKind }) {
     default:
       return null;
   }
+}
+
+function isPdfImportCandidate(file: File) {
+  if (file.type === "application/pdf") {
+    return true;
+  }
+  return file.name.trim().toLowerCase().endsWith(".pdf");
+}
+
+function stripPdfExtension(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed.toLowerCase().endsWith(".pdf") ? trimmed.slice(0, -4).trim() : trimmed;
 }
 
 function makeId(prefix: string) {
@@ -1242,6 +1259,11 @@ export function NotebookView() {
 
     await flushPendingNotebookSave();
 
+    if (isPdfImportCandidate(file)) {
+      await importNotebookPdfFile(file);
+      return;
+    }
+
     const validation = await validateNotebookImportFile(file);
     if (!validation.ok) {
       setStatus({ kind: "error", message: validation.reason });
@@ -1300,6 +1322,80 @@ export function NotebookView() {
         kind: "error",
         message,
       });
+    }
+  }
+
+  async function importNotebookPdfFile(file: File) {
+    try {
+      const headerBytes = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+      if (
+        headerBytes.length < 4 ||
+        headerBytes[0] !== 0x25 ||
+        headerBytes[1] !== 0x50 ||
+        headerBytes[2] !== 0x44 ||
+        headerBytes[3] !== 0x46
+      ) {
+        setStatus({
+          kind: "error",
+          message: "This file has a .pdf extension but does not look like a real PDF.",
+        });
+        return;
+      }
+
+      const uploaded = await uploadNotebookPdf(file);
+      const documentTitle = stripPdfExtension(file.name) || "Imported PDF";
+      const targetFolderId = activeDocument?.folderId ?? currentFolderId ?? null;
+      const targetFolderDocuments = notebookDocuments.filter(
+        (document) => (document.folderId ?? null) === targetFolderId,
+      );
+      const nextOrder = targetFolderDocuments.reduce(
+        (maxOrder, document) => Math.max(maxOrder, document.order),
+        -1,
+      ) + 1;
+      const now = nowIso();
+      const nextDocument: NotebookDocument = {
+        id: makeId("nb-document"),
+        title: documentTitle,
+        folderId: targetFolderId ?? undefined,
+        favorited: false,
+        order: nextOrder,
+        pages: [
+          {
+            id: makeId("nb-page"),
+            title: documentTitle,
+            contentHtml: "",
+            order: 0,
+            createdAt: now,
+            updatedAt: now,
+            kind: "pdf",
+            pdfFilename: uploaded.filename,
+            pdfOriginalName: uploaded.originalName,
+          },
+        ],
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const saved = await persistNotebookDocuments([...notebookDocuments, nextDocument]);
+      if (!saved) {
+        setStatus({ kind: "error", message: "Unable to import this PDF." });
+        return;
+      }
+
+      setActiveDocumentId(nextDocument.id);
+      setActivePageId(nextDocument.pages[0]?.id ?? null);
+      setStatus({
+        kind: "success",
+        message: `Imported "${documentTitle}" as a PDF document.`,
+      });
+    } catch (error) {
+      const message =
+        typeof error === "string"
+          ? error
+          : error instanceof Error && error.message
+            ? error.message
+            : "Unable to import this PDF.";
+      setStatus({ kind: "error", message });
     }
   }
 
@@ -2331,19 +2427,37 @@ const emptyStateMessage = normalizedSearchQuery
                           </div>
 
                           <div className="flex min-h-0 flex-1">
-                            <NotebookEditorAdapter
-                              value={activePage.contentHtml}
-                              onChange={(html) =>
-                                updateActivePage((page) => ({
-                                  ...page,
-                                  contentHtml: html,
-                                  updatedAt: nowIso(),
-                                }))
-                              }
-                              editorKey={activePage.id}
-                              placeholder="Write inside this document. Each page stays nested under the current document."
-                              className={notebookEditorShellClass}
-                            />
+                            {activePage.kind === "pdf" && activePage.pdfFilename ? (
+                              <NotebookPdfViewer
+                                key={activePage.id}
+                                filename={activePage.pdfFilename}
+                                originalName={activePage.pdfOriginalName ?? activePage.title}
+                                onPageCount={(count) => {
+                                  if (activePage.pdfPageCount === count) {
+                                    return;
+                                  }
+                                  updateActivePage((page) => ({
+                                    ...page,
+                                    pdfPageCount: count,
+                                    updatedAt: nowIso(),
+                                  }));
+                                }}
+                              />
+                            ) : (
+                              <NotebookEditorAdapter
+                                value={activePage.contentHtml}
+                                onChange={(html) =>
+                                  updateActivePage((page) => ({
+                                    ...page,
+                                    contentHtml: html,
+                                    updatedAt: nowIso(),
+                                  }))
+                                }
+                                editorKey={activePage.id}
+                                placeholder="Write inside this document. Each page stays nested under the current document."
+                                className={notebookEditorShellClass}
+                              />
+                            )}
                           </div>
                         </div>
                       ) : null
@@ -2427,7 +2541,7 @@ const emptyStateMessage = normalizedSearchQuery
       <input
         ref={importInputRef}
         type="file"
-        accept=".txt,.md,.markdown,.html,.htm,text/plain,text/markdown,text/html,application/xhtml+xml"
+        accept=".txt,.md,.markdown,.html,.htm,.pdf,text/plain,text/markdown,text/html,application/xhtml+xml,application/pdf"
         className="hidden"
         onChange={(event) => {
           void importNotebookFile(event);

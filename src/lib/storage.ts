@@ -720,12 +720,22 @@ export function getEmptyPracticeTestDraft(): PracticeTestInput {
   };
 }
 
+const NOTEBOOK_PDF_FILENAME_PATTERN = /^[A-Za-z0-9._-]+\.pdf$/;
+
 function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbackId?: string): NotebookPage {
   const timestamp = nowIso();
   const safeCreatedAt = sanitizeText(input?.createdAt) || timestamp;
   const safeUpdatedAt = sanitizeText(input?.updatedAt) || timestamp;
   const folderId = typeof input?.folderId === "string" ? input.folderId.trim() : "";
-  return {
+  const rawKind = typeof input?.kind === "string" ? input.kind : undefined;
+  const pdfFilenameRaw = typeof input?.pdfFilename === "string" ? input.pdfFilename.trim() : "";
+  const pdfFilename = NOTEBOOK_PDF_FILENAME_PATTERN.test(pdfFilenameRaw) ? pdfFilenameRaw : "";
+  const isPdf = rawKind === "pdf" && pdfFilename !== "";
+  const pdfOriginalName =
+    isPdf && typeof input?.pdfOriginalName === "string" ? input.pdfOriginalName.trim() : "";
+  const rawPageCount = sanitizeNumber(input?.pdfPageCount, 0);
+  const pdfPageCount = isPdf && rawPageCount > 0 ? Math.trunc(rawPageCount) : undefined;
+  const base: NotebookPage = {
     id: sanitizeText(input?.id) || fallbackId || createId("nb-page"),
     title: sanitizeText(input?.title) || "Untitled",
     contentHtml: typeof input?.contentHtml === "string" ? input.contentHtml : "",
@@ -735,6 +745,17 @@ function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbac
     createdAt: safeCreatedAt,
     updatedAt: safeUpdatedAt,
   };
+  if (isPdf) {
+    base.kind = "pdf";
+    base.pdfFilename = pdfFilename;
+    if (pdfOriginalName) {
+      base.pdfOriginalName = pdfOriginalName;
+    }
+    if (pdfPageCount !== undefined) {
+      base.pdfPageCount = pdfPageCount;
+    }
+  }
+  return base;
 }
 
 function normalizeNotebookFolder(input: Partial<NotebookFolder> | undefined, fallbackId?: string): NotebookFolder {
