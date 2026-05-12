@@ -357,6 +357,65 @@ async fn export_notebook_page(
 }
 
 #[tauri::command]
+async fn export_notebook_zip(
+    app: tauri::AppHandle,
+    suggested_file_name: String,
+    data_b64: String,
+) -> Result<String, String> {
+    use base64::Engine as _;
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&data_b64)
+        .map_err(|e| format!("Invalid zip base64 data: {e}"))?;
+
+    const MAX_BYTES: usize = 512 * 1024 * 1024;
+    if bytes.len() > MAX_BYTES {
+        return Err(format!("Zip export exceeds 512 MB limit ({} bytes)", bytes.len()));
+    }
+    // ZIP magic: PK\x03\x04
+    if bytes.len() < 4 || bytes[0] != 0x50 || bytes[1] != 0x4b || bytes[2] != 0x03 || bytes[3] != 0x04 {
+        return Err("Generated export is not a valid zip file.".to_string());
+    }
+
+    let fallback_name = "notebook-export.zip".to_string();
+    let mut file_name = if suggested_file_name.trim().is_empty() {
+        fallback_name
+    } else {
+        suggested_file_name
+    };
+    if !file_name.to_lowercase().ends_with(".zip") {
+        file_name.push_str(".zip");
+    }
+
+    let (tx, mut rx) = tauri::async_runtime::channel(1);
+    app.dialog().file().set_file_name(file_name).save_file(move |file| {
+        let _ = tx.try_send(file);
+    });
+
+    let selected_file = rx
+        .recv()
+        .await
+        .ok_or_else(|| "Unable to receive export destination.".to_string())?
+        .ok_or_else(|| "Export canceled by user.".to_string())?;
+
+    let mut path: PathBuf = selected_file
+        .into_path()
+        .map_err(|error| format!("Unable to resolve selected export path: {error}"))?;
+    if path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| !ext.eq_ignore_ascii_case("zip"))
+        .unwrap_or(true)
+    {
+        path.set_extension("zip");
+    }
+
+    fs::write(&path, bytes).map_err(|error| format!("Unable to write zip export: {error}"))?;
+
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 async fn export_notebook_pdf(
     app: tauri::AppHandle,
     suggested_file_name: String,
@@ -652,6 +711,7 @@ fn main() {
             open_notification_settings,
             export_notebook_page,
             export_notebook_pdf,
+            export_notebook_zip,
             save_notebook_image,
             read_notebook_image_as_base64,
             save_notebook_pdf,
