@@ -2704,6 +2704,8 @@ button {
   position: relative;
   max-width: 100%;
   margin: 0.25rem 0;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Alignment variants — applied to the NodeViewWrapper. */
@@ -2719,12 +2721,14 @@ button {
 }
 
 .notebook-image-node--align-right {
-  display: inline-block;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .notebook-image-node--align-right .notebook-image-node__inner {
-  float: right;
+  float: none;
   margin-left: 0.75rem;
+  margin-right: 0;
 }
 
 .notebook-image-node--align-center {
