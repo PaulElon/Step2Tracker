@@ -8,6 +8,7 @@ import {
   createNotebookTxtExport,
   parseNotebookImport,
   sanitizeNotebookFileNameSegment,
+  validateNotebookImportFile,
 } from "../../src/lib/notebook-io.ts";
 
 test("sanitizeNotebookFileNameSegment removes dangerous characters and collapses spacing", () => {
@@ -69,4 +70,70 @@ test("parseNotebookImport reads plain text exports into a new notebook page draf
   assert.equal(imported.documentTitle, "Cardiology");
   assert.equal(imported.pageTitle, "Page 3");
   assert.equal(imported.contentHtml, "<p>Line one</p>");
+});
+
+function makeFile(name: string, bytes: number[]): File {
+  return new File([new Uint8Array(bytes)], name);
+}
+
+function makeTextFile(name: string, content: string): File {
+  return new File([content], name);
+}
+
+test("validateNotebookImportFile accepts .txt", async () => {
+  const result = await validateNotebookImportFile(makeTextFile("notes.txt", "hello"));
+  assert.deepEqual(result, { ok: true });
+});
+
+test("validateNotebookImportFile accepts .md", async () => {
+  const result = await validateNotebookImportFile(makeTextFile("notes.md", "# Hello"));
+  assert.deepEqual(result, { ok: true });
+});
+
+test("validateNotebookImportFile accepts .html", async () => {
+  const result = await validateNotebookImportFile(makeTextFile("page.html", "<html></html>"));
+  assert.deepEqual(result, { ok: true });
+});
+
+test("validateNotebookImportFile rejects .docx by extension", async () => {
+  const result = await validateNotebookImportFile(makeTextFile("report.docx", "fake content"));
+  assert.equal(result.ok, false);
+  assert.ok((result as { ok: false; reason: string }).reason.includes("Word documents"));
+});
+
+test("validateNotebookImportFile rejects .pdf by extension", async () => {
+  const result = await validateNotebookImportFile(makeTextFile("report.pdf", "fake content"));
+  assert.equal(result.ok, false);
+  assert.ok((result as { ok: false; reason: string }).reason.includes("PDF"));
+});
+
+test("validateNotebookImportFile rejects unknown extension", async () => {
+  const result = await validateNotebookImportFile(makeTextFile("report.xyz", "data"));
+  assert.equal(result.ok, false);
+  assert.ok((result as { ok: false; reason: string }).reason.includes("Unsupported"));
+});
+
+test("validateNotebookImportFile rejects DOCX ZIP magic bytes even with .txt extension", async () => {
+  // PK\x03\x04 — ZIP/DOCX signature
+  const result = await validateNotebookImportFile(makeFile("tricks.txt", [0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]));
+  assert.equal(result.ok, false);
+  assert.ok((result as { ok: false; reason: string }).reason.includes("binary"));
+});
+
+test("validateNotebookImportFile rejects PDF magic bytes even with .md extension", async () => {
+  // %PDF
+  const result = await validateNotebookImportFile(makeFile("tricks.md", [0x25, 0x50, 0x44, 0x46, 0x2d, 0x31]));
+  assert.equal(result.ok, false);
+});
+
+test("validateNotebookImportFile rejects PNG magic bytes", async () => {
+  const result = await validateNotebookImportFile(makeFile("img.txt", [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]));
+  assert.equal(result.ok, false);
+  assert.ok((result as { ok: false; reason: string }).reason.includes("binary"));
+});
+
+test("validateNotebookImportFile rejects JPEG magic bytes", async () => {
+  const result = await validateNotebookImportFile(makeFile("img.txt", [0xff, 0xd8, 0xff, 0xe0]));
+  assert.equal(result.ok, false);
+  assert.ok((result as { ok: false; reason: string }).reason.includes("binary"));
 });
