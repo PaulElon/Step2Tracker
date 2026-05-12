@@ -99,6 +99,7 @@ async function createTiptapPdfExport(
 
     const target = renderRoot.querySelector<HTMLElement>(".ProseMirror") ?? renderRoot;
     includeFreeformImageBounds(target);
+    const highlightOverlayCount = addHighlightOverlayLayer(target);
     const canvas = await html2canvas(target, {
       backgroundColor: getCanvasBackground(editorElement),
       logging: false,
@@ -109,7 +110,7 @@ async function createTiptapPdfExport(
     return {
       bytes: await buildPdfFromCanvas(canvas),
       missingImages: embedded.missingImages,
-      embeddedHighlights: 0,
+      embeddedHighlights: highlightOverlayCount,
     };
   } finally {
     renderRoot.remove();
@@ -186,6 +187,14 @@ function createRenderRoot(html: string, editorElement: HTMLElement | null): HTML
     root.style.color = computed.color;
   }
 
+  const style = document.createElement("style");
+  style.textContent = `
+    .notebook-pdf-export-root .ProseMirror mark[data-color] {
+      background-color: transparent !important;
+      color: inherit !important;
+    }
+  `;
+
   root.innerHTML = [
     '<div class="tiptap-editor__content">',
     `<div class="ProseMirror notebook-tiptap-prosemirror" style="position:relative;width:${width}px;max-width:none;min-height:1px;">`,
@@ -193,7 +202,89 @@ function createRenderRoot(html: string, editorElement: HTMLElement | null): HTML
     "</div>",
     "</div>",
   ].join("");
+  root.prepend(style);
   return root;
+}
+
+interface HighlightOverlayRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  color: string;
+}
+
+function addHighlightOverlayLayer(target: HTMLElement): number {
+  const rects = collectHighlightOverlayRects(target);
+  if (rects.length === 0) {
+    return 0;
+  }
+
+  const overlayLayer = document.createElement("div");
+  overlayLayer.setAttribute("aria-hidden", "true");
+  overlayLayer.style.position = "absolute";
+  overlayLayer.style.inset = "0";
+  overlayLayer.style.pointerEvents = "none";
+
+  for (const rect of rects) {
+    const highlight = document.createElement("div");
+    highlight.style.position = "absolute";
+    highlight.style.left = `${rect.left}px`;
+    highlight.style.top = `${rect.top}px`;
+    highlight.style.width = `${rect.width}px`;
+    highlight.style.height = `${rect.height}px`;
+    highlight.style.backgroundColor = rect.color;
+    highlight.style.opacity = "1";
+    highlight.style.borderRadius = "1px";
+    overlayLayer.appendChild(highlight);
+  }
+
+  target.prepend(overlayLayer);
+  return rects.length;
+}
+
+function collectHighlightOverlayRects(target: HTMLElement): HighlightOverlayRect[] {
+  const targetRect = target.getBoundingClientRect();
+  const rects: HighlightOverlayRect[] = [];
+
+  target.querySelectorAll<HTMLElement>("mark[data-color]").forEach((mark) => {
+    const color = getHighlightColor(mark);
+    if (!color) {
+      return;
+    }
+
+    Array.from(mark.getClientRects()).forEach((clientRect) => {
+      if (clientRect.width <= 0 || clientRect.height <= 0) {
+        return;
+      }
+
+      rects.push({
+        left: clientRect.left - targetRect.left,
+        top: clientRect.top - targetRect.top,
+        width: clientRect.width,
+        height: clientRect.height,
+        color,
+      });
+    });
+  });
+
+  return rects;
+}
+
+function getHighlightColor(mark: HTMLElement): string | null {
+  const color =
+    mark.getAttribute("data-color")?.trim() ||
+    mark.style.backgroundColor.trim() ||
+    window.getComputedStyle(mark).backgroundColor.trim();
+  if (
+    !color ||
+    color === "transparent" ||
+    color === "rgba(0, 0, 0, 0)" ||
+    color.endsWith(", 0)")
+  ) {
+    return null;
+  }
+  return color;
 }
 
 async function buildPdfFromCanvas(canvas: HTMLCanvasElement): Promise<Uint8Array> {
