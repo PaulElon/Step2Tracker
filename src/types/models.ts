@@ -166,6 +166,8 @@ export interface NotebookFolder {
 
 export type NotebookPageKind = "tiptap" | "pdf";
 
+export type PdfViewMode = "horizontal" | "vertical";
+
 export interface PdfAnnotationQuad {
   // PDF user-space coordinates (origin bottom-left for PDF page).
   x: number;
@@ -201,6 +203,8 @@ export interface NotebookPage {
   pdfPageCount?: number;
   // Stage C (PDF highlights). Absent/empty = no annotations.
   pdfAnnotations?: PdfAnnotation[];
+  // Stage D (PDF viewer polish). Absent = "horizontal" (single-page).
+  pdfViewMode?: PdfViewMode;
 }
 
 export interface NotebookDocument {

@@ -823,6 +823,9 @@ function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbac
   const rawPageCount = sanitizeNumber(input?.pdfPageCount, 0);
   const pdfPageCount = isPdf && rawPageCount > 0 ? Math.trunc(rawPageCount) : undefined;
   const pdfAnnotations = isPdf ? normalizePdfAnnotations(input?.pdfAnnotations) : [];
+  const rawViewMode = typeof input?.pdfViewMode === "string" ? input.pdfViewMode : undefined;
+  const pdfViewMode =
+    isPdf && (rawViewMode === "horizontal" || rawViewMode === "vertical") ? rawViewMode : undefined;
   const base: NotebookPage = {
     id: sanitizeText(input?.id) || fallbackId || createId("nb-page"),
     title: sanitizeText(input?.title) || "Untitled",
@@ -844,6 +847,9 @@ function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbac
     }
     if (pdfAnnotations.length > 0) {
       base.pdfAnnotations = pdfAnnotations;
+    }
+    if (pdfViewMode) {
+      base.pdfViewMode = pdfViewMode;
     }
   }
   return base;

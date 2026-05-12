@@ -2433,6 +2433,14 @@ const emptyStateMessage = normalizedSearchQuery
                                 filename={activePage.pdfFilename}
                                 originalName={activePage.pdfOriginalName ?? activePage.title}
                                 annotations={activePage.pdfAnnotations}
+                                viewMode={activePage.pdfViewMode ?? "horizontal"}
+                                onChangeViewMode={(next) => {
+                                  updateActivePage((page) => ({
+                                    ...page,
+                                    pdfViewMode: next,
+                                    updatedAt: nowIso(),
+                                  }));
+                                }}
                                 onPageCount={(count) => {
                                   if (activePage.pdfPageCount === count) {
                                     return;

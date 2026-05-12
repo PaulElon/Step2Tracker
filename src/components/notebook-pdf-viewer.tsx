@@ -3,7 +3,7 @@ import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PageViewport, PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { readNotebookPdfBytes } from "../lib/notebook-pdf";
-import type { PdfAnnotation, PdfAnnotationQuad } from "../types/models";
+import type { PdfAnnotation, PdfAnnotationQuad, PdfViewMode } from "../types/models";
 
 if (typeof pdfjs.GlobalWorkerOptions.workerSrc !== "string" || !pdfjs.GlobalWorkerOptions.workerSrc) {
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -11,8 +11,17 @@ if (typeof pdfjs.GlobalWorkerOptions.workerSrc !== "string" || !pdfjs.GlobalWork
 
 const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3] as const;
 const DEFAULT_ZOOM_INDEX = 2; // 1.0
-const DEFAULT_HIGHLIGHT_COLOR = "#fde047";
 const MAX_SNIPPET_LENGTH = 500;
+
+const HIGHLIGHT_COLORS = [
+  { id: "yellow", value: "#fde047", label: "Yellow" },
+  { id: "green", value: "#86efac", label: "Green" },
+  { id: "cyan", value: "#67e8f9", label: "Cyan" },
+  { id: "pink", value: "#f9a8d4", label: "Pink" },
+  { id: "orange", value: "#fdba74", label: "Orange" },
+] as const;
+
+const DEFAULT_HIGHLIGHT_COLOR = HIGHLIGHT_COLORS[0].value;
 
 export interface NotebookPdfViewerProps {
   filename: string;
@@ -22,6 +31,8 @@ export interface NotebookPdfViewerProps {
   annotations?: PdfAnnotation[];
   onAddAnnotation?: (annotation: PdfAnnotation) => void;
   onDeleteAnnotation?: (annotationId: string) => void;
+  viewMode?: PdfViewMode;
+  onChangeViewMode?: (next: PdfViewMode) => void;
 }
 
 type LoadState =
@@ -30,11 +41,11 @@ type LoadState =
   | { kind: "ready"; doc: PDFDocumentProxy }
   | { kind: "error"; message: string };
 
-interface PageRenderInfo {
-  viewport: PageViewport;
+interface PageInfo {
   pageIndex: number;
-  cssWidth: number;
-  cssHeight: number;
+  viewport: PageViewport;
+  textLayerEl: HTMLDivElement;
+  containerEl: HTMLDivElement;
 }
 
 function createHighlightId(): string {
@@ -62,6 +73,286 @@ function quadToViewportRect(quad: PdfAnnotationQuad, viewport: PageViewport) {
   return { left, top, width: right - left, height: bottom - top };
 }
 
+function buildAnnotationFromSelection(
+  selection: Selection,
+  pageInfo: PageInfo,
+  color: string,
+): PdfAnnotation | null {
+  const containerRect = pageInfo.textLayerEl.getBoundingClientRect();
+  const viewport = pageInfo.viewport;
+  const quads: PdfAnnotationQuad[] = [];
+  let snippet = "";
+  for (let i = 0; i < selection.rangeCount; i += 1) {
+    const range = selection.getRangeAt(i);
+    const node = range.commonAncestorContainer;
+    if (!node || !pageInfo.textLayerEl.contains(node)) {
+      continue;
+    }
+    snippet += range.toString();
+    const clientRects = range.getClientRects();
+    for (let r = 0; r < clientRects.length; r += 1) {
+      const rect = clientRects[r];
+      if (rect.width <= 0 || rect.height <= 0) {
+        continue;
+      }
+      const x1 = rect.left - containerRect.left;
+      const y1 = rect.top - containerRect.top;
+      const x2 = rect.right - containerRect.left;
+      const y2 = rect.bottom - containerRect.top;
+      const [pdfX1, pdfY1] = viewport.convertToPdfPoint(x1, y1);
+      const [pdfX2, pdfY2] = viewport.convertToPdfPoint(x2, y2);
+      if (
+        !Number.isFinite(pdfX1) ||
+        !Number.isFinite(pdfY1) ||
+        !Number.isFinite(pdfX2) ||
+        !Number.isFinite(pdfY2)
+      ) {
+        continue;
+      }
+      const minX = Math.min(pdfX1, pdfX2);
+      const minY = Math.min(pdfY1, pdfY2);
+      const width = Math.abs(pdfX2 - pdfX1);
+      const height = Math.abs(pdfY2 - pdfY1);
+      if (width <= 0 || height <= 0) {
+        continue;
+      }
+      quads.push({ x: minX, y: minY, width, height });
+    }
+  }
+  if (quads.length === 0) {
+    return null;
+  }
+  const now = new Date().toISOString();
+  const annotation: PdfAnnotation = {
+    id: createHighlightId(),
+    kind: "highlight",
+    pageIndex: pageInfo.pageIndex,
+    color,
+    quads,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const trimmedSnippet = snippet.trim();
+  if (trimmedSnippet.length > 0) {
+    annotation.textSnippet = trimmedSnippet.slice(0, MAX_SNIPPET_LENGTH);
+  }
+  return annotation;
+}
+
+function findPageElement(node: Node | null): HTMLElement | null {
+  if (!node) {
+    return null;
+  }
+  let element: HTMLElement | null =
+    node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement;
+  while (element) {
+    if (element.dataset && element.dataset.pdfPageIndex !== undefined) {
+      return element;
+    }
+    element = element.parentElement;
+  }
+  return null;
+}
+
+interface PdfRenderedPageProps {
+  doc: PDFDocumentProxy;
+  pageIndex: number;
+  zoom: number;
+  annotations: PdfAnnotation[];
+  onDeleteHighlight: (annotationId: string) => void;
+  registerInfo: (pageIndex: number, info: PageInfo | null) => void;
+  onRendered?: (pageIndex: number) => void;
+  ariaLabel: string;
+}
+
+function PdfRenderedPage({
+  doc,
+  pageIndex,
+  zoom,
+  annotations,
+  onDeleteHighlight,
+  registerInfo,
+  onRendered,
+  ariaLabel,
+}: PdfRenderedPageProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const textLayerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const renderTokenRef = useRef(0);
+  const [dims, setDims] = useState<{ width: number; height: number } | null>(null);
+  const [viewport, setViewport] = useState<PageViewport | null>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const textLayer = textLayerRef.current;
+    if (!canvas) {
+      return;
+    }
+    const token = ++renderTokenRef.current;
+    let activePage: PDFPageProxy | null = null;
+    let renderTask: ReturnType<PDFPageProxy["render"]> | null = null;
+    let textLayerInstance: pdfjs.TextLayer | null = null;
+
+    (async () => {
+      try {
+        const page = await doc.getPage(pageIndex + 1);
+        if (token !== renderTokenRef.current) {
+          page.cleanup();
+          return;
+        }
+        activePage = page;
+        const dpr = window.devicePixelRatio || 1;
+        const renderViewport = page.getViewport({ scale: zoom * dpr });
+        const cssViewport = page.getViewport({ scale: zoom });
+        const cssWidth = Math.floor(cssViewport.width);
+        const cssHeight = Math.floor(cssViewport.height);
+        canvas.width = Math.floor(renderViewport.width);
+        canvas.height = Math.floor(renderViewport.height);
+        canvas.style.width = `${cssWidth}px`;
+        canvas.style.height = `${cssHeight}px`;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          throw new Error("Canvas 2D context unavailable.");
+        }
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        renderTask = page.render({ canvasContext: context, viewport: renderViewport });
+        await renderTask.promise;
+        if (token !== renderTokenRef.current) {
+          return;
+        }
+        setRenderError(null);
+        setDims({ width: cssWidth, height: cssHeight });
+        setViewport(cssViewport);
+
+        if (textLayer) {
+          textLayer.replaceChildren();
+          textLayer.style.width = `${cssWidth}px`;
+          textLayer.style.height = `${cssHeight}px`;
+          textLayer.style.setProperty("--scale-factor", String(cssViewport.scale));
+          try {
+            const textContent = await page.getTextContent();
+            if (token !== renderTokenRef.current) {
+              return;
+            }
+            textLayerInstance = new pdfjs.TextLayer({
+              textContentSource: textContent,
+              container: textLayer,
+              viewport: cssViewport,
+            });
+            await textLayerInstance.render();
+          } catch {
+            // Text layer is optional; ignore failures.
+          }
+        }
+        if (token !== renderTokenRef.current) {
+          return;
+        }
+        onRendered?.(pageIndex);
+      } catch (error) {
+        if (token !== renderTokenRef.current) {
+          return;
+        }
+        if (error instanceof Error && error.name === "RenderingCancelledException") {
+          return;
+        }
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : "Unable to render this PDF page.";
+        setRenderError(message);
+      } finally {
+        if (token === renderTokenRef.current) {
+          activePage?.cleanup();
+        }
+      }
+    })();
+
+    return () => {
+      renderTask?.cancel();
+      try {
+        textLayerInstance?.cancel();
+      } catch {
+        // ignore
+      }
+    };
+    // onRendered is informational only; intentionally excluded from deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc, pageIndex, zoom]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const textLayer = textLayerRef.current;
+    if (!container || !textLayer || !viewport) {
+      return;
+    }
+    const info: PageInfo = {
+      pageIndex,
+      viewport,
+      textLayerEl: textLayer,
+      containerEl: container,
+    };
+    registerInfo(pageIndex, info);
+    return () => {
+      registerInfo(pageIndex, null);
+    };
+  }, [pageIndex, registerInfo, viewport]);
+
+  const pageAnnotations = useMemo(
+    () => annotations.filter((annotation) => annotation.pageIndex === pageIndex),
+    [annotations, pageIndex],
+  );
+
+  return (
+    <div
+      ref={containerRef}
+      className="notebook-pdf-page-stack relative inline-block rounded-[8px] bg-white shadow-sm"
+      style={dims ? { width: `${dims.width}px`, height: `${dims.height}px` } : undefined}
+      data-pdf-page-index={pageIndex}
+    >
+      <canvas ref={canvasRef} className="notebook-pdf-canvas block" aria-label={ariaLabel} />
+      <div ref={textLayerRef} className="notebook-pdf-text-layer" aria-hidden="true" />
+      {viewport && pageAnnotations.length > 0 ? (
+        <div className="notebook-pdf-annotation-layer" aria-hidden="false">
+          {pageAnnotations.flatMap((annotation) =>
+            annotation.quads.map((quad, quadIndex) => {
+              const rect = quadToViewportRect(quad, viewport);
+              return (
+                <button
+                  key={`${annotation.id}-${quadIndex}`}
+                  type="button"
+                  className="notebook-pdf-highlight"
+                  style={{
+                    left: `${rect.left}px`,
+                    top: `${rect.top}px`,
+                    width: `${rect.width}px`,
+                    height: `${rect.height}px`,
+                    backgroundColor: annotation.color,
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDeleteHighlight(annotation.id);
+                  }}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  aria-label={
+                    annotation.textSnippet
+                      ? `Delete highlight: ${annotation.textSnippet}`
+                      : "Delete highlight"
+                  }
+                  title={annotation.textSnippet ?? "Click to delete highlight"}
+                />
+              );
+            }),
+          )}
+        </div>
+      ) : null}
+      {renderError ? (
+        <div className="notebook-pdf-page-error">{renderError}</div>
+      ) : null}
+    </div>
+  );
+}
+
 export function NotebookPdfViewer({
   filename,
   originalName,
@@ -70,26 +361,46 @@ export function NotebookPdfViewer({
   annotations,
   onAddAnnotation,
   onDeleteAnnotation,
+  viewMode: viewModeProp,
+  onChangeViewMode,
 }: NotebookPdfViewerProps) {
   const [load, setLoad] = useState<LoadState>({ kind: "idle" });
   const [pageNumber, setPageNumber] = useState(1);
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
-  const [renderError, setRenderError] = useState<string | null>(null);
-  const [pageRenderInfo, setPageRenderInfo] = useState<PageRenderInfo | null>(null);
+  const [internalViewMode, setInternalViewMode] = useState<PdfViewMode>("horizontal");
+  const [highlightMode, setHighlightMode] = useState(false);
+  const [currentColor, setCurrentColor] = useState<string>(DEFAULT_HIGHLIGHT_COLOR);
+  const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
   const [hasSelection, setHasSelection] = useState(false);
-  const [selectionMessage, setSelectionMessage] = useState<string | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const textLayerRef = useRef<HTMLDivElement | null>(null);
-  const renderTokenRef = useRef(0);
+  const [selectionPageIndex, setSelectionPageIndex] = useState<number | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const pageInfosRef = useRef<Map<number, PageInfo>>(new Map());
+  const colorMenuRef = useRef<HTMLDivElement | null>(null);
+  const colorButtonRef = useRef<HTMLButtonElement | null>(null);
 
+  const viewMode = viewModeProp ?? internalViewMode;
+  const setViewMode = useCallback(
+    (next: PdfViewMode) => {
+      if (onChangeViewMode) {
+        onChangeViewMode(next);
+      } else {
+        setInternalViewMode(next);
+      }
+    },
+    [onChangeViewMode],
+  );
+
+  // Document load.
   useEffect(() => {
     let cancelled = false;
     setLoad({ kind: "loading" });
     setPageNumber(1);
-    setRenderError(null);
-    setPageRenderInfo(null);
     setHasSelection(false);
-    setSelectionMessage(null);
+    setSelectionPageIndex(null);
+    setHint(null);
+    pageInfosRef.current.clear();
 
     (async () => {
       try {
@@ -120,10 +431,11 @@ export function NotebookPdfViewer({
     return () => {
       cancelled = true;
     };
-    // onPageCount intentionally omitted from deps: it is informational only.
+    // onPageCount intentionally omitted from deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filename]);
 
+  // Destroy document on unmount or replace.
   useEffect(() => {
     return () => {
       if (load.kind === "ready") {
@@ -136,225 +448,214 @@ export function NotebookPdfViewer({
   const numPages = load.kind === "ready" ? load.doc.numPages : 0;
   const zoom = ZOOM_LEVELS[zoomIndex];
 
-  useEffect(() => {
-    if (load.kind !== "ready") {
-      return;
+  const registerInfo = useCallback((pageIndex: number, info: PageInfo | null) => {
+    if (info) {
+      pageInfosRef.current.set(pageIndex, info);
+    } else {
+      pageInfosRef.current.delete(pageIndex);
     }
-    const canvas = canvasRef.current;
-    const textLayer = textLayerRef.current;
-    if (!canvas) {
-      return;
-    }
-    const safePage = Math.max(1, Math.min(pageNumber, load.doc.numPages));
-    const token = ++renderTokenRef.current;
-    let activePage: PDFPageProxy | null = null;
-    let renderTask: ReturnType<PDFPageProxy["render"]> | null = null;
-    let textLayerInstance: pdfjs.TextLayer | null = null;
+  }, []);
 
-    (async () => {
-      try {
-        const page = await load.doc.getPage(safePage);
-        if (token !== renderTokenRef.current) {
-          page.cleanup();
-          return;
-        }
-        activePage = page;
-        const dpr = window.devicePixelRatio || 1;
-        const viewport = page.getViewport({ scale: zoom * dpr });
-        const cssViewport = page.getViewport({ scale: zoom });
-        const cssWidth = Math.floor(cssViewport.width);
-        const cssHeight = Math.floor(cssViewport.height);
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
-        canvas.style.width = `${cssWidth}px`;
-        canvas.style.height = `${cssHeight}px`;
-        const context = canvas.getContext("2d");
-        if (!context) {
-          throw new Error("Canvas 2D context unavailable.");
-        }
-        context.clearRect(0, 0, canvas.width, canvas.height);
-        renderTask = page.render({ canvasContext: context, viewport });
-        await renderTask.promise;
-        if (token !== renderTokenRef.current) {
-          return;
-        }
-        setRenderError(null);
-
-        if (textLayer) {
-          textLayer.replaceChildren();
-          textLayer.style.width = `${cssWidth}px`;
-          textLayer.style.height = `${cssHeight}px`;
-          textLayer.style.setProperty("--scale-factor", String(cssViewport.scale));
-          try {
-            const textContent = await page.getTextContent();
-            if (token !== renderTokenRef.current) {
-              return;
-            }
-            textLayerInstance = new pdfjs.TextLayer({
-              textContentSource: textContent,
-              container: textLayer,
-              viewport: cssViewport,
-            });
-            await textLayerInstance.render();
-          } catch {
-            // Text layer is optional for viewing; ignore failures so the page still renders.
-          }
-        }
-        if (token !== renderTokenRef.current) {
-          return;
-        }
-        setPageRenderInfo({
-          viewport: cssViewport,
-          pageIndex: safePage - 1,
-          cssWidth,
-          cssHeight,
-        });
-      } catch (error) {
-        if (token !== renderTokenRef.current) {
-          return;
-        }
-        if (error instanceof Error && error.name === "RenderingCancelledException") {
-          return;
-        }
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : "Unable to render this PDF page.";
-        setRenderError(message);
-      } finally {
-        if (token === renderTokenRef.current) {
-          activePage?.cleanup();
-        }
-      }
-    })();
-
-    return () => {
-      renderTask?.cancel();
-      try {
-        textLayerInstance?.cancel();
-      } catch {
-        // ignore
-      }
-    };
-  }, [load, pageNumber, zoom]);
-
+  // Watch selection state for the manual Highlight button enable/disable.
   useEffect(() => {
     const handleSelectionChange = () => {
-      const textLayer = textLayerRef.current;
-      if (!textLayer) {
-        setHasSelection(false);
-        return;
-      }
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
         setHasSelection(false);
+        setSelectionPageIndex(null);
         return;
       }
-      let inside = false;
-      for (let i = 0; i < selection.rangeCount; i += 1) {
-        const range = selection.getRangeAt(i);
-        const node = range.commonAncestorContainer;
-        if (node && textLayer.contains(node)) {
-          inside = true;
-          break;
-        }
+      const range = selection.getRangeAt(0);
+      const pageEl = findPageElement(range.commonAncestorContainer);
+      if (!pageEl) {
+        setHasSelection(false);
+        setSelectionPageIndex(null);
+        return;
       }
-      setHasSelection(inside);
-      if (inside && selectionMessage) {
-        setSelectionMessage(null);
+      const pageIndex = Number(pageEl.dataset.pdfPageIndex);
+      if (!Number.isInteger(pageIndex)) {
+        setHasSelection(false);
+        setSelectionPageIndex(null);
+        return;
       }
+      setHasSelection(true);
+      setSelectionPageIndex(pageIndex);
+      setHint(null);
     };
     document.addEventListener("selectionchange", handleSelectionChange);
     return () => {
       document.removeEventListener("selectionchange", handleSelectionChange);
     };
-  }, [selectionMessage]);
+  }, []);
 
-  const overlayAnnotations = useMemo(() => {
-    if (!annotations || annotations.length === 0 || !pageRenderInfo) {
-      return [] as PdfAnnotation[];
-    }
-    return annotations.filter((annotation) => annotation.pageIndex === pageRenderInfo.pageIndex);
-  }, [annotations, pageRenderInfo]);
+  const createHighlightFromCurrentSelection = useCallback(
+    (color: string): boolean => {
+      if (!onAddAnnotation) {
+        return false;
+      }
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        return false;
+      }
+      const range = selection.getRangeAt(0);
+      const pageEl = findPageElement(range.commonAncestorContainer);
+      if (!pageEl) {
+        return false;
+      }
+      const pageIndex = Number(pageEl.dataset.pdfPageIndex);
+      if (!Number.isInteger(pageIndex)) {
+        return false;
+      }
+      const info = pageInfosRef.current.get(pageIndex);
+      if (!info) {
+        return false;
+      }
+      const annotation = buildAnnotationFromSelection(selection, info, color);
+      if (!annotation) {
+        return false;
+      }
+      selection.removeAllRanges();
+      setHasSelection(false);
+      setSelectionPageIndex(null);
+      onAddAnnotation(annotation);
+      return true;
+    },
+    [onAddAnnotation],
+  );
 
-  const handleCreateHighlight = useCallback(() => {
-    if (!pageRenderInfo) {
+  // Auto-highlight on mouseup while highlight mode is ON.
+  useEffect(() => {
+    if (!highlightMode || !onAddAnnotation) {
       return;
     }
-    const textLayer = textLayerRef.current;
-    if (!textLayer) {
-      setSelectionMessage("PDF text layer is not ready yet.");
+    const viewportEl = viewportRef.current;
+    if (!viewportEl) {
       return;
     }
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-      setSelectionMessage("Select PDF text first.");
-      return;
-    }
-    const containerRect = textLayer.getBoundingClientRect();
-    const viewport = pageRenderInfo.viewport;
-    const quads: PdfAnnotationQuad[] = [];
-    let snippet = "";
-    for (let i = 0; i < selection.rangeCount; i += 1) {
-      const range = selection.getRangeAt(i);
-      const node = range.commonAncestorContainer;
-      if (!node || !textLayer.contains(node)) {
-        continue;
+    function onPointerUp(event: PointerEvent) {
+      const target = event.target as Element | null;
+      // Skip if the pointerup lands on a highlight overlay button (delete) or any toolbar control.
+      if (target && target.closest('.notebook-pdf-highlight, [data-pdf-no-autohighlight]')) {
+        return;
       }
-      snippet += range.toString();
-      const clientRects = range.getClientRects();
-      for (let r = 0; r < clientRects.length; r += 1) {
-        const rect = clientRects[r];
-        if (rect.width <= 0 || rect.height <= 0) {
-          continue;
-        }
-        const x1 = rect.left - containerRect.left;
-        const y1 = rect.top - containerRect.top;
-        const x2 = rect.right - containerRect.left;
-        const y2 = rect.bottom - containerRect.top;
-        const [pdfX1, pdfY1] = viewport.convertToPdfPoint(x1, y1);
-        const [pdfX2, pdfY2] = viewport.convertToPdfPoint(x2, y2);
-        if (
-          !Number.isFinite(pdfX1) ||
-          !Number.isFinite(pdfY1) ||
-          !Number.isFinite(pdfX2) ||
-          !Number.isFinite(pdfY2)
-        ) {
-          continue;
-        }
-        const minX = Math.min(pdfX1, pdfX2);
-        const minY = Math.min(pdfY1, pdfY2);
-        const width = Math.abs(pdfX2 - pdfX1);
-        const height = Math.abs(pdfY2 - pdfY1);
-        if (width <= 0 || height <= 0) {
-          continue;
-        }
-        quads.push({ x: minX, y: minY, width, height });
-      }
+      // Defer so the selection state is finalized.
+      window.setTimeout(() => {
+        createHighlightFromCurrentSelection(currentColor);
+      }, 0);
     }
-    if (quads.length === 0) {
-      setSelectionMessage("Select PDF text first.");
-      return;
-    }
-    const now = new Date().toISOString();
-    const annotation: PdfAnnotation = {
-      id: createHighlightId(),
-      kind: "highlight",
-      pageIndex: pageRenderInfo.pageIndex,
-      color: DEFAULT_HIGHLIGHT_COLOR,
-      quads,
-      createdAt: now,
-      updatedAt: now,
+    viewportEl.addEventListener("pointerup", onPointerUp);
+    return () => {
+      viewportEl.removeEventListener("pointerup", onPointerUp);
     };
-    const trimmedSnippet = snippet.trim();
-    if (trimmedSnippet.length > 0) {
-      annotation.textSnippet = trimmedSnippet.slice(0, MAX_SNIPPET_LENGTH);
+  }, [highlightMode, currentColor, createHighlightFromCurrentSelection, onAddAnnotation]);
+
+  // Close color menu when clicking outside.
+  useEffect(() => {
+    if (!isColorMenuOpen) {
+      return;
     }
-    selection.removeAllRanges();
-    setHasSelection(false);
-    setSelectionMessage(null);
-    onAddAnnotation?.(annotation);
-  }, [pageRenderInfo, onAddAnnotation]);
+    function onDocClick(event: MouseEvent) {
+      const target = event.target as Node | null;
+      if (!target) {
+        return;
+      }
+      if (
+        colorMenuRef.current?.contains(target) ||
+        colorButtonRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setIsColorMenuOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsColorMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [isColorMenuOpen]);
+
+  const goToPage = useCallback(
+    (next: number) => {
+      if (load.kind !== "ready") {
+        return;
+      }
+      const clamped = Math.max(1, Math.min(next, load.doc.numPages));
+      setPageNumber(clamped);
+      if (viewMode === "vertical") {
+        const info = pageInfosRef.current.get(clamped - 1);
+        const scrollEl = viewportRef.current;
+        if (info && scrollEl) {
+          const elTop = info.containerEl.offsetTop;
+          scrollEl.scrollTo({ top: Math.max(0, elTop - 12), behavior: "smooth" });
+        }
+      }
+    },
+    [load, viewMode],
+  );
+
+  // Track current page in vertical mode via IntersectionObserver.
+  useEffect(() => {
+    if (viewMode !== "vertical" || load.kind !== "ready") {
+      return;
+    }
+    const scrollEl = viewportRef.current;
+    if (!scrollEl) {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let best: { pageIndex: number; ratio: number } | null = null;
+        for (const entry of entries) {
+          const idAttr = (entry.target as HTMLElement).dataset.pdfPageIndex;
+          const pageIndex = idAttr === undefined ? Number.NaN : Number(idAttr);
+          if (!Number.isInteger(pageIndex)) {
+            continue;
+          }
+          if (!best || entry.intersectionRatio > best.ratio) {
+            best = { pageIndex, ratio: entry.intersectionRatio };
+          }
+        }
+        if (best && best.ratio > 0) {
+          setPageNumber(best.pageIndex + 1);
+        }
+      },
+      { root: scrollEl, threshold: [0.1, 0.25, 0.5, 0.75, 1] },
+    );
+    // Observe whatever pages currently exist; the observer is shared as new pages mount.
+    const observed = new Set<HTMLElement>();
+    const scan = () => {
+      const els = scrollEl.querySelectorAll<HTMLElement>("[data-pdf-page-index]");
+      els.forEach((el) => {
+        if (!observed.has(el)) {
+          observer.observe(el);
+          observed.add(el);
+        }
+      });
+    };
+    scan();
+    const mutationObserver = new MutationObserver(scan);
+    mutationObserver.observe(scrollEl, { childList: true, subtree: true });
+    return () => {
+      mutationObserver.disconnect();
+      observer.disconnect();
+    };
+  }, [viewMode, load]);
+
+  const handleManualHighlight = useCallback(() => {
+    if (!onAddAnnotation) {
+      return;
+    }
+    const ok = createHighlightFromCurrentSelection(currentColor);
+    if (!ok) {
+      setHint("Select PDF text first.");
+    }
+  }, [createHighlightFromCurrentSelection, currentColor, onAddAnnotation]);
 
   const handleDeleteHighlight = useCallback(
     (annotationId: string) => {
@@ -371,38 +672,85 @@ export function NotebookPdfViewer({
     [onDeleteAnnotation],
   );
 
+  // Keyboard navigation, scoped to the viewer root.
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName?.toLowerCase();
+        if (
+          tag === "input" ||
+          tag === "textarea" ||
+          tag === "select" ||
+          tag === "button" ||
+          target.isContentEditable
+        ) {
+          return;
+        }
+      }
+      if (load.kind !== "ready") {
+        return;
+      }
+      const key = event.key;
+      const isNext =
+        key === "ArrowRight" ||
+        key === "PageDown" ||
+        (viewMode === "vertical" && key === "ArrowDown");
+      const isPrev =
+        key === "ArrowLeft" ||
+        key === "PageUp" ||
+        (viewMode === "vertical" && key === "ArrowUp");
+      if (!isNext && !isPrev) {
+        return;
+      }
+      event.preventDefault();
+      goToPage(isNext ? pageNumber + 1 : pageNumber - 1);
+    },
+    [goToPage, load.kind, pageNumber, viewMode],
+  );
+
   const headerLabel = useMemo(() => {
     const trimmed = originalName?.trim();
     return trimmed && trimmed.length > 0 ? trimmed : "PDF";
   }, [originalName]);
 
-  const goToPage = (next: number) => {
-    if (load.kind !== "ready") {
-      return;
-    }
-    const clamped = Math.max(1, Math.min(next, load.doc.numPages));
-    setPageNumber(clamped);
-  };
+  const annotationsList = annotations ?? [];
 
   const canPrev = load.kind === "ready" && pageNumber > 1;
   const canNext = load.kind === "ready" && pageNumber < numPages;
   const canZoomOut = zoomIndex > 0;
   const canZoomIn = zoomIndex < ZOOM_LEVELS.length - 1;
-  const canHighlight = Boolean(
-    onAddAnnotation && pageRenderInfo && hasSelection && load.kind === "ready",
-  );
+  const canHighlight = Boolean(onAddAnnotation && load.kind === "ready" && hasSelection);
 
   const toolbarButtonClass =
     "inline-flex h-8 min-w-[2rem] items-center justify-center rounded-[10px] border border-[color:var(--panel-border)] bg-[color:var(--surface-muted)] px-2 text-xs font-medium text-slate-600 transition hover:border-sky-200/70 hover:bg-[color:var(--field-bg)] hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50";
+  const activeToolbarButtonClass =
+    "inline-flex h-8 min-w-[2rem] items-center justify-center rounded-[10px] border border-sky-300/60 bg-sky-50 px-2 text-xs font-medium text-sky-700 shadow-sm transition hover:bg-sky-100";
+
+  // Pages to render.
+  const pagesToRender = useMemo(() => {
+    if (load.kind !== "ready") {
+      return [] as number[];
+    }
+    if (viewMode === "vertical") {
+      return Array.from({ length: load.doc.numPages }, (_, index) => index);
+    }
+    return [Math.max(0, Math.min(pageNumber - 1, load.doc.numPages - 1))];
+  }, [load, viewMode, pageNumber]);
 
   return (
     <div
+      ref={rootRef}
       className={
         "flex min-h-0 min-w-0 flex-1 flex-col gap-2 rounded-[18px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] p-2" +
         (className ? ` ${className}` : "")
       }
+      onKeyDown={handleKeyDown}
     >
-      <div className="flex flex-wrap items-center gap-2 px-1">
+      <div className="flex flex-wrap items-center gap-2 px-1" data-pdf-no-autohighlight="true">
         <div className="min-w-0 flex-1 truncate text-xs font-medium text-slate-600" title={headerLabel}>
           {headerLabel}
         </div>
@@ -431,20 +779,111 @@ export function NotebookPdfViewer({
             ›
           </button>
         </div>
+
+        <div className="flex items-center gap-1" role="group" aria-label="Page layout">
+          <button
+            type="button"
+            className={viewMode === "horizontal" ? activeToolbarButtonClass : toolbarButtonClass}
+            onClick={() => setViewMode("horizontal")}
+            aria-pressed={viewMode === "horizontal"}
+            title="Single-page layout"
+          >
+            Single
+          </button>
+          <button
+            type="button"
+            className={viewMode === "vertical" ? activeToolbarButtonClass : toolbarButtonClass}
+            onClick={() => setViewMode("vertical")}
+            aria-pressed={viewMode === "vertical"}
+            title="Continuous scroll layout"
+          >
+            Scroll
+          </button>
+        </div>
+
         {onAddAnnotation ? (
           <div className="flex items-center gap-1">
             <button
               type="button"
-              className={toolbarButtonClass}
-              onClick={handleCreateHighlight}
-              disabled={!canHighlight}
-              aria-label="Highlight selected text"
-              title={canHighlight ? "Highlight selected text" : "Select PDF text to highlight"}
+              className={highlightMode ? activeToolbarButtonClass : toolbarButtonClass}
+              onClick={() => {
+                setHighlightMode((prev) => !prev);
+                setHint(null);
+              }}
+              aria-pressed={highlightMode}
+              title={
+                highlightMode
+                  ? "Highlight mode ON — selecting text auto-highlights"
+                  : "Turn highlight mode on"
+              }
             >
               Highlight
             </button>
+            <div className="relative">
+              <button
+                ref={colorButtonRef}
+                type="button"
+                className={toolbarButtonClass + " gap-1.5"}
+                onClick={() => setIsColorMenuOpen((open) => !open)}
+                aria-haspopup="menu"
+                aria-expanded={isColorMenuOpen}
+                aria-label="Highlight color"
+                title="Highlight color"
+              >
+                <span
+                  className="inline-block h-3 w-3 rounded-full border border-slate-300/70"
+                  style={{ backgroundColor: currentColor }}
+                  aria-hidden="true"
+                />
+                <span className="text-xs">Color</span>
+              </button>
+              {isColorMenuOpen ? (
+                <div
+                  ref={colorMenuRef}
+                  role="menu"
+                  className="absolute right-0 top-full z-20 mt-1 flex items-center gap-1 rounded-[12px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] p-1 shadow-lg"
+                  data-pdf-no-autohighlight="true"
+                >
+                  {HIGHLIGHT_COLORS.map((color) => {
+                    const isSelected = color.value === currentColor;
+                    return (
+                      <button
+                        key={color.id}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={isSelected}
+                        title={color.label}
+                        onClick={() => {
+                          setCurrentColor(color.value);
+                          setIsColorMenuOpen(false);
+                        }}
+                        className={
+                          "notebook-pdf-color-swatch" + (isSelected ? " is-selected" : "")
+                        }
+                        style={{ backgroundColor: color.value }}
+                      >
+                        <span className="sr-only">{color.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+            {!highlightMode ? (
+              <button
+                type="button"
+                className={toolbarButtonClass}
+                onClick={handleManualHighlight}
+                disabled={!canHighlight}
+                aria-label="Highlight selected text"
+                title={canHighlight ? "Highlight selected text" : "Select PDF text to highlight"}
+              >
+                Apply
+              </button>
+            ) : null}
           </div>
         ) : null}
+
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -481,74 +920,52 @@ export function NotebookPdfViewer({
         </div>
       </div>
 
-      {selectionMessage ? (
+      {hint ? (
         <div className="px-1 text-[11px] text-slate-500" role="status">
-          {selectionMessage}
+          {hint}
         </div>
       ) : null}
 
-      <div className="notebook-pdf-viewport flex min-h-0 flex-1 items-start justify-center overflow-auto rounded-[12px] bg-[color:var(--surface-muted)] p-3 scrollbar-subtle">
+      <div
+        ref={viewportRef}
+        tabIndex={0}
+        className={
+          "notebook-pdf-viewport flex min-h-0 flex-1 overflow-auto rounded-[12px] bg-[color:var(--surface-muted)] p-3 scrollbar-subtle outline-none" +
+          (viewMode === "vertical"
+            ? " notebook-pdf-viewport--vertical flex-col items-center gap-3"
+            : " notebook-pdf-viewport--horizontal items-start justify-center")
+        }
+        aria-label={
+          viewMode === "vertical"
+            ? `${headerLabel} continuous scroll viewer`
+            : `${headerLabel} single-page viewer`
+        }
+      >
         {load.kind === "loading" ? (
           <div className="m-auto text-xs text-slate-500">Loading PDF…</div>
         ) : load.kind === "error" ? (
           <div className="m-auto max-w-md px-3 py-4 text-center text-xs text-rose-600">{load.message}</div>
-        ) : renderError ? (
-          <div className="m-auto max-w-md px-3 py-4 text-center text-xs text-rose-600">{renderError}</div>
         ) : (
-          <div
-            className="notebook-pdf-page-stack relative inline-block rounded-[8px] bg-white shadow-sm"
-            style={
-              pageRenderInfo
-                ? { width: `${pageRenderInfo.cssWidth}px`, height: `${pageRenderInfo.cssHeight}px` }
-                : undefined
-            }
-          >
-            <canvas
-              ref={canvasRef}
-              className="notebook-pdf-canvas block"
-              aria-label={`${headerLabel} — page ${pageNumber}`}
+          pagesToRender.map((pageIndex) => (
+            <PdfRenderedPage
+              key={pageIndex}
+              doc={(load as { kind: "ready"; doc: PDFDocumentProxy }).doc}
+              pageIndex={pageIndex}
+              zoom={zoom}
+              annotations={annotationsList}
+              onDeleteHighlight={handleDeleteHighlight}
+              registerInfo={registerInfo}
+              ariaLabel={`${headerLabel} — page ${pageIndex + 1}`}
             />
-            <div
-              ref={textLayerRef}
-              className="notebook-pdf-text-layer"
-              aria-hidden="true"
-            />
-            {pageRenderInfo && overlayAnnotations.length > 0 ? (
-              <div className="notebook-pdf-annotation-layer" aria-hidden="false">
-                {overlayAnnotations.flatMap((annotation) =>
-                  annotation.quads.map((quad, quadIndex) => {
-                    const rect = quadToViewportRect(quad, pageRenderInfo.viewport);
-                    return (
-                      <button
-                        key={`${annotation.id}-${quadIndex}`}
-                        type="button"
-                        className="notebook-pdf-highlight"
-                        style={{
-                          left: `${rect.left}px`,
-                          top: `${rect.top}px`,
-                          width: `${rect.width}px`,
-                          height: `${rect.height}px`,
-                          backgroundColor: annotation.color,
-                        }}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleDeleteHighlight(annotation.id);
-                        }}
-                        aria-label={
-                          annotation.textSnippet
-                            ? `Delete highlight: ${annotation.textSnippet}`
-                            : "Delete highlight"
-                        }
-                        title={annotation.textSnippet ?? "Click to delete highlight"}
-                      />
-                    );
-                  }),
-                )}
-              </div>
-            ) : null}
-          </div>
+          ))
         )}
       </div>
+
+      {selectionPageIndex !== null && hasSelection && highlightMode ? (
+        <span className="sr-only" role="status">
+          Selection on page {selectionPageIndex + 1} will be highlighted.
+        </span>
+      ) : null}
     </div>
   );
 }
