@@ -865,6 +865,8 @@ button {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   word-break: break-word;
+  /* Positioning ancestor for absolutely-positioned freeform image NodeViews. */
+  position: relative;
 }
 
 .tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
@@ -2896,6 +2898,26 @@ button {
   pointer-events: none;
   user-select: none;
   z-index: 10;
+}
+
+/* Freeform image — absolutely positioned in front of text. Inline `style`
+   supplies the `left`/`top`/`position: absolute` values; class supplies the
+   rest. Drag/keyboard logic keeps coordinates relative to the ProseMirror
+   editor surface, which is `position: relative`. */
+.notebook-image-node--free {
+  z-index: 5;
+}
+
+.notebook-image-node--free .notebook-image-node__inner {
+  display: inline-block;
+}
+
+.notebook-image-node--free .notebook-image-node__inner img {
+  cursor: grab;
+}
+
+.notebook-image-node--free.notebook-image-node--selected .notebook-image-node__inner img {
+  cursor: move;
 }
 
 /* ── Editable-text word spacing (visual only) ─────────────────────────────── */

@@ -503,6 +503,45 @@ export function TiptapEditor({
                 return {};
               },
             },
+            positionMode: {
+              default: null,
+              parseHTML: (el: HTMLElement) =>
+                el.getAttribute("data-position-mode") === "free" ? "free" : null,
+              renderHTML: (attrs: Record<string, unknown>) => {
+                if (attrs.positionMode === "free") return { "data-position-mode": "free" };
+                return {};
+              },
+            },
+            x: {
+              default: null,
+              parseHTML: (el: HTMLElement) => {
+                const raw = el.getAttribute("data-x");
+                if (raw === null) return null;
+                const n = parseInt(raw, 10);
+                return Number.isFinite(n) ? n : null;
+              },
+              renderHTML: (attrs: Record<string, unknown>) => {
+                if (attrs.positionMode !== "free") return {};
+                const n = typeof attrs.x === "number" ? attrs.x : Number(attrs.x);
+                if (!Number.isFinite(n)) return {};
+                return { "data-x": String(Math.round(n)) };
+              },
+            },
+            y: {
+              default: null,
+              parseHTML: (el: HTMLElement) => {
+                const raw = el.getAttribute("data-y");
+                if (raw === null) return null;
+                const n = parseInt(raw, 10);
+                return Number.isFinite(n) ? n : null;
+              },
+              renderHTML: (attrs: Record<string, unknown>) => {
+                if (attrs.positionMode !== "free") return {};
+                const n = typeof attrs.y === "number" ? attrs.y : Number(attrs.y);
+                if (!Number.isFinite(n)) return {};
+                return { "data-y": String(Math.round(n)) };
+              },
+            },
           };
         },
         addNodeView() {
@@ -513,6 +552,24 @@ export function TiptapEditor({
       Extension.create({
         name: "imageKeyboardShortcuts",
         addKeyboardShortcuts() {
+          const movePos = (editor: Editor, dx: number, dy: number): boolean => {
+            const { selection } = editor.state;
+            if (!(selection instanceof NodeSelection)) return false;
+            const node = selection.node;
+            if (node?.type?.name !== "image") return false;
+            if (node.attrs.positionMode !== "free") return false;
+            const curX = Number.isFinite(node.attrs.x) ? Number(node.attrs.x) : 0;
+            const curY = Number.isFinite(node.attrs.y) ? Number(node.attrs.y) : 0;
+            editor
+              .chain()
+              .updateAttributes("image", {
+                x: Math.max(0, Math.round(curX + dx)),
+                y: Math.max(0, Math.round(curY + dy)),
+              })
+              .run();
+            return true;
+          };
+
           const nudge = (editor: Editor, widthDelta: number, heightDelta: number): boolean => {
             const { selection } = editor.state;
             if (!(selection instanceof NodeSelection)) return false;
@@ -566,6 +623,14 @@ export function TiptapEditor({
             "Shift-Alt-ArrowLeft": ({ editor }) => nudge(editor, -10, 0),
             "Shift-Alt-ArrowDown": ({ editor }) => nudge(editor, 0, 10),
             "Shift-Alt-ArrowUp": ({ editor }) => nudge(editor, 0, -10),
+            ArrowRight: ({ editor }) => movePos(editor, 1, 0),
+            ArrowLeft: ({ editor }) => movePos(editor, -1, 0),
+            ArrowDown: ({ editor }) => movePos(editor, 0, 1),
+            ArrowUp: ({ editor }) => movePos(editor, 0, -1),
+            "Shift-ArrowRight": ({ editor }) => movePos(editor, 10, 0),
+            "Shift-ArrowLeft": ({ editor }) => movePos(editor, -10, 0),
+            "Shift-ArrowDown": ({ editor }) => movePos(editor, 0, 10),
+            "Shift-ArrowUp": ({ editor }) => movePos(editor, 0, -10),
             Escape: ({ editor }) => {
               const { selection } = editor.state;
               if (!(selection instanceof NodeSelection)) return false;
