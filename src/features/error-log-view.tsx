@@ -779,8 +779,10 @@ export function ErrorLogView() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 pb-6">
+    <div className="flex h-full min-h-0 flex-col gap-4 pb-6">
       {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
+
+      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Portfolio - Error Log</h2>
 
       <HeaderBand
         search={search}
@@ -897,62 +899,51 @@ function HeaderBand({
 }) {
   const hasEntries = entriesCount > 0;
   return (
-    <section className="glass-panel flex shrink-0 flex-col gap-3 p-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-[1.55rem] font-semibold leading-tight tracking-[-0.02em] text-white">Error Log</h2>
-          <p className="mt-1 text-sm text-slate-400">
-            Review mistakes, understand patterns, and build stronger decision rules.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-          {hasEntries ? (
-            <>
-              <label className="relative flex h-9 min-w-0 items-center sm:w-[18rem]">
-                <Search className="pointer-events-none absolute left-3 h-4 w-4 text-slate-500" />
-                <input
-                  type="text"
-                  placeholder="Search entries..."
-                  value={search}
-                  onChange={(e) => onSearchChange(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-white/10 bg-slate-900/60 pl-9 pr-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={onToggleFilters}
-                aria-expanded={showFilters}
-                className={`${secondaryButtonClassName} h-9 shrink-0 px-3 text-sm`}
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-                Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
-              </button>
-            </>
-          ) : null}
+    <section className="glass-panel flex shrink-0 flex-wrap items-center gap-2 p-4">
+      {hasEntries ? (
+        <>
+          <label className="relative flex h-9 min-w-0 items-center sm:w-[18rem]">
+            <Search className="pointer-events-none absolute left-3 h-4 w-4 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Search entries..."
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="h-9 w-full rounded-lg border border-white/10 bg-slate-900/60 pl-9 pr-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
+            />
+          </label>
           <button
             type="button"
-            onClick={onCreate}
-            className={`${primaryButtonClassName} h-9 shrink-0 px-3 text-sm`}
-            title="Log a new entry"
+            onClick={onToggleFilters}
+            aria-expanded={showFilters}
+            className={`${secondaryButtonClassName} h-9 shrink-0 px-3 text-sm`}
           >
-            <Plus className="h-4 w-4" />
-            Log entry
+            <SlidersHorizontal className="h-4 w-4" />
+            Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
           </button>
-          <button
-            type="button"
-            onClick={onExport}
-            disabled={!canExport}
-            className={`${secondaryButtonClassName} h-9 shrink-0 px-3 text-sm ${
-              canExport ? "" : "cursor-default opacity-50"
-            }`}
-            title="Export visible entries to CSV"
-          >
-            <Download className="h-4 w-4" />
-            Export
-          </button>
-        </div>
-      </div>
+        </>
+      ) : null}
+      <button
+        type="button"
+        onClick={onCreate}
+        className={`${primaryButtonClassName} h-9 shrink-0 px-3 text-sm`}
+        title="Log a new entry"
+      >
+        <Plus className="h-4 w-4" />
+        Log entry
+      </button>
+      <button
+        type="button"
+        onClick={onExport}
+        disabled={!canExport}
+        className={`${secondaryButtonClassName} h-9 shrink-0 px-3 text-sm ${
+          canExport ? "" : "cursor-default opacity-50"
+        }`}
+        title="Export visible entries to CSV"
+      >
+        <Download className="h-4 w-4" />
+        Export
+      </button>
     </section>
   );
 }

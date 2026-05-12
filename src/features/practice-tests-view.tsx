@@ -481,6 +481,7 @@ export function PracticeTestsView() {
 
   return (
     <div className="space-y-4">
+      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Portfolio - Practice Tests</h2>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Average"

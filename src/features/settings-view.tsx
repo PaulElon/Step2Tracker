@@ -893,14 +893,7 @@ export function SettingsView({
 
   return (
     <div className="space-y-4">
-      <div className="glass-panel flex flex-col gap-1 px-6 py-5">
-        <p className="text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">Workspace</p>
-        <h2 className="text-xl font-semibold text-white">Settings</h2>
-        <p className="text-sm text-slate-400">
-          Tune appearance, defaults, and manage your local Study Tracker data. Everything stays on this device.
-        </p>
-      </div>
-
+      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Settings</h2>
       <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="glass-panel h-fit p-3 xl:sticky xl:top-4">
           <nav className="space-y-4">

@@ -45,7 +45,6 @@ import type {
   ExamDisplayMode,
   ExamTimer,
   PersistenceSummary,
-  SectionId,
   TrashItem,
 } from "./types/models";
 
@@ -63,17 +62,6 @@ const mobileNavigationItems = [
     : []),
   { id: "settings" as const, label: "Settings", icon: Settings2 },
 ];
-
-const sectionCopy: Record<SectionId, { title: string }> = {
-  dashboard: { title: "Today" },
-  planner: { title: "Plan" },
-  weakTopics: { title: "Weak Topics" },
-  tests: { title: "Practice Tests" },
-  errorLog: { title: "Error Log" },
-  settings: { title: "Settings" },
-  timefolio: { title: "Study Time" },
-  notebook: { title: "Notebook" },
-};
 
 function formatCountsLine(counts: BackupMetadata["counts"]) {
   return `${counts.studyBlocks} tasks · ${counts.practiceTests} tests · ${counts.weakTopicEntries} topics`;
@@ -505,8 +493,6 @@ export default function App() {
         ? "dashboard"
         : activeSection;
   const portfolioActive = isPortfolioSection(resolvedSection);
-  const sectionMeta = sectionCopy[resolvedSection];
-  const headerTitle = (portfolioActive || portfolioOverviewActive) ? "Portfolio" : sectionMeta.title;
   const totalMinutes = sumStudyMinutes(state.studyBlocks);
   const dateRange = getDateRange(state.studyBlocks);
   const persistenceCopy =
@@ -1026,17 +1012,6 @@ export default function App() {
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
-          <header className="glass-panel px-5 py-4">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              {resolvedSection !== "dashboard" && resolvedSection !== "planner" ? (
-                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-white md:text-[1.75rem]">
-                  {headerTitle}
-                </h2>
-              ) : null}
-              <p className="text-[11px] text-slate-500">{persistenceCopy}</p>
-            </div>
-          </header>
-
           <MobileNav
             items={mobileNavigationItems}
             activeSection={resolvedSection}

@@ -1616,13 +1616,16 @@ const emptyStateMessage = normalizedSearchQuery
   const isEditorFullscreen = isFullscreen && !isLibraryMode;
   const notebookRootClass = isEditorFullscreen
     ? "notebook-fullscreen-shell fixed inset-0 z-[80] flex flex-col gap-2 overflow-hidden px-3 pb-3 pt-2"
-    : "flex h-full flex-col gap-2 overflow-hidden px-3 pb-3 pt-1.5";
+    : "flex h-full flex-col gap-4 overflow-hidden pb-3 pt-1.5";
 
   return (
     <>
       {exportMenuPortal}
       {editorOverflowMenuPortal}
       <div className={notebookRootClass}>
+        {!isFullscreen ? (
+          <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Notebook</h2>
+        ) : null}
         <section className="glass-panel flex min-h-0 flex-1 flex-col gap-2 overflow-visible p-3">
           {isLibraryMode ? (
             <div className="mx-auto flex min-h-0 w-full max-w-[1480px] flex-1 flex-col gap-2.5">

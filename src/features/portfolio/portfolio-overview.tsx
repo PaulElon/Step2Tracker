@@ -197,15 +197,7 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
 
   return (
     <div className="flex flex-col gap-4 pb-2">
-      <div className="px-1">
-        <h2 className="text-[1.4rem] font-semibold tracking-[-0.03em] text-white md:text-[1.55rem]">
-          Portfolio
-        </h2>
-        <p className="mt-1 text-sm text-slate-400">
-          Review performance, close weak areas, and track your progress over time.
-        </p>
-      </div>
-
+      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Portfolio - Overview</h2>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
         <div className="flex min-w-0 flex-col gap-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
