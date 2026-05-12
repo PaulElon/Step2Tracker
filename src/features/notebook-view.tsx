@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { Maximize2, Minimize2, PanelLeftOpen } from "lucide-react";
 import { ModalShell } from "../components/modal-shell";
 import { NotebookEditorAdapter } from "../components/notebook-editor-adapter";
 import { richTextToPlain } from "../components/rich-text-editor";
@@ -1504,9 +1504,7 @@ export function NotebookView() {
   const notebookSectionValueClass = "notebook-editor-section-value";
   const notebookRailTitleClass = "notebook-editor-rail__title";
   const notebookRailMetaClass = "notebook-editor-rail__meta";
-  const notebookRailHeaderButtonClass =
-    "notebook-editor-action-button inline-flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-[10px] border px-2 text-xs font-medium transition";
-  const emptyStateMessage = normalizedSearchQuery
+const emptyStateMessage = normalizedSearchQuery
     ? `No results for "${searchQuery.trim()}".`
     : currentFolder
       ? "This folder is empty."
@@ -1900,7 +1898,11 @@ export function NotebookView() {
                         onClick={toggleNotebookRail}
                         className={`${notebookCollapsedRailButtonClass} ${isNotebookRailExpanded ? "notebook-editor-rail__icon-button--active" : ""}`}
                       >
-                        <NotebookRailIcon kind={isNotebookRailExpanded ? "collapse" : "toggle"} />
+                        {isNotebookRailExpanded ? (
+                          <NotebookRailIcon kind="collapse" />
+                        ) : (
+                          <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+                        )}
                       </button>
                       <button
                         type="button"
@@ -1953,31 +1955,7 @@ export function NotebookView() {
                       <>
                         <div className={notebookNavigatorDividerClass} aria-hidden="true" />
                         <aside className={notebookNavigatorPanelClass}>
-                      <div className="flex items-center justify-between gap-1.5">
-                        <button
-                          type="button"
-                          title="Back to Library"
-                          aria-label="Back to Library"
-                          onClick={() => void goBackToLibrary()}
-                          className={notebookRailHeaderButtonClass}
-                        >
-                          <NotebookRailIcon kind="back" />
-                          <span className="truncate">Library</span>
-                        </button>
-                        <button
-                          type="button"
-                          title="Collapse notebook rail"
-                          aria-label="Collapse notebook rail"
-                          aria-pressed
-                          onClick={toggleNotebookRail}
-                          className={`${notebookCollapsedRailButtonClass} shrink-0`}
-                        >
-                          <NotebookRailIcon kind="collapse" />
-                        </button>
-                      </div>
-
                       <div className="space-y-1">
-                        <div className={notebookSectionTitleClass}>Library</div>
                         <div className={notebookSectionValueClass}>{currentFolder ? currentFolder.name.trim() || "Untitled Folder" : "Library"}</div>
                         <div className={notebookRailMetaClass}>
                           {currentFolder ? "Current folder context" : "All documents"} · {sortedDocuments.length} documents
