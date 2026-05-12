@@ -7,7 +7,8 @@ import { NotebookPdfViewer } from "../components/notebook-pdf-viewer";
 import { richTextToPlain } from "../components/rich-text-editor";
 import { purgeOrphanedNotebookImages } from "../lib/notebook-images";
 import { createNotebookPdfExport } from "../lib/notebook-pdf-export";
-import { exportNotebookPdfBytes, uploadNotebookPdf } from "../lib/notebook-pdf";
+import { exportNotebookPdfBytes, exportNotebookZipBytes, uploadNotebookPdf } from "../lib/notebook-pdf";
+import { exportNotebookDocumentToBytes, exportNotebookFolderToZip } from "../lib/notebook-export";
 import {
   buildNotebookExportFileName,
   parseNotebookImport,
@@ -929,6 +930,45 @@ export function NotebookView() {
     setStatus(null);
   }
 
+  async function handleExportDocument(doc: NotebookDocument) {
+    closeTileActionMenu();
+    setStatus(null);
+    try {
+      await flushPendingNotebookSave();
+      const result = await exportNotebookDocumentToBytes(doc);
+      const savedPath = result.isZip
+        ? await exportNotebookZipBytes(result.suggestedFileName, result.bytes)
+        : await exportNotebookPdfBytes(result.suggestedFileName, result.bytes);
+      const parts: string[] = [`Exported ${result.pageCount} page(s) to ${savedPath}.`];
+      if (result.warnings.length > 0) parts.push(result.warnings.join(" "));
+      setStatus({ kind: "success", message: parts.join(" ") });
+    } catch (error) {
+      const message =
+        typeof error === "string" ? error : error instanceof Error ? error.message : "Unable to export this document.";
+      if (message === "Export canceled by user.") return;
+      setStatus({ kind: "error", message });
+    }
+  }
+
+  async function handleExportFolder(folder: NotebookFolder) {
+    closeTileActionMenu();
+    setStatus(null);
+    try {
+      await flushPendingNotebookSave();
+      const folderDocuments = sortedDocuments.filter((doc) => (doc.folderId ?? null) === folder.id);
+      const result = await exportNotebookFolderToZip(folder, folderDocuments);
+      const savedPath = await exportNotebookZipBytes(result.suggestedFileName, result.bytes);
+      const parts: string[] = [`Exported ${result.documentCount} document(s) to ${savedPath}.`];
+      if (result.warnings.length > 0) parts.push(result.warnings.join(" "));
+      setStatus({ kind: "success", message: parts.join(" ") });
+    } catch (error) {
+      const message =
+        typeof error === "string" ? error : error instanceof Error ? error.message : "Unable to export this folder.";
+      if (message === "Export canceled by user.") return;
+      setStatus({ kind: "error", message });
+    }
+  }
+
   function updateActiveDocumentTitle(title: string) {
     if (!activeDocument) {
       return;
@@ -1684,6 +1724,13 @@ export function NotebookView() {
                   >
                     New Document
                   </button>
+                  <button
+                    type="button"
+                    onClick={openImportPicker}
+                    className={libraryToolbarButtonClass}
+                  >
+                    Import
+                  </button>
                   <input
                     type="search"
                     value={searchQuery}
@@ -1777,6 +1824,16 @@ export function NotebookView() {
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation();
+                              void handleExportFolder(folder);
+                            }}
+                            className={compactMenuItemClass}
+                          >
+                            Export
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
                               closeTileActionMenu();
                               handleDeleteFolder(folder);
                             }}
@@ -1865,6 +1922,16 @@ export function NotebookView() {
                             }`}
                           >
                             {document.favorited ? "Unfavorite" : "Favorite"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleExportDocument(document);
+                            }}
+                            className={compactMenuItemClass}
+                          >
+                            Export
                           </button>
                           <button
                             type="button"
