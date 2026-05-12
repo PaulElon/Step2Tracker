@@ -1028,7 +1028,7 @@ export default function App() {
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
           <header className="glass-panel px-5 py-4">
             <div className="flex flex-wrap items-end justify-between gap-3">
-              {resolvedSection !== "dashboard" ? (
+              {resolvedSection !== "dashboard" && resolvedSection !== "planner" ? (
                 <h2 className="text-2xl font-semibold tracking-[-0.04em] text-white md:text-[1.75rem]">
                   {headerTitle}
                 </h2>
