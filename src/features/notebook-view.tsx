@@ -2434,6 +2434,7 @@ const emptyStateMessage = normalizedSearchQuery
                                 originalName={activePage.pdfOriginalName ?? activePage.title}
                                 annotations={activePage.pdfAnnotations}
                                 viewMode={activePage.pdfViewMode ?? "horizontal"}
+                                outline={activePage.pdfOutline}
                                 onChangeViewMode={(next) => {
                                   updateActivePage((page) => ({
                                     ...page,
@@ -2448,6 +2449,13 @@ const emptyStateMessage = normalizedSearchQuery
                                   updateActivePage((page) => ({
                                     ...page,
                                     pdfPageCount: count,
+                                    updatedAt: nowIso(),
+                                  }));
+                                }}
+                                onChangeOutline={(outline) => {
+                                  updateActivePage((page) => ({
+                                    ...page,
+                                    pdfOutline: outline,
                                     updatedAt: nowIso(),
                                   }));
                                 }}

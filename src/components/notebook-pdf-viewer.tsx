@@ -3,7 +3,7 @@ import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PageViewport, PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { readNotebookPdfBytes } from "../lib/notebook-pdf";
-import type { PdfAnnotation, PdfAnnotationQuad, PdfViewMode } from "../types/models";
+import type { PdfAnnotation, PdfAnnotationQuad, PdfOutlineItem, PdfViewMode } from "../types/models";
 
 if (typeof pdfjs.GlobalWorkerOptions.workerSrc !== "string" || !pdfjs.GlobalWorkerOptions.workerSrc) {
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -12,6 +12,9 @@ if (typeof pdfjs.GlobalWorkerOptions.workerSrc !== "string" || !pdfjs.GlobalWork
 const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3] as const;
 const DEFAULT_ZOOM_INDEX = 2; // 1.0
 const MAX_SNIPPET_LENGTH = 500;
+const MANUAL_OUTLINE_TITLE_MAX_LENGTH = 80;
+const EMBEDDED_OUTLINE_TITLE_MAX_LENGTH = 160;
+const OUTLINE_MAX_DEPTH = 12;
 
 const HIGHLIGHT_COLORS = [
   { id: "yellow", value: "#fde047", label: "Yellow" },
@@ -22,6 +25,7 @@ const HIGHLIGHT_COLORS = [
 ] as const;
 
 const DEFAULT_HIGHLIGHT_COLOR = HIGHLIGHT_COLORS[0].value;
+const EMPTY_OUTLINE: PdfOutlineItem[] = [];
 
 export interface NotebookPdfViewerProps {
   filename: string;
@@ -33,6 +37,8 @@ export interface NotebookPdfViewerProps {
   onDeleteAnnotation?: (annotationId: string) => void;
   viewMode?: PdfViewMode;
   onChangeViewMode?: (next: PdfViewMode) => void;
+  outline?: PdfOutlineItem[];
+  onChangeOutline?: (next: PdfOutlineItem[]) => void;
 }
 
 type LoadState =
@@ -40,6 +46,11 @@ type LoadState =
   | { kind: "loading" }
   | { kind: "ready"; doc: PDFDocumentProxy }
   | { kind: "error"; message: string };
+
+interface PdfRefProxy {
+  num: number;
+  gen: number;
+}
 
 interface PageInfo {
   pageIndex: number;
@@ -53,6 +64,20 @@ function createHighlightId(): string {
     return `nb-pdf-hl-${crypto.randomUUID()}`;
   }
   return `nb-pdf-hl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createOutlineId(source: PdfOutlineItem["source"]): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `nb-pdf-outline-${source}-${crypto.randomUUID()}`;
+  }
+  return `nb-pdf-outline-${source}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeOutlineTitle(value: unknown, maxLength: number): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
 
 function quadToViewportRect(quad: PdfAnnotationQuad, viewport: PageViewport) {
@@ -71,6 +96,111 @@ function quadToViewportRect(quad: PdfAnnotationQuad, viewport: PageViewport) {
   const right = Math.max(x1, x2);
   const bottom = Math.max(y1, y2);
   return { left, top, width: right - left, height: bottom - top };
+}
+
+function isRefProxy(value: unknown): value is PdfRefProxy {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as Partial<PdfRefProxy>;
+  return Number.isInteger(candidate.num) && Number.isInteger(candidate.gen);
+}
+
+function getDestinationTop(dest: unknown[]): number | undefined {
+  const mode = dest[1];
+  const modeName =
+    mode && typeof mode === "object" && "name" in mode && typeof mode.name === "string"
+      ? mode.name
+      : "";
+  const rawTop =
+    modeName === "XYZ"
+      ? dest[3]
+      : modeName === "FitH" || modeName === "FitBH"
+        ? dest[2]
+        : modeName === "FitR"
+          ? dest[5]
+          : undefined;
+  const top = typeof rawTop === "string" ? Number(rawTop.trim()) : Number(rawTop);
+  return Number.isFinite(top) ? top : undefined;
+}
+
+async function resolvePdfDestination(
+  pdfDoc: PDFDocumentProxy,
+  rawDest: unknown,
+): Promise<{ pageIndex: number; y?: number } | null> {
+  let dest = rawDest;
+  if (typeof dest === "string") {
+    dest = await pdfDoc.getDestination(dest).catch(() => null);
+  }
+  if (!Array.isArray(dest) || dest.length === 0) {
+    return null;
+  }
+
+  const target = dest[0];
+  let pageIndex = Number.NaN;
+  if (typeof target === "number" && Number.isFinite(target)) {
+    pageIndex = Math.trunc(target);
+  } else if (isRefProxy(target)) {
+    pageIndex = await pdfDoc.getPageIndex(target).catch(() => Number.NaN);
+  }
+  if (!Number.isInteger(pageIndex) || pageIndex < 0 || pageIndex >= pdfDoc.numPages) {
+    return null;
+  }
+  const top = getDestinationTop(dest);
+  return Number.isFinite(top) ? { pageIndex, y: top } : { pageIndex };
+}
+
+interface PdfJsOutlineNode {
+  title?: unknown;
+  dest?: unknown;
+  items?: PdfJsOutlineNode[];
+}
+
+async function extractEmbeddedOutline(pdfDoc: PDFDocumentProxy): Promise<PdfOutlineItem[]> {
+  const outline = await pdfDoc.getOutline().catch(() => null);
+  if (!Array.isArray(outline) || outline.length === 0) {
+    return [];
+  }
+
+  async function walk(nodes: PdfJsOutlineNode[], depth: number, path: string): Promise<PdfOutlineItem[]> {
+    if (depth > OUTLINE_MAX_DEPTH) {
+      return [];
+    }
+    const result: PdfOutlineItem[] = [];
+    for (let index = 0; index < nodes.length; index += 1) {
+      const node = nodes[index];
+      const nodePath = path ? `${path}-${index}` : String(index);
+      const title = normalizeOutlineTitle(node.title, EMBEDDED_OUTLINE_TITLE_MAX_LENGTH);
+      const childrenRaw = Array.isArray(node.items) ? node.items : [];
+      const resolved = title ? await resolvePdfDestination(pdfDoc, node.dest) : null;
+      if (!resolved) {
+        if (childrenRaw.length > 0) {
+          result.push(...(await walk(childrenRaw, depth, nodePath)));
+        }
+        continue;
+      }
+      const item: PdfOutlineItem = {
+        id: `nb-pdf-outline-embedded-${nodePath}-${resolved.pageIndex}`,
+        title,
+        pageIndex: resolved.pageIndex,
+        depth,
+        source: "embedded",
+      };
+      if (resolved.y !== undefined) {
+        item.y = resolved.y;
+      }
+      if (childrenRaw.length > 0) {
+        const children = await walk(childrenRaw, depth + 1, nodePath);
+        if (children.length > 0) {
+          item.children = children;
+        }
+      }
+      result.push(item);
+    }
+    return result;
+  }
+
+  return walk(outline as PdfJsOutlineNode[], 0, "");
 }
 
 function buildAnnotationFromSelection(
@@ -139,6 +269,45 @@ function buildAnnotationFromSelection(
   return annotation;
 }
 
+function buildManualOutlineFromSelection(
+  selection: Selection,
+  pageInfo: PageInfo,
+): PdfOutlineItem | null {
+  const title = normalizeOutlineTitle(selection.toString(), MANUAL_OUTLINE_TITLE_MAX_LENGTH);
+  if (!title || selection.rangeCount === 0) {
+    return null;
+  }
+  const item: PdfOutlineItem = {
+    id: createOutlineId("manual"),
+    title,
+    pageIndex: pageInfo.pageIndex,
+    source: "manual",
+  };
+
+  const containerRect = pageInfo.textLayerEl.getBoundingClientRect();
+  for (let i = 0; i < selection.rangeCount; i += 1) {
+    const range = selection.getRangeAt(i);
+    const node = range.commonAncestorContainer;
+    if (!node || !pageInfo.textLayerEl.contains(node)) {
+      continue;
+    }
+    const firstRect = Array.from(range.getClientRects()).find(
+      (rect) => rect.width > 0 && rect.height > 0,
+    );
+    if (!firstRect) {
+      continue;
+    }
+    const viewportY = firstRect.top - containerRect.top;
+    const [, pdfY] = pageInfo.viewport.convertToPdfPoint(0, viewportY);
+    if (Number.isFinite(pdfY)) {
+      item.y = pdfY;
+    }
+    break;
+  }
+
+  return item;
+}
+
 function findPageElement(node: Node | null): HTMLElement | null {
   if (!node) {
     return null;
@@ -150,6 +319,60 @@ function findPageElement(node: Node | null): HTMLElement | null {
       return element;
     }
     element = element.parentElement;
+  }
+  return null;
+}
+
+function countOutlineItems(items: PdfOutlineItem[], source?: PdfOutlineItem["source"]): number {
+  return items.reduce((total, item) => {
+    const ownCount = source === undefined || item.source === source ? 1 : 0;
+    return total + ownCount + countOutlineItems(item.children ?? [], source);
+  }, 0);
+}
+
+function outlineHasSource(items: PdfOutlineItem[], source: PdfOutlineItem["source"]): boolean {
+  return items.some(
+    (item) => item.source === source || outlineHasSource(item.children ?? [], source),
+  );
+}
+
+function getOutlineFingerprint(items: PdfOutlineItem[]): string {
+  return JSON.stringify(
+    items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      pageIndex: item.pageIndex,
+      y: item.y,
+      depth: item.depth,
+      source: item.source,
+      children: item.children ? JSON.parse(getOutlineFingerprint(item.children)) : undefined,
+    })),
+  );
+}
+
+function removeOutlineItem(items: PdfOutlineItem[], itemId: string): PdfOutlineItem[] {
+  return items
+    .filter((item) => item.id !== itemId)
+    .map((item) => {
+      const children = item.children ? removeOutlineItem(item.children, itemId) : [];
+      if (children.length === 0) {
+        const withoutChildren = { ...item };
+        delete withoutChildren.children;
+        return withoutChildren;
+      }
+      return { ...item, children };
+    });
+}
+
+function findOutlineItem(items: PdfOutlineItem[], itemId: string): PdfOutlineItem | null {
+  for (const item of items) {
+    if (item.id === itemId) {
+      return item;
+    }
+    const child = findOutlineItem(item.children ?? [], itemId);
+    if (child) {
+      return child;
+    }
   }
   return null;
 }
@@ -363,11 +586,16 @@ export function NotebookPdfViewer({
   onDeleteAnnotation,
   viewMode: viewModeProp,
   onChangeViewMode,
+  outline,
+  onChangeOutline,
 }: NotebookPdfViewerProps) {
   const [load, setLoad] = useState<LoadState>({ kind: "idle" });
   const [pageNumber, setPageNumber] = useState(1);
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
   const [internalViewMode, setInternalViewMode] = useState<PdfViewMode>("horizontal");
+  const [isOutlineOpen, setIsOutlineOpen] = useState(true);
+  const [outlineStatus, setOutlineStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [outlineError, setOutlineError] = useState<string | null>(null);
   const [highlightMode, setHighlightMode] = useState(false);
   const [currentColor, setCurrentColor] = useState<string>(DEFAULT_HIGHLIGHT_COLOR);
   const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
@@ -379,8 +607,12 @@ export function NotebookPdfViewer({
   const pageInfosRef = useRef<Map<number, PageInfo>>(new Map());
   const colorMenuRef = useRef<HTMLDivElement | null>(null);
   const colorButtonRef = useRef<HTMLButtonElement | null>(null);
+  const outlineRef = useRef<PdfOutlineItem[]>(outline ?? EMPTY_OUTLINE);
+  const onChangeOutlineRef = useRef(onChangeOutline);
 
   const viewMode = viewModeProp ?? internalViewMode;
+  const outlineItems = outline ?? EMPTY_OUTLINE;
+  const readyDoc = load.kind === "ready" ? load.doc : null;
   const setViewMode = useCallback(
     (next: PdfViewMode) => {
       if (onChangeViewMode) {
@@ -392,6 +624,14 @@ export function NotebookPdfViewer({
     [onChangeViewMode],
   );
 
+  useEffect(() => {
+    outlineRef.current = outline ?? EMPTY_OUTLINE;
+  }, [outline]);
+
+  useEffect(() => {
+    onChangeOutlineRef.current = onChangeOutline;
+  }, [onChangeOutline]);
+
   // Document load.
   useEffect(() => {
     let cancelled = false;
@@ -400,6 +640,8 @@ export function NotebookPdfViewer({
     setHasSelection(false);
     setSelectionPageIndex(null);
     setHint(null);
+    setOutlineStatus("idle");
+    setOutlineError(null);
     pageInfosRef.current.clear();
 
     (async () => {
@@ -444,6 +686,55 @@ export function NotebookPdfViewer({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load.kind === "ready" ? load.doc : null]);
+
+  useEffect(() => {
+    if (!readyDoc) {
+      return;
+    }
+    if (outlineHasSource(outlineRef.current ?? [], "embedded")) {
+      setOutlineStatus("ready");
+      setOutlineError(null);
+      return;
+    }
+    let cancelled = false;
+    setOutlineStatus("loading");
+    setOutlineError(null);
+
+    (async () => {
+      try {
+        const embeddedOutline = await extractEmbeddedOutline(readyDoc);
+        if (cancelled) {
+          return;
+        }
+        setOutlineStatus("ready");
+        if (embeddedOutline.length === 0) {
+          return;
+        }
+        const changeOutline = onChangeOutlineRef.current;
+        if (!changeOutline) {
+          return;
+        }
+        const existingOutline = outlineRef.current ?? [];
+        if (outlineHasSource(existingOutline, "embedded")) {
+          return;
+        }
+        const manualOutline = existingOutline.filter((item) => item.source === "manual");
+        const nextOutline = [...embeddedOutline, ...manualOutline];
+        if (getOutlineFingerprint(existingOutline) !== getOutlineFingerprint(nextOutline)) {
+          changeOutline(nextOutline);
+        }
+      } catch {
+        if (!cancelled) {
+          setOutlineStatus("error");
+          setOutlineError("Unable to read PDF bookmarks.");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [readyDoc]);
 
   const numPages = load.kind === "ready" ? load.doc.numPages : 0;
   const zoom = ZOOM_LEVELS[zoomIndex];
@@ -581,18 +872,32 @@ export function NotebookPdfViewer({
   }, [isColorMenuOpen]);
 
   const goToPage = useCallback(
-    (next: number) => {
+    (next: number, y?: number) => {
       if (load.kind !== "ready") {
         return;
       }
       const clamped = Math.max(1, Math.min(next, load.doc.numPages));
       setPageNumber(clamped);
       if (viewMode === "vertical") {
-        const info = pageInfosRef.current.get(clamped - 1);
         const scrollEl = viewportRef.current;
-        if (info && scrollEl) {
+        const scrollToPage = () => {
+          const info = pageInfosRef.current.get(clamped - 1);
+          if (!info || !scrollEl) {
+            return false;
+          }
           const elTop = info.containerEl.offsetTop;
-          scrollEl.scrollTo({ top: Math.max(0, elTop - 12), behavior: "smooth" });
+          let nextTop = elTop - 12;
+          if (Number.isFinite(y)) {
+            const [, viewportY] = info.viewport.convertToViewportPoint(0, y as number);
+            if (Number.isFinite(viewportY)) {
+              nextTop += viewportY;
+            }
+          }
+          scrollEl.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
+          return true;
+        };
+        if (!scrollToPage()) {
+          window.setTimeout(scrollToPage, 80);
         }
       }
     },
@@ -656,6 +961,76 @@ export function NotebookPdfViewer({
       setHint("Select PDF text first.");
     }
   }, [createHighlightFromCurrentSelection, currentColor, onAddAnnotation]);
+
+  const handleAddOutlineFromSelection = useCallback(() => {
+    const changeOutline = onChangeOutlineRef.current;
+    if (!changeOutline) {
+      return;
+    }
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      setHint("Select PDF text first.");
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    const pageEl = findPageElement(range.commonAncestorContainer);
+    if (!pageEl) {
+      setHint("Select PDF text first.");
+      return;
+    }
+    const pageIndex = Number(pageEl.dataset.pdfPageIndex);
+    if (!Number.isInteger(pageIndex)) {
+      setHint("Select PDF text first.");
+      return;
+    }
+    const info = pageInfosRef.current.get(pageIndex);
+    if (!info) {
+      setHint("Select PDF text first.");
+      return;
+    }
+    const outlineItem = buildManualOutlineFromSelection(selection, info);
+    if (!outlineItem) {
+      setHint("Select PDF text first.");
+      return;
+    }
+    const nextOutline = [...(outlineRef.current ?? []), outlineItem];
+    selection.removeAllRanges();
+    setHasSelection(false);
+    setSelectionPageIndex(null);
+    setHint(`Added outline entry on page ${outlineItem.pageIndex + 1}.`);
+    changeOutline(nextOutline);
+  }, []);
+
+  const handleDeleteOutlineItem = useCallback((itemId: string) => {
+    const existingOutline = outlineRef.current ?? [];
+    const target = findOutlineItem(existingOutline, itemId);
+    if (target?.source !== "manual") {
+      return;
+    }
+    if (typeof window !== "undefined" && typeof window.confirm === "function") {
+      if (!window.confirm("Delete this outline entry?")) {
+        return;
+      }
+    }
+    const changeOutline = onChangeOutlineRef.current;
+    if (!changeOutline) {
+      return;
+    }
+    const nextOutline = removeOutlineItem(existingOutline, itemId);
+    if (getOutlineFingerprint(existingOutline) !== getOutlineFingerprint(nextOutline)) {
+      changeOutline(nextOutline);
+    }
+  }, []);
+
+  const handleGoToOutlineItem = useCallback(
+    (item: PdfOutlineItem) => {
+      goToPage(item.pageIndex + 1, item.y);
+      window.setTimeout(() => {
+        viewportRef.current?.focus({ preventScroll: true });
+      }, 0);
+    },
+    [goToPage],
+  );
 
   const handleDeleteHighlight = useCallback(
     (annotationId: string) => {
@@ -724,6 +1099,12 @@ export function NotebookPdfViewer({
   const canZoomOut = zoomIndex > 0;
   const canZoomIn = zoomIndex < ZOOM_LEVELS.length - 1;
   const canHighlight = Boolean(onAddAnnotation && load.kind === "ready" && hasSelection);
+  const canAddOutline = Boolean(onChangeOutline && load.kind === "ready" && hasSelection);
+  const outlineCount = countOutlineItems(outlineItems);
+  const embeddedOutlineItems = outlineItems.filter((item) => item.source === "embedded");
+  const manualOutlineItems = outlineItems.filter((item) => item.source === "manual");
+  const embeddedOutlineCount = countOutlineItems(embeddedOutlineItems);
+  const manualOutlineCount = countOutlineItems(manualOutlineItems);
 
   const toolbarButtonClass =
     "inline-flex h-8 min-w-[2rem] items-center justify-center rounded-[10px] border border-[color:var(--panel-border)] bg-[color:var(--surface-muted)] px-2 text-xs font-medium text-slate-600 transition hover:border-sky-200/70 hover:bg-[color:var(--field-bg)] hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50";
@@ -741,6 +1122,45 @@ export function NotebookPdfViewer({
     return [Math.max(0, Math.min(pageNumber - 1, load.doc.numPages - 1))];
   }, [load, viewMode, pageNumber]);
 
+  const renderOutlineItems = (items: PdfOutlineItem[], fallbackDepth = 0) =>
+    items.map((item) => {
+      const displayDepth = Math.max(
+        0,
+        Math.min(item.depth ?? fallbackDepth, OUTLINE_MAX_DEPTH),
+      );
+      return (
+        <li key={item.id} className="notebook-pdf-outline-list-item">
+          <div className="notebook-pdf-outline-row" style={{ paddingLeft: `${displayDepth * 0.7}rem` }}>
+            <button
+              type="button"
+              className="notebook-pdf-outline-item"
+              onClick={() => handleGoToOutlineItem(item)}
+              title={`${item.title} — page ${item.pageIndex + 1}`}
+            >
+              <span className="notebook-pdf-outline-title">{item.title}</span>
+              <span className="notebook-pdf-outline-page">{item.pageIndex + 1}</span>
+            </button>
+            {item.source === "manual" && onChangeOutline ? (
+              <button
+                type="button"
+                className="notebook-pdf-outline-delete"
+                onClick={() => handleDeleteOutlineItem(item.id)}
+                aria-label={`Delete manual outline entry ${item.title}`}
+                title="Delete manual outline entry"
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
+          {item.children && item.children.length > 0 ? (
+            <ol className="notebook-pdf-outline-list">
+              {renderOutlineItems(item.children, displayDepth + 1)}
+            </ol>
+          ) : null}
+        </li>
+      );
+    });
+
   return (
     <div
       ref={rootRef}
@@ -754,6 +1174,15 @@ export function NotebookPdfViewer({
         <div className="min-w-0 flex-1 truncate text-xs font-medium text-slate-600" title={headerLabel}>
           {headerLabel}
         </div>
+        <button
+          type="button"
+          className={isOutlineOpen ? activeToolbarButtonClass : toolbarButtonClass}
+          onClick={() => setIsOutlineOpen((open) => !open)}
+          aria-pressed={isOutlineOpen}
+          title={isOutlineOpen ? "Hide outline" : "Show outline"}
+        >
+          Outline
+        </button>
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -884,6 +1313,19 @@ export function NotebookPdfViewer({
           </div>
         ) : null}
 
+        {onChangeOutline ? (
+          <button
+            type="button"
+            className={toolbarButtonClass}
+            onClick={handleAddOutlineFromSelection}
+            disabled={!canAddOutline}
+            aria-label="Add selected text to PDF outline"
+            title={canAddOutline ? "Add selected text to outline" : "Select PDF text to add outline"}
+          >
+            Add outline
+          </button>
+        ) : null}
+
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -926,39 +1368,87 @@ export function NotebookPdfViewer({
         </div>
       ) : null}
 
-      <div
-        ref={viewportRef}
-        tabIndex={0}
-        className={
-          "notebook-pdf-viewport flex min-h-0 flex-1 overflow-auto rounded-[12px] bg-[color:var(--surface-muted)] p-3 scrollbar-subtle outline-none" +
-          (viewMode === "vertical"
-            ? " notebook-pdf-viewport--vertical flex-col items-center gap-3"
-            : " notebook-pdf-viewport--horizontal items-start justify-center")
-        }
-        aria-label={
-          viewMode === "vertical"
-            ? `${headerLabel} continuous scroll viewer`
-            : `${headerLabel} single-page viewer`
-        }
-      >
-        {load.kind === "loading" ? (
-          <div className="m-auto text-xs text-slate-500">Loading PDF…</div>
-        ) : load.kind === "error" ? (
-          <div className="m-auto max-w-md px-3 py-4 text-center text-xs text-rose-600">{load.message}</div>
-        ) : (
-          pagesToRender.map((pageIndex) => (
-            <PdfRenderedPage
-              key={pageIndex}
-              doc={(load as { kind: "ready"; doc: PDFDocumentProxy }).doc}
-              pageIndex={pageIndex}
-              zoom={zoom}
-              annotations={annotationsList}
-              onDeleteHighlight={handleDeleteHighlight}
-              registerInfo={registerInfo}
-              ariaLabel={`${headerLabel} — page ${pageIndex + 1}`}
-            />
-          ))
-        )}
+      <div className="flex min-h-0 min-w-0 flex-1 gap-2">
+        {isOutlineOpen ? (
+          <aside
+            className="notebook-pdf-outline-panel"
+            aria-label="PDF outline"
+            data-pdf-no-autohighlight="true"
+          >
+            <div className="notebook-pdf-outline-header">
+              <span>Outline</span>
+              <span className="notebook-pdf-outline-count">{outlineCount}</span>
+            </div>
+            <div className="notebook-pdf-outline-body scrollbar-subtle">
+              {outlineStatus === "loading" && outlineCount === 0 ? (
+                <div className="notebook-pdf-outline-empty">Loading bookmarks…</div>
+              ) : null}
+              {outlineStatus === "error" && outlineError ? (
+                <div className="notebook-pdf-outline-empty text-rose-500">{outlineError}</div>
+              ) : null}
+              {embeddedOutlineItems.length > 0 ? (
+                <section className="notebook-pdf-outline-section" aria-label="Embedded PDF outline">
+                  <div className="notebook-pdf-outline-section-label">
+                    <span>PDF</span>
+                    <span>{embeddedOutlineCount}</span>
+                  </div>
+                  <ol className="notebook-pdf-outline-list">
+                    {renderOutlineItems(embeddedOutlineItems)}
+                  </ol>
+                </section>
+              ) : null}
+              {manualOutlineItems.length > 0 ? (
+                <section className="notebook-pdf-outline-section" aria-label="Manual PDF outline">
+                  <div className="notebook-pdf-outline-section-label">
+                    <span>Manual</span>
+                    <span>{manualOutlineCount}</span>
+                  </div>
+                  <ol className="notebook-pdf-outline-list">
+                    {renderOutlineItems(manualOutlineItems)}
+                  </ol>
+                </section>
+              ) : null}
+              {outlineStatus !== "loading" && outlineStatus !== "error" && outlineCount === 0 ? (
+                <div className="notebook-pdf-outline-empty">No PDF bookmarks found.</div>
+              ) : null}
+            </div>
+          </aside>
+        ) : null}
+
+        <div
+          ref={viewportRef}
+          tabIndex={0}
+          className={
+            "notebook-pdf-viewport flex min-h-0 min-w-0 flex-1 overflow-auto rounded-[12px] bg-[color:var(--surface-muted)] p-3 scrollbar-subtle outline-none" +
+            (viewMode === "vertical"
+              ? " notebook-pdf-viewport--vertical flex-col items-center gap-3"
+              : " notebook-pdf-viewport--horizontal items-start justify-center")
+          }
+          aria-label={
+            viewMode === "vertical"
+              ? `${headerLabel} continuous scroll viewer`
+              : `${headerLabel} single-page viewer`
+          }
+        >
+          {load.kind === "loading" ? (
+            <div className="m-auto text-xs text-slate-500">Loading PDF…</div>
+          ) : load.kind === "error" ? (
+            <div className="m-auto max-w-md px-3 py-4 text-center text-xs text-rose-600">{load.message}</div>
+          ) : (
+            pagesToRender.map((pageIndex) => (
+              <PdfRenderedPage
+                key={pageIndex}
+                doc={(load as { kind: "ready"; doc: PDFDocumentProxy }).doc}
+                pageIndex={pageIndex}
+                zoom={zoom}
+                annotations={annotationsList}
+                onDeleteHighlight={handleDeleteHighlight}
+                registerInfo={registerInfo}
+                ariaLabel={`${headerLabel} — page ${pageIndex + 1}`}
+              />
+            ))
+          )}
+        </div>
       </div>
 
       {selectionPageIndex !== null && hasSelection && highlightMode ? (

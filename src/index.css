@@ -2947,6 +2947,150 @@ textarea.font-mono {
 }
 
 /* ── Notebook PDF viewer ─────────────────────────────────────────────────── */
+.notebook-pdf-outline-panel {
+  display: flex;
+  min-height: 0;
+  min-width: 11rem;
+  flex: 0 0 min(16rem, 36%);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  border-radius: 0.75rem;
+  background: var(--panel-bg);
+}
+
+.notebook-pdf-outline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--panel-border);
+  padding: 0.55rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgb(71, 85, 105);
+}
+
+.notebook-pdf-outline-count,
+.notebook-pdf-outline-page {
+  font-variant-numeric: tabular-nums;
+}
+
+.notebook-pdf-outline-count {
+  border-radius: 9999px;
+  background: var(--surface-muted);
+  padding: 0.1rem 0.45rem;
+  font-size: 0.68rem;
+  color: rgb(100, 116, 139);
+}
+
+.notebook-pdf-outline-body {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 0.45rem;
+}
+
+.notebook-pdf-outline-section + .notebook-pdf-outline-section {
+  margin-top: 0.65rem;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 0.55rem;
+}
+
+.notebook-pdf-outline-section-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0.2rem 0.3rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgb(100, 116, 139);
+  text-transform: uppercase;
+}
+
+.notebook-pdf-outline-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notebook-pdf-outline-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.notebook-pdf-outline-item {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.45rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  padding: 0.42rem 0.45rem;
+  text-align: left;
+  color: rgb(71, 85, 105);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.notebook-pdf-outline-item:hover,
+.notebook-pdf-outline-item:focus-visible {
+  outline: none;
+  background: var(--surface-muted);
+  color: rgb(15, 23, 42);
+}
+
+.notebook-pdf-outline-title {
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
+.notebook-pdf-outline-page {
+  color: rgb(100, 116, 139);
+  font-size: 0.65rem;
+}
+
+.notebook-pdf-outline-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.45rem;
+  min-width: 1.45rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: rgb(148, 163, 184);
+  cursor: pointer;
+}
+
+.notebook-pdf-outline-delete:hover,
+.notebook-pdf-outline-delete:focus-visible {
+  outline: none;
+  background: rgba(244, 63, 94, 0.1);
+  color: rgb(225, 29, 72);
+}
+
+.notebook-pdf-outline-empty {
+  padding: 0.75rem 0.45rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: rgb(100, 116, 139);
+}
+
 .notebook-pdf-page-stack {
   position: relative;
   word-spacing: normal;

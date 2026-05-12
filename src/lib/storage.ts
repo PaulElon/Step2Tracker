@@ -20,6 +20,7 @@ import type {
   NotebookDocument,
   PdfAnnotation,
   PdfAnnotationQuad,
+  PdfOutlineItem,
   StudyBlock,
   StudyBlockInput,
   StudyTaskCategory,
@@ -726,6 +727,8 @@ const NOTEBOOK_PDF_FILENAME_PATTERN = /^[A-Za-z0-9._-]+\.pdf$/;
 
 const NOTEBOOK_PDF_HIGHLIGHT_COLOR_PATTERN = /^#[0-9a-fA-F]{3,8}$/;
 const NOTEBOOK_PDF_HIGHLIGHT_DEFAULT_COLOR = "#fde047";
+const NOTEBOOK_PDF_OUTLINE_MAX_DEPTH = 12;
+const NOTEBOOK_PDF_OUTLINE_MAX_TITLE_LENGTH = 200;
 
 function normalizePdfAnnotationQuad(input: unknown): PdfAnnotationQuad | null {
   if (!input || typeof input !== "object") {
@@ -809,6 +812,71 @@ function normalizePdfAnnotations(raw: unknown): PdfAnnotation[] {
   return result;
 }
 
+function normalizePdfOutlineTitle(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value.replace(/\s+/g, " ").trim().slice(0, NOTEBOOK_PDF_OUTLINE_MAX_TITLE_LENGTH);
+}
+
+function normalizePdfOutlineItem(input: unknown, fallbackDepth: number): PdfOutlineItem | null {
+  if (!input || typeof input !== "object" || fallbackDepth > NOTEBOOK_PDF_OUTLINE_MAX_DEPTH) {
+    return null;
+  }
+  const raw = input as Partial<PdfOutlineItem>;
+  const title = normalizePdfOutlineTitle(raw.title);
+  if (!title) {
+    return null;
+  }
+  const pageIndexNum = sanitizeNumber(raw.pageIndex, Number.NaN);
+  if (!Number.isFinite(pageIndexNum) || pageIndexNum < 0) {
+    return null;
+  }
+  const pageIndex = Math.trunc(pageIndexNum);
+  const id = sanitizeText(raw.id) || createId("nb-pdf-outline");
+  const source = raw.source === "manual" ? "manual" : "embedded";
+  const item: PdfOutlineItem = {
+    id,
+    title,
+    pageIndex,
+    source,
+  };
+  const y = normalizeFiniteNumber(raw.y);
+  if (Number.isFinite(y)) {
+    item.y = y;
+  }
+  const depth = normalizeInteger(raw.depth);
+  if (Number.isFinite(depth) && depth >= 0) {
+    item.depth = Math.min(depth, NOTEBOOK_PDF_OUTLINE_MAX_DEPTH);
+  } else if (fallbackDepth > 0) {
+    item.depth = fallbackDepth;
+  }
+  const childrenRaw = Array.isArray(raw.children) ? raw.children : [];
+  if (childrenRaw.length > 0 && fallbackDepth < NOTEBOOK_PDF_OUTLINE_MAX_DEPTH) {
+    const children = childrenRaw
+      .map((child) => normalizePdfOutlineItem(child, fallbackDepth + 1))
+      .filter((child): child is PdfOutlineItem => child !== null);
+    if (children.length > 0) {
+      item.children = children;
+    }
+  }
+  return item;
+}
+
+function normalizePdfOutline(raw: unknown): PdfOutlineItem[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const result: PdfOutlineItem[] = [];
+  for (const candidate of raw) {
+    const item = normalizePdfOutlineItem(candidate, 0);
+    if (item) {
+      result.push(item);
+    }
+  }
+  return result;
+}
+
 function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbackId?: string): NotebookPage {
   const timestamp = nowIso();
   const safeCreatedAt = sanitizeText(input?.createdAt) || timestamp;
@@ -823,6 +891,7 @@ function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbac
   const rawPageCount = sanitizeNumber(input?.pdfPageCount, 0);
   const pdfPageCount = isPdf && rawPageCount > 0 ? Math.trunc(rawPageCount) : undefined;
   const pdfAnnotations = isPdf ? normalizePdfAnnotations(input?.pdfAnnotations) : [];
+  const pdfOutline = isPdf ? normalizePdfOutline(input?.pdfOutline) : [];
   const rawViewMode = typeof input?.pdfViewMode === "string" ? input.pdfViewMode : undefined;
   const pdfViewMode =
     isPdf && (rawViewMode === "horizontal" || rawViewMode === "vertical") ? rawViewMode : undefined;
@@ -850,6 +919,9 @@ function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbac
     }
     if (pdfViewMode) {
       base.pdfViewMode = pdfViewMode;
+    }
+    if (pdfOutline.length > 0) {
+      base.pdfOutline = pdfOutline;
     }
   }
   return base;

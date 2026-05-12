@@ -187,6 +187,16 @@ export interface PdfAnnotation {
   updatedAt: string;
 }
 
+export interface PdfOutlineItem {
+  id: string;
+  title: string;
+  pageIndex: number; // zero-based index of the PDF page
+  y?: number;
+  depth?: number;
+  source: "embedded" | "manual";
+  children?: PdfOutlineItem[];
+}
+
 export interface NotebookPage {
   id: string;
   title: string;
@@ -205,6 +215,8 @@ export interface NotebookPage {
   pdfAnnotations?: PdfAnnotation[];
   // Stage D (PDF viewer polish). Absent = "horizontal" (single-page).
   pdfViewMode?: PdfViewMode;
+  // Stage D (PDF outline/navigation). Absent/empty = no saved outline.
+  pdfOutline?: PdfOutlineItem[];
 }
 
 export interface NotebookDocument {
