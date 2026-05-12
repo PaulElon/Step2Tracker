@@ -14,6 +14,9 @@ const DEFAULT_ZOOM_INDEX = 2; // 1.0
 const MAX_SNIPPET_LENGTH = 500;
 const MANUAL_OUTLINE_TITLE_MAX_LENGTH = 80;
 const EMBEDDED_OUTLINE_TITLE_MAX_LENGTH = 160;
+const NOTE_TEXT_MAX_LENGTH = 1000;
+const NOTE_TITLE_MAX_LENGTH = 60;
+const OUTLINE_NAVIGATION_DELAY_MS = 220;
 const OUTLINE_MAX_DEPTH = 12;
 
 const HIGHLIGHT_COLORS = [
@@ -47,6 +50,9 @@ type LoadState =
   | { kind: "ready"; doc: PDFDocumentProxy }
   | { kind: "error"; message: string };
 
+type PdfOutlineFilter = "all" | "outline" | "notes";
+type PdfOutlineFormMode = "title" | "note" | null;
+
 interface PdfRefProxy {
   num: number;
   gen: number;
@@ -78,6 +84,43 @@ function normalizeOutlineTitle(value: unknown, maxLength: number): string {
     return "";
   }
   return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+function normalizeNoteText(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value.replace(/\r\n?/g, "\n").trim().slice(0, NOTE_TEXT_MAX_LENGTH);
+}
+
+function deriveNoteTitle(noteText: string): string {
+  return normalizeOutlineTitle(noteText, NOTE_TITLE_MAX_LENGTH) || "Note";
+}
+
+function getOutlineSortCreatedAt(item: PdfOutlineItem): string {
+  return item.createdAt ?? "";
+}
+
+function sortOutlineItemsByPageAndCreatedAt(items: PdfOutlineItem[]): PdfOutlineItem[] {
+  return [...items].sort((left, right) => {
+    const pageDifference = left.pageIndex - right.pageIndex;
+    if (pageDifference !== 0) {
+      return pageDifference;
+    }
+    const createdAtDifference = getOutlineSortCreatedAt(left).localeCompare(getOutlineSortCreatedAt(right));
+    if (createdAtDifference !== 0) {
+      return createdAtDifference;
+    }
+    const titleDifference = left.title.localeCompare(right.title);
+    if (titleDifference !== 0) {
+      return titleDifference;
+    }
+    return left.id.localeCompare(right.id);
+  });
+}
+
+function getOutlineItemDisplayText(item: PdfOutlineItem): string {
+  return item.kind === "note" ? item.noteText ?? item.title : item.title;
 }
 
 function quadToViewportRect(quad: PdfAnnotationQuad, viewport: PageViewport) {
@@ -185,6 +228,7 @@ async function extractEmbeddedOutline(pdfDoc: PDFDocumentProxy): Promise<PdfOutl
         pageIndex: resolved.pageIndex,
         depth,
         source: "embedded",
+        kind: "outline",
       };
       if (resolved.y !== undefined) {
         item.y = resolved.y;
@@ -269,45 +313,6 @@ function buildAnnotationFromSelection(
   return annotation;
 }
 
-function buildManualOutlineFromSelection(
-  selection: Selection,
-  pageInfo: PageInfo,
-): PdfOutlineItem | null {
-  const title = normalizeOutlineTitle(selection.toString(), MANUAL_OUTLINE_TITLE_MAX_LENGTH);
-  if (!title || selection.rangeCount === 0) {
-    return null;
-  }
-  const item: PdfOutlineItem = {
-    id: createOutlineId("manual"),
-    title,
-    pageIndex: pageInfo.pageIndex,
-    source: "manual",
-  };
-
-  const containerRect = pageInfo.textLayerEl.getBoundingClientRect();
-  for (let i = 0; i < selection.rangeCount; i += 1) {
-    const range = selection.getRangeAt(i);
-    const node = range.commonAncestorContainer;
-    if (!node || !pageInfo.textLayerEl.contains(node)) {
-      continue;
-    }
-    const firstRect = Array.from(range.getClientRects()).find(
-      (rect) => rect.width > 0 && rect.height > 0,
-    );
-    if (!firstRect) {
-      continue;
-    }
-    const viewportY = firstRect.top - containerRect.top;
-    const [, pdfY] = pageInfo.viewport.convertToPdfPoint(0, viewportY);
-    if (Number.isFinite(pdfY)) {
-      item.y = pdfY;
-    }
-    break;
-  }
-
-  return item;
-}
-
 function findPageElement(node: Node | null): HTMLElement | null {
   if (!node) {
     return null;
@@ -323,10 +328,22 @@ function findPageElement(node: Node | null): HTMLElement | null {
   return null;
 }
 
-function countOutlineItems(items: PdfOutlineItem[], source?: PdfOutlineItem["source"]): number {
+function getOutlineItemKind(item: PdfOutlineItem): "outline" | "note" {
+  return item.kind === "note" ? "note" : "outline";
+}
+
+function isOutlineEntry(item: PdfOutlineItem): boolean {
+  return getOutlineItemKind(item) === "outline";
+}
+
+function isNoteEntry(item: PdfOutlineItem): boolean {
+  return getOutlineItemKind(item) === "note";
+}
+
+function countOutlineItems(items: PdfOutlineItem[], predicate?: (item: PdfOutlineItem) => boolean): number {
   return items.reduce((total, item) => {
-    const ownCount = source === undefined || item.source === source ? 1 : 0;
-    return total + ownCount + countOutlineItems(item.children ?? [], source);
+    const ownCount = predicate === undefined || predicate(item) ? 1 : 0;
+    return total + ownCount + countOutlineItems(item.children ?? [], predicate);
   }, 0);
 }
 
@@ -345,6 +362,10 @@ function getOutlineFingerprint(items: PdfOutlineItem[]): string {
       y: item.y,
       depth: item.depth,
       source: item.source,
+      kind: getOutlineItemKind(item),
+      noteText: item.noteText,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
       children: item.children ? JSON.parse(getOutlineFingerprint(item.children)) : undefined,
     })),
   );
@@ -375,6 +396,43 @@ function findOutlineItem(items: PdfOutlineItem[], itemId: string): PdfOutlineIte
     }
   }
   return null;
+}
+
+function updateOutlineItem(
+  items: PdfOutlineItem[],
+  itemId: string,
+  updater: (item: PdfOutlineItem) => PdfOutlineItem,
+): PdfOutlineItem[] {
+  let changed = false;
+  const next = items.map((item) => {
+    if (item.id === itemId) {
+      changed = true;
+      return updater(item);
+    }
+    if (!item.children || item.children.length === 0) {
+      return item;
+    }
+    const nextChildren = updateOutlineItem(item.children, itemId, updater);
+    if (nextChildren === item.children) {
+      return item;
+    }
+    changed = true;
+    if (nextChildren.length === 0) {
+      const withoutChildren = { ...item };
+      delete withoutChildren.children;
+      return withoutChildren;
+    }
+    return { ...item, children: nextChildren };
+  });
+  return changed ? next : items;
+}
+
+interface OutlineEditState {
+  itemId: string;
+  mode: PdfOutlineFormMode;
+  pageIndex: number;
+  titleDraft: string;
+  noteDraft: string;
 }
 
 interface PdfRenderedPageProps {
@@ -594,6 +652,11 @@ export function NotebookPdfViewer({
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
   const [internalViewMode, setInternalViewMode] = useState<PdfViewMode>("horizontal");
   const [isOutlineOpen, setIsOutlineOpen] = useState(true);
+  const [outlineFilter, setOutlineFilter] = useState<PdfOutlineFilter>("all");
+  const [outlineFormMode, setOutlineFormMode] = useState<PdfOutlineFormMode>(null);
+  const [outlineTitleDraft, setOutlineTitleDraft] = useState("");
+  const [outlineNoteDraft, setOutlineNoteDraft] = useState("");
+  const [outlineEditState, setOutlineEditState] = useState<OutlineEditState | null>(null);
   const [outlineStatus, setOutlineStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [outlineError, setOutlineError] = useState<string | null>(null);
   const [highlightMode, setHighlightMode] = useState(false);
@@ -607,8 +670,20 @@ export function NotebookPdfViewer({
   const pageInfosRef = useRef<Map<number, PageInfo>>(new Map());
   const colorMenuRef = useRef<HTMLDivElement | null>(null);
   const colorButtonRef = useRef<HTMLButtonElement | null>(null);
+  const outlineTitleInputRef = useRef<HTMLInputElement | null>(null);
+  const outlineNoteInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const outlineEditTitleInputRef = useRef<HTMLInputElement | null>(null);
+  const outlineEditNoteInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const outlineNavigationTimerRef = useRef<number | null>(null);
+  const outlineEditStateRef = useRef<OutlineEditState | null>(null);
   const outlineRef = useRef<PdfOutlineItem[]>(outline ?? EMPTY_OUTLINE);
   const onChangeOutlineRef = useRef(onChangeOutline);
+  const clearOutlineNavigationTimer = useCallback(() => {
+    if (outlineNavigationTimerRef.current !== null) {
+      window.clearTimeout(outlineNavigationTimerRef.current);
+      outlineNavigationTimerRef.current = null;
+    }
+  }, []);
 
   const viewMode = viewModeProp ?? internalViewMode;
   const outlineItems = outline ?? EMPTY_OUTLINE;
@@ -632,6 +707,34 @@ export function NotebookPdfViewer({
     onChangeOutlineRef.current = onChangeOutline;
   }, [onChangeOutline]);
 
+  useEffect(() => {
+    outlineEditStateRef.current = outlineEditState;
+  }, [outlineEditState]);
+
+  useEffect(() => {
+    if (outlineFormMode === "title") {
+      window.setTimeout(() => outlineTitleInputRef.current?.focus(), 0);
+    } else if (outlineFormMode === "note") {
+      window.setTimeout(() => outlineNoteInputRef.current?.focus(), 0);
+    }
+  }, [outlineFormMode]);
+
+  useEffect(() => {
+    if (outlineEditState?.mode === "title") {
+      window.setTimeout(() => outlineEditTitleInputRef.current?.focus(), 0);
+    } else if (outlineEditState?.mode === "note") {
+      window.setTimeout(() => outlineEditNoteInputRef.current?.focus(), 0);
+    }
+  }, [outlineEditState]);
+
+  useEffect(() => {
+    return () => {
+      if (outlineNavigationTimerRef.current !== null) {
+        window.clearTimeout(outlineNavigationTimerRef.current);
+      }
+    };
+  }, []);
+
   // Document load.
   useEffect(() => {
     let cancelled = false;
@@ -640,6 +743,10 @@ export function NotebookPdfViewer({
     setHasSelection(false);
     setSelectionPageIndex(null);
     setHint(null);
+    setOutlineFormMode(null);
+    setOutlineTitleDraft("");
+    setOutlineNoteDraft("");
+    setOutlineEditState(null);
     setOutlineStatus("idle");
     setOutlineError(null);
     pageInfosRef.current.clear();
@@ -718,8 +825,8 @@ export function NotebookPdfViewer({
         if (outlineHasSource(existingOutline, "embedded")) {
           return;
         }
-        const manualOutline = existingOutline.filter((item) => item.source === "manual");
-        const nextOutline = [...embeddedOutline, ...manualOutline];
+        const manualItems = existingOutline.filter((item) => item.source === "manual");
+        const nextOutline = [...embeddedOutline, ...manualItems];
         if (getOutlineFingerprint(existingOutline) !== getOutlineFingerprint(nextOutline)) {
           changeOutline(nextOutline);
         }
@@ -872,37 +979,42 @@ export function NotebookPdfViewer({
   }, [isColorMenuOpen]);
 
   const goToPage = useCallback(
-    (next: number, y?: number) => {
+    (next: number) => {
       if (load.kind !== "ready") {
         return;
       }
       const clamped = Math.max(1, Math.min(next, load.doc.numPages));
       setPageNumber(clamped);
       if (viewMode === "vertical") {
-        const scrollEl = viewportRef.current;
         const scrollToPage = () => {
           const info = pageInfosRef.current.get(clamped - 1);
-          if (!info || !scrollEl) {
+          if (!info) {
             return false;
           }
-          const elTop = info.containerEl.offsetTop;
-          let nextTop = elTop - 12;
-          if (Number.isFinite(y)) {
-            const [, viewportY] = info.viewport.convertToViewportPoint(0, y as number);
-            if (Number.isFinite(viewportY)) {
-              nextTop += viewportY;
-            }
-          }
-          scrollEl.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
+          info.containerEl.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
           return true;
         };
         if (!scrollToPage()) {
           window.setTimeout(scrollToPage, 80);
         }
+      } else {
+        const scrollEl = viewportRef.current;
+        if (scrollEl) {
+          scrollEl.scrollTop = 0;
+          scrollEl.scrollLeft = 0;
+        }
       }
     },
     [load, viewMode],
   );
+
+  const getCurrentPdfTarget = useCallback((): { pageIndex: number } | null => {
+    if (load.kind !== "ready") {
+      return null;
+    }
+    const pageIndex = Math.max(0, Math.min(pageNumber - 1, load.doc.numPages - 1));
+    return { pageIndex };
+  }, [load, pageNumber]);
 
   // Track current page in vertical mode via IntersectionObserver.
   useEffect(() => {
@@ -952,54 +1064,100 @@ export function NotebookPdfViewer({
     };
   }, [viewMode, load]);
 
-  const handleManualHighlight = useCallback(() => {
-    if (!onAddAnnotation) {
-      return;
-    }
-    const ok = createHighlightFromCurrentSelection(currentColor);
-    if (!ok) {
-      setHint("Select PDF text first.");
-    }
-  }, [createHighlightFromCurrentSelection, currentColor, onAddAnnotation]);
+  const handleAddCustomOutline = useCallback(() => {
+    clearOutlineNavigationTimer();
+    setOutlineEditState(null);
+    setIsOutlineOpen(true);
+    setOutlineFormMode("title");
+    setOutlineTitleDraft("");
+    setOutlineFilter("outline");
+    setHint(null);
+  }, [clearOutlineNavigationTimer]);
 
-  const handleAddOutlineFromSelection = useCallback(() => {
+  const handleAddNote = useCallback(() => {
+    clearOutlineNavigationTimer();
+    setOutlineEditState(null);
+    setIsOutlineOpen(true);
+    setOutlineFormMode("note");
+    setOutlineNoteDraft("");
+    setOutlineFilter("notes");
+    setHint(null);
+  }, [clearOutlineNavigationTimer]);
+
+  const handleCancelOutlineForm = useCallback(() => {
+    setOutlineFormMode(null);
+    setOutlineTitleDraft("");
+    setOutlineNoteDraft("");
+  }, []);
+
+  const handleCancelOutlineEdit = useCallback(() => {
+    setOutlineEditState(null);
+  }, []);
+
+  const handleSaveCustomOutline = useCallback(() => {
     const changeOutline = onChangeOutlineRef.current;
     if (!changeOutline) {
       return;
     }
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-      setHint("Select PDF text first.");
+    const target = getCurrentPdfTarget();
+    if (!target) {
+      setHint("Open a PDF page first.");
       return;
     }
-    const range = selection.getRangeAt(0);
-    const pageEl = findPageElement(range.commonAncestorContainer);
-    if (!pageEl) {
-      setHint("Select PDF text first.");
+    const title = normalizeOutlineTitle(outlineTitleDraft, MANUAL_OUTLINE_TITLE_MAX_LENGTH);
+    if (!title) {
+      setHint("Enter a title first.");
       return;
     }
-    const pageIndex = Number(pageEl.dataset.pdfPageIndex);
-    if (!Number.isInteger(pageIndex)) {
-      setHint("Select PDF text first.");
-      return;
-    }
-    const info = pageInfosRef.current.get(pageIndex);
-    if (!info) {
-      setHint("Select PDF text first.");
-      return;
-    }
-    const outlineItem = buildManualOutlineFromSelection(selection, info);
-    if (!outlineItem) {
-      setHint("Select PDF text first.");
-      return;
-    }
-    const nextOutline = [...(outlineRef.current ?? []), outlineItem];
-    selection.removeAllRanges();
-    setHasSelection(false);
-    setSelectionPageIndex(null);
+    const now = new Date().toISOString();
+    const outlineItem: PdfOutlineItem = {
+      id: createOutlineId("manual"),
+      title,
+      pageIndex: target.pageIndex,
+      source: "manual",
+      kind: "outline",
+      createdAt: now,
+      updatedAt: now,
+    };
+    changeOutline([...(outlineRef.current ?? []), outlineItem]);
+    setOutlineFilter("outline");
+    setOutlineFormMode(null);
+    setOutlineTitleDraft("");
     setHint(`Added outline entry on page ${outlineItem.pageIndex + 1}.`);
-    changeOutline(nextOutline);
-  }, []);
+  }, [getCurrentPdfTarget, outlineTitleDraft]);
+
+  const handleSaveNote = useCallback(() => {
+    const changeOutline = onChangeOutlineRef.current;
+    if (!changeOutline) {
+      return;
+    }
+    const target = getCurrentPdfTarget();
+    if (!target) {
+      setHint("Open a PDF page first.");
+      return;
+    }
+    const noteText = normalizeNoteText(outlineNoteDraft);
+    if (!noteText) {
+      setHint("Enter a note first.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const noteItem: PdfOutlineItem = {
+      id: createOutlineId("manual"),
+      title: deriveNoteTitle(noteText),
+      pageIndex: target.pageIndex,
+      source: "manual",
+      kind: "note",
+      noteText,
+      createdAt: now,
+      updatedAt: now,
+    };
+    changeOutline([...(outlineRef.current ?? []), noteItem]);
+    setOutlineFilter("notes");
+    setOutlineFormMode(null);
+    setOutlineNoteDraft("");
+    setHint(`Added note on page ${noteItem.pageIndex + 1}.`);
+  }, [getCurrentPdfTarget, outlineNoteDraft]);
 
   const handleDeleteOutlineItem = useCallback((itemId: string) => {
     const existingOutline = outlineRef.current ?? [];
@@ -1016,6 +1174,9 @@ export function NotebookPdfViewer({
     if (!changeOutline) {
       return;
     }
+    if (outlineEditStateRef.current?.itemId === itemId) {
+      setOutlineEditState(null);
+    }
     const nextOutline = removeOutlineItem(existingOutline, itemId);
     if (getOutlineFingerprint(existingOutline) !== getOutlineFingerprint(nextOutline)) {
       changeOutline(nextOutline);
@@ -1024,13 +1185,109 @@ export function NotebookPdfViewer({
 
   const handleGoToOutlineItem = useCallback(
     (item: PdfOutlineItem) => {
-      goToPage(item.pageIndex + 1, item.y);
+      goToPage(item.pageIndex + 1);
       window.setTimeout(() => {
         viewportRef.current?.focus({ preventScroll: true });
       }, 0);
     },
     [goToPage],
   );
+
+  const handleStartOutlineEdit = useCallback(
+    (item: PdfOutlineItem) => {
+      if (item.source !== "manual") {
+        return;
+      }
+      const itemKind = getOutlineItemKind(item);
+      clearOutlineNavigationTimer();
+      setOutlineFormMode(null);
+      setOutlineTitleDraft("");
+      setOutlineNoteDraft("");
+      setOutlineEditState({
+        itemId: item.id,
+        mode: itemKind === "note" ? "note" : "title",
+        pageIndex: item.pageIndex,
+        titleDraft: item.title,
+        noteDraft: item.noteText ?? item.title,
+      });
+      setHint(null);
+    },
+    [clearOutlineNavigationTimer],
+  );
+
+  const handleOutlineItemClick = useCallback(
+    (item: PdfOutlineItem) => {
+      if (outlineEditStateRef.current?.itemId === item.id) {
+        return;
+      }
+      clearOutlineNavigationTimer();
+      outlineNavigationTimerRef.current = window.setTimeout(() => {
+        outlineNavigationTimerRef.current = null;
+        handleGoToOutlineItem(item);
+      }, OUTLINE_NAVIGATION_DELAY_MS);
+    },
+    [clearOutlineNavigationTimer, handleGoToOutlineItem],
+  );
+
+  const handleOutlineItemDoubleClick = useCallback(
+    (item: PdfOutlineItem) => {
+      clearOutlineNavigationTimer();
+      handleStartOutlineEdit(item);
+    },
+    [clearOutlineNavigationTimer, handleStartOutlineEdit],
+  );
+
+  const handleSaveOutlineEdit = useCallback(() => {
+    const changeOutline = onChangeOutlineRef.current;
+    const editState = outlineEditStateRef.current;
+    if (!changeOutline || !editState) {
+      return;
+    }
+    const existingOutline = outlineRef.current ?? [];
+    const target = findOutlineItem(existingOutline, editState.itemId);
+    if (!target || target.source !== "manual") {
+      setOutlineEditState(null);
+      return;
+    }
+    const now = new Date().toISOString();
+    const nextOutline =
+      editState.mode === "note"
+        ? (() => {
+            const noteText = normalizeNoteText(editState.noteDraft);
+            if (!noteText) {
+              setHint("Enter a note first.");
+              return null;
+            }
+            return updateOutlineItem(existingOutline, editState.itemId, (item) => ({
+              ...item,
+              pageIndex: editState.pageIndex,
+              title: deriveNoteTitle(noteText),
+              noteText,
+              updatedAt: now,
+            }));
+          })()
+        : (() => {
+            const title = normalizeOutlineTitle(editState.titleDraft, MANUAL_OUTLINE_TITLE_MAX_LENGTH);
+            if (!title) {
+              setHint("Enter a title first.");
+              return null;
+            }
+            return updateOutlineItem(existingOutline, editState.itemId, (item) => ({
+              ...item,
+              pageIndex: editState.pageIndex,
+              title,
+              updatedAt: now,
+            }));
+          })();
+    if (!nextOutline) {
+      return;
+    }
+    if (getOutlineFingerprint(existingOutline) !== getOutlineFingerprint(nextOutline)) {
+      changeOutline(nextOutline);
+    }
+    setOutlineEditState(null);
+    setHint(editState.mode === "note" ? "Updated note." : "Updated outline entry.");
+  }, []);
 
   const handleDeleteHighlight = useCallback(
     (annotationId: string) => {
@@ -1098,18 +1355,30 @@ export function NotebookPdfViewer({
   const canNext = load.kind === "ready" && pageNumber < numPages;
   const canZoomOut = zoomIndex > 0;
   const canZoomIn = zoomIndex < ZOOM_LEVELS.length - 1;
-  const canHighlight = Boolean(onAddAnnotation && load.kind === "ready" && hasSelection);
-  const canAddOutline = Boolean(onChangeOutline && load.kind === "ready" && hasSelection);
-  const outlineCount = countOutlineItems(outlineItems);
-  const embeddedOutlineItems = outlineItems.filter((item) => item.source === "embedded");
-  const manualOutlineItems = outlineItems.filter((item) => item.source === "manual");
-  const embeddedOutlineCount = countOutlineItems(embeddedOutlineItems);
-  const manualOutlineCount = countOutlineItems(manualOutlineItems);
+  const canAddSidebarEntry = Boolean(onChangeOutline && load.kind === "ready");
+  const totalOutlineCount = countOutlineItems(outlineItems, isOutlineEntry);
+  const totalNoteCount = countOutlineItems(outlineItems, isNoteEntry);
+  const totalItemCount = totalOutlineCount + totalNoteCount;
+  const filteredOutlineCount =
+    outlineFilter === "notes"
+      ? totalNoteCount
+      : outlineFilter === "outline"
+        ? totalOutlineCount
+        : totalItemCount;
+  const embeddedOutlineItems = outlineItems.filter(
+    (item) => item.source === "embedded" && isOutlineEntry(item),
+  );
+  const manualOutlineItems = outlineItems.filter(
+    (item) => item.source === "manual" && isOutlineEntry(item),
+  );
+  const noteItems = outlineItems.filter(isNoteEntry);
+  const sortedManualOutlineItems = sortOutlineItemsByPageAndCreatedAt(manualOutlineItems);
+  const sortedNoteItems = sortOutlineItemsByPageAndCreatedAt(noteItems);
+  const embeddedOutlineCount = countOutlineItems(embeddedOutlineItems, isOutlineEntry);
+  const manualOutlineCount = countOutlineItems(manualOutlineItems, isOutlineEntry);
 
-  const toolbarButtonClass =
-    "inline-flex h-8 min-w-[2rem] items-center justify-center rounded-[10px] border border-[color:var(--panel-border)] bg-[color:var(--surface-muted)] px-2 text-xs font-medium text-slate-600 transition hover:border-sky-200/70 hover:bg-[color:var(--field-bg)] hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50";
-  const activeToolbarButtonClass =
-    "inline-flex h-8 min-w-[2rem] items-center justify-center rounded-[10px] border border-sky-300/60 bg-sky-50 px-2 text-xs font-medium text-sky-700 shadow-sm transition hover:bg-sky-100";
+  const toolbarButtonClass = "notebook-pdf-toolbar-button";
+  const activeToolbarButtonClass = "notebook-pdf-toolbar-button is-active";
 
   // Pages to render.
   const pagesToRender = useMemo(() => {
@@ -1128,30 +1397,124 @@ export function NotebookPdfViewer({
         0,
         Math.min(item.depth ?? fallbackDepth, OUTLINE_MAX_DEPTH),
       );
+      const itemKind = getOutlineItemKind(item);
+      const isNote = itemKind === "note";
+      const isEditing = outlineEditState?.itemId === item.id;
+      const displayText = getOutlineItemDisplayText(item);
+      const displayLabel = `${normalizeOutlineTitle(displayText, 140)} — page ${item.pageIndex + 1}`;
+      const itemClassName = `notebook-pdf-outline-item is-${itemKind} ${
+        item.source === "manual" ? "is-manual" : "is-embedded"
+      }`;
+      const editMode = isEditing ? outlineEditState?.mode : null;
       return (
         <li key={item.id} className="notebook-pdf-outline-list-item">
-          <div className="notebook-pdf-outline-row" style={{ paddingLeft: `${displayDepth * 0.7}rem` }}>
-            <button
-              type="button"
-              className="notebook-pdf-outline-item"
-              onClick={() => handleGoToOutlineItem(item)}
-              title={`${item.title} — page ${item.pageIndex + 1}`}
+          {isEditing && editMode ? (
+            <form
+              className="notebook-pdf-outline-form notebook-pdf-outline-inline-form"
+              style={{ marginLeft: `${displayDepth * 0.7}rem` }}
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleSaveOutlineEdit();
+              }}
             >
-              <span className="notebook-pdf-outline-title">{item.title}</span>
-              <span className="notebook-pdf-outline-page">{item.pageIndex + 1}</span>
-            </button>
-            {item.source === "manual" && onChangeOutline ? (
+              {editMode === "title" ? (
+                <label>
+                  <span>Title</span>
+                  <input
+                    ref={outlineEditTitleInputRef}
+                    type="text"
+                    value={outlineEditState?.titleDraft ?? ""}
+                    maxLength={MANUAL_OUTLINE_TITLE_MAX_LENGTH}
+                    onChange={(event) =>
+                      setOutlineEditState((current) =>
+                        current
+                          ? {
+                              ...current,
+                              titleDraft: event.target.value,
+                            }
+                          : current,
+                      )
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        handleCancelOutlineEdit();
+                      }
+                    }}
+                    placeholder={`Page ${item.pageIndex + 1} title`}
+                  />
+                </label>
+              ) : (
+                <label>
+                  <span>Note</span>
+                  <textarea
+                    ref={outlineEditNoteInputRef}
+                    value={outlineEditState?.noteDraft ?? ""}
+                    maxLength={NOTE_TEXT_MAX_LENGTH}
+                    onChange={(event) =>
+                      setOutlineEditState((current) =>
+                        current
+                          ? {
+                              ...current,
+                              noteDraft: event.target.value,
+                            }
+                          : current,
+                      )
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        handleCancelOutlineEdit();
+                        return;
+                      }
+                      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                        event.preventDefault();
+                        handleSaveOutlineEdit();
+                      }
+                    }}
+                    placeholder={`Note for page ${item.pageIndex + 1}`}
+                    rows={4}
+                  />
+                </label>
+              )}
+              <div className="notebook-pdf-outline-form-actions">
+                <button type="submit">Save</button>
+                <button type="button" onClick={handleCancelOutlineEdit}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="notebook-pdf-outline-row" style={{ paddingLeft: `${displayDepth * 0.7}rem` }}>
               <button
                 type="button"
-                className="notebook-pdf-outline-delete"
-                onClick={() => handleDeleteOutlineItem(item.id)}
-                aria-label={`Delete manual outline entry ${item.title}`}
-                title="Delete manual outline entry"
+                className={itemClassName}
+                onClick={() => handleOutlineItemClick(item)}
+                onDoubleClick={() => handleOutlineItemDoubleClick(item)}
+                title={displayLabel}
               >
-                ×
+                <span className="notebook-pdf-outline-content">
+                  <span className="notebook-pdf-outline-title">
+                    {isNote ? displayText : item.title}
+                  </span>
+                </span>
+                <span className="notebook-pdf-outline-page">{item.pageIndex + 1}</span>
               </button>
-            ) : null}
-          </div>
+              {item.source === "manual" && onChangeOutline ? (
+                <button
+                  type="button"
+                  className="notebook-pdf-outline-delete"
+                  onClick={() => handleDeleteOutlineItem(item.id)}
+                  aria-label={
+                    isNote ? `Delete note ${getOutlineItemDisplayText(item)}` : `Delete manual outline entry ${item.title}`
+                  }
+                  title={isNote ? "Delete note" : "Delete manual outline entry"}
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
+          )}
           {item.children && item.children.length > 0 ? (
             <ol className="notebook-pdf-outline-list">
               {renderOutlineItems(item.children, displayDepth + 1)}
@@ -1170,8 +1533,8 @@ export function NotebookPdfViewer({
       }
       onKeyDown={handleKeyDown}
     >
-      <div className="flex flex-wrap items-center gap-2 px-1" data-pdf-no-autohighlight="true">
-        <div className="min-w-0 flex-1 truncate text-xs font-medium text-slate-600" title={headerLabel}>
+      <div className="notebook-pdf-toolbar" data-pdf-no-autohighlight="true">
+        <div className="notebook-pdf-toolbar-title" title={headerLabel}>
           {headerLabel}
         </div>
         <button
@@ -1183,7 +1546,7 @@ export function NotebookPdfViewer({
         >
           Outline
         </button>
-        <div className="flex items-center gap-1">
+        <div className="notebook-pdf-toolbar-group">
           <button
             type="button"
             className={toolbarButtonClass}
@@ -1194,7 +1557,7 @@ export function NotebookPdfViewer({
           >
             ‹
           </button>
-          <span className="select-none px-1 text-xs tabular-nums text-slate-600">
+          <span className="notebook-pdf-page-indicator">
             {load.kind === "ready" ? `${pageNumber} / ${numPages}` : "— / —"}
           </span>
           <button
@@ -1209,7 +1572,7 @@ export function NotebookPdfViewer({
           </button>
         </div>
 
-        <div className="flex items-center gap-1" role="group" aria-label="Page layout">
+        <div className="notebook-pdf-toolbar-group" role="group" aria-label="Page layout">
           <button
             type="button"
             className={viewMode === "horizontal" ? activeToolbarButtonClass : toolbarButtonClass}
@@ -1231,7 +1594,7 @@ export function NotebookPdfViewer({
         </div>
 
         {onAddAnnotation ? (
-          <div className="flex items-center gap-1">
+          <div className="notebook-pdf-toolbar-group">
             <button
               type="button"
               className={highlightMode ? activeToolbarButtonClass : toolbarButtonClass}
@@ -1252,7 +1615,7 @@ export function NotebookPdfViewer({
               <button
                 ref={colorButtonRef}
                 type="button"
-                className={toolbarButtonClass + " gap-1.5"}
+                className={toolbarButtonClass + " has-color"}
                 onClick={() => setIsColorMenuOpen((open) => !open)}
                 aria-haspopup="menu"
                 aria-expanded={isColorMenuOpen}
@@ -1264,7 +1627,7 @@ export function NotebookPdfViewer({
                   style={{ backgroundColor: currentColor }}
                   aria-hidden="true"
                 />
-                <span className="text-xs">Color</span>
+                <span>Color</span>
               </button>
               {isColorMenuOpen ? (
                 <div
@@ -1298,35 +1661,10 @@ export function NotebookPdfViewer({
                 </div>
               ) : null}
             </div>
-            {!highlightMode ? (
-              <button
-                type="button"
-                className={toolbarButtonClass}
-                onClick={handleManualHighlight}
-                disabled={!canHighlight}
-                aria-label="Highlight selected text"
-                title={canHighlight ? "Highlight selected text" : "Select PDF text to highlight"}
-              >
-                Apply
-              </button>
-            ) : null}
           </div>
         ) : null}
 
-        {onChangeOutline ? (
-          <button
-            type="button"
-            className={toolbarButtonClass}
-            onClick={handleAddOutlineFromSelection}
-            disabled={!canAddOutline}
-            aria-label="Add selected text to PDF outline"
-            title={canAddOutline ? "Add selected text to outline" : "Select PDF text to add outline"}
-          >
-            Add outline
-          </button>
-        ) : null}
-
-        <div className="flex items-center gap-1">
+        <div className="notebook-pdf-toolbar-group">
           <button
             type="button"
             className={toolbarButtonClass}
@@ -1337,7 +1675,7 @@ export function NotebookPdfViewer({
           >
             −
           </button>
-          <span className="select-none px-1 text-xs tabular-nums text-slate-600">
+          <span className="notebook-pdf-zoom-indicator">
             {Math.round(zoom * 100)}%
           </span>
           <button
@@ -1377,16 +1715,128 @@ export function NotebookPdfViewer({
           >
             <div className="notebook-pdf-outline-header">
               <span>Outline</span>
-              <span className="notebook-pdf-outline-count">{outlineCount}</span>
+              <span className="notebook-pdf-outline-count">{filteredOutlineCount}</span>
+            </div>
+            <div className="notebook-pdf-outline-controls">
+              <div className="notebook-pdf-outline-filter" role="group" aria-label="Outline filter">
+                <button
+                  type="button"
+                  className={outlineFilter === "all" ? "is-active" : ""}
+                  onClick={() => setOutlineFilter("all")}
+                  aria-pressed={outlineFilter === "all"}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  className={outlineFilter === "outline" ? "is-active" : ""}
+                  onClick={() => setOutlineFilter("outline")}
+                  aria-pressed={outlineFilter === "outline"}
+                >
+                  Outline
+                </button>
+                <button
+                  type="button"
+                  className={outlineFilter === "notes" ? "is-active" : ""}
+                  onClick={() => setOutlineFilter("notes")}
+                  aria-pressed={outlineFilter === "notes"}
+                >
+                  Notes
+                </button>
+              </div>
+              {onChangeOutline ? (
+                <div className="notebook-pdf-outline-actions">
+                  <button
+                    type="button"
+                    onClick={handleAddCustomOutline}
+                    disabled={!canAddSidebarEntry}
+                    title={canAddSidebarEntry ? "Add title for the current page" : "Open a PDF page first"}
+                  >
+                    Add title
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddNote}
+                    disabled={!canAddSidebarEntry}
+                    title={canAddSidebarEntry ? "Add note for the current page" : "Open a PDF page first"}
+                  >
+                    Add note
+                  </button>
+                </div>
+              ) : null}
+              {outlineFormMode ? (
+                <form
+                  className="notebook-pdf-outline-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (outlineFormMode === "title") {
+                      handleSaveCustomOutline();
+                    } else {
+                      handleSaveNote();
+                    }
+                  }}
+                >
+                  {outlineFormMode === "title" ? (
+                    <label>
+                      <span>Title</span>
+                      <input
+                        ref={outlineTitleInputRef}
+                        type="text"
+                        value={outlineTitleDraft}
+                        maxLength={MANUAL_OUTLINE_TITLE_MAX_LENGTH}
+                        onChange={(event) => setOutlineTitleDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            handleCancelOutlineForm();
+                          }
+                        }}
+                        placeholder={`Page ${pageNumber} title`}
+                      />
+                    </label>
+                  ) : (
+                    <label>
+                      <span>Note</span>
+                      <textarea
+                        ref={outlineNoteInputRef}
+                        value={outlineNoteDraft}
+                        maxLength={NOTE_TEXT_MAX_LENGTH}
+                        onChange={(event) => setOutlineNoteDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            handleCancelOutlineForm();
+                            return;
+                          }
+                          if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                            event.preventDefault();
+                            handleSaveNote();
+                          }
+                        }}
+                        placeholder={`Note for page ${pageNumber}`}
+                        rows={3}
+                      />
+                    </label>
+                  )}
+                  <div className="notebook-pdf-outline-form-actions">
+                    <button type="submit">
+                      Save
+                    </button>
+                    <button type="button" onClick={handleCancelOutlineForm}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : null}
             </div>
             <div className="notebook-pdf-outline-body scrollbar-subtle">
-              {outlineStatus === "loading" && outlineCount === 0 ? (
+              {outlineStatus === "loading" && outlineFilter !== "notes" && filteredOutlineCount === 0 ? (
                 <div className="notebook-pdf-outline-empty">Loading bookmarks…</div>
               ) : null}
-              {outlineStatus === "error" && outlineError ? (
+              {outlineStatus === "error" && outlineFilter !== "notes" && outlineError ? (
                 <div className="notebook-pdf-outline-empty text-rose-500">{outlineError}</div>
               ) : null}
-              {embeddedOutlineItems.length > 0 ? (
+              {outlineFilter !== "notes" && embeddedOutlineItems.length > 0 ? (
                 <section className="notebook-pdf-outline-section" aria-label="Embedded PDF outline">
                   <div className="notebook-pdf-outline-section-label">
                     <span>PDF</span>
@@ -1397,19 +1847,36 @@ export function NotebookPdfViewer({
                   </ol>
                 </section>
               ) : null}
-              {manualOutlineItems.length > 0 ? (
+              {outlineFilter !== "notes" && manualOutlineItems.length > 0 ? (
                 <section className="notebook-pdf-outline-section" aria-label="Manual PDF outline">
                   <div className="notebook-pdf-outline-section-label">
-                    <span>Manual</span>
+                    <span>Outline</span>
                     <span>{manualOutlineCount}</span>
                   </div>
                   <ol className="notebook-pdf-outline-list">
-                    {renderOutlineItems(manualOutlineItems)}
+                    {renderOutlineItems(sortedManualOutlineItems)}
                   </ol>
                 </section>
               ) : null}
-              {outlineStatus !== "loading" && outlineStatus !== "error" && outlineCount === 0 ? (
-                <div className="notebook-pdf-outline-empty">No PDF bookmarks found.</div>
+              {outlineFilter !== "outline" && noteItems.length > 0 ? (
+                <section className="notebook-pdf-outline-section" aria-label="PDF notes">
+                  <div className="notebook-pdf-outline-section-label">
+                    <span>Notes</span>
+                    <span>{totalNoteCount}</span>
+                  </div>
+                  <ol className="notebook-pdf-outline-list">
+                    {renderOutlineItems(sortedNoteItems)}
+                  </ol>
+                </section>
+              ) : null}
+              {outlineStatus !== "loading" && outlineStatus !== "error" && filteredOutlineCount === 0 ? (
+                <div className="notebook-pdf-outline-empty">
+                  {outlineFilter === "notes"
+                    ? "No notes yet."
+                    : outlineFilter === "outline"
+                      ? "No outline entries."
+                      : "No outline entries or notes yet."}
+                </div>
               ) : null}
             </div>
           </aside>

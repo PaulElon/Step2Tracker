@@ -729,6 +729,7 @@ const NOTEBOOK_PDF_HIGHLIGHT_COLOR_PATTERN = /^#[0-9a-fA-F]{3,8}$/;
 const NOTEBOOK_PDF_HIGHLIGHT_DEFAULT_COLOR = "#fde047";
 const NOTEBOOK_PDF_OUTLINE_MAX_DEPTH = 12;
 const NOTEBOOK_PDF_OUTLINE_MAX_TITLE_LENGTH = 200;
+const NOTEBOOK_PDF_NOTE_MAX_LENGTH = 1000;
 
 function normalizePdfAnnotationQuad(input: unknown): PdfAnnotationQuad | null {
   if (!input || typeof input !== "object") {
@@ -819,6 +820,13 @@ function normalizePdfOutlineTitle(value: unknown): string {
   return value.replace(/\s+/g, " ").trim().slice(0, NOTEBOOK_PDF_OUTLINE_MAX_TITLE_LENGTH);
 }
 
+function normalizePdfNoteText(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value.replace(/\r\n?/g, "\n").trim().slice(0, NOTEBOOK_PDF_NOTE_MAX_LENGTH);
+}
+
 function normalizePdfOutlineItem(input: unknown, fallbackDepth: number): PdfOutlineItem | null {
   if (!input || typeof input !== "object" || fallbackDepth > NOTEBOOK_PDF_OUTLINE_MAX_DEPTH) {
     return null;
@@ -834,13 +842,32 @@ function normalizePdfOutlineItem(input: unknown, fallbackDepth: number): PdfOutl
   }
   const pageIndex = Math.trunc(pageIndexNum);
   const id = sanitizeText(raw.id) || createId("nb-pdf-outline");
-  const source = raw.source === "manual" ? "manual" : "embedded";
+  const kind = raw.kind === "note" && raw.source !== "embedded" ? "note" : "outline";
+  const source = kind === "note" || raw.source === "manual" ? "manual" : "embedded";
   const item: PdfOutlineItem = {
     id,
     title,
     pageIndex,
     source,
   };
+  if (kind === "note") {
+    const noteText = normalizePdfNoteText(raw.noteText);
+    if (!noteText) {
+      return null;
+    }
+    item.kind = "note";
+    item.noteText = noteText;
+  } else if (raw.kind === "outline") {
+    item.kind = "outline";
+  }
+  const createdAt = sanitizeText(raw.createdAt);
+  if (createdAt) {
+    item.createdAt = createdAt;
+  }
+  const updatedAt = sanitizeText(raw.updatedAt);
+  if (updatedAt) {
+    item.updatedAt = updatedAt;
+  }
   const y = normalizeFiniteNumber(raw.y);
   if (Number.isFinite(y)) {
     item.y = y;

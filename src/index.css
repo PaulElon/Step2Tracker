@@ -2947,6 +2947,98 @@ textarea.font-mono {
 }
 
 /* ── Notebook PDF viewer ─────────────────────────────────────────────────── */
+.notebook-pdf-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.1rem 0.15rem;
+}
+
+.notebook-pdf-toolbar-title {
+  min-width: 8rem;
+  flex: 1 1 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgb(71, 85, 105);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.notebook-pdf-toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 2rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--surface-muted) 78%, transparent);
+  padding: 0.15rem;
+}
+
+.notebook-pdf-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 1.8rem;
+  height: 1.65rem;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  background: transparent;
+  padding: 0 0.55rem;
+  color: rgb(71, 85, 105);
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.notebook-pdf-toolbar-button:hover,
+.notebook-pdf-toolbar-button:focus-visible {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.36);
+  background: var(--field-bg);
+  color: rgb(15, 23, 42);
+}
+
+.notebook-pdf-toolbar-button.is-active {
+  border-color: rgba(56, 189, 248, 0.48);
+  background: rgba(14, 165, 233, 0.14);
+  color: rgb(3, 105, 161);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.notebook-pdf-toolbar-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.notebook-pdf-toolbar-button.has-color {
+  padding-left: 0.4rem;
+}
+
+.notebook-pdf-page-indicator,
+.notebook-pdf-zoom-indicator {
+  min-width: 3.4rem;
+  padding: 0 0.3rem;
+  color: rgb(71, 85, 105);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: center;
+  user-select: none;
+}
+
+.notebook-pdf-zoom-indicator {
+  min-width: 2.8rem;
+}
+
 .notebook-pdf-outline-panel {
   display: flex;
   min-height: 0;
@@ -2982,6 +3074,143 @@ textarea.font-mono {
   padding: 0.1rem 0.45rem;
   font-size: 0.68rem;
   color: rgb(100, 116, 139);
+}
+
+.notebook-pdf-outline-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border-bottom: 1px solid var(--panel-border);
+  padding: 0.45rem;
+}
+
+.notebook-pdf-outline-filter,
+.notebook-pdf-outline-actions {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.notebook-pdf-outline-filter {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.notebook-pdf-outline-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.notebook-pdf-outline-filter button,
+.notebook-pdf-outline-actions button {
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 0.5rem;
+  background: var(--surface-muted);
+  padding: 0.34rem 0.35rem;
+  color: rgb(71, 85, 105);
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.notebook-pdf-outline-filter button:hover,
+.notebook-pdf-outline-filter button:focus-visible,
+.notebook-pdf-outline-actions button:hover,
+.notebook-pdf-outline-actions button:focus-visible {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.42);
+  background: var(--field-bg);
+  color: rgb(15, 23, 42);
+}
+
+.notebook-pdf-outline-filter button.is-active {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(14, 165, 233, 0.12);
+  color: rgb(3, 105, 161);
+}
+
+.notebook-pdf-outline-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.notebook-pdf-outline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--field-bg) 86%, transparent);
+  padding: 0.45rem;
+}
+
+.notebook-pdf-outline-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.notebook-pdf-outline-form label > span {
+  color: rgb(100, 116, 139);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.notebook-pdf-outline-form input,
+.notebook-pdf-outline-form textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 0.5rem;
+  background: var(--panel-bg);
+  padding: 0.45rem 0.5rem;
+  color: rgb(15, 23, 42);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.notebook-pdf-outline-form textarea {
+  resize: vertical;
+}
+
+.notebook-pdf-outline-form input:focus,
+.notebook-pdf-outline-form textarea:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.14);
+}
+
+.notebook-pdf-outline-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.3rem;
+}
+
+.notebook-pdf-outline-form-actions button {
+  border: 1px solid var(--panel-border);
+  border-radius: 9999px;
+  background: var(--surface-muted);
+  padding: 0.3rem 0.55rem;
+  color: rgb(71, 85, 105);
+  font-size: 0.68rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.notebook-pdf-outline-form-actions button:first-child {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(14, 165, 233, 0.12);
+  color: rgb(3, 105, 161);
+}
+
+.notebook-pdf-outline-form-actions button:hover,
+.notebook-pdf-outline-form-actions button:focus-visible {
+  outline: none;
+  background: var(--field-bg);
 }
 
 .notebook-pdf-outline-body {
@@ -3049,19 +3278,56 @@ textarea.font-mono {
   color: rgb(15, 23, 42);
 }
 
+.notebook-pdf-outline-item.is-manual.is-outline {
+  border-left: 2px solid rgba(14, 165, 233, 0.45);
+}
+
+.notebook-pdf-outline-item.is-note {
+  border-left: 2px solid rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.06);
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+
+.notebook-pdf-outline-content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
 .notebook-pdf-outline-title {
   min-width: 0;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  overflow: visible;
+  display: block;
+  overflow-wrap: anywhere;
   font-size: 0.72rem;
   line-height: 1.25;
+}
+
+.notebook-pdf-outline-item.is-note .notebook-pdf-outline-title {
+  white-space: pre-wrap;
+  overflow: visible;
+  line-height: 1.3;
+}
+
+.notebook-pdf-outline-preview {
+  overflow: visible;
+  display: block;
+  overflow-wrap: anywhere;
+  color: rgb(100, 116, 139);
+  font-size: 0.67rem;
+  line-height: 1.3;
 }
 
 .notebook-pdf-outline-page {
   color: rgb(100, 116, 139);
   font-size: 0.65rem;
+}
+
+.notebook-pdf-outline-item.is-note .notebook-pdf-outline-page {
+  align-self: start;
+  padding-top: 0.05rem;
 }
 
 .notebook-pdf-outline-delete {
@@ -3082,6 +3348,10 @@ textarea.font-mono {
   outline: none;
   background: rgba(244, 63, 94, 0.1);
   color: rgb(225, 29, 72);
+}
+
+.notebook-pdf-outline-inline-form {
+  margin: 0.2rem 0.2rem 0.15rem;
 }
 
 .notebook-pdf-outline-empty {

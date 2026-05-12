@@ -187,6 +187,8 @@ export interface PdfAnnotation {
   updatedAt: string;
 }
 
+export type PdfOutlineItemKind = "outline" | "note";
+
 export interface PdfOutlineItem {
   id: string;
   title: string;
@@ -194,6 +196,10 @@ export interface PdfOutlineItem {
   y?: number;
   depth?: number;
   source: "embedded" | "manual";
+  kind?: PdfOutlineItemKind;
+  noteText?: string;
+  createdAt?: string;
+  updatedAt?: string;
   children?: PdfOutlineItem[];
 }
 
