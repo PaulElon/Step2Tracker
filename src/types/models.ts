@@ -166,6 +166,25 @@ export interface NotebookFolder {
 
 export type NotebookPageKind = "tiptap" | "pdf";
 
+export interface PdfAnnotationQuad {
+  // PDF user-space coordinates (origin bottom-left for PDF page).
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface PdfAnnotation {
+  id: string;
+  kind: "highlight";
+  pageIndex: number; // zero-based index of the PDF page
+  color: string;
+  quads: PdfAnnotationQuad[];
+  textSnippet?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface NotebookPage {
   id: string;
   title: string;
@@ -180,6 +199,8 @@ export interface NotebookPage {
   pdfFilename?: string;
   pdfOriginalName?: string;
   pdfPageCount?: number;
+  // Stage C (PDF highlights). Absent/empty = no annotations.
+  pdfAnnotations?: PdfAnnotation[];
 }
 
 export interface NotebookDocument {

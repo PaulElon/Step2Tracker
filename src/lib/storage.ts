@@ -18,6 +18,8 @@ import type {
   NotebookPage,
   NotebookFolder,
   NotebookDocument,
+  PdfAnnotation,
+  PdfAnnotationQuad,
   StudyBlock,
   StudyBlockInput,
   StudyTaskCategory,
@@ -722,6 +724,91 @@ export function getEmptyPracticeTestDraft(): PracticeTestInput {
 
 const NOTEBOOK_PDF_FILENAME_PATTERN = /^[A-Za-z0-9._-]+\.pdf$/;
 
+const NOTEBOOK_PDF_HIGHLIGHT_COLOR_PATTERN = /^#[0-9a-fA-F]{3,8}$/;
+const NOTEBOOK_PDF_HIGHLIGHT_DEFAULT_COLOR = "#fde047";
+
+function normalizePdfAnnotationQuad(input: unknown): PdfAnnotationQuad | null {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+  const raw = input as Partial<PdfAnnotationQuad>;
+  const x = sanitizeNumber(raw.x, Number.NaN);
+  const y = sanitizeNumber(raw.y, Number.NaN);
+  const width = sanitizeNumber(raw.width, Number.NaN);
+  const height = sanitizeNumber(raw.height, Number.NaN);
+  if (
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height)
+  ) {
+    return null;
+  }
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+  return { x, y, width, height };
+}
+
+function normalizePdfAnnotation(input: unknown): PdfAnnotation | null {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+  const raw = input as Partial<PdfAnnotation>;
+  if (raw.kind !== "highlight") {
+    return null;
+  }
+  const pageIndexNum = sanitizeNumber(raw.pageIndex, Number.NaN);
+  if (!Number.isFinite(pageIndexNum) || pageIndexNum < 0) {
+    return null;
+  }
+  const pageIndex = Math.trunc(pageIndexNum);
+  const quadsRaw = Array.isArray(raw.quads) ? raw.quads : [];
+  const quads = quadsRaw
+    .map((quad) => normalizePdfAnnotationQuad(quad))
+    .filter((quad): quad is PdfAnnotationQuad => quad !== null);
+  if (quads.length === 0) {
+    return null;
+  }
+  const colorRaw = typeof raw.color === "string" ? raw.color.trim() : "";
+  const color = NOTEBOOK_PDF_HIGHLIGHT_COLOR_PATTERN.test(colorRaw)
+    ? colorRaw
+    : NOTEBOOK_PDF_HIGHLIGHT_DEFAULT_COLOR;
+  const id = sanitizeText(raw.id) || createId("nb-pdf-hl");
+  const timestamp = nowIso();
+  const createdAt = sanitizeText(raw.createdAt) || timestamp;
+  const updatedAt = sanitizeText(raw.updatedAt) || createdAt;
+  const snippetRaw = typeof raw.textSnippet === "string" ? raw.textSnippet : "";
+  const textSnippet = snippetRaw.length > 0 ? snippetRaw.slice(0, 500) : undefined;
+  const annotation: PdfAnnotation = {
+    id,
+    kind: "highlight",
+    pageIndex,
+    color,
+    quads,
+    createdAt,
+    updatedAt,
+  };
+  if (textSnippet) {
+    annotation.textSnippet = textSnippet;
+  }
+  return annotation;
+}
+
+function normalizePdfAnnotations(raw: unknown): PdfAnnotation[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const result: PdfAnnotation[] = [];
+  for (const candidate of raw) {
+    const annotation = normalizePdfAnnotation(candidate);
+    if (annotation) {
+      result.push(annotation);
+    }
+  }
+  return result;
+}
+
 function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbackId?: string): NotebookPage {
   const timestamp = nowIso();
   const safeCreatedAt = sanitizeText(input?.createdAt) || timestamp;
@@ -735,6 +822,7 @@ function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbac
     isPdf && typeof input?.pdfOriginalName === "string" ? input.pdfOriginalName.trim() : "";
   const rawPageCount = sanitizeNumber(input?.pdfPageCount, 0);
   const pdfPageCount = isPdf && rawPageCount > 0 ? Math.trunc(rawPageCount) : undefined;
+  const pdfAnnotations = isPdf ? normalizePdfAnnotations(input?.pdfAnnotations) : [];
   const base: NotebookPage = {
     id: sanitizeText(input?.id) || fallbackId || createId("nb-page"),
     title: sanitizeText(input?.title) || "Untitled",
@@ -753,6 +841,9 @@ function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbac
     }
     if (pdfPageCount !== undefined) {
       base.pdfPageCount = pdfPageCount;
+    }
+    if (pdfAnnotations.length > 0) {
+      base.pdfAnnotations = pdfAnnotations;
     }
   }
   return base;

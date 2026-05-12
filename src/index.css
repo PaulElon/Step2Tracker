@@ -2945,3 +2945,66 @@ input.font-mono,
 textarea.font-mono {
   word-spacing: normal;
 }
+
+/* ── Notebook PDF viewer ─────────────────────────────────────────────────── */
+.notebook-pdf-page-stack {
+  position: relative;
+  word-spacing: normal;
+}
+
+.notebook-pdf-canvas {
+  display: block;
+}
+
+.notebook-pdf-text-layer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  text-align: initial;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  z-index: 1;
+  word-spacing: normal;
+}
+
+.notebook-pdf-text-layer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.notebook-pdf-text-layer ::selection {
+  background: rgba(56, 189, 248, 0.35);
+}
+
+.notebook-pdf-annotation-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.notebook-pdf-highlight {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background-color: #fde047;
+  opacity: 0.32;
+  mix-blend-mode: multiply;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: opacity 120ms ease;
+  border-radius: 1px;
+}
+
+.notebook-pdf-highlight:hover,
+.notebook-pdf-highlight:focus-visible {
+  opacity: 0.5;
+  outline: none;
+}

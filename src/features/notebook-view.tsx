@@ -2432,6 +2432,7 @@ const emptyStateMessage = normalizedSearchQuery
                                 key={activePage.id}
                                 filename={activePage.pdfFilename}
                                 originalName={activePage.pdfOriginalName ?? activePage.title}
+                                annotations={activePage.pdfAnnotations}
                                 onPageCount={(count) => {
                                   if (activePage.pdfPageCount === count) {
                                     return;
@@ -2439,6 +2440,25 @@ const emptyStateMessage = normalizedSearchQuery
                                   updateActivePage((page) => ({
                                     ...page,
                                     pdfPageCount: count,
+                                    updatedAt: nowIso(),
+                                  }));
+                                }}
+                                onAddAnnotation={(annotation) => {
+                                  updateActivePage((page) => ({
+                                    ...page,
+                                    pdfAnnotations: [
+                                      ...(page.pdfAnnotations ?? []),
+                                      annotation,
+                                    ],
+                                    updatedAt: nowIso(),
+                                  }));
+                                }}
+                                onDeleteAnnotation={(annotationId) => {
+                                  updateActivePage((page) => ({
+                                    ...page,
+                                    pdfAnnotations: (page.pdfAnnotations ?? []).filter(
+                                      (existing) => existing.id !== annotationId,
+                                    ),
                                     updatedAt: nowIso(),
                                   }));
                                 }}
