@@ -12,6 +12,7 @@ import {
   createNotebookMarkdownExport,
   createNotebookTxtExport,
   parseNotebookImport,
+  validateNotebookImportFile,
   type NotebookExportFormat,
 } from "../lib/notebook-io";
 import { useAppStore } from "../state/app-store";
@@ -1240,6 +1241,12 @@ export function NotebookView() {
     }
 
     await flushPendingNotebookSave();
+
+    const validation = await validateNotebookImportFile(file);
+    if (!validation.ok) {
+      setStatus({ kind: "error", message: validation.reason });
+      return;
+    }
 
     try {
       const raw = await file.text();

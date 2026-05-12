@@ -243,6 +243,63 @@ export function createNotebookHtmlExport(documentTitle: string, pageTitle: strin
   ].join("\n");
 }
 
+const SUPPORTED_IMPORT_EXTENSIONS = new Set([".txt", ".md", ".markdown", ".html", ".htm"]);
+
+function getFileExtension(fileName: string): string {
+  const normalized = fileName.trim().toLowerCase();
+  const lastDot = normalized.lastIndexOf(".");
+  return lastDot >= 0 ? normalized.slice(lastDot) : "";
+}
+
+export type NotebookImportValidationResult = { ok: true } | { ok: false; reason: string };
+
+export async function validateNotebookImportFile(file: File): Promise<NotebookImportValidationResult> {
+  const ext = getFileExtension(file.name);
+
+  if (ext === ".doc") {
+    return { ok: false, reason: "Word documents are not supported yet. Please export the file as PDF or plain text before importing." };
+  }
+  if (ext === ".docx") {
+    return { ok: false, reason: "Word documents are not supported yet. Please export the file as PDF or plain text before importing." };
+  }
+  if (ext === ".pdf") {
+    return { ok: false, reason: "PDF import is coming soon. For now, import TXT, Markdown, or HTML files only." };
+  }
+  if (!SUPPORTED_IMPORT_EXTENSIONS.has(ext)) {
+    return { ok: false, reason: "Unsupported notebook import file. Please choose a TXT, Markdown, or HTML file." };
+  }
+
+  // Magic-byte check — catches mislabeled binaries.
+  const headerBytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+
+  // ZIP / DOCX / XLSX / ODT: PK\x03\x04
+  if (headerBytes[0] === 0x50 && headerBytes[1] === 0x4b && headerBytes[2] === 0x03 && headerBytes[3] === 0x04) {
+    return { ok: false, reason: "This file appears to be binary and cannot be imported as notebook text." };
+  }
+  // Legacy Office (DOC/XLS/PPT): D0 CF 11 E0
+  if (headerBytes[0] === 0xd0 && headerBytes[1] === 0xcf && headerBytes[2] === 0x11 && headerBytes[3] === 0xe0) {
+    return { ok: false, reason: "This file appears to be binary and cannot be imported as notebook text." };
+  }
+  // PDF: %PDF
+  if (headerBytes[0] === 0x25 && headerBytes[1] === 0x50 && headerBytes[2] === 0x44 && headerBytes[3] === 0x46) {
+    return { ok: false, reason: "PDF import is coming soon. For now, import TXT, Markdown, or HTML files only." };
+  }
+  // PNG: \x89PNG
+  if (headerBytes[0] === 0x89 && headerBytes[1] === 0x50 && headerBytes[2] === 0x4e && headerBytes[3] === 0x47) {
+    return { ok: false, reason: "This file appears to be binary and cannot be imported as notebook text." };
+  }
+  // JPEG: FF D8 FF
+  if (headerBytes[0] === 0xff && headerBytes[1] === 0xd8 && headerBytes[2] === 0xff) {
+    return { ok: false, reason: "This file appears to be binary and cannot be imported as notebook text." };
+  }
+  // GIF: GIF8
+  if (headerBytes[0] === 0x47 && headerBytes[1] === 0x49 && headerBytes[2] === 0x46 && headerBytes[3] === 0x38) {
+    return { ok: false, reason: "This file appears to be binary and cannot be imported as notebook text." };
+  }
+
+  return { ok: true };
+}
+
 export function parseNotebookImport(fileName: string, contents: string): NotebookImportedPageDraft {
   const normalized = normalizeLineEndings(contents).replace(/^\uFEFF/, "");
   const lowerName = fileName.trim().toLowerCase();
