@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
-import { invoke } from "@tauri-apps/api/core";
+import { Maximize2, Minimize2, PanelLeftOpen } from "lucide-react";
 import { ModalShell } from "../components/modal-shell";
 import { NotebookEditorAdapter } from "../components/notebook-editor-adapter";
+import { NotebookPdfViewer } from "../components/notebook-pdf-viewer";
 import { richTextToPlain } from "../components/rich-text-editor";
-import { embedNotebookImagesInHtml, purgeOrphanedNotebookImages } from "../lib/notebook-images";
+import { purgeOrphanedNotebookImages } from "../lib/notebook-images";
+import { createNotebookPdfExport } from "../lib/notebook-pdf-export";
+import { exportNotebookPdfBytes, uploadNotebookPdf } from "../lib/notebook-pdf";
 import {
   buildNotebookExportFileName,
-  createNotebookHtmlExport,
-  createNotebookMarkdownExport,
-  createNotebookTxtExport,
   parseNotebookImport,
-  type NotebookExportFormat,
+  validateNotebookImportFile,
 } from "../lib/notebook-io";
 import { useAppStore } from "../state/app-store";
 import type { NotebookDocument, NotebookFolder, NotebookPage } from "../types/models";
@@ -136,6 +136,21 @@ function NotebookRailIcon({ kind }: { kind: NotebookRailIconKind }) {
   }
 }
 
+function isPdfImportCandidate(file: File) {
+  if (file.type === "application/pdf") {
+    return true;
+  }
+  return file.name.trim().toLowerCase().endsWith(".pdf");
+}
+
+function stripPdfExtension(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed.toLowerCase().endsWith(".pdf") ? trimmed.slice(0, -4).trim() : trimmed;
+}
+
 function makeId(prefix: string) {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `${prefix}-${crypto.randomUUID()}`;
@@ -149,10 +164,8 @@ function nowIso() {
 
 const NOTEBOOK_FLOATING_MENU_GAP = 8;
 const NOTEBOOK_FLOATING_MENU_VIEWPORT_MARGIN = 8;
-const NOTEBOOK_EXPORT_MENU_WIDTH = 176;
-const NOTEBOOK_EXPORT_MENU_ESTIMATED_HEIGHT = 176;
-const NOTEBOOK_OVERFLOW_MENU_WIDTH = 160;
-const NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT = 96;
+const NOTEBOOK_OVERFLOW_MENU_WIDTH = 176;
+const NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT = 176;
 
 function getNotebookFloatingMenuPosition(
   button: HTMLButtonElement,
@@ -282,16 +295,13 @@ export function NotebookView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [status, setStatus] = useState<ActionStatus>(null);
   const [saveStatus, setSaveStatus] = useState<NotebookSaveStatus>("idle");
-  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
-  const [exportMenuPosition, setExportMenuPosition] = useState<NotebookFloatingMenuPosition | null>(null);
   const [isEditorOverflowMenuOpen, setIsEditorOverflowMenuOpen] = useState(false);
   const [editorOverflowMenuPosition, setEditorOverflowMenuPosition] = useState<NotebookFloatingMenuPosition | null>(null);
   const [tileActionMenu, setTileActionMenu] = useState<TileActionMenuState | null>(null);
   const [promptState, setPromptState] = useState<PromptState | null>(null);
   const [isNotebookRailExpanded, setIsNotebookRailExpanded] = useState(false);
   const [notebookRailTargetSection, setNotebookRailTargetSection] = useState<NotebookRailSection>(null);
-  const exportMenuRef = useRef<HTMLDivElement>(null);
-  const exportButtonRef = useRef<HTMLButtonElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const tileActionMenuRef = useRef<HTMLDivElement>(null);
   const promptInputRef = useRef<HTMLInputElement>(null);
@@ -541,7 +551,6 @@ export function NotebookView() {
       if (activePageId !== null) {
         setActivePageId(null);
       }
-      closeExportMenu();
       return;
     }
 
@@ -560,12 +569,6 @@ export function NotebookView() {
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
       if (
-        !exportButtonRef.current?.contains(event.target as Node) &&
-        !exportMenuRef.current?.contains(event.target as Node)
-      ) {
-        closeExportMenu();
-      }
-      if (
         !editorOverflowButtonRef.current?.contains(event.target as Node) &&
         !editorOverflowMenuRef.current?.contains(event.target as Node)
       ) {
@@ -578,7 +581,6 @@ export function NotebookView() {
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        closeExportMenu();
         closeEditorOverflowMenu();
         setTileActionMenu(null);
         if (editingPageId) {
@@ -589,11 +591,6 @@ export function NotebookView() {
     }
 
     function updateFloatingMenuPositions() {
-      if (isExportMenuOpen && exportButtonRef.current) {
-        setExportMenuPosition(
-          getNotebookFloatingMenuPosition(exportButtonRef.current, NOTEBOOK_EXPORT_MENU_WIDTH, NOTEBOOK_EXPORT_MENU_ESTIMATED_HEIGHT),
-        );
-      }
       if (isEditorOverflowMenuOpen && editorOverflowButtonRef.current) {
         setEditorOverflowMenuPosition(
           getNotebookFloatingMenuPosition(
@@ -605,7 +602,7 @@ export function NotebookView() {
       }
     }
 
-    if (isExportMenuOpen || isEditorOverflowMenuOpen || tileActionMenu) {
+    if (isEditorOverflowMenuOpen || tileActionMenu) {
       window.addEventListener("mousedown", handleOutsideClick);
       window.addEventListener("keydown", handleEscape);
       window.addEventListener("resize", updateFloatingMenuPositions);
@@ -620,7 +617,7 @@ export function NotebookView() {
     }
 
     return undefined;
-  }, [editingPageId, isEditorOverflowMenuOpen, isExportMenuOpen, tileActionMenu]);
+  }, [editingPageId, isEditorOverflowMenuOpen, tileActionMenu]);
 
   useEffect(() => {
     if (!isNotebookRailExpanded || !notebookRailTargetSection) {
@@ -663,6 +660,10 @@ export function NotebookView() {
     setNotebookRailTargetSection(section);
   }
 
+  function toggleFullscreen() {
+    setIsFullscreen((current) => !current);
+  }
+
   function updateDocument(documentId: string, updater: (document: NotebookDocument) => NotebookDocument) {
     const nextDocuments = notebookDocuments.map((document) => (document.id === documentId ? updater(document) : document));
     replaceNotebookDocuments(nextDocuments);
@@ -687,25 +688,13 @@ export function NotebookView() {
     setEditorOverflowMenuPosition(null);
   }
 
-  function openExportMenu() {
-    const button = exportButtonRef.current;
-    if (!button) {
-      setExportMenuPosition(null);
-      setIsExportMenuOpen(true);
-      return;
-    }
-
-    setExportMenuPosition(getNotebookFloatingMenuPosition(button, NOTEBOOK_EXPORT_MENU_WIDTH, NOTEBOOK_EXPORT_MENU_ESTIMATED_HEIGHT));
-    setIsExportMenuOpen(true);
-  }
-
   function closeExportMenu() {
-    setIsExportMenuOpen(false);
-    setExportMenuPosition(null);
+    return;
   }
 
   function openImportPicker() {
     closeExportMenu();
+    closeEditorOverflowMenu();
     importInputRef.current?.click();
   }
 
@@ -759,6 +748,7 @@ export function NotebookView() {
     collapseNotebookRail();
     closeExportMenu();
     closeTileActionMenu();
+    setIsFullscreen(false);
     setStatus(null);
   }
 
@@ -934,6 +924,7 @@ export function NotebookView() {
       setActiveDocumentId(null);
       setActivePageId(null);
       closeExportMenu();
+      setIsFullscreen(false);
     }
     setStatus(null);
   }
@@ -1151,7 +1142,7 @@ export function NotebookView() {
     }
   }
 
-  async function exportActivePage(format: NotebookExportFormat) {
+  async function exportActivePageAsPdf() {
     closeExportMenu();
 
     if (!activeDocument || !activePage) {
@@ -1160,49 +1151,21 @@ export function NotebookView() {
     }
 
     try {
-      const fileName = buildNotebookExportFileName(activeDocument, activePage, format);
-      let content: string;
-      let label: string;
-      let missingImages: string[] = [];
-
-      if (format === "txt") {
-        content = createNotebookTxtExport(
-          activeDocument.title.trim() || "Untitled Document",
-          activePage.title.trim() || "Page 1",
-          richTextToPlain(activePage.contentHtml),
-        );
-        label = "TXT";
-      } else if (format === "html") {
-        const embedded = await embedNotebookImagesInHtml(
-          createNotebookHtmlExport(
-            activeDocument.title.trim() || "Untitled Document",
-            activePage.title.trim() || "Page 1",
-            activePage.contentHtml,
-          ),
-        );
-        content = embedded.html;
-        missingImages = embedded.missingImages;
-        label = "HTML";
-      } else {
-        content = createNotebookMarkdownExport(
-          activeDocument.title.trim() || "Untitled Document",
-          activePage.title.trim() || "Page 1",
-          richTextToPlain(activePage.contentHtml),
-        );
-        label = "Markdown";
-      }
-
-      const savedPath = await invoke<string>("export_notebook_page", {
-        suggestedFileName: fileName,
-        contents: content,
-      });
+      await flushPendingNotebookSave();
+      const fileName = buildNotebookExportFileName(activeDocument, activePage, "pdf");
+      const editorElement =
+        activePage.kind === "pdf"
+          ? null
+          : document.querySelector<HTMLElement>(".notebook-editor-shell .ProseMirror");
+      const exportResult = await createNotebookPdfExport(activePage, editorElement);
+      const savedPath = await exportNotebookPdfBytes(fileName, exportResult.bytes);
 
       setStatus({
         kind: "success",
         message:
-          missingImages.length > 0
-            ? `${label} export saved to ${savedPath}. ${missingImages.length} local image(s) could not be embedded.`
-            : `${label} export saved to ${savedPath}.`,
+          exportResult.missingImages.length > 0
+            ? `PDF export saved to ${savedPath}. ${exportResult.missingImages.length} local image(s) could not be embedded.`
+            : `PDF export saved to ${savedPath}.`,
       });
     } catch (error) {
       const message =
@@ -1232,6 +1195,17 @@ export function NotebookView() {
     }
 
     await flushPendingNotebookSave();
+
+    if (isPdfImportCandidate(file)) {
+      await importNotebookPdfFile(file);
+      return;
+    }
+
+    const validation = await validateNotebookImportFile(file);
+    if (!validation.ok) {
+      setStatus({ kind: "error", message: validation.reason });
+      return;
+    }
 
     try {
       const raw = await file.text();
@@ -1285,6 +1259,80 @@ export function NotebookView() {
         kind: "error",
         message,
       });
+    }
+  }
+
+  async function importNotebookPdfFile(file: File) {
+    try {
+      const headerBytes = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+      if (
+        headerBytes.length < 4 ||
+        headerBytes[0] !== 0x25 ||
+        headerBytes[1] !== 0x50 ||
+        headerBytes[2] !== 0x44 ||
+        headerBytes[3] !== 0x46
+      ) {
+        setStatus({
+          kind: "error",
+          message: "This file has a .pdf extension but does not look like a real PDF.",
+        });
+        return;
+      }
+
+      const uploaded = await uploadNotebookPdf(file);
+      const documentTitle = stripPdfExtension(file.name) || "Imported PDF";
+      const targetFolderId = activeDocument?.folderId ?? currentFolderId ?? null;
+      const targetFolderDocuments = notebookDocuments.filter(
+        (document) => (document.folderId ?? null) === targetFolderId,
+      );
+      const nextOrder = targetFolderDocuments.reduce(
+        (maxOrder, document) => Math.max(maxOrder, document.order),
+        -1,
+      ) + 1;
+      const now = nowIso();
+      const nextDocument: NotebookDocument = {
+        id: makeId("nb-document"),
+        title: documentTitle,
+        folderId: targetFolderId ?? undefined,
+        favorited: false,
+        order: nextOrder,
+        pages: [
+          {
+            id: makeId("nb-page"),
+            title: documentTitle,
+            contentHtml: "",
+            order: 0,
+            createdAt: now,
+            updatedAt: now,
+            kind: "pdf",
+            pdfFilename: uploaded.filename,
+            pdfOriginalName: uploaded.originalName,
+          },
+        ],
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const saved = await persistNotebookDocuments([...notebookDocuments, nextDocument]);
+      if (!saved) {
+        setStatus({ kind: "error", message: "Unable to import this PDF." });
+        return;
+      }
+
+      setActiveDocumentId(nextDocument.id);
+      setActivePageId(nextDocument.pages[0]?.id ?? null);
+      setStatus({
+        kind: "success",
+        message: `Imported "${documentTitle}" as a PDF document.`,
+      });
+    } catch (error) {
+      const message =
+        typeof error === "string"
+          ? error
+          : error instanceof Error && error.message
+            ? error.message
+            : "Unable to import this PDF.";
+      setStatus({ kind: "error", message });
     }
   }
 
@@ -1455,8 +1503,8 @@ export function NotebookView() {
   const editorTitleFieldClass = `${editorFieldClass} notebook-editor-input--title min-w-0 font-semibold tracking-[-0.03em]`;
   const editorActionButtonClass =
     "notebook-editor-action-button inline-flex h-8 items-center justify-center rounded-[14px] border px-3 text-sm font-medium transition";
-  const editorDangerButtonClass =
-    "notebook-editor-action-button notebook-editor-action-button--danger inline-flex h-8 items-center justify-center rounded-[14px] border px-3 text-sm font-medium transition";
+  const editorIconButtonClass =
+    "notebook-editor-action-button inline-flex h-8 w-8 items-center justify-center rounded-[14px] border text-sm font-medium transition";
   const modalActionButtonClass =
     "inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:ring-offset-0";
   const modalPrimaryActionButtonClass =
@@ -1476,87 +1524,32 @@ export function NotebookView() {
   const editorTabCompactActionClass =
     "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[14px] border bg-[color:var(--field-bg)] text-sm font-medium transition";
   const notebookEditorShellClass = "notebook-editor-shell min-h-0 flex-1 overflow-hidden";
-  const notebookWorkspaceClass = isNotebookRailExpanded
-    ? "grid min-h-0 min-w-0 flex-1 gap-2 grid-cols-[52px_232px_minmax(0,1fr)]"
-    : "grid min-h-0 min-w-0 flex-1 gap-2 grid-cols-[52px_minmax(0,1fr)]";
-  const notebookCollapsedRailClass =
-    "notebook-editor-rail notebook-editor-rail--collapsed flex min-h-0 flex-col items-stretch gap-1 overflow-hidden rounded-[20px] border p-1";
+  const notebookWorkspaceClass = "flex min-h-0 min-w-0 flex-1 gap-2";
+  const notebookNavigatorClass = "notebook-navigator flex min-h-0 shrink-0 overflow-hidden";
+  const notebookNavigatorIconsClass =
+    "notebook-navigator__icons flex w-11 shrink-0 flex-col items-center gap-1 p-1.5";
+  const notebookNavigatorDividerClass = "notebook-navigator__divider w-px shrink-0";
+  const notebookNavigatorPanelClass =
+    "notebook-navigator__panel flex w-[192px] shrink-0 min-h-0 flex-col gap-2 px-2.5 py-2";
   const notebookCollapsedRailButtonClass =
-    "notebook-editor-rail__icon-button inline-flex h-8 w-8 items-center justify-center rounded-[13px] border text-slate-600 transition";
-  const notebookExpandedRailClass =
-    "notebook-editor-rail notebook-editor-rail--expanded flex min-h-0 flex-col gap-1.5 overflow-hidden rounded-[20px] border p-2";
+    "notebook-editor-rail__icon-button inline-flex h-7 w-7 items-center justify-center rounded-[10px] border border-transparent text-slate-600 transition";
   const notebookExpandedRailSectionClass = "space-y-1";
-  const notebookExpandedRailScrollClass = "flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto pr-1 scrollbar-subtle";
-  const notebookRailListClass = "space-y-1";
+  const notebookExpandedRailScrollClass = "flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto pr-0.5 scrollbar-subtle";
+  const notebookRailListClass = "space-y-0.5";
   const notebookRailItemClass =
-    "notebook-editor-rail__item group flex w-full items-start gap-1.5 rounded-[14px] border border-transparent px-2 py-1.5 text-left transition";
+    "notebook-editor-rail__item group flex w-full items-center gap-2 rounded-[10px] border border-transparent px-1.5 py-1.5 text-left transition";
   const notebookRailIconClass =
-    "notebook-editor-rail__icon flex h-7 w-7 shrink-0 items-center justify-center rounded-[11px] border text-[11px] font-semibold";
+    "notebook-editor-rail__icon flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] border text-[11px] font-semibold";
   const notebookSectionTitleClass = "notebook-editor-section-title";
   const notebookSectionValueClass = "notebook-editor-section-value";
   const notebookRailTitleClass = "notebook-editor-rail__title";
   const notebookRailMetaClass = "notebook-editor-rail__meta";
-  const notebookRailHeaderButtonClass =
-    "inline-flex h-8 items-center justify-center gap-2 rounded-full border px-3 text-xs font-medium transition";
   const emptyStateMessage = normalizedSearchQuery
     ? `No results for "${searchQuery.trim()}".`
     : currentFolder
       ? "This folder is empty."
       : "No documents yet.";
   const notebookFloatingMenuPortalTarget = typeof document !== "undefined" ? document.body : null;
-  const exportMenuPortal =
-    activeDocument && notebookFloatingMenuPortalTarget && isExportMenuOpen && exportMenuPosition
-      ? createPortal(
-          <div
-            ref={exportMenuRef}
-            className="notebook-floating-menu"
-            style={{
-              position: "fixed",
-              top: `${exportMenuPosition.top}px`,
-              left: `${exportMenuPosition.left}px`,
-              width: `${NOTEBOOK_EXPORT_MENU_WIDTH}px`,
-              zIndex: 9999,
-            }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                void exportActivePage("txt");
-              }}
-              className="notebook-floating-menu__item whitespace-nowrap"
-            >
-              Text (.txt)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void exportActivePage("html");
-              }}
-              className="notebook-floating-menu__item whitespace-nowrap"
-            >
-              HTML (.html)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void exportActivePage("markdown");
-              }}
-              className="notebook-floating-menu__item whitespace-nowrap"
-            >
-              Markdown (.md)
-            </button>
-            <button
-              type="button"
-              onClick={openImportPicker}
-              className="notebook-floating-menu__item whitespace-nowrap"
-            >
-              Import notebook file
-            </button>
-          </div>,
-          notebookFloatingMenuPortalTarget,
-        )
-      : null;
   const editorOverflowMenuPortal =
     activeDocument && notebookFloatingMenuPortalTarget && isEditorOverflowMenuOpen && editorOverflowMenuPosition
       ? createPortal(
@@ -1585,6 +1578,15 @@ export function NotebookView() {
             <button
               type="button"
               onClick={() => {
+                openImportPicker();
+              }}
+              className="notebook-floating-menu__item"
+            >
+              Import notebook file
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 void handleCleanImages();
                 closeEditorOverflowMenu();
               }}
@@ -1592,16 +1594,33 @@ export function NotebookView() {
             >
               Clean Images
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                closeEditorOverflowMenu();
+                void handleDeleteDocument(activeDocument);
+              }}
+              className="notebook-floating-menu__item notebook-floating-menu__item--danger"
+            >
+              Delete Document
+            </button>
           </div>,
           notebookFloatingMenuPortalTarget,
         )
       : null;
 
+  const isEditorFullscreen = isFullscreen && !isLibraryMode;
+  const notebookRootClass = isEditorFullscreen
+    ? "notebook-fullscreen-shell fixed inset-0 z-[80] flex flex-col gap-2 overflow-hidden px-3 pb-3 pt-2"
+    : "flex h-full flex-col gap-4 overflow-hidden pb-3 pt-1.5";
+
   return (
     <>
-      {exportMenuPortal}
       {editorOverflowMenuPortal}
-      <div className="flex h-full flex-col gap-2 overflow-hidden px-3 pb-3 pt-1.5">
+      <div className={notebookRootClass}>
+        {!isFullscreen ? (
+          <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Notebook</h2>
+        ) : null}
         <section className="glass-panel flex min-h-0 flex-1 flex-col gap-2 overflow-visible p-3">
           {isLibraryMode ? (
             <div className="mx-auto flex min-h-0 w-full max-w-[1480px] flex-1 flex-col gap-2.5">
@@ -1867,89 +1886,74 @@ export function NotebookView() {
             <>
               {activeDocument ? (
                 <div className={notebookWorkspaceClass}>
-                  <aside className={notebookCollapsedRailClass}>
-                    <button
-                      type="button"
-                      title={isNotebookRailExpanded ? "Collapse notebook rail" : "Expand notebook rail"}
-                      aria-label={isNotebookRailExpanded ? "Collapse notebook rail" : "Expand notebook rail"}
-                      aria-pressed={isNotebookRailExpanded}
-                      onClick={toggleNotebookRail}
-                      className={`${notebookCollapsedRailButtonClass} ${isNotebookRailExpanded ? "notebook-editor-rail__icon-button--active" : ""}`}
-                    >
-                      <NotebookRailIcon kind={isNotebookRailExpanded ? "collapse" : "toggle"} />
-                    </button>
-                    <button
-                      type="button"
-                      title="Back to Library"
-                      aria-label="Back to Library"
-                      onClick={() => void goBackToLibrary()}
-                      className={notebookCollapsedRailButtonClass}
-                    >
-                      <NotebookRailIcon kind="back" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Pinned documents"
-                      aria-label="Pinned documents"
-                      onClick={() => focusNotebookRailSection("pinned")}
-                      className={notebookCollapsedRailButtonClass}
-                    >
-                      <NotebookRailIcon kind="favorite" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Recent documents"
-                      aria-label="Recent documents"
-                      onClick={() => focusNotebookRailSection("recent")}
-                      className={notebookCollapsedRailButtonClass}
-                    >
-                      <NotebookRailIcon kind="recent" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Folders"
-                      aria-label="Folders"
-                      onClick={() => focusNotebookRailSection("folders")}
-                      className={notebookCollapsedRailButtonClass}
-                    >
-                      <NotebookRailIcon kind="folder" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Documents"
-                      aria-label="Documents"
-                      onClick={() => focusNotebookRailSection("documents")}
-                      className={notebookCollapsedRailButtonClass}
-                    >
-                      <NotebookRailIcon kind="document" />
-                    </button>
-                  </aside>
-
-                  {isNotebookRailExpanded ? (
-                    <aside className={notebookExpandedRailClass}>
-                      <div className="flex items-start justify-between gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void goBackToLibrary()}
-                          className={notebookRailHeaderButtonClass}
-                        >
-                          <NotebookRailIcon kind="back" />
-                          <span className="truncate">Back to Library</span>
-                        </button>
-                        <button
-                          type="button"
-                          title="Collapse notebook rail"
-                          aria-label="Collapse notebook rail"
-                          aria-pressed
-                          onClick={toggleNotebookRail}
-                          className={notebookCollapsedRailButtonClass}
-                        >
+                  <div className={notebookNavigatorClass}>
+                    <aside className={notebookNavigatorIconsClass}>
+                      <button
+                        type="button"
+                        title={isNotebookRailExpanded ? "Collapse notebook rail" : "Expand notebook rail"}
+                        aria-label={isNotebookRailExpanded ? "Collapse notebook rail" : "Expand notebook rail"}
+                        aria-pressed={isNotebookRailExpanded}
+                        onClick={toggleNotebookRail}
+                        className={`${notebookCollapsedRailButtonClass} ${isNotebookRailExpanded ? "notebook-editor-rail__icon-button--active" : ""}`}
+                      >
+                        {isNotebookRailExpanded ? (
                           <NotebookRailIcon kind="collapse" />
-                        </button>
-                      </div>
+                        ) : (
+                          <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        title="Back to Library"
+                        aria-label="Back to Library"
+                        onClick={() => void goBackToLibrary()}
+                        className={notebookCollapsedRailButtonClass}
+                      >
+                        <NotebookRailIcon kind="back" />
+                      </button>
+                      <button
+                        type="button"
+                        title="Pinned documents"
+                        aria-label="Pinned documents"
+                        onClick={() => focusNotebookRailSection("pinned")}
+                        className={notebookCollapsedRailButtonClass}
+                      >
+                        <NotebookRailIcon kind="favorite" />
+                      </button>
+                      <button
+                        type="button"
+                        title="Recent documents"
+                        aria-label="Recent documents"
+                        onClick={() => focusNotebookRailSection("recent")}
+                        className={notebookCollapsedRailButtonClass}
+                      >
+                        <NotebookRailIcon kind="recent" />
+                      </button>
+                      <button
+                        type="button"
+                        title="Folders"
+                        aria-label="Folders"
+                        onClick={() => focusNotebookRailSection("folders")}
+                        className={notebookCollapsedRailButtonClass}
+                      >
+                        <NotebookRailIcon kind="folder" />
+                      </button>
+                      <button
+                        type="button"
+                        title="Documents"
+                        aria-label="Documents"
+                        onClick={() => focusNotebookRailSection("documents")}
+                        className={notebookCollapsedRailButtonClass}
+                      >
+                        <NotebookRailIcon kind="document" />
+                      </button>
+                    </aside>
 
+                    {isNotebookRailExpanded ? (
+                      <>
+                        <div className={notebookNavigatorDividerClass} aria-hidden="true" />
+                        <aside className={notebookNavigatorPanelClass}>
                       <div className="space-y-1">
-                        <div className={notebookSectionTitleClass}>Library</div>
                         <div className={notebookSectionValueClass}>{currentFolder ? currentFolder.name.trim() || "Untitled Folder" : "Library"}</div>
                         <div className={notebookRailMetaClass}>
                           {currentFolder ? "Current folder context" : "All documents"} · {sortedDocuments.length} documents
@@ -1990,10 +1994,12 @@ export function NotebookView() {
                             {favoritedDocuments.length > 0 ? (
                               favoritedDocuments.map((document) => {
                                 const isActive = document.id === activeDocument.id;
+                                const displayTitle = document.title.trim() || "Untitled Document";
                                 return (
                                   <button
                                     key={document.id}
                                     type="button"
+                                    title={displayTitle}
                                     onClick={() => {
                                       void openDocument(document);
                                     }}
@@ -2003,7 +2009,7 @@ export function NotebookView() {
                                       <NotebookRailIcon kind="favorite" />
                                     </span>
                                     <span className="min-w-0 flex-1">
-                                      <span className={notebookRailTitleClass}>{document.title.trim() || "Untitled Document"}</span>
+                                      <span className={notebookRailTitleClass}>{displayTitle}</span>
                                       <span className={notebookRailMetaClass}>{document.pages.length} pages</span>
                                     </span>
                                   </button>
@@ -2021,10 +2027,12 @@ export function NotebookView() {
                             {recentDocuments.length > 0 ? (
                               recentDocuments.map((document) => {
                                 const isActive = document.id === activeDocument.id;
+                                const displayTitle = document.title.trim() || "Untitled Document";
                                 return (
                                   <button
                                     key={document.id}
                                     type="button"
+                                    title={displayTitle}
                                     onClick={() => {
                                       void openDocument(document);
                                     }}
@@ -2034,7 +2042,7 @@ export function NotebookView() {
                                       <NotebookRailIcon kind="recent" />
                                     </span>
                                     <span className="min-w-0 flex-1">
-                                      <span className={notebookRailTitleClass}>{document.title.trim() || "Untitled Document"}</span>
+                                      <span className={notebookRailTitleClass}>{displayTitle}</span>
                                       <span className={notebookRailMetaClass}>{document.pages.length} pages</span>
                                     </span>
                                   </button>
@@ -2050,28 +2058,32 @@ export function NotebookView() {
                           <div className={notebookSectionTitleClass}>Folders</div>
                           <div className={notebookRailListClass}>
                             {railFolders.length > 0 ? (
-                              railFolders.map((folder) => (
-                                <button
-                                  key={folder.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setCurrentFolderId(folder.id);
-                                    setSearchQuery("");
-                                    setStatus(null);
-                                  }}
-                                  className={`${notebookRailItemClass} hover:border-white/10 hover:bg-white/[0.05]`}
-                                >
-                                  <span className={`${notebookRailIconClass} border-amber-200/60 bg-amber-100 text-amber-700`}>
-                                    <NotebookRailIcon kind="folder" />
-                                  </span>
-                                  <span className="min-w-0 flex-1">
-                                    <span className={notebookRailTitleClass}>{folder.name.trim() || "Untitled Folder"}</span>
-                                    <span className={notebookRailMetaClass}>
-                                      {sortedDocuments.filter((document) => (document.folderId ?? null) === folder.id).length} docs
+                              railFolders.map((folder) => {
+                                const displayName = folder.name.trim() || "Untitled Folder";
+                                return (
+                                  <button
+                                    key={folder.id}
+                                    type="button"
+                                    title={displayName}
+                                    onClick={() => {
+                                      setCurrentFolderId(folder.id);
+                                      setSearchQuery("");
+                                      setStatus(null);
+                                    }}
+                                    className={`${notebookRailItemClass} hover:border-white/10 hover:bg-white/[0.05]`}
+                                  >
+                                    <span className={`${notebookRailIconClass} border-amber-200/60 bg-amber-100 text-amber-700`}>
+                                      <NotebookRailIcon kind="folder" />
                                     </span>
-                                  </span>
-                                </button>
-                              ))
+                                    <span className="min-w-0 flex-1">
+                                      <span className={notebookRailTitleClass}>{displayName}</span>
+                                      <span className={notebookRailMetaClass}>
+                                        {sortedDocuments.filter((document) => (document.folderId ?? null) === folder.id).length} docs
+                                      </span>
+                                    </span>
+                                  </button>
+                                );
+                              })
                             ) : (
                               <div className={notebookRailMetaClass}>
                                 {normalizedSearchQuery ? "No folders match this search." : "No folders yet."}
@@ -2086,10 +2098,12 @@ export function NotebookView() {
                             {railDocuments.length > 0 ? (
                               railDocuments.map((document) => {
                                 const isActive = document.id === activeDocument.id;
+                                const displayTitle = document.title.trim() || "Untitled Document";
                                 return (
                                   <button
                                     key={document.id}
                                     type="button"
+                                    title={displayTitle}
                                     onClick={() => {
                                       void openDocument(document);
                                     }}
@@ -2099,7 +2113,7 @@ export function NotebookView() {
                                       <NotebookRailIcon kind="document" />
                                     </span>
                                     <span className="min-w-0 flex-1">
-                                      <span className={notebookRailTitleClass}>{document.title.trim() || "Untitled Document"}</span>
+                                      <span className={notebookRailTitleClass}>{displayTitle}</span>
                                       <span className={notebookRailMetaClass}>
                                         {document.pages.length} pages
                                         {document.favorited === true ? " · Favorited" : ""}
@@ -2116,10 +2130,12 @@ export function NotebookView() {
                           </div>
                         </section>
                       </div>
-                    </aside>
-                  ) : null}
+                        </aside>
+                      </>
+                    ) : null}
+                  </div>
 
-                  <div className="flex min-h-0 min-w-0 flex-col gap-2">
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
                     <div className="rounded-[22px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] p-3 shadow-[0_8px_24px_var(--panel-shadow)]">
                       <div className="relative z-30 flex min-w-0 flex-wrap items-center justify-between gap-1.5">
                         <label className="min-w-0 flex-1 basis-[18rem]">
@@ -2142,19 +2158,14 @@ export function NotebookView() {
                           {status ? <div className={`inline-flex shrink-0 items-center ${compactStatusClass} ${statusClass}`}>{status.message}</div> : null}
                           <div className="relative">
                             <button
-                              ref={exportButtonRef}
                               type="button"
                               onClick={() => {
                                 setStatus(null);
-                                if (isExportMenuOpen) {
-                                  closeExportMenu();
-                                } else {
-                                  openExportMenu();
-                                }
+                                void exportActivePageAsPdf();
                               }}
                               className={`${editorActionButtonClass} border-[color:var(--panel-border)] bg-white/70 text-slate-600`}
                             >
-                              Export page
+                              Export PDF
                             </button>
                           </div>
                           <div className="relative">
@@ -2176,8 +2187,19 @@ export function NotebookView() {
                               …
                             </button>
                           </div>
-                          <button type="button" onClick={() => void handleDeleteDocument(activeDocument)} className={editorDangerButtonClass}>
-                            Delete Document
+                          <button
+                            type="button"
+                            onClick={toggleFullscreen}
+                            aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                            aria-pressed={isFullscreen}
+                            title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                            className={`${editorIconButtonClass} border-[color:var(--panel-border)] bg-white/70 text-slate-600`}
+                          >
+                            {isFullscreen ? (
+                              <Minimize2 className="h-4 w-4" aria-hidden="true" />
+                            ) : (
+                              <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                            )}
                           </button>
                         </div>
                       </div>
@@ -2292,19 +2314,73 @@ export function NotebookView() {
                           </div>
 
                           <div className="flex min-h-0 flex-1">
-                            <NotebookEditorAdapter
-                              value={activePage.contentHtml}
-                              onChange={(html) =>
-                                updateActivePage((page) => ({
-                                  ...page,
-                                  contentHtml: html,
-                                  updatedAt: nowIso(),
-                                }))
-                              }
-                              editorKey={activePage.id}
-                              placeholder="Write inside this document. Each page stays nested under the current document."
-                              className={notebookEditorShellClass}
-                            />
+                            {activePage.kind === "pdf" && activePage.pdfFilename ? (
+                              <NotebookPdfViewer
+                                key={activePage.id}
+                                filename={activePage.pdfFilename}
+                                originalName={activePage.pdfOriginalName ?? activePage.title}
+                                annotations={activePage.pdfAnnotations}
+                                viewMode={activePage.pdfViewMode ?? "horizontal"}
+                                outline={activePage.pdfOutline}
+                                onChangeViewMode={(next) => {
+                                  updateActivePage((page) => ({
+                                    ...page,
+                                    pdfViewMode: next,
+                                    updatedAt: nowIso(),
+                                  }));
+                                }}
+                                onPageCount={(count) => {
+                                  if (activePage.pdfPageCount === count) {
+                                    return;
+                                  }
+                                  updateActivePage((page) => ({
+                                    ...page,
+                                    pdfPageCount: count,
+                                    updatedAt: nowIso(),
+                                  }));
+                                }}
+                                onChangeOutline={(outline) => {
+                                  updateActivePage((page) => ({
+                                    ...page,
+                                    pdfOutline: outline,
+                                    updatedAt: nowIso(),
+                                  }));
+                                }}
+                                onAddAnnotation={(annotation) => {
+                                  updateActivePage((page) => ({
+                                    ...page,
+                                    pdfAnnotations: [
+                                      ...(page.pdfAnnotations ?? []),
+                                      annotation,
+                                    ],
+                                    updatedAt: nowIso(),
+                                  }));
+                                }}
+                                onDeleteAnnotation={(annotationId) => {
+                                  updateActivePage((page) => ({
+                                    ...page,
+                                    pdfAnnotations: (page.pdfAnnotations ?? []).filter(
+                                      (existing) => existing.id !== annotationId,
+                                    ),
+                                    updatedAt: nowIso(),
+                                  }));
+                                }}
+                              />
+                            ) : (
+                              <NotebookEditorAdapter
+                                value={activePage.contentHtml}
+                                onChange={(html) =>
+                                  updateActivePage((page) => ({
+                                    ...page,
+                                    contentHtml: html,
+                                    updatedAt: nowIso(),
+                                  }))
+                                }
+                                editorKey={activePage.id}
+                                placeholder="Write inside this document. Each page stays nested under the current document."
+                                className={notebookEditorShellClass}
+                              />
+                            )}
                           </div>
                         </div>
                       ) : null
@@ -2388,7 +2464,7 @@ export function NotebookView() {
       <input
         ref={importInputRef}
         type="file"
-        accept=".txt,.md,.markdown,.html,.htm,text/plain,text/markdown,text/html,application/xhtml+xml"
+        accept=".txt,.md,.markdown,.html,.htm,.pdf,text/plain,text/markdown,text/html,application/xhtml+xml,application/pdf"
         className="hidden"
         onChange={(event) => {
           void importNotebookFile(event);

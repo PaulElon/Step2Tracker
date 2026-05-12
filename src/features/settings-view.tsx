@@ -1,11 +1,34 @@
-import { Bell, Check, Database, Download, ExternalLink, Globe, Monitor, Palette, Pencil, Plus, RefreshCw, RotateCcw, Trash2, X, Zap } from "lucide-react";
+import {
+  Bell,
+  BookmarkPlus,
+  Check,
+  Database,
+  Download,
+  ExternalLink,
+  FolderOpen,
+  Globe,
+  Info,
+  Monitor,
+  Palette,
+  Pencil,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  ShieldAlert,
+  SlidersHorizontal,
+  Tag,
+  Trash2,
+  Upload,
+  X,
+  Zap,
+} from "lucide-react";
 import { launchResource } from "../lib/launcher";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
-import { Panel } from "../components/ui";
+import { NavigationButton, Panel } from "../components/ui";
 import { themeList } from "../lib/themes";
-import { fieldClassName, secondaryButtonClassName } from "../lib/ui";
+import { cn, fieldClassName, secondaryButtonClassName } from "../lib/ui";
 import type { BackupArtifactPreview, PersistenceSummary, ResourceLink, ThemeId } from "../types/models";
 
 function generateId(prefix: string) {
@@ -72,7 +95,10 @@ function CategoriesPanel({
   }
 
   return (
-    <Panel title="Categories">
+    <Panel
+      title="Categories"
+      subtitle="Organize study tasks with your own category labels."
+    >
       <div className="space-y-2">
         {customCategories.map((category, index) => (
           <div
@@ -248,12 +274,7 @@ function ResourcesPanel({
     <>
       <Panel
         title="Resources"
-        action={
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/55 px-3 py-2 text-sm text-slate-300">
-            <ExternalLink className="h-4 w-4 text-cyan-200" />
-            Links
-          </div>
-        }
+        subtitle="Quick launchers for your most-used study sites and apps."
       >
         <div className="space-y-2">
           {openError ? (
@@ -506,7 +527,7 @@ function readCachedStatus(): UpdateStatus {
   }
 }
 
-function UpdatesPanel() {
+function AboutPanel() {
   const [status, setStatus] = useState<UpdateStatus>(readCachedStatus);
   const [appVersion, setAppVersion] = useState<string>("");
   const hasAutoCheckedRef = useRef(false);
@@ -618,15 +639,29 @@ function UpdatesPanel() {
   }
 
   return (
-    <Panel title="Updates">
-      <div className="flex flex-col gap-4">
-        {displayVersion ? (
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-            Installed: v{displayVersion}
-          </p>
-        ) : null}
-
-        <p className="text-sm text-slate-300">{statusLine}</p>
+    <Panel
+      title="About TimeFolio Study Tracker"
+      subtitle="Installed version and update status."
+    >
+      <div className="flex flex-col gap-5">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-[16px] border border-white/10 bg-slate-950/45 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Installed version</p>
+            <p className="mt-2 text-lg font-semibold text-white">
+              {displayVersion ? `v${displayVersion}` : "—"}
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              Built for disciplined, local-first study tracking.
+            </p>
+          </div>
+          <div className="rounded-[16px] border border-white/10 bg-slate-950/45 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Update status</p>
+            <p className="mt-2 text-sm">{statusLine}</p>
+            <p className="mt-1 text-xs text-slate-400">
+              Checked automatically once per day.
+            </p>
+          </div>
+        </div>
 
         {status.kind === "error" ? (
           <div className="rounded-[14px] border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
@@ -644,7 +679,7 @@ function UpdatesPanel() {
             }}
           >
             <RefreshCw className={`h-4 w-4 ${status.kind === "checking" ? "animate-spin" : ""}`} />
-            Check for Updates
+            Check for updates
           </button>
 
           {status.kind === "available" ? (
@@ -656,7 +691,7 @@ function UpdatesPanel() {
                 void handleInstall();
               }}
             >
-              Install Update v{status.version}
+              Install update v{status.version}
             </button>
           ) : null}
         </div>
@@ -664,6 +699,30 @@ function UpdatesPanel() {
     </Panel>
   );
 }
+
+type SettingsSection =
+  | "appearance"
+  | "defaults"
+  | "categories"
+  | "resources"
+  | "reminders"
+  | "data"
+  | "about";
+
+const SETTINGS_NAV: Array<{
+  id: SettingsSection;
+  label: string;
+  icon: typeof Palette;
+  group: "preferences" | "content" | "system";
+}> = [
+  { id: "appearance", label: "Appearance", icon: Palette, group: "preferences" },
+  { id: "defaults", label: "Study Defaults", icon: SlidersHorizontal, group: "preferences" },
+  { id: "categories", label: "Categories", icon: Tag, group: "content" },
+  { id: "resources", label: "Resources", icon: BookmarkPlus, group: "content" },
+  { id: "reminders", label: "Reminders", icon: Bell, group: "system" },
+  { id: "data", label: "Data & Safety", icon: Database, group: "system" },
+  { id: "about", label: "About", icon: Info, group: "system" },
+];
 
 export function SettingsView({
   themeId,
@@ -713,6 +772,8 @@ export function SettingsView({
     trashItems: number;
   };
 }) {
+  const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
+
   const reminderButtonLabel =
     notificationPermission === "granted"
       ? "Send test alert"
@@ -824,270 +885,363 @@ export function SettingsView({
     }
   }
 
+  const groupOrder: Array<{ id: "preferences" | "content" | "system"; label: string }> = [
+    { id: "preferences", label: "Preferences" },
+    { id: "content", label: "Content" },
+    { id: "system", label: "System" },
+  ];
+
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Panel
-          title="Appearance"
-          action={
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/55 px-3 py-2 text-sm text-slate-300">
-              <Palette className="h-4 w-4 text-cyan-200" />
-              Theme
-            </div>
-          }
-        >
-          <div className="h-[172px] overflow-y-scroll scrollbar-subtle">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {themeList.map((theme) => {
-                const isEnhanced = enhancedThemeIds.includes(theme.id);
-                return (
-                  <div
-                    key={theme.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={themeId === theme.id}
-                    className={`theme-option cursor-pointer ${themeId === theme.id ? "border-white/20 bg-white/[0.07]" : ""}`}
-                    onClick={() => onThemeChange(theme.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") onThemeChange(theme.id);
-                    }}
-                  >
-                    <p className="text-sm font-semibold text-white">{theme.label}</p>
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1">
-                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: theme.chart.primary }} />
-                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: theme.chart.secondary }} />
-                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: theme.chart.tertiary }} />
-                      </div>
-                      <button
-                        type="button"
-                        aria-label={isEnhanced ? `Disable enhanced ${theme.label}` : `Enhance ${theme.label}`}
-                        aria-pressed={isEnhanced}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onToggleThemeEnhanced(theme.id);
+      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Settings</h2>
+      <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
+        <aside className="glass-panel h-fit p-3 xl:sticky xl:top-4">
+          <nav className="space-y-4">
+            {groupOrder.map((group) => (
+              <div key={group.id} className="space-y-0.5">
+                <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">
+                  {group.label}
+                </p>
+                {SETTINGS_NAV.filter((item) => item.group === group.id).map((item) => (
+                  <NavigationButton
+                    key={item.id}
+                    icon={item.icon}
+                    label={item.label}
+                    active={activeSection === item.id}
+                    onClick={() => setActiveSection(item.id)}
+                  />
+                ))}
+              </div>
+            ))}
+          </nav>
+        </aside>
+
+        <div className="min-w-0 space-y-4">
+          {activeSection === "appearance" ? (
+            <Panel
+              title="Appearance"
+              subtitle="Choose your theme and toggle enhanced accents."
+            >
+              <div className="max-h-[420px] overflow-y-auto pr-1 scrollbar-subtle">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {themeList.map((theme) => {
+                    const isEnhanced = enhancedThemeIds.includes(theme.id);
+                    return (
+                      <div
+                        key={theme.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={themeId === theme.id}
+                        className={`theme-option cursor-pointer ${themeId === theme.id ? "border-white/20 bg-white/[0.07]" : ""}`}
+                        onClick={() => onThemeChange(theme.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") onThemeChange(theme.id);
                         }}
-                        className={`rounded-full border p-1.5 transition ${
-                          isEnhanced
-                            ? "border-yellow-300/50 bg-yellow-300/15 text-yellow-300"
-                            : "border-white/10 text-slate-400 hover:text-white"
-                        }`}
                       >
-                        <Zap className={`h-3.5 w-3.5 ${isEnhanced ? "fill-yellow-300" : ""}`} />
-                      </button>
+                        <p className="text-sm font-semibold text-white">{theme.label}</p>
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1">
+                            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: theme.chart.primary }} />
+                            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: theme.chart.secondary }} />
+                            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: theme.chart.tertiary }} />
+                          </div>
+                          <button
+                            type="button"
+                            aria-label={isEnhanced ? `Disable enhanced ${theme.label}` : `Enhance ${theme.label}`}
+                            aria-pressed={isEnhanced}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onToggleThemeEnhanced(theme.id);
+                            }}
+                            className={`rounded-full border p-1.5 transition ${
+                              isEnhanced
+                                ? "border-yellow-300/50 bg-yellow-300/15 text-yellow-300"
+                                : "border-white/10 text-slate-400 hover:text-white"
+                            }`}
+                          >
+                            <Zap className={`h-3.5 w-3.5 ${isEnhanced ? "fill-yellow-300" : ""}`} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </Panel>
+          ) : null}
+
+          {activeSection === "defaults" ? (
+            <Panel
+              title="Study Defaults"
+              subtitle="Targets used across Today, Plan, and progress views."
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="panel-subtle">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Daily target</p>
+                  <p className="mt-2 text-3xl font-semibold text-white">
+                    {Math.max(Math.round(dailyGoalMinutes / 60), 1)}h
+                  </p>
+                  <label
+                    className="mt-5 block text-xs uppercase tracking-[0.16em] text-slate-500"
+                    htmlFor="daily-goal-hours"
+                  >
+                    Goal hours
+                  </label>
+                  <input
+                    id="daily-goal-hours"
+                    type="number"
+                    min={1}
+                    max={16}
+                    step={1}
+                    inputMode="numeric"
+                    key={dailyGoalMinutes}
+                    defaultValue={Math.max(Math.round(dailyGoalMinutes / 60), 1)}
+                    onBlur={(event) => {
+                      const parsed = Number.parseInt(event.target.value.trim(), 10);
+                      const nextHours = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), 16) : 1;
+                      onDailyGoalMinutesChange(nextHours);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.currentTarget.blur();
+                      }
+                    }}
+                    className={`${fieldClassName} mt-2`}
+                  />
+                  <p className="mt-2 text-sm text-slate-400">Saved range: 1 to 16 hours.</p>
+                </div>
+              </div>
+            </Panel>
+          ) : null}
+
+          {activeSection === "categories" ? (
+            <CategoriesPanel
+              customCategories={customCategories}
+              onSetCustomCategories={onSetCustomCategories}
+            />
+          ) : null}
+
+          {activeSection === "resources" ? (
+            <ResourcesPanel
+              resourceLinks={resourceLinks}
+              onSetResourceLinks={onSetResourceLinks}
+            />
+          ) : null}
+
+          {activeSection === "reminders" ? (
+            <Panel
+              title="Reminders"
+              subtitle="Local notifications for study sessions on this Mac."
+            >
+              <div className="flex flex-col gap-4">
+                <div className="panel-subtle flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Status</p>
+                    <p className="mt-1 text-sm font-medium text-white">
+                      {notificationPermission === "granted"
+                        ? "Enabled"
+                        : notificationPermission === "denied"
+                          ? "Blocked"
+                          : notificationPermission === "unsupported"
+                            ? "Unsupported"
+                            : "Not enabled"}
+                    </p>
+                  </div>
+                  <button type="button" className={secondaryButtonClassName} onClick={handleReminderClick}>
+                    {reminderButtonLabel}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Reminders only run while the app is open. Nothing is sent off your device.
+                </p>
+              </div>
+            </Panel>
+          ) : null}
+
+          {activeSection === "data" ? (
+            <div className="space-y-4">
+              <Panel
+                title="Data & Safety"
+                subtitle="Manage your local Study Tracker data."
+              >
+                <div className="grid gap-4">
+                  <div className="panel-subtle flex items-start gap-3">
+                    <Database className="mt-0.5 h-5 w-5 shrink-0 text-cyan-200" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-white">Local-first storage</p>
+                      <p className="text-xs leading-5 text-slate-400">{persistenceCopy}</p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        </Panel>
 
-        <Panel title="Study Defaults">
-          <div className="panel-subtle">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Daily target</p>
-            <p className="mt-2 text-3xl font-semibold text-white">{Math.max(Math.round(dailyGoalMinutes / 60), 1)}h</p>
-            <label className="mt-5 block text-xs uppercase tracking-[0.16em] text-slate-500" htmlFor="daily-goal-hours">
-              Goal hours
-            </label>
-            <input
-              id="daily-goal-hours"
-              type="number"
-              min={1}
-              max={16}
-              step={1}
-              inputMode="numeric"
-              key={dailyGoalMinutes}
-              defaultValue={Math.max(Math.round(dailyGoalMinutes / 60), 1)}
-              onBlur={(event) => {
-                const parsed = Number.parseInt(event.target.value.trim(), 10);
-                const nextHours = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), 16) : 1;
-                onDailyGoalMinutesChange(nextHours);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.currentTarget.blur();
-                }
-              }}
-              className={`${fieldClassName} mt-2`}
-            />
-            <p className="mt-2 text-sm text-slate-400">Saved range: 1 to 16 hours.</p>
-          </div>
-        </Panel>
-      </div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <StorageStatCard
+                      label="Task count"
+                      value={String(studyStorageCounts.studyBlocks)}
+                      detail="Study tasks in local storage."
+                    />
+                    <StorageStatCard
+                      label="Practice tests"
+                      value={String(studyStorageCounts.practiceTests)}
+                      detail="Saved practice test records."
+                    />
+                    <StorageStatCard
+                      label="Weak topics"
+                      value={String(studyStorageCounts.weakTopicEntries)}
+                      detail="Tracked weak topic entries."
+                    />
+                    <StorageStatCard
+                      label="Trash items"
+                      value={String(studyStorageCounts.trashItems)}
+                      detail="Recoverable records in trash."
+                    />
+                  </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <CategoriesPanel
-          customCategories={customCategories}
-          onSetCustomCategories={onSetCustomCategories}
-        />
-        <ResourcesPanel resourceLinks={resourceLinks} onSetResourceLinks={onSetResourceLinks} />
-      </div>
-
-      <UpdatesPanel />
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2.6fr)]">
-        <Panel
-          title="Reminders"
-          action={
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/55 px-3 py-2 text-sm text-slate-300">
-              <Bell className="h-4 w-4 text-cyan-200" />
-              Alerts
-            </div>
-          }
-        >
-          <div className="flex flex-col gap-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
-              Status:{" "}
-              {notificationPermission === "granted"
-                ? "enabled"
-                : notificationPermission === "denied"
-                  ? "blocked"
-                  : notificationPermission === "unsupported"
-                    ? "unsupported"
-                  : "not enabled"}
-            </p>
-            <button type="button" className={secondaryButtonClassName} onClick={handleReminderClick}>
-              {reminderButtonLabel}
-            </button>
-          </div>
-        </Panel>
-
-        <Panel
-          title="Storage"
-          action={
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/55 px-3 py-2 text-sm text-slate-300">
-              <Database className="h-4 w-4 text-cyan-200" />
-              Local
-            </div>
-          }
-        >
-          <div className="grid gap-4">
-            <div className="flex flex-col gap-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <StorageStatCard
-                  label="Task count"
-                  value={String(studyStorageCounts.studyBlocks)}
-                  detail="Study tasks in local Study Tracker storage."
-                />
-                <StorageStatCard
-                  label="Practice tests"
-                  value={String(studyStorageCounts.practiceTests)}
-                  detail="Saved practice test records."
-                />
-                <StorageStatCard
-                  label="Weak topics"
-                  value={String(studyStorageCounts.weakTopicEntries)}
-                  detail="Tracked weak topic entries."
-                />
-                <StorageStatCard
-                  label="Trash items"
-                  value={String(studyStorageCounts.trashItems)}
-                  detail="Recoverable records in Study Tracker trash."
-                />
-              </div>
-
-              {storageMessage ? (
-                <div
-                  className={`rounded-[16px] border px-4 py-3 text-sm ${
-                    storageMessage.tone === "error"
-                      ? "border-rose-500/25 bg-rose-500/10 text-rose-100"
-                      : "border-emerald-500/25 bg-emerald-500/10 text-emerald-100"
-                  }`}
-                >
-                  {storageMessage.text}
-                </div>
-              ) : null}
-
-              <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
-                <div className="rounded-[16px] border border-white/10 bg-slate-950/45 p-4">
-                  <div className="text-sm font-semibold text-white">Import JSON</div>
-                  <p className="mt-2 text-xs leading-5 text-slate-400">
-                    Select a `.json` TimeFolio Study Tracker backup artifact. TimeFolio data is untouched.
-                  </p>
-                  <input
-                    type="file"
-                    accept=".json,application/json"
-                    onChange={(event) => {
-                      void handleImportFileChange(event);
-                    }}
-                    disabled={isStorageBusy}
-                    className="mt-3 block w-full rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-200 file:mr-4 file:rounded-md file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-100 hover:file:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
-                  />
-                  {pendingImportPreview ? (
-                    <div className="mt-3 rounded-[14px] border border-cyan-300/20 bg-cyan-300/10 p-3 text-sm text-slate-200">
-                      <p className="font-semibold text-white">
-                        Exported {pendingImportPreview.exportedAt.slice(0, 10)}
-                      </p>
-                      <p className="mt-1">{formatCountsLine(pendingImportPreview.counts)}</p>
-                      <p className="mt-1 text-xs text-slate-300">
-                        Schema {pendingImportPreview.schemaVersion} · App {pendingImportPreview.appVersion}
-                      </p>
+                  {storageMessage ? (
+                    <div
+                      className={cn(
+                        "rounded-[16px] border px-4 py-3 text-sm",
+                        storageMessage.tone === "error"
+                          ? "border-rose-500/25 bg-rose-500/10 text-rose-100"
+                          : "border-emerald-500/25 bg-emerald-500/10 text-emerald-100",
+                      )}
+                    >
+                      {storageMessage.text}
                     </div>
                   ) : null}
                 </div>
+              </Panel>
 
-                <div className="flex flex-col gap-3">
-                  <button
-                    type="button"
-                    className="rounded-lg border border-cyan-500/30 bg-cyan-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={isStorageBusy}
-                    onClick={() => {
-                      void handleExportBackup();
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Download className="h-4 w-4" />
-                      Export JSON
+              <div className="grid gap-4 xl:grid-cols-2">
+                <Panel
+                  title="Backup & Export"
+                  subtitle="Save a JSON snapshot of your Study Tracker data."
+                >
+                  <div className="flex flex-col gap-3">
+                    <p className="text-xs leading-5 text-slate-400">
+                      Exports a single <code className="text-slate-300">.json</code> file with all study tasks,
+                      practice tests, weak topics, and trashed items. Safe to run any time.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isStorageBusy}
+                        onClick={() => {
+                          void handleExportBackup();
+                        }}
+                      >
+                        <Download className="h-4 w-4" />
+                        Export JSON
+                      </button>
+                      <button
+                        type="button"
+                        className={secondaryButtonClassName}
+                        onClick={onOpenRecoveryCenter}
+                        disabled={isStorageBusy}
+                      >
+                        <FolderOpen className="h-4 w-4" />
+                        Recovery Center
+                      </button>
                     </div>
-                  </button>
+                    <p className="text-xs text-slate-500">
+                      Recovery Center lets you restore individual items from trash without affecting the rest of your data.
+                    </p>
+                  </div>
+                </Panel>
 
-                  <button
-                    type="button"
-                    className="rounded-lg border border-white/10 bg-slate-900/70 px-4 py-3 text-sm font-medium text-slate-100 transition hover:border-white/20 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={onOpenRecoveryCenter}
-                    disabled={isStorageBusy}
-                  >
-                    <div className="flex items-center gap-2">
-                      <RotateCcw className="h-4 w-4" />
-                      Recovery center
-                    </div>
-                  </button>
-
-                  {pendingImportPreview ? (
-                    <div className="rounded-[16px] border border-rose-500/25 bg-rose-500/10 p-3 text-sm text-rose-100">
-                      <p className="font-medium">Import will replace Study Tracker local data only.</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          className="rounded-lg border border-rose-400/40 bg-rose-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
-                          onClick={() => {
-                            void handleConfirmImport();
-                          }}
-                          disabled={isStorageBusy}
-                        >
-                          Confirm import
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-                          onClick={handleCancelPendingImport}
-                          disabled={isStorageBusy}
-                        >
-                          Cancel
-                        </button>
+                <Panel
+                  title="Import & Restore"
+                  subtitle="Replace local Study Tracker data from a backup file."
+                  className="border-rose-500/20"
+                >
+                  <div className="flex flex-col gap-3">
+                    <div className="rounded-[16px] border border-rose-500/25 bg-rose-500/5 p-4">
+                      <div className="flex items-start gap-3">
+                        <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-rose-300" />
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-rose-100">Destructive action</p>
+                          <p className="text-xs leading-5 text-rose-200/80">
+                            Importing replaces your current Study Tracker data with the contents of the backup file.
+                            TimeFolio time-tracking data is untouched. Export a backup first if you want to keep your current state.
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  ) : null}
-                </div>
+
+                    <label className="block text-xs uppercase tracking-[0.16em] text-slate-500">
+                      Backup file
+                    </label>
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      onChange={(event) => {
+                        void handleImportFileChange(event);
+                      }}
+                      disabled={isStorageBusy}
+                      className="block w-full rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-200 file:mr-4 file:rounded-md file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-100 hover:file:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+
+                    {pendingImportPreview ? (
+                      <div className="space-y-3">
+                        <div className="rounded-[14px] border border-cyan-300/20 bg-cyan-300/10 p-3 text-sm text-slate-200">
+                          <p className="font-semibold text-white">
+                            Backup snapshot · exported {pendingImportPreview.exportedAt.slice(0, 10)}
+                          </p>
+                          <p className="mt-1">{formatCountsLine(pendingImportPreview.counts)}</p>
+                          <p className="mt-1 text-xs text-slate-300">
+                            Schema {pendingImportPreview.schemaVersion} · App {pendingImportPreview.appVersion}
+                          </p>
+                        </div>
+                        <div className="rounded-[16px] border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100">
+                          <p className="font-medium">
+                            This will replace your current Study Tracker data. This cannot be undone.
+                          </p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-2 rounded-lg border border-rose-400/40 bg-rose-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
+                              onClick={() => {
+                                void handleConfirmImport();
+                              }}
+                              disabled={isStorageBusy}
+                            >
+                              <Upload className="h-4 w-4" />
+                              Confirm replace
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                              onClick={handleCancelPendingImport}
+                              disabled={isStorageBusy}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      className={`${secondaryButtonClassName} self-start`}
+                      onClick={onOpenRecoveryCenter}
+                      disabled={isStorageBusy}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Recover individual items
+                    </button>
+                    <p className="text-xs text-slate-500">
+                      Looking to restore a single deleted task? Use Recovery Center instead of importing a full backup.
+                    </p>
+                  </div>
+                </Panel>
               </div>
-
-              <p className="text-xs text-slate-500">{persistenceCopy}</p>
             </div>
-          </div>
-        </Panel>
-      </div>
+          ) : null}
 
+          {activeSection === "about" ? <AboutPanel /> : null}
+        </div>
+      </div>
     </div>
   );
 }

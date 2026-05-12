@@ -1,6 +1,19 @@
-import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Download, Edit2, Plus, SlidersHorizontal, Trash2, X } from "lucide-react";
-import { MetricCard } from "../components/ui";
+import { Fragment, useDeferredValue, useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ChevronRight,
+  Download,
+  Edit2,
+  Plus,
+  Repeat,
+  Search,
+  Sparkles,
+  SlidersHorizontal,
+  Target,
+  Trash2,
+  TrendingUp,
+  X,
+} from "lucide-react";
 import { ModalShell } from "../components/modal-shell";
 import { RichTextEditor, RichTextRender, richTextToPlain } from "../components/rich-text-editor";
 import { primaryButtonClassName, secondaryButtonClassName } from "../lib/ui";
@@ -25,19 +38,23 @@ import type {
 
 type SortKey = "newest" | "system" | "topic" | "errorType" | "priority";
 
+const PRIORITY_DOT: Record<ErrorLogPriority, string> = {
+  high: "bg-rose-400",
+  medium: "bg-amber-400",
+  low: "bg-emerald-400",
+};
+
 const PRIORITY_PILL: Record<ErrorLogPriority, string> = {
-  high: "border-white/10 bg-white/[0.04] text-slate-300",
-  medium: "border-white/10 bg-white/[0.04] text-slate-300",
-  low: "border-white/10 bg-white/[0.04] text-slate-300",
+  high: "border-rose-300/25 bg-rose-400/10 text-rose-200",
+  medium: "border-amber-300/25 bg-amber-300/10 text-amber-200",
+  low: "border-emerald-300/25 bg-emerald-300/10 text-emerald-200",
 };
 
-const PRIORITY_CARD_ACCENT: Record<ErrorLogPriority, string> = {
-  high: "border-l-rose-400/80 shadow-[inset_3px_0_0_rgba(251,113,133,0.72)]",
-  medium: "border-l-amber-400/70 shadow-[inset_3px_0_0_rgba(251,191,36,0.58)]",
-  low: "border-l-slate-500/70 shadow-[inset_3px_0_0_rgba(100,116,139,0.46)]",
+const PRIORITY_LABEL: Record<ErrorLogPriority, string> = {
+  high: "High",
+  medium: "Medium",
+  low: "Low",
 };
-
-const NEUTRAL_TAG = "border-white/10 bg-white/[0.04] text-slate-300";
 
 const FOLLOW_UP_ACTION_LABELS: Record<ErrorLogFollowUpAction, string> = {
   "": "No follow-up set",
@@ -48,31 +65,22 @@ const FOLLOW_UP_ACTION_LABELS: Record<ErrorLogFollowUpAction, string> = {
   "ignore-one-off-detail": "Ignore one-off detail",
 };
 
-const REVIEW_SECTION_CLASS =
-  "min-w-0 rounded-2xl border border-white/[0.07] bg-white/[0.035] px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]";
-const FILTER_FIELD_CLASS = "h-9 w-full rounded-lg border border-white/10 bg-slate-900/70 px-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-cyan-400/30";
+const FILTER_FIELD_CLASS =
+  "h-9 w-full rounded-lg border border-white/10 bg-slate-900/70 px-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-cyan-400/30";
 const STUDY_TEXT_CLASS = "break-words whitespace-pre-wrap text-[0.95rem] leading-6 text-slate-200";
-const REVIEW_LABEL_CLASS = "text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-500";
-const PREVIEW_TEXT_CLASS =
-  "break-words whitespace-pre-wrap text-[0.84rem] leading-[1.2rem] text-slate-100 [&_p]:my-0 [&_li]:my-0.5 [&_ul]:my-1 [&_ol]:my-1";
-const PREVIEW_MAX_HEIGHT = "2.6rem";
-const COLLAPSED_CARD_VISIBLE_TAGS = 2;
 const ENTRY_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
   year: "numeric",
 });
 
-function getEntryTags(entry: ErrorLogEntry) {
-  const priority = entry.priority ?? "medium";
-  return [
-    { label: entry.errorType, className: NEUTRAL_TAG },
-    { label: priority, className: PRIORITY_PILL[priority] },
-    ...(entry.isRepeatMiss ? [{ label: "Repeat miss", className: NEUTRAL_TAG }] : []),
-    ...(entry.isGuessedCorrect ? [{ label: "Guessed correct", className: NEUTRAL_TAG }] : []),
-    ...(entry.addToFinalSheet ? [{ label: "Final sheet", className: NEUTRAL_TAG }] : []),
-  ];
-}
+const TOPIC_BAR_PALETTE = [
+  "bg-rose-400/85",
+  "bg-amber-400/85",
+  "bg-cyan-300/80",
+  "bg-violet-400/85",
+  "bg-emerald-400/80",
+];
 
 function looksLikeHtml(value: string) {
   return /<\/?[a-z][\s\S]*>/i.test(value);
@@ -139,99 +147,6 @@ function renderStudyContent(content: string, className = STUDY_TEXT_CLASS) {
         </Fragment>
       ))}
     </div>
-  );
-}
-
-function StudyPreview({
-  label,
-  content,
-}: {
-  label: string;
-  content: string;
-}) {
-  const hasContent = content.trim().length > 0;
-  const previewRef = useRef<HTMLDivElement | null>(null);
-  const [hasOverflow, setHasOverflow] = useState(false);
-
-  useEffect(() => {
-    const node = previewRef.current;
-    if (!node || !hasContent) {
-      setHasOverflow(false);
-      return;
-    }
-
-    const measureOverflow = () => {
-      setHasOverflow(node.scrollHeight - node.clientHeight > 1);
-    };
-
-    measureOverflow();
-
-    if (typeof ResizeObserver === "undefined") {
-      return;
-    }
-
-    const observer = new ResizeObserver(measureOverflow);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [content, hasContent]);
-
-  return (
-    <section className="flex min-h-0 min-w-0 flex-col">
-      <p className={REVIEW_LABEL_CLASS}>{label}</p>
-      {hasContent ? (
-        <div className="mt-1 min-w-0">
-          <div
-            ref={previewRef}
-            className="overflow-hidden pr-1"
-            style={{ minHeight: PREVIEW_MAX_HEIGHT, maxHeight: PREVIEW_MAX_HEIGHT }}
-          >
-            {renderStudyContent(content, PREVIEW_TEXT_CLASS)}
-          </div>
-          {hasOverflow ? (
-            <div className="pointer-events-none mt-1 h-1.5 rounded-full bg-gradient-to-b from-white/[0.07] via-white/[0.02] to-transparent" />
-          ) : null}
-        </div>
-      ) : (
-        <p className="mt-1 text-[0.84rem] leading-[1.2rem] text-slate-500">Not provided</p>
-      )}
-    </section>
-  );
-}
-
-function IconActionButton({
-  icon,
-  label,
-  onClick,
-  disabled = false,
-  className = "",
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onClick?: () => void;
-  disabled?: boolean;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      title={label}
-      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors ${className} ${
-        disabled ? "cursor-default opacity-70" : "hover:bg-white/5"
-      }`}
-    >
-      {icon}
-    </button>
-  );
-}
-
-function Badge({ className, children }: { className: string; children: React.ReactNode }) {
-  return (
-    <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] ${className}`}>
-      {children}
-    </span>
   );
 }
 
@@ -702,12 +617,11 @@ export function ErrorLogView() {
   const [showFilters, setShowFilters] = useState(false);
   const [editingEntry, setEditingEntry] = useState<ErrorLogEntry | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [reasoningEntryId, setReasoningEntryId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [addedWeakTopicIds, setAddedWeakTopicIds] = useState<Set<string>>(new Set());
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
-  const topicRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
     const q = deferredSearch.toLowerCase().trim();
@@ -741,20 +655,60 @@ export function ErrorLogView() {
     });
   }, [filtered, sortKey]);
 
-  const mostCommonErrorType = modeCount(entries.map((e) => e.errorType));
-  const mostCommonSystem = modeCount(entries.map((e) => e.system));
-  const topRepeatedWeakTopics = useMemo(() => {
+  useEffect(() => {
+    if (sorted.length === 0) {
+      if (selectedEntryId !== null) setSelectedEntryId(null);
+      return;
+    }
+    if (!selectedEntryId || !sorted.some((entry) => entry.id === selectedEntryId)) {
+      setSelectedEntryId(sorted[0].id);
+    }
+  }, [sorted, selectedEntryId]);
+
+  const selectedEntry = useMemo(
+    () => (selectedEntryId ? entries.find((entry) => entry.id === selectedEntryId) ?? null : null),
+    [entries, selectedEntryId],
+  );
+
+  const totalMissed = entries.length;
+  const recurringPatternsCount = useMemo(
+    () => entries.reduce((total, entry) => total + (entry.isRepeatMiss ? 1 : 0), 0),
+    [entries],
+  );
+  const highImpactCount = useMemo(
+    () => entries.reduce((total, entry) => total + ((entry.priority ?? "medium") === "high" ? 1 : 0), 0),
+    [entries],
+  );
+  const mostCommonSystem = useMemo(() => modeCount(entries.map((e) => e.system)), [entries]);
+  const mostCommonErrorType = useMemo(() => modeCount(entries.map((e) => e.errorType)), [entries]);
+
+  const topMissedTopics = useMemo(() => {
     const counts = new Map<string, number>();
     for (const entry of entries) {
-      if (!entry.isRepeatMiss) continue;
       const topic = entry.topic.trim();
       if (!topic) continue;
       counts.set(topic, (counts.get(topic) ?? 0) + 1);
     }
     return [...counts.entries()]
-      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .slice(0, 5);
   }, [entries]);
+
+  const nextReviewSuggestions = useMemo(() => {
+    const others = entries.filter((entry) => entry.id !== selectedEntryId);
+    return [...others]
+      .sort((a, b) => {
+        const aRepeat = a.isRepeatMiss ? 0 : 1;
+        const bRepeat = b.isRepeatMiss ? 0 : 1;
+        if (aRepeat !== bRepeat) return aRepeat - bRepeat;
+        const pa = PRIORITY_SORT_ORDER[a.priority ?? "medium"] ?? 1;
+        const pb = PRIORITY_SORT_ORDER[b.priority ?? "medium"] ?? 1;
+        if (pa !== pb) return pa - pb;
+        return b.createdAt.localeCompare(a.createdAt);
+      })
+      .slice(0, 3);
+  }, [entries, selectedEntryId]);
+
   const activeFilterCount = [
     filterSource !== "All",
     filterSystem !== "All",
@@ -762,13 +716,22 @@ export function ErrorLogView() {
     filterPriority !== "All",
     sortKey !== "newest",
   ].filter(Boolean).length;
-  const reasoningEntry = reasoningEntryId ? entries.find((entry) => entry.id === reasoningEntryId) ?? null : null;
+
+  const filtersActive = activeFilterCount > 0 || search.trim().length > 0;
+
+  function resetFilters() {
+    setFilterSource("All");
+    setFilterSystem("All");
+    setFilterErrorType("All");
+    setFilterPriority("All");
+    setSortKey("newest");
+    setSearch("");
+  }
 
   async function handleSave(input: ErrorLogInput) {
     await upsertErrorLogEntry(input);
     setShowModal(false);
     setEditingEntry(null);
-    setTimeout(() => topicRef.current?.focus(), 50);
   }
 
   async function handleDelete(id: string) {
@@ -804,252 +767,100 @@ export function ErrorLogView() {
     setToast(`Added "${entry.topic}" as a weak topic.`);
   }
 
+  function openCreate() {
+    setEditingEntry(null);
+    setShowModal(true);
+  }
+
+  function openEdit(entry: ErrorLogEntry) {
+    setEditingEntry(entry);
+    setConfirmDeleteId(null);
+    setShowModal(true);
+  }
+
   return (
-    <div className="flex h-full flex-col gap-3 pb-6">
+    <div className="flex h-full min-h-0 flex-col gap-4 pb-6">
       {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
 
-      {/* Row 1 — Metric cards */}
-      <div className="grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total logged" value={String(entries.length)} />
-        <MetricCard label="Most common error type" value={mostCommonErrorType ?? "—"} />
-        <MetricCard label="Most common category" value={mostCommonSystem ?? "—"} />
-        <div className="panel-subtle flex min-h-[132px] min-w-0 flex-col justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Top repeated weak topics</p>
-            {topRepeatedWeakTopics.length ? (
-              <div className="mt-2 min-w-0">
-                <p className="truncate text-[1.75rem] font-semibold tracking-[-0.04em] text-white">
-                  {topRepeatedWeakTopics[0][0]}
-                </p>
-              </div>
-            ) : (
-              <div className="mt-2">
-                <p className="text-[1.75rem] font-semibold tracking-[-0.04em] text-white">None yet</p>
-                <p className="mt-1 text-sm text-slate-300">No repeated misses yet</p>
-              </div>
-            )}
-          </div>
-          <p className="mt-3 text-xs text-slate-500">
-            {topRepeatedWeakTopics.length
-              ? `${topRepeatedWeakTopics[0][1]} repeat${topRepeatedWeakTopics[0][1] === 1 ? "" : "s"} tracked · ${topRepeatedWeakTopics.length} repeated topic${topRepeatedWeakTopics.length === 1 ? "" : "s"}`
-              : "0 repeats tracked · 0 repeated topics"}
-          </p>
-        </div>
+      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Portfolio - Error Log</h2>
+
+      <HeaderBand
+        search={search}
+        onSearchChange={setSearch}
+        showFilters={showFilters}
+        onToggleFilters={() => setShowFilters((value) => !value)}
+        activeFilterCount={activeFilterCount}
+        onCreate={openCreate}
+        onExport={() => exportCsv(sorted)}
+        canExport={sorted.length > 0}
+        entriesCount={entries.length}
+      />
+
+      {showFilters && entries.length > 0 ? (
+        <FiltersPanel
+          filterSource={filterSource}
+          filterSystem={filterSystem}
+          filterErrorType={filterErrorType}
+          filterPriority={filterPriority}
+          sortKey={sortKey}
+          onFilterSource={setFilterSource}
+          onFilterSystem={setFilterSystem}
+          onFilterErrorType={setFilterErrorType}
+          onFilterPriority={setFilterPriority}
+          onSortKey={setSortKey}
+          onReset={resetFilters}
+        />
+      ) : null}
+
+      <SummaryStrip
+        totalMissed={totalMissed}
+        recurringPatterns={recurringPatternsCount}
+        highImpact={highImpactCount}
+        mostCommonSystem={mostCommonSystem}
+        mostCommonErrorType={mostCommonErrorType}
+        filteredCount={sorted.length}
+        filtersActive={filtersActive}
+      />
+
+      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,17rem)_minmax(0,1fr)_minmax(0,16.5rem)]">
+        <EntryList
+          entries={sorted}
+          totalEntries={entries.length}
+          selectedId={selectedEntryId}
+          filtersActive={filtersActive}
+          onSelect={setSelectedEntryId}
+          onCreate={openCreate}
+          onResetFilters={resetFilters}
+        />
+
+        <EntryDetail
+          entry={selectedEntry}
+          totalEntries={entries.length}
+          onEdit={(entry) => openEdit(entry)}
+          onCreate={openCreate}
+        />
+
+        <InsightsRail
+          entries={entries}
+          selectedEntry={selectedEntry}
+          topMissedTopics={topMissedTopics}
+          recurringPatterns={recurringPatternsCount}
+          nextReview={nextReviewSuggestions}
+          weakTopicAdded={selectedEntry ? addedWeakTopicIds.has(selectedEntry.id) : false}
+          confirmDeleteId={confirmDeleteId}
+          onAddWeakTopic={(entry) => {
+            void handleAddWeakTopic(entry);
+          }}
+          onEditEntry={openEdit}
+          onExportEntry={(entry) => exportCsv([entry])}
+          onDeleteRequest={(id) => setConfirmDeleteId(id)}
+          onDeleteConfirm={(id) => {
+            void handleDelete(id);
+          }}
+          onDeleteCancel={() => setConfirmDeleteId(null)}
+          onSelect={setSelectedEntryId}
+        />
       </div>
-
-      {/* Entries list — fills remaining space */}
-      <section className="glass-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Header + controls stay fixed while cards scroll */}
-        <div className="shrink-0 border-b border-white/[0.07] pb-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-white">
-              Entries
-              {sorted.length !== entries.length ? (
-                <span className="ml-1.5 text-xs font-normal text-slate-400">
-                  ({sorted.length} of {entries.length})
-                </span>
-              ) : null}
-            </p>
-
-            {entries.length > 0 ? (
-              <div className="flex min-w-0 flex-1 flex-wrap items-center justify-start gap-2 sm:justify-end">
-                <input
-                  type="text"
-                  placeholder="Search topic, source, pattern..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="h-10 w-full min-w-0 rounded-xl border border-white/10 bg-slate-900/60 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40 sm:min-w-[20rem] sm:flex-1 sm:max-w-[28rem] lg:max-w-[30rem]"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowFilters((value) => !value)}
-                  className={`${secondaryButtonClassName} h-10 shrink-0`}
-                  aria-expanded={showFilters}
-                >
-                  <SlidersHorizontal className="h-4 w-4" />
-                  Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
-                </button>
-                <button
-                  type="button"
-                  className={`${primaryButtonClassName} h-10 shrink-0`}
-                  onClick={() => {
-                    setEditingEntry(null);
-                    setShowModal(true);
-                  }}
-                  title="Log a new entry"
-                >
-                  <Plus className="h-4 w-4" />
-                  Log entry
-                </button>
-                <button
-                  type="button"
-                  className={`${secondaryButtonClassName} h-10 shrink-0`}
-                  onClick={() => exportCsv(sorted)}
-                  title="Export CSV"
-                >
-                  <Download className="h-4 w-4" />
-                  Export
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className={`${primaryButtonClassName} h-10 shrink-0`}
-                  onClick={() => {
-                    setEditingEntry(null);
-                    setShowModal(true);
-                  }}
-                  title="Log a new entry"
-                >
-                  <Plus className="h-4 w-4" />
-                  Log entry
-                </button>
-                <button
-                  type="button"
-                  className={`${secondaryButtonClassName} h-10 shrink-0`}
-                  onClick={() => exportCsv(sorted)}
-                  title="Export CSV"
-                >
-                  <Download className="h-4 w-4" />
-                  Export
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Compact filters */}
-          {entries.length > 0 ? (
-            <>
-              {showFilters ? (
-                <div className="mt-2 rounded-xl border border-white/[0.08] bg-slate-950/35 p-3">
-                  <div className="grid gap-2 md:grid-cols-5">
-                    <label className="min-w-0">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Source</span>
-                      <select
-                        value={filterSource}
-                        onChange={(e) => setFilterSource(e.target.value as ErrorLogSource | "All")}
-                        className={`${FILTER_FIELD_CLASS} mt-1`}
-                      >
-                        <option value="All">All sources</option>
-                        {ERROR_LOG_SOURCE_VALUES.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="min-w-0">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">System</span>
-                      <select
-                        value={filterSystem}
-                        onChange={(e) => setFilterSystem(e.target.value as ErrorLogSystem | "All")}
-                        className={`${FILTER_FIELD_CLASS} mt-1`}
-                      >
-                        <option value="All">All systems</option>
-                        {ERROR_LOG_SYSTEM_VALUES.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="min-w-0">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Error type</span>
-                      <select
-                        value={filterErrorType}
-                        onChange={(e) => setFilterErrorType(e.target.value as ErrorLogErrorType | "All")}
-                        className={`${FILTER_FIELD_CLASS} mt-1`}
-                      >
-                        <option value="All">All error types</option>
-                        {ERROR_LOG_ERROR_TYPE_VALUES.map((t) => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="min-w-0">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Priority</span>
-                      <select
-                        value={filterPriority}
-                        onChange={(e) => setFilterPriority(e.target.value as ErrorLogPriority | "All")}
-                        className={`${FILTER_FIELD_CLASS} mt-1`}
-                      >
-                        <option value="All">All priorities</option>
-                        <option value="high">High</option>
-                        <option value="medium">Medium</option>
-                        <option value="low">Low</option>
-                      </select>
-                    </label>
-                    <label className="min-w-0">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Sort</span>
-                      <select
-                        value={sortKey}
-                        onChange={(e) => setSortKey(e.target.value as SortKey)}
-                        className={`${FILTER_FIELD_CLASS} mt-1`}
-                      >
-                        <option value="newest">Newest</option>
-                        <option value="priority">Priority</option>
-                        <option value="system">System</option>
-                        <option value="topic">Topic</option>
-                        <option value="errorType">Error Type</option>
-                      </select>
-                    </label>
-                  </div>
-                </div>
-              ) : null}
-            </>
-          ) : null}
-        </div>
-
-        {/* Entries */}
-        <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-subtle">
-          {entries.length === 0 ? (
-            <button
-              type="button"
-              onClick={() => {
-                setEditingEntry(null);
-                setShowModal(true);
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-white/15 bg-white/[0.02] py-10 text-base font-semibold text-slate-300 transition-colors hover:border-cyan-300/40 hover:bg-cyan-300/5 hover:text-cyan-200"
-            >
-              <Plus className="h-5 w-5" />
-              Add first log entry
-            </button>
-          ) : sorted.length === 0 ? (
-            <div className="py-8 text-center text-sm text-slate-500">
-              No entries match the current filters.
-            </div>
-          ) : (
-            <div className="grid gap-3 pb-4 lg:grid-cols-2">
-              {sorted.map((entry) => (
-                <EntryCard
-                  key={entry.id}
-                  entry={entry}
-                  isEditing={editingEntry?.id === entry.id}
-                  confirmDeleteId={confirmDeleteId}
-                  weakTopicAdded={addedWeakTopicIds.has(entry.id)}
-                  onShowReasoning={() => setReasoningEntryId(entry.id)}
-                  onEdit={() => {
-                    setEditingEntry(entry);
-                    setConfirmDeleteId(null);
-                    setShowModal(true);
-                  }}
-                  onDeleteRequest={() => setConfirmDeleteId(entry.id)}
-                  onDeleteConfirm={() => {
-                    void handleDelete(entry.id);
-                  }}
-                  onDeleteCancel={() => setConfirmDeleteId(null)}
-                  onAddWeakTopic={() => {
-                    void handleAddWeakTopic(entry);
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
 
       {showModal ? (
         <LogEntryModal
@@ -1061,258 +872,784 @@ export function ErrorLogView() {
           onSave={(input) => handleSave(input)}
         />
       ) : null}
-
-      {reasoningEntry ? (
-        <FullReasoningModal entry={reasoningEntry} onClose={() => setReasoningEntryId(null)} />
-      ) : null}
     </div>
   );
 }
 
-function FullReasoningModal({
-  entry,
-  onClose,
+function HeaderBand({
+  search,
+  onSearchChange,
+  showFilters,
+  onToggleFilters,
+  activeFilterCount,
+  onCreate,
+  onExport,
+  canExport,
+  entriesCount,
 }: {
-  entry: ErrorLogEntry;
-  onClose: () => void;
+  search: string;
+  onSearchChange: (value: string) => void;
+  showFilters: boolean;
+  onToggleFilters: () => void;
+  activeFilterCount: number;
+  onCreate: () => void;
+  onExport: () => void;
+  canExport: boolean;
+  entriesCount: number;
 }) {
-  const displayDate = formatEntryDate(entry.entryDate || entry.createdAt.slice(0, 10));
-  const metadata = [
-    entry.system,
-    entry.source,
-    entry.examBlock,
-    displayDate,
-  ].filter(Boolean);
-  const tags = getEntryTags(entry);
-  const nextReview = describeNextReview(entry);
-
+  const hasEntries = entriesCount > 0;
   return (
-    <ModalShell
-      onClose={onClose}
-      position="center"
-      titleId="full-reasoning-title"
-      contentClassName="max-h-[90vh] w-full max-w-[1080px] overflow-y-auto p-0"
-    >
+    <section className="glass-panel flex shrink-0 flex-wrap items-center gap-2 p-4">
+      {hasEntries ? (
+        <>
+          <label className="relative flex h-9 min-w-0 items-center sm:w-[18rem]">
+            <Search className="pointer-events-none absolute left-3 h-4 w-4 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Search entries..."
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="h-9 w-full rounded-lg border border-white/10 bg-slate-900/60 pl-9 pr-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={onToggleFilters}
+            aria-expanded={showFilters}
+            className={`${secondaryButtonClassName} h-9 shrink-0 px-3 text-sm`}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
+          </button>
+        </>
+      ) : null}
       <button
         type="button"
-        onClick={onClose}
-        aria-label="Close full reasoning"
-        title="Close full reasoning"
-        className="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-slate-950/75 text-slate-300 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+        onClick={onCreate}
+        className={`${primaryButtonClassName} h-9 shrink-0 px-3 text-sm`}
+        title="Log a new entry"
       >
-        <X className="h-4 w-4" />
+        <Plus className="h-4 w-4" />
+        Log entry
       </button>
-
-      <div className="border-b border-white/[0.08] bg-slate-950/45 px-5 py-5 pr-16 sm:px-6 sm:pr-16">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Full reasoning</p>
-            <h3 id="full-reasoning-title" className="mt-2 break-words text-2xl font-semibold leading-tight text-white">
-              {entry.topic || "Untitled topic"}
-            </h3>
-            <p className="mt-2 break-words text-sm leading-5 text-slate-400">{metadata.join(" · ")}</p>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-            {tags.map((tag) => (
-              <Badge key={tag.label} className={tag.className}>
-                {tag.label}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="px-5 py-5 sm:px-6">
-        <div className="grid gap-3.5 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
-          <div className="space-y-3.5">
-            <ReviewSection title="Missed">
-              {renderStudyContent(entry.missedPattern)}
-            </ReviewSection>
-
-            <ReviewSection title="Why I missed it">
-              {renderStudyContent(entry.whyPickedWrongAnswer)}
-            </ReviewSection>
-
-            <ReviewSection title="Fix">
-              {renderStudyContent(entry.fix)}
-            </ReviewSection>
-
-            <ReviewSection title="Additional details">
-              <div className="grid gap-2 text-[0.95rem] leading-6 text-slate-200 sm:grid-cols-2">
-                <p className="break-words">
-                  <span className="text-slate-500">Follow-up:</span>{" "}
-                  {FOLLOW_UP_ACTION_LABELS[entry.followUpAction] ?? entry.followUpAction}
-                </p>
-                <p>
-                  <span className="text-slate-500">Repeat miss:</span> {entry.isRepeatMiss ? "Yes" : "No"}
-                </p>
-                <p>
-                  <span className="text-slate-500">Guessed correct:</span> {entry.isGuessedCorrect ? "Yes" : "No"}
-                </p>
-                <p>
-                  <span className="text-slate-500">Final sheet:</span> {entry.addToFinalSheet ? "Yes" : "No"}
-                </p>
-              </div>
-            </ReviewSection>
-          </div>
-
-          <div className="space-y-3.5">
-            <ReviewSection title="Correct rule">
-              {renderStudyContent(entry.whyCorrectAnswerIsCorrect)}
-            </ReviewSection>
-
-            <ReviewSection title="Tempting wrong answer">
-              {renderStudyContent(entry.whyTemptingWrongAnswerIsWrong)}
-            </ReviewSection>
-
-            <ReviewSection title="Decision rule / algorithm">
-              {renderStudyContent(entry.decisionRule)}
-            </ReviewSection>
-
-            <ReviewSection title="Next action">
-              {renderStudyContent(nextReview)}
-            </ReviewSection>
-          </div>
-        </div>
-      </div>
-    </ModalShell>
+      <button
+        type="button"
+        onClick={onExport}
+        disabled={!canExport}
+        className={`${secondaryButtonClassName} h-9 shrink-0 px-3 text-sm ${
+          canExport ? "" : "cursor-default opacity-50"
+        }`}
+        title="Export visible entries to CSV"
+      >
+        <Download className="h-4 w-4" />
+        Export
+      </button>
+    </section>
   );
 }
 
-function EntryCard({
+function FiltersPanel({
+  filterSource,
+  filterSystem,
+  filterErrorType,
+  filterPriority,
+  sortKey,
+  onFilterSource,
+  onFilterSystem,
+  onFilterErrorType,
+  onFilterPriority,
+  onSortKey,
+  onReset,
+}: {
+  filterSource: ErrorLogSource | "All";
+  filterSystem: ErrorLogSystem | "All";
+  filterErrorType: ErrorLogErrorType | "All";
+  filterPriority: ErrorLogPriority | "All";
+  sortKey: SortKey;
+  onFilterSource: (value: ErrorLogSource | "All") => void;
+  onFilterSystem: (value: ErrorLogSystem | "All") => void;
+  onFilterErrorType: (value: ErrorLogErrorType | "All") => void;
+  onFilterPriority: (value: ErrorLogPriority | "All") => void;
+  onSortKey: (value: SortKey) => void;
+  onReset: () => void;
+}) {
+  const labelClass = "text-[10px] font-semibold uppercase tracking-wider text-slate-500";
+  return (
+    <section className="shrink-0 rounded-2xl border border-white/[0.08] bg-slate-950/35 p-3">
+      <div className="grid gap-2 md:grid-cols-5">
+        <label className="min-w-0">
+          <span className={labelClass}>Source</span>
+          <select
+            value={filterSource}
+            onChange={(e) => onFilterSource(e.target.value as ErrorLogSource | "All")}
+            className={`${FILTER_FIELD_CLASS} mt-1`}
+          >
+            <option value="All">All sources</option>
+            {ERROR_LOG_SOURCE_VALUES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="min-w-0">
+          <span className={labelClass}>System</span>
+          <select
+            value={filterSystem}
+            onChange={(e) => onFilterSystem(e.target.value as ErrorLogSystem | "All")}
+            className={`${FILTER_FIELD_CLASS} mt-1`}
+          >
+            <option value="All">All systems</option>
+            {ERROR_LOG_SYSTEM_VALUES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="min-w-0">
+          <span className={labelClass}>Error type</span>
+          <select
+            value={filterErrorType}
+            onChange={(e) => onFilterErrorType(e.target.value as ErrorLogErrorType | "All")}
+            className={`${FILTER_FIELD_CLASS} mt-1`}
+          >
+            <option value="All">All error types</option>
+            {ERROR_LOG_ERROR_TYPE_VALUES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="min-w-0">
+          <span className={labelClass}>Priority</span>
+          <select
+            value={filterPriority}
+            onChange={(e) => onFilterPriority(e.target.value as ErrorLogPriority | "All")}
+            className={`${FILTER_FIELD_CLASS} mt-1`}
+          >
+            <option value="All">All priorities</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </label>
+        <label className="min-w-0">
+          <span className={labelClass}>Sort</span>
+          <select
+            value={sortKey}
+            onChange={(e) => onSortKey(e.target.value as SortKey)}
+            className={`${FILTER_FIELD_CLASS} mt-1`}
+          >
+            <option value="newest">Newest</option>
+            <option value="priority">Priority</option>
+            <option value="system">System</option>
+            <option value="topic">Topic</option>
+            <option value="errorType">Error Type</option>
+          </select>
+        </label>
+      </div>
+      <div className="mt-2 flex justify-end">
+        <button
+          type="button"
+          onClick={onReset}
+          className="text-[11px] font-medium text-slate-400 transition-colors hover:text-cyan-200"
+        >
+          Reset filters
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function SummaryStrip({
+  totalMissed,
+  recurringPatterns,
+  highImpact,
+  mostCommonSystem,
+  mostCommonErrorType,
+  filteredCount,
+  filtersActive,
+}: {
+  totalMissed: number;
+  recurringPatterns: number;
+  highImpact: number;
+  mostCommonSystem: string | null;
+  mostCommonErrorType: string | null;
+  filteredCount: number;
+  filtersActive: boolean;
+}) {
+  return (
+    <section className="grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <SummaryCell
+        label="Total Missed"
+        value={String(totalMissed)}
+        meta={
+          filtersActive && filteredCount !== totalMissed
+            ? `${filteredCount} match filters`
+            : totalMissed === 1
+              ? "1 entry logged"
+              : `${totalMissed} entries logged`
+        }
+        icon={AlertTriangle}
+        tone="text-rose-200"
+      />
+      <SummaryCell
+        label="Recurring Patterns"
+        value={String(recurringPatterns)}
+        meta={recurringPatterns === 0 ? "No repeat misses yet" : recurringPatterns === 1 ? "1 repeat miss" : `${recurringPatterns} repeat misses`}
+        icon={Repeat}
+        tone="text-amber-200"
+      />
+      <SummaryCell
+        label="High Impact"
+        value={String(highImpact)}
+        meta={highImpact === 0 ? "Nothing at high priority" : "High-priority entries"}
+        icon={Target}
+        tone="text-cyan-200"
+      />
+      <SummaryCell
+        label="Top Category"
+        value={mostCommonSystem ?? "—"}
+        meta={mostCommonErrorType ? `Most common: ${mostCommonErrorType}` : "Add entries to see trends"}
+        icon={TrendingUp}
+        tone="text-emerald-200"
+      />
+    </section>
+  );
+}
+
+function SummaryCell({
+  label,
+  value,
+  meta,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: string;
+  meta: string;
+  icon: typeof AlertTriangle;
+  tone: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-start justify-between gap-3 rounded-2xl border border-white/[0.07] bg-slate-950/40 px-4 py-3">
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">{label}</p>
+        <p className="mt-1 truncate text-[1.6rem] font-semibold leading-none tracking-[-0.03em] text-white">{value}</p>
+        <p className="mt-1.5 truncate text-[11px] text-slate-400">{meta}</p>
+      </div>
+      <Icon className={`h-4 w-4 shrink-0 ${tone}`} />
+    </div>
+  );
+}
+
+function EntryList({
+  entries,
+  totalEntries,
+  selectedId,
+  filtersActive,
+  onSelect,
+  onCreate,
+  onResetFilters,
+}: {
+  entries: ErrorLogEntry[];
+  totalEntries: number;
+  selectedId: string | null;
+  filtersActive: boolean;
+  onSelect: (id: string) => void;
+  onCreate: () => void;
+  onResetFilters: () => void;
+}) {
+  return (
+    <section className="glass-panel flex min-h-0 min-w-0 flex-col overflow-hidden p-0">
+      <header className="shrink-0 border-b border-white/[0.07] px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Entries</p>
+          <p className="text-[11px] text-slate-500">
+            {totalEntries === 0
+              ? "None yet"
+              : entries.length === totalEntries
+                ? `${totalEntries} total`
+                : `${entries.length} of ${totalEntries}`}
+          </p>
+        </div>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle">
+        {totalEntries === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-4 py-10 text-center">
+            <p className="text-sm font-semibold text-white">No entries yet</p>
+            <p className="text-xs text-slate-400">Log your first miss to start building patterns.</p>
+            <button type="button" onClick={onCreate} className={`${primaryButtonClassName} h-9 px-3 text-sm`}>
+              <Plus className="h-4 w-4" />
+              Log entry
+            </button>
+          </div>
+        ) : entries.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-4 py-10 text-center">
+            <p className="text-sm font-semibold text-white">No matches</p>
+            <p className="text-xs text-slate-400">No entries match the current filters.</p>
+            {filtersActive ? (
+              <button
+                type="button"
+                onClick={onResetFilters}
+                className={`${secondaryButtonClassName} h-9 px-3 text-sm`}
+              >
+                Reset filters
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <ul className="divide-y divide-white/[0.05]">
+            {entries.map((entry) => (
+              <EntryListRow
+                key={entry.id}
+                entry={entry}
+                selected={entry.id === selectedId}
+                onSelect={() => onSelect(entry.id)}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function EntryListRow({
   entry,
-  isEditing,
-  confirmDeleteId,
-  weakTopicAdded,
-  onShowReasoning,
+  selected,
+  onSelect,
+}: {
+  entry: ErrorLogEntry;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const priority = entry.priority ?? "medium";
+  const dateLabel = formatEntryDate(entry.entryDate || entry.createdAt.slice(0, 10));
+  const sourceLabel = [entry.source, entry.examBlock].filter(Boolean).join(" · ");
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-current={selected ? "true" : undefined}
+        className={`flex w-full items-start gap-3 px-3 py-3 text-left transition-colors ${
+          selected ? "bg-cyan-400/[0.08]" : "hover:bg-white/[0.03]"
+        }`}
+      >
+        <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOT[priority]}`} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <p className={`truncate text-[13px] font-semibold leading-tight ${selected ? "text-white" : "text-slate-100"}`}>
+              {entry.topic || "Untitled topic"}
+            </p>
+            <span
+              className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] ${PRIORITY_PILL[priority]}`}
+            >
+              {PRIORITY_LABEL[priority]}
+            </span>
+          </div>
+          <p className="mt-1 truncate text-[11px] text-slate-400">
+            {sourceLabel || "—"} {sourceLabel ? "·" : ""} {dateLabel}
+          </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+            <span className="truncate">{entry.system}</span>
+            {entry.isRepeatMiss ? (
+              <span className="inline-flex items-center gap-1 text-amber-300/90">
+                <Repeat className="h-3 w-3" />
+                Repeat
+              </span>
+            ) : null}
+            {entry.addToFinalSheet ? <span className="text-slate-400">Final sheet</span> : null}
+          </div>
+        </div>
+      </button>
+    </li>
+  );
+}
+
+function EntryDetail({
+  entry,
+  totalEntries,
   onEdit,
+  onCreate,
+}: {
+  entry: ErrorLogEntry | null;
+  totalEntries: number;
+  onEdit: (entry: ErrorLogEntry) => void;
+  onCreate: () => void;
+}) {
+  if (!entry) {
+    return (
+      <section className="glass-panel flex min-h-0 min-w-0 flex-col items-center justify-center gap-3 p-6 text-center">
+        {totalEntries === 0 ? (
+          <>
+            <p className="text-base font-semibold text-white">Nothing logged yet</p>
+            <p className="max-w-sm text-sm text-slate-400">
+              Capture a missed question, the reasoning that led you astray, and the rule you want to remember next time.
+            </p>
+            <button type="button" onClick={onCreate} className={`${primaryButtonClassName} h-9 px-3 text-sm`}>
+              <Plus className="h-4 w-4" />
+              Log entry
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-base font-semibold text-white">Select an entry</p>
+            <p className="max-w-sm text-sm text-slate-400">Choose an entry from the list to review its reasoning.</p>
+          </>
+        )}
+      </section>
+    );
+  }
+
+  const priority = entry.priority ?? "medium";
+  const dateLabel = formatEntryDate(entry.entryDate || entry.createdAt.slice(0, 10));
+  const metadata = [entry.source, entry.examBlock, dateLabel].filter(Boolean).join(" · ");
+  const showHighImpact = priority === "high";
+
+  return (
+    <section className="glass-panel flex min-h-0 min-w-0 flex-col overflow-hidden p-0">
+      <header className="shrink-0 border-b border-white/[0.07] px-5 py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`inline-block h-2.5 w-2.5 rounded-full ${PRIORITY_DOT[priority]}`} />
+              <h3 className="break-words text-lg font-semibold leading-tight text-white">
+                {entry.topic || "Untitled topic"}
+              </h3>
+              {showHighImpact ? (
+                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] ${PRIORITY_PILL.high}`}>
+                  High impact
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1.5 break-words text-xs text-slate-400">
+              {entry.system}
+              {metadata ? <span className="text-slate-500"> · {metadata}</span> : null}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onEdit(entry)}
+            className={`${secondaryButtonClassName} h-8 shrink-0 px-3 text-xs`}
+          >
+            <Edit2 className="h-3.5 w-3.5" />
+            Edit Entry
+          </button>
+        </div>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle px-5 py-4">
+        <DetailSection title="Summary" icon={Sparkles}>
+          {renderStudyContent(entry.missedPattern)}
+        </DetailSection>
+
+        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <DetailSection title="Your Reasoning" tone="rose" badge="Why you picked the wrong answer">
+            {renderStudyContent(entry.whyPickedWrongAnswer)}
+          </DetailSection>
+          <DetailSection title="Correct Reasoning" tone="emerald" badge="Why the correct answer is correct">
+            {renderStudyContent(entry.whyCorrectAnswerIsCorrect)}
+          </DetailSection>
+        </div>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <DetailSection title="Tempting Wrong Answer">
+            {renderStudyContent(entry.whyTemptingWrongAnswerIsWrong)}
+          </DetailSection>
+          <DetailSection title="Missed Pattern">
+            {renderStudyContent(entry.missedPattern)}
+          </DetailSection>
+          <DetailSection title="Fix / Takeaway">
+            {renderStudyContent(entry.fix)}
+          </DetailSection>
+        </div>
+
+        <div className="mt-3">
+          <DetailSection title="Decision Rule">
+            {renderStudyContent(entry.decisionRule)}
+          </DetailSection>
+        </div>
+
+        <DetailMetaRow entry={entry} />
+      </div>
+    </section>
+  );
+}
+
+function DetailSection({
+  title,
+  icon: Icon,
+  badge,
+  tone,
+  children,
+}: {
+  title: string;
+  icon?: typeof AlertTriangle;
+  badge?: string;
+  tone?: "rose" | "emerald";
+  children: React.ReactNode;
+}) {
+  const toneRing =
+    tone === "rose"
+      ? "border-rose-300/15"
+      : tone === "emerald"
+        ? "border-emerald-300/15"
+        : "border-white/[0.07]";
+  const toneTitle =
+    tone === "rose" ? "text-rose-200" : tone === "emerald" ? "text-emerald-200" : "text-slate-200";
+
+  return (
+    <section className={`min-w-0 rounded-2xl border ${toneRing} bg-white/[0.03] px-4 py-3`}>
+      <div className="flex items-center gap-2">
+        {Icon ? <Icon className="h-3.5 w-3.5 text-slate-400" /> : null}
+        <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${toneTitle}`}>{title}</p>
+      </div>
+      {badge ? <p className="mt-0.5 text-[11px] text-slate-500">{badge}</p> : null}
+      <div className="mt-2 text-[0.92rem] leading-6 text-slate-200">{children}</div>
+    </section>
+  );
+}
+
+function DetailMetaRow({ entry }: { entry: ErrorLogEntry }) {
+  const items = [
+    { label: "Error type", value: entry.errorType },
+    {
+      label: "Follow-up",
+      value: FOLLOW_UP_ACTION_LABELS[entry.followUpAction] ?? entry.followUpAction,
+    },
+    { label: "Repeat miss", value: entry.isRepeatMiss ? "Yes" : "No" },
+    { label: "Guessed correct", value: entry.isGuessedCorrect ? "Yes" : "No" },
+    { label: "Final sheet", value: entry.addToFinalSheet ? "Yes" : "No" },
+  ];
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-2xl border border-white/[0.05] bg-white/[0.02] px-4 py-2.5">
+      {items.map((item) => (
+        <p key={item.label} className="text-[11px] text-slate-400">
+          <span className="text-slate-500">{item.label}:</span>{" "}
+          <span className="text-slate-200">{item.value || "—"}</span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function InsightsRail({
+  entries,
+  selectedEntry,
+  topMissedTopics,
+  recurringPatterns,
+  nextReview,
+  weakTopicAdded,
+  confirmDeleteId,
+  onAddWeakTopic,
+  onEditEntry,
+  onExportEntry,
   onDeleteRequest,
   onDeleteConfirm,
   onDeleteCancel,
-  onAddWeakTopic,
+  onSelect,
 }: {
-  entry: ErrorLogEntry;
-  isEditing: boolean;
-  confirmDeleteId: string | null;
+  entries: ErrorLogEntry[];
+  selectedEntry: ErrorLogEntry | null;
+  topMissedTopics: Array<[string, number]>;
+  recurringPatterns: number;
+  nextReview: ErrorLogEntry[];
   weakTopicAdded: boolean;
-  onShowReasoning: () => void;
-  onEdit: () => void;
-  onDeleteRequest: () => void;
-  onDeleteConfirm: () => void;
+  confirmDeleteId: string | null;
+  onAddWeakTopic: (entry: ErrorLogEntry) => void;
+  onEditEntry: (entry: ErrorLogEntry) => void;
+  onExportEntry: (entry: ErrorLogEntry) => void;
+  onDeleteRequest: (id: string) => void;
+  onDeleteConfirm: (id: string) => void;
   onDeleteCancel: () => void;
-  onAddWeakTopic: () => void;
+  onSelect: (id: string) => void;
 }) {
-  const priority = entry.priority ?? "medium";
-  const displayDate = formatEntryDate(entry.entryDate || entry.createdAt.slice(0, 10));
-  const metadata = [
-    entry.system,
-    entry.source,
-    entry.examBlock,
-    displayDate,
-  ].filter(Boolean);
-  const tags = getEntryTags(entry);
-  const visibleTags = tags.slice(0, COLLAPSED_CARD_VISIBLE_TAGS);
-  const hiddenTagCount = Math.max(0, tags.length - visibleTags.length);
+  const totalForPercent = Math.max(1, entries.length);
+  const isConfirming = selectedEntry !== null && confirmDeleteId === selectedEntry.id;
 
   return (
-    <div
-      className={`flex min-h-[20rem] w-full flex-col overflow-hidden rounded-2xl border border-l-4 px-4 py-3.5 transition-colors md:h-[20rem] ${
-        isEditing
-          ? "border-cyan-400/30 bg-cyan-400/[0.06]"
-          : "border-white/[0.08] bg-slate-950/45 hover:border-white/15"
-      } ${PRIORITY_CARD_ACCENT[priority]}`}
-    >
-      <div className="grid gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_minmax(11rem,12.75rem)] md:items-start">
-        <div className="min-w-0">
-          <h3 className="line-clamp-2 break-words text-base font-semibold leading-tight text-white">
-            {entry.topic || "Untitled topic"}
-          </h3>
-        </div>
-        <div className="min-w-0 md:max-w-[12.75rem] md:justify-self-end">
-          <div className="flex flex-col gap-1 md:items-end">
-            <div className="flex flex-wrap gap-1.5 md:justify-end">
-              {visibleTags.map((tag) => (
-                <Badge key={tag.label} className={tag.className}>
-                  {tag.label}
-                </Badge>
-              ))}
-              {hiddenTagCount > 0 ? <Badge className={NEUTRAL_TAG}>+{hiddenTagCount}</Badge> : null}
+    <section className="flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto scrollbar-subtle lg:col-span-2 xl:col-span-1">
+      <RailCard title="Pattern Insights" icon={Sparkles}>
+        {topMissedTopics.length === 0 ? (
+          <p className="text-xs text-slate-500">Log entries to surface most-missed topics.</p>
+        ) : (
+          <>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Most missed topics</p>
+            <ul className="mt-2 space-y-2">
+              {topMissedTopics.map(([topic, count], index) => {
+                const pct = Math.round((count / totalForPercent) * 100);
+                return (
+                  <li key={topic} className="min-w-0">
+                    <div className="flex items-center justify-between gap-3 text-[11px]">
+                      <span className="truncate text-slate-200">{topic}</span>
+                      <span className="shrink-0 text-slate-500">{pct}%</span>
+                    </div>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                      <div
+                        className={`h-full rounded-full ${TOPIC_BAR_PALETTE[index % TOPIC_BAR_PALETTE.length]}`}
+                        style={{ width: `${Math.min(100, Math.max(4, pct))}%` }}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="mt-3 border-t border-white/[0.06] pt-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Recurring Patterns</p>
+              <p className="mt-1 text-[1.4rem] font-semibold leading-none tracking-[-0.03em] text-white">{recurringPatterns}</p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                {recurringPatterns === 0
+                  ? "No repeat misses yet"
+                  : recurringPatterns === 1
+                    ? "1 repeat miss flagged"
+                    : `${recurringPatterns} repeat misses flagged`}
+              </p>
             </div>
-            <p className="line-clamp-2 break-words text-[10px] leading-4 text-slate-400 md:text-right">
-              {metadata.join(" · ")}
-            </p>
-          </div>
-        </div>
-      </div>
+          </>
+        )}
+      </RailCard>
 
-      <div className="mt-2.5 grid min-h-0 flex-1 grid-cols-1 gap-x-3 gap-y-2 sm:grid-cols-2">
-        <StudyPreview label="Missed pattern" content={entry.missedPattern} />
-        <StudyPreview label="Fix" content={entry.fix} />
-        <StudyPreview label="Why wrong answer is tempting" content={entry.whyTemptingWrongAnswerIsWrong} />
-        <StudyPreview label="Rule / Algorithm" content={entry.decisionRule} />
-      </div>
+      <RailCard title="Next Review Suggestions">
+        {nextReview.length === 0 ? (
+          <p className="text-xs text-slate-500">Nothing else queued up.</p>
+        ) : (
+          <ul className="space-y-2">
+            {nextReview.map((entry) => {
+              const priority = entry.priority ?? "medium";
+              return (
+                <li key={entry.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(entry.id)}
+                    className="flex w-full items-start gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-left transition-colors hover:border-white/15 hover:bg-white/[0.04]"
+                  >
+                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOT[priority]}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12px] font-medium text-slate-100">
+                        {entry.topic || "Untitled topic"}
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-slate-500">
+                        Priority: <span className="text-slate-300">{PRIORITY_LABEL[priority]}</span>
+                        {entry.isRepeatMiss ? <span className="ml-1 text-amber-300/90">· Repeat</span> : null}
+                      </p>
+                      <p className="mt-0.5 truncate text-[10px] text-slate-500">{describeNextReview(entry)}</p>
+                    </div>
+                    <ChevronRight className="mt-1 h-3.5 w-3.5 shrink-0 text-slate-500" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </RailCard>
 
-      <div className="mt-2.5 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/[0.07] pt-2">
-        <button
-          type="button"
-          onClick={onShowReasoning}
-          className="text-[10px] font-medium tracking-[0.08em] text-slate-500 transition-colors hover:text-cyan-200"
-          aria-haspopup="dialog"
-        >
-          Show full reasoning
-        </button>
-
-        <div className="flex items-center justify-end gap-1">
-          {confirmDeleteId === entry.id ? (
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={onDeleteConfirm} className="text-[11px] font-medium text-rose-300 hover:text-rose-200">
-                Confirm delete
-              </button>
-              <button type="button" onClick={onDeleteCancel} className="text-[11px] text-slate-500 hover:text-slate-300">
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <IconActionButton
-              icon={<Plus className="h-4 w-4" />}
-              label={weakTopicAdded ? "Already added as weak topic" : "Add as weak topic"}
-              onClick={weakTopicAdded ? undefined : onAddWeakTopic}
+      <RailCard title="Actions">
+        {selectedEntry ? (
+          <div className="space-y-1">
+            <ActionRow
+              icon={Plus}
+              label={weakTopicAdded ? "Added as Weak Topic" : "Add as Weak Topic"}
+              onClick={weakTopicAdded ? undefined : () => onAddWeakTopic(selectedEntry)}
               disabled={weakTopicAdded}
-              className={weakTopicAdded ? "text-emerald-300" : "hover:text-cyan-300"}
+              accent={weakTopicAdded ? "emerald" : undefined}
             />
-          )}
-
-          <IconActionButton
-            icon={<Edit2 className="h-4 w-4" />}
-            label="Edit"
-            onClick={onEdit}
-            className="hover:text-cyan-300"
-          />
-          <IconActionButton
-            icon={<Trash2 className="h-4 w-4" />}
-            label="Delete"
-            onClick={onDeleteRequest}
-            className="hover:text-rose-300"
-          />
-        </div>
-      </div>
-    </div>
+            <ActionRow icon={Edit2} label="Edit Entry" onClick={() => onEditEntry(selectedEntry)} />
+            <ActionRow icon={Download} label="Export This Entry" onClick={() => onExportEntry(selectedEntry)} />
+            <div className="mt-2 border-t border-white/[0.06] pt-2">
+              {isConfirming ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-rose-400/25 bg-rose-500/[0.06] px-3 py-2">
+                  <p className="text-[11px] text-rose-200">Delete this entry?</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onDeleteConfirm(selectedEntry.id)}
+                      className="text-[11px] font-medium text-rose-300 hover:text-rose-200"
+                    >
+                      Confirm
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onDeleteCancel}
+                      className="text-[11px] text-slate-500 hover:text-slate-300"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <ActionRow
+                  icon={Trash2}
+                  label="Delete Entry"
+                  onClick={() => onDeleteRequest(selectedEntry.id)}
+                  accent="rose"
+                />
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500">Select an entry to see available actions.</p>
+        )}
+      </RailCard>
+    </section>
   );
 }
 
-function ReviewSection({
+function RailCard({
   title,
+  icon: Icon,
   children,
-  className = "",
 }: {
   title: string;
+  icon?: typeof AlertTriangle;
   children: React.ReactNode;
-  className?: string;
 }) {
   return (
-    <section className={`${REVIEW_SECTION_CLASS} ${className}`}>
-      <p className={REVIEW_LABEL_CLASS}>{title}</p>
-      <div className="mt-2 text-[0.95rem] leading-6 text-slate-200">{children}</div>
+    <section className="glass-panel min-w-0 p-4">
+      <header className="flex items-center gap-2">
+        {Icon ? <Icon className="h-3.5 w-3.5 text-slate-400" /> : null}
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{title}</p>
+      </header>
+      <div className="mt-2.5">{children}</div>
     </section>
+  );
+}
+
+function ActionRow({
+  icon: Icon,
+  label,
+  onClick,
+  disabled = false,
+  accent,
+}: {
+  icon: typeof AlertTriangle;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  accent?: "rose" | "emerald";
+}) {
+  const toneClass =
+    accent === "rose"
+      ? "text-rose-300 hover:text-rose-200 hover:bg-rose-500/[0.08]"
+      : accent === "emerald"
+        ? "text-emerald-200"
+        : "text-slate-200 hover:text-white hover:bg-white/[0.04]";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[12px] font-medium transition-colors ${toneClass} ${
+        disabled ? "cursor-default opacity-80" : ""
+      }`}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      <span className="truncate">{label}</span>
+    </button>
   );
 }

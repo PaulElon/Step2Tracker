@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { EditorContent, useEditor, ReactNodeViewRenderer } from "@tiptap/react";
 import { Extension, type Editor } from "@tiptap/core";
 import { NotebookImageNodeView } from "./notebook-image-node-view";
-import { Plugin } from "@tiptap/pm/state";
+import { Plugin, NodeSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -470,6 +470,78 @@ export function TiptapEditor({
                 return { width: String(attrs.width) };
               },
             },
+            height: {
+              default: null,
+              parseHTML: (el: HTMLElement) => {
+                const h = el.getAttribute("height");
+                if (h) return h;
+                const sh = el.style.height;
+                if (sh && sh !== "auto") return sh.replace(/px$/, "");
+                return null;
+              },
+              renderHTML: (attrs: Record<string, unknown>) => {
+                if (!attrs.height) return {};
+                return { height: String(attrs.height) };
+              },
+            },
+            dataAlign: {
+              default: null,
+              parseHTML: (el: HTMLElement) => el.getAttribute("data-align") || null,
+              renderHTML: (attrs: Record<string, unknown>) => {
+                if (!attrs.dataAlign) return {};
+                return { "data-align": String(attrs.dataAlign) };
+              },
+            },
+            lockAspect: {
+              default: null,
+              parseHTML: (el: HTMLElement) => {
+                const v = el.getAttribute("data-lock-aspect");
+                return v === "false" ? "false" : null;
+              },
+              renderHTML: (attrs: Record<string, unknown>) => {
+                if (attrs.lockAspect === "false") return { "data-lock-aspect": "false" };
+                return {};
+              },
+            },
+            positionMode: {
+              default: null,
+              parseHTML: (el: HTMLElement) =>
+                el.getAttribute("data-position-mode") === "free" ? "free" : null,
+              renderHTML: (attrs: Record<string, unknown>) => {
+                if (attrs.positionMode === "free") return { "data-position-mode": "free" };
+                return {};
+              },
+            },
+            x: {
+              default: null,
+              parseHTML: (el: HTMLElement) => {
+                const raw = el.getAttribute("data-x");
+                if (raw === null) return null;
+                const n = parseInt(raw, 10);
+                return Number.isFinite(n) ? n : null;
+              },
+              renderHTML: (attrs: Record<string, unknown>) => {
+                if (attrs.positionMode !== "free") return {};
+                const n = typeof attrs.x === "number" ? attrs.x : Number(attrs.x);
+                if (!Number.isFinite(n)) return {};
+                return { "data-x": String(Math.round(n)) };
+              },
+            },
+            y: {
+              default: null,
+              parseHTML: (el: HTMLElement) => {
+                const raw = el.getAttribute("data-y");
+                if (raw === null) return null;
+                const n = parseInt(raw, 10);
+                return Number.isFinite(n) ? n : null;
+              },
+              renderHTML: (attrs: Record<string, unknown>) => {
+                if (attrs.positionMode !== "free") return {};
+                const n = typeof attrs.y === "number" ? attrs.y : Number(attrs.y);
+                if (!Number.isFinite(n)) return {};
+                return { "data-y": String(Math.round(n)) };
+              },
+            },
           };
         },
         addNodeView() {
@@ -477,6 +549,102 @@ export function TiptapEditor({
         },
       }).configure({ inline: false, allowBase64: false }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
+      Extension.create({
+        name: "imageKeyboardShortcuts",
+        addKeyboardShortcuts() {
+          const movePos = (editor: Editor, dx: number, dy: number): boolean => {
+            const { selection } = editor.state;
+            if (!(selection instanceof NodeSelection)) return false;
+            const node = selection.node;
+            if (node?.type?.name !== "image") return false;
+            if (node.attrs.positionMode !== "free") return false;
+            const curX = Number.isFinite(node.attrs.x) ? Number(node.attrs.x) : 0;
+            const curY = Number.isFinite(node.attrs.y) ? Number(node.attrs.y) : 0;
+            editor
+              .chain()
+              .updateAttributes("image", {
+                x: Math.max(0, Math.round(curX + dx)),
+                y: Math.max(0, Math.round(curY + dy)),
+              })
+              .run();
+            return true;
+          };
+
+          const nudge = (editor: Editor, widthDelta: number, heightDelta: number): boolean => {
+            const { selection } = editor.state;
+            if (!(selection instanceof NodeSelection)) return false;
+            const node = selection.node;
+            if (node?.type?.name !== "image") return false;
+
+            const isLocked = node.attrs.lockAspect !== "false";
+            const fromPos = selection.from;
+
+            const domEl = editor.view.nodeDOM(fromPos);
+            const imgEl = domEl instanceof HTMLElement ? domEl.querySelector("img") : null;
+            const w = node.attrs.width != null
+              ? parseInt(String(node.attrs.width), 10)
+              : (imgEl?.offsetWidth ?? null);
+            const h = node.attrs.height != null
+              ? parseInt(String(node.attrs.height), 10)
+              : (imgEl?.offsetHeight ?? null);
+
+            if (w === null || h === null || w <= 0 || h <= 0) return false;
+
+            const aspect = w / h;
+            const MIN_W = 80;
+            const MIN_H = 60;
+            const next: Record<string, string> = {};
+
+            if (widthDelta !== 0) {
+              const newW = Math.max(MIN_W, w + widthDelta);
+              next.width = String(newW);
+              if (isLocked) next.height = String(Math.round(Math.max(MIN_H, newW / aspect)));
+            } else if (heightDelta !== 0) {
+              if (isLocked) {
+                const newH = Math.max(MIN_H, h + heightDelta);
+                next.height = String(newH);
+                next.width = String(Math.round(Math.max(MIN_W, newH * aspect)));
+              } else {
+                next.height = String(Math.max(MIN_H, h + heightDelta));
+              }
+            }
+
+            if (Object.keys(next).length === 0) return false;
+            editor.chain().updateAttributes("image", next).run();
+            return true;
+          };
+
+          return {
+            "Alt-ArrowRight": ({ editor }) => nudge(editor, 1, 0),
+            "Alt-ArrowLeft": ({ editor }) => nudge(editor, -1, 0),
+            "Alt-ArrowDown": ({ editor }) => nudge(editor, 0, 1),
+            "Alt-ArrowUp": ({ editor }) => nudge(editor, 0, -1),
+            "Shift-Alt-ArrowRight": ({ editor }) => nudge(editor, 10, 0),
+            "Shift-Alt-ArrowLeft": ({ editor }) => nudge(editor, -10, 0),
+            "Shift-Alt-ArrowDown": ({ editor }) => nudge(editor, 0, 10),
+            "Shift-Alt-ArrowUp": ({ editor }) => nudge(editor, 0, -10),
+            ArrowRight: ({ editor }) => movePos(editor, 1, 0),
+            ArrowLeft: ({ editor }) => movePos(editor, -1, 0),
+            ArrowDown: ({ editor }) => movePos(editor, 0, 1),
+            ArrowUp: ({ editor }) => movePos(editor, 0, -1),
+            "Shift-ArrowRight": ({ editor }) => movePos(editor, 10, 0),
+            "Shift-ArrowLeft": ({ editor }) => movePos(editor, -10, 0),
+            "Shift-ArrowDown": ({ editor }) => movePos(editor, 0, 10),
+            "Shift-ArrowUp": ({ editor }) => movePos(editor, 0, -10),
+            Escape: ({ editor }) => {
+              const { selection } = editor.state;
+              if (!(selection instanceof NodeSelection)) return false;
+              if (selection.node?.type?.name !== "image") return false;
+              const to = Math.min(
+                selection.from + selection.node.nodeSize,
+                editor.state.doc.content.size,
+              );
+              editor.chain().focus().setTextSelection(to).run();
+              return true;
+            },
+          };
+        },
+      }),
       Extension.create({
         name: "imageUpload",
         addProseMirrorPlugins() {

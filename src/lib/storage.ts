@@ -18,6 +18,9 @@ import type {
   NotebookPage,
   NotebookFolder,
   NotebookDocument,
+  PdfAnnotation,
+  PdfAnnotationQuad,
+  PdfOutlineItem,
   StudyBlock,
   StudyBlockInput,
   StudyTaskCategory,
@@ -720,12 +723,206 @@ export function getEmptyPracticeTestDraft(): PracticeTestInput {
   };
 }
 
+const NOTEBOOK_PDF_FILENAME_PATTERN = /^[A-Za-z0-9._-]+\.pdf$/;
+
+const NOTEBOOK_PDF_HIGHLIGHT_COLOR_PATTERN = /^#[0-9a-fA-F]{3,8}$/;
+const NOTEBOOK_PDF_HIGHLIGHT_DEFAULT_COLOR = "#fde047";
+const NOTEBOOK_PDF_OUTLINE_MAX_DEPTH = 12;
+const NOTEBOOK_PDF_OUTLINE_MAX_TITLE_LENGTH = 200;
+const NOTEBOOK_PDF_NOTE_MAX_LENGTH = 1000;
+
+function normalizePdfAnnotationQuad(input: unknown): PdfAnnotationQuad | null {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+  const raw = input as Partial<PdfAnnotationQuad>;
+  const x = sanitizeNumber(raw.x, Number.NaN);
+  const y = sanitizeNumber(raw.y, Number.NaN);
+  const width = sanitizeNumber(raw.width, Number.NaN);
+  const height = sanitizeNumber(raw.height, Number.NaN);
+  if (
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height)
+  ) {
+    return null;
+  }
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+  return { x, y, width, height };
+}
+
+function normalizePdfAnnotation(input: unknown): PdfAnnotation | null {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+  const raw = input as Partial<PdfAnnotation>;
+  if (raw.kind !== "highlight") {
+    return null;
+  }
+  const pageIndexNum = sanitizeNumber(raw.pageIndex, Number.NaN);
+  if (!Number.isFinite(pageIndexNum) || pageIndexNum < 0) {
+    return null;
+  }
+  const pageIndex = Math.trunc(pageIndexNum);
+  const quadsRaw = Array.isArray(raw.quads) ? raw.quads : [];
+  const quads = quadsRaw
+    .map((quad) => normalizePdfAnnotationQuad(quad))
+    .filter((quad): quad is PdfAnnotationQuad => quad !== null);
+  if (quads.length === 0) {
+    return null;
+  }
+  const colorRaw = typeof raw.color === "string" ? raw.color.trim() : "";
+  const color = NOTEBOOK_PDF_HIGHLIGHT_COLOR_PATTERN.test(colorRaw)
+    ? colorRaw
+    : NOTEBOOK_PDF_HIGHLIGHT_DEFAULT_COLOR;
+  const id = sanitizeText(raw.id) || createId("nb-pdf-hl");
+  const timestamp = nowIso();
+  const createdAt = sanitizeText(raw.createdAt) || timestamp;
+  const updatedAt = sanitizeText(raw.updatedAt) || createdAt;
+  const snippetRaw = typeof raw.textSnippet === "string" ? raw.textSnippet : "";
+  const textSnippet = snippetRaw.length > 0 ? snippetRaw.slice(0, 500) : undefined;
+  const annotation: PdfAnnotation = {
+    id,
+    kind: "highlight",
+    pageIndex,
+    color,
+    quads,
+    createdAt,
+    updatedAt,
+  };
+  if (textSnippet) {
+    annotation.textSnippet = textSnippet;
+  }
+  return annotation;
+}
+
+function normalizePdfAnnotations(raw: unknown): PdfAnnotation[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const result: PdfAnnotation[] = [];
+  for (const candidate of raw) {
+    const annotation = normalizePdfAnnotation(candidate);
+    if (annotation) {
+      result.push(annotation);
+    }
+  }
+  return result;
+}
+
+function normalizePdfOutlineTitle(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value.replace(/\s+/g, " ").trim().slice(0, NOTEBOOK_PDF_OUTLINE_MAX_TITLE_LENGTH);
+}
+
+function normalizePdfNoteText(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value.replace(/\r\n?/g, "\n").trim().slice(0, NOTEBOOK_PDF_NOTE_MAX_LENGTH);
+}
+
+function normalizePdfOutlineItem(input: unknown, fallbackDepth: number): PdfOutlineItem | null {
+  if (!input || typeof input !== "object" || fallbackDepth > NOTEBOOK_PDF_OUTLINE_MAX_DEPTH) {
+    return null;
+  }
+  const raw = input as Partial<PdfOutlineItem>;
+  const title = normalizePdfOutlineTitle(raw.title);
+  if (!title) {
+    return null;
+  }
+  const pageIndexNum = sanitizeNumber(raw.pageIndex, Number.NaN);
+  if (!Number.isFinite(pageIndexNum) || pageIndexNum < 0) {
+    return null;
+  }
+  const pageIndex = Math.trunc(pageIndexNum);
+  const id = sanitizeText(raw.id) || createId("nb-pdf-outline");
+  const kind = raw.kind === "note" && raw.source !== "embedded" ? "note" : "outline";
+  const source = kind === "note" || raw.source === "manual" ? "manual" : "embedded";
+  const item: PdfOutlineItem = {
+    id,
+    title,
+    pageIndex,
+    source,
+  };
+  if (kind === "note") {
+    const noteText = normalizePdfNoteText(raw.noteText);
+    if (!noteText) {
+      return null;
+    }
+    item.kind = "note";
+    item.noteText = noteText;
+  } else if (raw.kind === "outline") {
+    item.kind = "outline";
+  }
+  const createdAt = sanitizeText(raw.createdAt);
+  if (createdAt) {
+    item.createdAt = createdAt;
+  }
+  const updatedAt = sanitizeText(raw.updatedAt);
+  if (updatedAt) {
+    item.updatedAt = updatedAt;
+  }
+  const y = normalizeFiniteNumber(raw.y);
+  if (Number.isFinite(y)) {
+    item.y = y;
+  }
+  const depth = normalizeInteger(raw.depth);
+  if (Number.isFinite(depth) && depth >= 0) {
+    item.depth = Math.min(depth, NOTEBOOK_PDF_OUTLINE_MAX_DEPTH);
+  } else if (fallbackDepth > 0) {
+    item.depth = fallbackDepth;
+  }
+  const childrenRaw = Array.isArray(raw.children) ? raw.children : [];
+  if (childrenRaw.length > 0 && fallbackDepth < NOTEBOOK_PDF_OUTLINE_MAX_DEPTH) {
+    const children = childrenRaw
+      .map((child) => normalizePdfOutlineItem(child, fallbackDepth + 1))
+      .filter((child): child is PdfOutlineItem => child !== null);
+    if (children.length > 0) {
+      item.children = children;
+    }
+  }
+  return item;
+}
+
+function normalizePdfOutline(raw: unknown): PdfOutlineItem[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const result: PdfOutlineItem[] = [];
+  for (const candidate of raw) {
+    const item = normalizePdfOutlineItem(candidate, 0);
+    if (item) {
+      result.push(item);
+    }
+  }
+  return result;
+}
+
 function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbackId?: string): NotebookPage {
   const timestamp = nowIso();
   const safeCreatedAt = sanitizeText(input?.createdAt) || timestamp;
   const safeUpdatedAt = sanitizeText(input?.updatedAt) || timestamp;
   const folderId = typeof input?.folderId === "string" ? input.folderId.trim() : "";
-  return {
+  const rawKind = typeof input?.kind === "string" ? input.kind : undefined;
+  const pdfFilenameRaw = typeof input?.pdfFilename === "string" ? input.pdfFilename.trim() : "";
+  const pdfFilename = NOTEBOOK_PDF_FILENAME_PATTERN.test(pdfFilenameRaw) ? pdfFilenameRaw : "";
+  const isPdf = rawKind === "pdf" && pdfFilename !== "";
+  const pdfOriginalName =
+    isPdf && typeof input?.pdfOriginalName === "string" ? input.pdfOriginalName.trim() : "";
+  const rawPageCount = sanitizeNumber(input?.pdfPageCount, 0);
+  const pdfPageCount = isPdf && rawPageCount > 0 ? Math.trunc(rawPageCount) : undefined;
+  const pdfAnnotations = isPdf ? normalizePdfAnnotations(input?.pdfAnnotations) : [];
+  const pdfOutline = isPdf ? normalizePdfOutline(input?.pdfOutline) : [];
+  const rawViewMode = typeof input?.pdfViewMode === "string" ? input.pdfViewMode : undefined;
+  const pdfViewMode =
+    isPdf && (rawViewMode === "horizontal" || rawViewMode === "vertical") ? rawViewMode : undefined;
+  const base: NotebookPage = {
     id: sanitizeText(input?.id) || fallbackId || createId("nb-page"),
     title: sanitizeText(input?.title) || "Untitled",
     contentHtml: typeof input?.contentHtml === "string" ? input.contentHtml : "",
@@ -735,6 +932,26 @@ function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbac
     createdAt: safeCreatedAt,
     updatedAt: safeUpdatedAt,
   };
+  if (isPdf) {
+    base.kind = "pdf";
+    base.pdfFilename = pdfFilename;
+    if (pdfOriginalName) {
+      base.pdfOriginalName = pdfOriginalName;
+    }
+    if (pdfPageCount !== undefined) {
+      base.pdfPageCount = pdfPageCount;
+    }
+    if (pdfAnnotations.length > 0) {
+      base.pdfAnnotations = pdfAnnotations;
+    }
+    if (pdfViewMode) {
+      base.pdfViewMode = pdfViewMode;
+    }
+    if (pdfOutline.length > 0) {
+      base.pdfOutline = pdfOutline;
+    }
+  }
+  return base;
 }
 
 function normalizeNotebookFolder(input: Partial<NotebookFolder> | undefined, fallbackId?: string): NotebookFolder {

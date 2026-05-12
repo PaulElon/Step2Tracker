@@ -1,5 +1,5 @@
-import { AlertTriangle, ArrowDown, ArrowUp, Bell, ChevronLeft, ChevronRight, Pencil, Plus, Search, Upload } from "lucide-react";
-import { useDeferredValue, useId, useRef, useState, useTransition } from "react";
+import { AlertTriangle, ArrowDown, ArrowUp, Bell, CalendarDays, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Plus, Search, Upload } from "lucide-react";
+import { useDeferredValue, useEffect, useId, useRef, useState, useTransition } from "react";
 import { getStudyBlockMinutes, getWeekDates } from "../lib/analytics";
 import {
   addDays,
@@ -22,12 +22,12 @@ import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { ModalShell } from "../components/modal-shell";
 import { CategoryBadge, EmptyState, Panel } from "../components/ui";
 import {
+  cn,
   fieldClassName,
-  iconButtonClassName,
   primaryButtonClassName,
   secondaryButtonClassName,
 } from "../lib/ui";
-import type { ImportMode, StudyBlock, StudyBlockInput, WorkbookImportPreview } from "../types/models";
+import type { ExamTimer, ImportMode, StudyBlock, StudyBlockInput, WorkbookImportPreview } from "../types/models";
 import type { IcsImportPreview } from "../lib/ics-import";
 
 const compactPlannerButtonClassName =
@@ -518,6 +518,31 @@ function getMonthCategoryTone(category: string): MonthCategoryTone {
   };
 }
 
+type WorkloadIntensity = {
+  barClassName: string;
+  label: string;
+};
+
+function getWorkloadIntensity(minutes: number): WorkloadIntensity {
+  if (minutes <= 0) {
+    return { barClassName: "bg-white/10", label: "" };
+  }
+  if (minutes < 60) {
+    return { barClassName: "bg-emerald-400/65", label: "Light" };
+  }
+  if (minutes < 180) {
+    return { barClassName: "bg-cyan-400/65", label: "Steady" };
+  }
+  if (minutes < 300) {
+    return { barClassName: "bg-amber-400/70", label: "Heavy" };
+  }
+  return { barClassName: "bg-rose-400/70", label: "Intense" };
+}
+
+function getDayMonth(dateKey: string) {
+  return dateKey.slice(0, 7);
+}
+
 export function PlannerView() {
   const {
     state,
@@ -539,6 +564,8 @@ export function PlannerView() {
   const [bulkDurationHours, setBulkDurationHours] = useState("0");
   const [bulkDurationMinutes, setBulkDurationMinutes] = useState("0");
   const [isBulkPending, setIsBulkPending] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
 
   const id = useId();
   const deferredSearch = useDeferredValue(state.preferences.plannerFilters.search);
@@ -677,19 +704,179 @@ export function PlannerView() {
     void setPlannerFocusDate(date);
   }
 
-  const periodDates = plannerMode === "week" ? weekDates : monthDates;
   const periodLabel = plannerMode === "week" ? `Week of ${formatLongDate(weekStart)}` : formatMonthLabel(selectedDate);
   const periodPreviousLabel = plannerMode === "week" ? "Previous week" : "Previous month";
   const periodNextLabel = plannerMode === "week" ? "Next week" : "Next month";
   const periodPreviousDate = plannerMode === "week" ? addDays(weekStart, -7) : addMonths(selectedDate, -1);
   const periodNextDate = plannerMode === "week" ? addDays(weekStart, 7) : addMonths(selectedDate, 1);
 
+  const studiedMinutes = allSelectedDateTasks
+    .filter((task) => task.completed)
+    .reduce((total, task) => total + getStudyBlockMinutes(task), 0);
+  const completionPercent = allSelectedDateTasks.length
+    ? Math.round((completedCount / allSelectedDateTasks.length) * 100)
+    : 0;
+
+  const eventsByDate = new Map<string, ExamTimer[]>();
+  for (const timer of state.preferences.examTimers) {
+    if (!timer.examDate) {
+      continue;
+    }
+    const existing = eventsByDate.get(timer.examDate);
+    if (existing) {
+      existing.push(timer);
+    } else {
+      eventsByDate.set(timer.examDate, [timer]);
+    }
+  }
+
+  const weekTotalMinutes = weekDates.reduce(
+    (total, date) =>
+      total + (tasksByDate.get(date) ?? []).reduce((sum, task) => sum + getStudyBlockMinutes(task), 0),
+    0,
+  );
+  const weekTotalTasks = weekDates.reduce((total, date) => total + (tasksByDate.get(date)?.length ?? 0), 0);
+
+  let monthMinutesInScope = 0;
+  let monthTasksInScope = 0;
+  for (const date of monthDates) {
+    if (getDayMonth(date) !== selectedMonthKey) {
+      continue;
+    }
+    const dayTasks = tasksByDate.get(date) ?? [];
+    monthTasksInScope += dayTasks.length;
+    for (const task of dayTasks) {
+      monthMinutesInScope += getStudyBlockMinutes(task);
+    }
+  }
+
+  useEffect(() => {
+    if (!showMore) {
+      return;
+    }
+    function handleMouseDown(event: MouseEvent) {
+      if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
+        setShowMore(false);
+      }
+    }
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setShowMore(false);
+      }
+    }
+    document.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [showMore]);
+
   return (
-    <div className="flex h-full flex-col gap-3">
-      <div className="grid shrink-0 gap-3 rounded-[24px] border border-white/10 bg-slate-950/35 p-3 lg:grid-cols-[minmax(0,1.35fr)_220px_auto] lg:items-center">
-        <label htmlFor={searchId} className="relative block min-w-0">
+    <div className="flex h-full min-h-0 flex-col gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Plan</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Your schedule at a glance. Plan your weeks.{" "}
+            <span className="text-slate-200">Execute your days.</span>
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              handlePlannerFocusDate(todayKey);
+            }}
+            className="inline-flex h-9 items-center gap-1.5 rounded-[14px] border border-white/10 bg-slate-900/55 px-3.5 text-xs font-medium text-slate-200 transition hover:border-cyan-300/25 hover:bg-slate-800/80 hover:text-white"
+          >
+            <CalendarDays className="h-4 w-4 text-slate-400" />
+            Today
+          </button>
+
+          <div className="inline-flex rounded-[14px] border border-white/10 bg-slate-900/55 p-1">
+            <button
+              type="button"
+              onClick={() => {
+                void setPlannerMode("week");
+              }}
+              aria-pressed={plannerMode === "week"}
+              className={cn(
+                "rounded-[10px] px-3 py-1.5 text-xs font-medium transition",
+                plannerMode === "week" ? "bg-cyan-300/15 text-white" : "text-slate-400 hover:text-white",
+              )}
+            >
+              Week
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void setPlannerMode("month");
+              }}
+              aria-pressed={plannerMode === "month"}
+              className={cn(
+                "rounded-[10px] px-3 py-1.5 text-xs font-medium transition",
+                plannerMode === "month" ? "bg-cyan-300/15 text-white" : "text-slate-400 hover:text-white",
+              )}
+            >
+              Month
+            </button>
+          </div>
+
+          <div ref={moreRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShowMore((value) => !value)}
+              aria-haspopup="menu"
+              aria-expanded={showMore}
+              className="inline-flex h-9 items-center gap-1.5 rounded-[14px] border border-white/10 bg-slate-900/55 px-3 text-xs font-medium text-slate-200 transition hover:border-cyan-300/25 hover:bg-slate-800/80 hover:text-white"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+              More
+            </button>
+            {showMore ? (
+              <div
+                role="menu"
+                className="absolute right-0 top-full z-30 mt-1.5 w-48 overflow-hidden rounded-[12px] border border-white/10 bg-slate-950/95 p-1 shadow-xl backdrop-blur"
+              >
+                <p className="px-2.5 pb-1 pt-1.5 text-[10px] uppercase tracking-[0.18em] text-slate-500">Import</p>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setShowMore(false);
+                    setShowIcsImport(false);
+                    setShowImport(true);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-xs text-slate-200 transition hover:bg-white/[0.06]"
+                >
+                  <Upload className="h-3.5 w-3.5 text-slate-400" />
+                  Legacy workbook
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setShowMore(false);
+                    setShowImport(false);
+                    setShowIcsImport(true);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-xs text-slate-200 transition hover:bg-white/[0.06]"
+                >
+                  <Upload className="h-3.5 w-3.5 text-slate-400" />
+                  Calendar (.ics)
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 rounded-[18px] border border-white/8 bg-slate-950/35 px-3 py-2.5">
+        <label htmlFor={searchId} className="relative min-w-[14rem] flex-1">
           <span className="sr-only">Search planner tasks</span>
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <input
             id={searchId}
             value={state.preferences.plannerFilters.search}
@@ -698,7 +885,7 @@ export function PlannerView() {
               void updatePlannerFilters({ search: event.target.value });
             }}
             placeholder="Search task, category, or date"
-            className={`${fieldClassName} pl-11`}
+            className="h-9 w-full rounded-[12px] border border-white/10 bg-slate-900/55 pl-9 pr-3 text-xs font-medium text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-300/35"
           />
         </label>
 
@@ -709,7 +896,7 @@ export function PlannerView() {
             clearBulkSelection();
             void updatePlannerFilters({ category: event.target.value });
           }}
-          className={fieldClassName}
+          className="h-9 min-w-[10rem] rounded-[12px] border border-white/10 bg-slate-900/55 px-3 text-xs font-medium text-white outline-none transition focus:border-cyan-300/35"
         >
           <option value="All">All categories</option>
           {state.preferences.customCategories.map((category) => (
@@ -719,246 +906,340 @@ export function PlannerView() {
           ))}
         </select>
 
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="ml-auto flex items-center gap-1.5">
           <button
             type="button"
-            className={secondaryButtonClassName}
+            aria-label={periodPreviousLabel}
             onClick={() => {
-              setShowIcsImport(false);
-              setShowImport(true);
+              handlePlannerFocusDate(periodPreviousDate);
             }}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] border border-white/10 bg-slate-900/55 text-slate-200 transition hover:border-cyan-300/25 hover:text-white"
           >
-            <Upload className="h-4 w-4" />
-            Import legacy
+            <ChevronLeft className="h-4 w-4" />
           </button>
+          <p className="min-w-[12rem] text-center text-sm font-semibold tracking-[-0.01em] text-white">{periodLabel}</p>
           <button
             type="button"
-            className={secondaryButtonClassName}
+            aria-label={periodNextLabel}
             onClick={() => {
-              setShowImport(false);
-              setShowIcsImport(true);
+              handlePlannerFocusDate(periodNextDate);
             }}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] border border-white/10 bg-slate-900/55 text-slate-200 transition hover:border-cyan-300/25 hover:text-white"
           >
-            <Upload className="h-4 w-4" />
-            Import .ics
+            <ChevronRight className="h-4 w-4" />
           </button>
         </div>
       </div>
 
       <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,0.85fr)] xl:items-stretch">
         <Panel className="flex min-h-0 flex-col xl:h-full">
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                {plannerMode === "week" ? "Weekly planner" : "Monthly planner"}
-              </p>
-              <h3 className={`mt-1 font-semibold tracking-[-0.03em] text-white ${plannerMode === "month" ? "text-2xl" : "text-lg"}`}>
-                {periodLabel}
-              </h3>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <div className="inline-flex rounded-[16px] border border-white/10 bg-slate-900/55 p-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    void setPlannerMode("week");
-                  }}
-                  className={`rounded-[12px] px-3 py-1.5 text-xs font-medium transition ${
-                    plannerMode === "week" ? "bg-cyan-300/15 text-white" : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  Week
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void setPlannerMode("month");
-                  }}
-                  className={`rounded-[12px] px-3 py-1.5 text-xs font-medium transition ${
-                    plannerMode === "month" ? "bg-cyan-300/15 text-white" : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  Month
-                </button>
-              </div>
-              <button
-                type="button"
-                className="h-8 rounded-[14px] border border-white/10 bg-slate-900/55 px-3 text-[11px] font-medium text-slate-300 transition hover:border-cyan-300/25 hover:bg-slate-800/80 hover:text-white"
-                onClick={() => {
-                  handlePlannerFocusDate(getTodayKey());
-                }}
-              >
-                Today
-              </button>
-              <button
-                type="button"
-                className={iconButtonClassName}
-                onClick={() => {
-                  handlePlannerFocusDate(periodPreviousDate);
-                }}
-                aria-label={periodPreviousLabel}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                className={iconButtonClassName}
-                onClick={() => {
-                  handlePlannerFocusDate(periodNextDate);
-                }}
-                aria-label={periodNextLabel}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+              {plannerMode === "week" ? "7-day plan" : `${formatMonthLabel(selectedDate)} overview`}
+            </p>
+            <p className="text-xs text-slate-400">
+              {plannerMode === "week" ? (
+                <>
+                  <span className="font-semibold text-white">{weekTotalTasks}</span> task{weekTotalTasks === 1 ? "" : "s"}
+                  {" · "}
+                  <span className="font-semibold text-white">{formatMinutes(weekTotalMinutes)}</span> planned
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-white">{monthTasksInScope}</span> task{monthTasksInScope === 1 ? "" : "s"}
+                  {" · "}
+                  <span className="font-semibold text-white">{formatMinutes(monthMinutesInScope)}</span> planned
+                </>
+              )}
+            </p>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col">
-            {plannerMode === "week" ? (
-              <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle">
-                <div className="space-y-2">
-                  {periodDates.map((date) => {
-                    const dayTasks = tasksByDate.get(date) ?? [];
-                    const dayCompleted = dayTasks.filter((task) => task.completed).length;
-                    const isSelected = date === selectedDate;
+          {plannerMode === "week" ? (
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-hidden sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 xl:gap-0 xl:rounded-[16px] xl:border xl:border-white/10 xl:bg-slate-950/40">
+              {weekDates.map((date, index) => {
+                const dayTasks = (tasksByDate.get(date) ?? []).slice().sort(compareStudyBlocks);
+                const dayMinutes = dayTasks.reduce((sum, task) => sum + getStudyBlockMinutes(task), 0);
+                const isSelected = date === selectedDate;
+                const isTodayDate = date === todayKey;
+                const intensity = getWorkloadIntensity(dayMinutes);
+                const dayEvents = eventsByDate.get(date) ?? [];
+                const widthPercent = Math.min(100, Math.round((dayMinutes / 360) * 100));
 
-                    return (
-                      <button
-                        key={date}
-                        type="button"
-                        onClick={() => {
-                          handlePlannerFocusDate(date);
-                        }}
-                        className={`w-full rounded-[18px] border px-4 py-3 text-left transition ${
-                          isSelected
-                            ? "border-cyan-300/30 bg-cyan-300/10"
-                            : "border-white/10 bg-slate-900/55 hover:border-white/15"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{getDayName(date)}</p>
-                            <p className="mt-1 text-base font-semibold text-white">{formatShortDate(date)}</p>
-                          </div>
-                          <div className="text-right text-xs text-slate-400">
-                            <div>{dayTasks.length} tasks</div>
-                            <div>
-                              {dayCompleted}/{dayTasks.length || 0} done
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="flex min-h-0 flex-1 flex-col gap-2">
-                <div className="grid grid-cols-7 gap-px text-center">
-                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-                    <div key={day} className="py-1 text-[10px] uppercase tracking-[0.14em] text-slate-500">
-                      {day}
-                    </div>
-                  ))}
-                </div>
-                <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px overflow-hidden rounded-[16px] border border-white/8 bg-white/[0.06]">
-                  {periodDates.map((date) => {
-                    const dayTasks = tasksByDate.get(date) ?? [];
-                    const isSelected = date === selectedDate;
-                    const isCurrentMonth = date.slice(0, 7) === selectedMonthKey;
-                    const isToday = date === todayKey;
-                    const visibleTasks = dayTasks.slice(0, 3);
-                    const hiddenCount = Math.max(dayTasks.length - visibleTasks.length, 0);
-                    const isPast = date < todayKey;
-                    const overdueCount = isPast ? dayTasks.filter((task) => !task.completed).length : 0;
-                    const isOverdue = overdueCount > 0;
-
-                    return (
-                      <button
-                        key={date}
-                        type="button"
-                        onClick={() => handlePlannerFocusDate(date)}
-                        className={[
-                          "flex min-h-0 h-full flex-col overflow-hidden bg-slate-950/45 px-2 py-2 text-left transition-colors duration-150",
-                          isSelected
-                            ? "bg-cyan-300/10 ring-1 ring-inset ring-cyan-300/45"
-                            : isToday
-                            ? "bg-white/[0.07] ring-1 ring-inset ring-cyan-300/18"
-                            : isOverdue
-                            ? "bg-rose-500/10 hover:bg-rose-500/14"
-                            : "hover:bg-white/[0.04]",
-                          !isCurrentMonth ? "text-slate-500" : "text-slate-100",
-                        ].join(" ")}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <span
-                            className={`text-[12px] font-semibold leading-none ${
-                              isCurrentMonth ? "text-slate-100" : "text-slate-500"
-                            }`}
-                          >
-                            {Number(date.slice(8))}
+                return (
+                  <button
+                    key={date}
+                    type="button"
+                    onClick={() => handlePlannerFocusDate(date)}
+                    className={cn(
+                      "group flex min-h-[14rem] min-w-0 flex-col overflow-hidden rounded-[14px] border border-white/8 bg-slate-950/35 text-left transition xl:min-h-0 xl:rounded-none xl:border-0 xl:border-l xl:border-white/10",
+                      index === 0 ? "xl:border-l-0" : "",
+                      isSelected
+                        ? "ring-1 ring-inset ring-cyan-300/40"
+                        : isTodayDate
+                        ? "hover:bg-white/[0.03]"
+                        : "hover:bg-white/[0.03]",
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "flex items-center justify-between gap-2 border-b border-white/8 px-3 py-2.5",
+                        isSelected ? "bg-cyan-300/12" : isTodayDate ? "bg-white/[0.04]" : "",
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <p
+                          className={cn(
+                            "text-[10px] font-medium uppercase tracking-[0.18em]",
+                            isTodayDate ? "text-cyan-300" : isSelected ? "text-cyan-200/80" : "text-slate-500",
+                          )}
+                        >
+                          {getDayName(date).slice(0, 3)}
+                        </p>
+                        <p
+                          className={cn(
+                            "mt-0.5 text-[22px] font-semibold leading-none tracking-[-0.03em]",
+                            isTodayDate ? "text-cyan-100" : "text-white",
+                          )}
+                        >
+                          {Number(date.slice(8))}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[12px] font-semibold tabular-nums text-slate-100">
+                          {dayTasks.length}
+                          <span className="ml-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">
+                            {dayTasks.length === 1 ? "task" : "tasks"}
                           </span>
-                          {isOverdue ? (
-                            <span className="flex items-center gap-1 text-[9px] font-medium leading-none text-rose-200">
-                              <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
-                              {overdueCount}
-                            </span>
-                          ) : null}
-                        </div>
+                        </p>
+                        <p className="mt-0.5 text-[11px] tabular-nums text-slate-400">
+                          {dayMinutes ? formatMinutes(dayMinutes) : "—"}
+                        </p>
+                      </div>
+                    </div>
 
-                        <div className="mt-2 flex min-h-0 flex-1 flex-col gap-1 overflow-hidden">
-                          {visibleTasks.map((task) => {
-                            const tone = getMonthCategoryTone(task.category);
+                    <div className="h-[3px] w-full overflow-hidden bg-white/[0.04]">
+                      <div
+                        className={cn("h-full transition-[width]", intensity.barClassName)}
+                        style={{ width: `${widthPercent}%` }}
+                      />
+                    </div>
 
-                            return (
-                              <div key={task.id} className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[11px] leading-4">
-                                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone.dotClassName}`} />
-                                <span
-                                  className={`min-w-0 truncate ${
-                                    isCurrentMonth ? "text-slate-200" : "text-slate-500"
-                                  }`}
-                                >
-                                  {task.task}
+                    {dayEvents.length ? (
+                      <div className="flex flex-wrap items-center gap-1 px-2.5 pt-2">
+                        {dayEvents.slice(0, 1).map((timer) => (
+                          <span
+                            key={timer.id}
+                            className="inline-flex max-w-full items-center truncate rounded-[7px] border border-violet-300/25 bg-violet-300/12 px-1.5 py-0.5 text-[10px] font-medium text-violet-100"
+                          >
+                            {timer.label || "Exam"}
+                          </span>
+                        ))}
+                        {dayEvents.length > 1 ? (
+                          <span className="text-[10px] font-medium text-violet-200/80">
+                            +{dayEvents.length - 1}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2 scrollbar-subtle">
+                      {dayTasks.length ? (
+                        dayTasks.map((task) => {
+                          const tone = getMonthCategoryTone(task.category);
+                          const taskMinutes = getStudyBlockMinutes(task);
+                          return (
+                            <div
+                              key={task.id}
+                              className={cn(
+                                "relative flex min-w-0 items-center gap-1.5 overflow-hidden rounded-[9px] border border-white/8 bg-slate-900/55 pl-2 pr-2 py-1.5",
+                                task.completed ? "opacity-60" : "",
+                              )}
+                            >
+                              <span
+                                className={cn("absolute inset-y-1 left-0 w-[2px] rounded-r-full", tone.dotClassName)}
+                                aria-hidden="true"
+                              />
+                              <span
+                                className={cn(
+                                  "min-w-0 flex-1 truncate pl-1 text-[12px] leading-[1.2]",
+                                  task.completed ? "text-slate-400 line-through decoration-white/25" : "text-slate-100",
+                                )}
+                              >
+                                {task.task}
+                              </span>
+                              {taskMinutes ? (
+                                <span className="shrink-0 text-[10px] tabular-nums text-slate-500">
+                                  {formatMinutes(taskMinutes)}
                                 </span>
-                              </div>
-                            );
-                          })}
-                          {hiddenCount > 0 ? (
-                            <div className={`mt-auto pl-3 text-[10px] font-medium leading-none ${isCurrentMonth ? "text-slate-400" : "text-slate-500"}`}>
-                              +{hiddenCount} more
+                              ) : null}
                             </div>
-                          ) : null}
+                          );
+                        })
+                      ) : (
+                        <div className="flex flex-1 items-center justify-center py-4">
+                          <p className="text-[11px] text-slate-600">Quiet day</p>
                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col gap-2">
+              <div className="grid grid-cols-7 gap-px text-center">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+                  <div key={day} className="py-1 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                    {day}
+                  </div>
+                ))}
               </div>
-            )}
-          </div>
+              <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px overflow-hidden rounded-[16px] border border-white/10 bg-white/[0.06]">
+                {monthDates.map((date) => {
+                  const dayTasks = tasksByDate.get(date) ?? [];
+                  const dayMinutes = dayTasks.reduce((sum, task) => sum + getStudyBlockMinutes(task), 0);
+                  const isSelected = date === selectedDate;
+                  const isCurrentMonth = getDayMonth(date) === selectedMonthKey;
+                  const isTodayDate = date === todayKey;
+                  const isPast = date < todayKey;
+                  const overdueCount = isPast ? dayTasks.filter((task) => !task.completed).length : 0;
+                  const isOverdue = overdueCount > 0;
+                  const intensity = getWorkloadIntensity(dayMinutes);
+                  const widthPercent = Math.min(100, Math.round((dayMinutes / 360) * 100));
+                  const dayEvents = eventsByDate.get(date) ?? [];
+
+                  return (
+                    <button
+                      key={date}
+                      type="button"
+                      onClick={() => handlePlannerFocusDate(date)}
+                      className={cn(
+                        "flex min-h-0 flex-col gap-1 bg-slate-950/65 px-2 py-2 text-left transition-colors",
+                        isSelected
+                          ? "bg-cyan-300/12 ring-1 ring-inset ring-cyan-300/45"
+                          : isTodayDate
+                          ? "bg-white/[0.07] ring-1 ring-inset ring-cyan-300/25"
+                          : isOverdue
+                          ? "bg-rose-500/10 hover:bg-rose-500/14"
+                          : "hover:bg-white/[0.05]",
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span
+                          className={cn(
+                            "text-[13px] font-semibold leading-none tracking-[-0.01em]",
+                            !isCurrentMonth
+                              ? "text-slate-600"
+                              : isTodayDate
+                              ? "text-cyan-100"
+                              : "text-slate-100",
+                          )}
+                        >
+                          {Number(date.slice(8))}
+                        </span>
+                        {isOverdue ? (
+                          <span className="flex items-center gap-0.5 text-[9px] font-medium leading-none text-rose-200">
+                            <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                            {overdueCount}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {dayEvents.length ? (
+                        <div className="truncate rounded-[6px] border border-violet-300/30 bg-violet-300/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-100">
+                          {dayEvents[0].label || "Exam"}
+                          {dayEvents.length > 1 ? ` +${dayEvents.length - 1}` : ""}
+                        </div>
+                      ) : null}
+
+                      <div className="mt-auto space-y-1">
+                        {dayTasks.length ? (
+                          <div
+                            className={cn(
+                              "flex items-baseline gap-1 leading-none",
+                              isCurrentMonth ? "text-slate-200" : "text-slate-500",
+                            )}
+                          >
+                            <span className="text-[12px] font-semibold tabular-nums">{dayTasks.length}</span>
+                            <span className="text-[9px] uppercase tracking-[0.12em] text-slate-500">
+                              {dayTasks.length === 1 ? "task" : "tasks"}
+                            </span>
+                            <span className="ml-auto text-[10px] tabular-nums text-slate-400">
+                              {formatMinutes(dayMinutes)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="h-[12px]" aria-hidden="true" />
+                        )}
+                        <div className="h-[3px] w-full overflow-hidden rounded-full bg-white/[0.07]">
+                          <div
+                            className={cn("h-full rounded-full", intensity.barClassName)}
+                            style={{ width: `${widthPercent}%` }}
+                          />
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-6 rounded-full bg-emerald-400/65" aria-hidden="true" />
+                  Light
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-6 rounded-full bg-cyan-400/65" aria-hidden="true" />
+                  Steady
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-6 rounded-full bg-amber-400/70" aria-hidden="true" />
+                  Heavy
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-6 rounded-full bg-rose-400/70" aria-hidden="true" />
+                  Intense
+                </span>
+                {state.preferences.examTimers.length ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-6 rounded-full bg-violet-300/60" aria-hidden="true" />
+                    Exam
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          )}
         </Panel>
 
         <Panel className="flex min-h-0 flex-col xl:h-full">
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Selected day</p>
-              <h3 className="mt-1 text-base font-semibold text-white">{formatLongDate(selectedDate)}</h3>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Selected day</p>
+              <h3 className="mt-0.5 truncate text-[15px] font-semibold tracking-[-0.01em] text-white">
+                {formatLongDate(selectedDate)}
+              </h3>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex shrink-0 items-center gap-1.5">
               {isSelectionMode ? (
                 <>
-                  <button type="button" className={compactPlannerButtonClassName} onClick={exitSelectionMode}>
+                  <button
+                    type="button"
+                    className="inline-flex h-8 items-center rounded-[10px] border border-white/10 bg-slate-900/55 px-2.5 text-[11px] font-medium text-slate-200 transition hover:border-cyan-300/25 hover:text-white"
+                    onClick={exitSelectionMode}
+                  >
                     Cancel
                   </button>
-                  <button type="button" className={primaryButtonClassName} onClick={exitSelectionMode}>
+                  <button
+                    type="button"
+                    className="inline-flex h-8 items-center gap-1 rounded-[10px] bg-cyan-300/90 px-3 text-[11px] font-semibold text-slate-950 transition hover:bg-cyan-200"
+                    onClick={exitSelectionMode}
+                  >
                     Done
                   </button>
                 </>
               ) : (
                 <button
                   type="button"
-                  className={compactPlannerButtonClassName}
+                  className="inline-flex h-8 items-center rounded-[10px] border border-white/10 bg-slate-900/55 px-2.5 text-[11px] font-medium text-slate-300 transition hover:border-cyan-300/25 hover:text-white"
                   onClick={() => {
                     setIsSelectionMode(true);
                     clearBulkSelection();
@@ -967,32 +1248,40 @@ export function PlannerView() {
                   Select
                 </button>
               )}
-              <button type="button" className={primaryButtonClassName} onClick={() => openNewTask(selectedDate)}>
-                <Plus className="h-4 w-4" />
+              <button
+                type="button"
+                className="inline-flex h-8 items-center gap-1 rounded-[10px] bg-cyan-300/90 px-3 text-[11px] font-semibold text-slate-950 transition hover:bg-cyan-200"
+                onClick={() => openNewTask(selectedDate)}
+              >
+                <Plus className="h-3.5 w-3.5" />
                 Add task
               </button>
             </div>
           </div>
 
-          <div className="mb-3 grid grid-cols-3 gap-2">
-            <div className="rounded-[16px] border border-white/8 bg-slate-900/45 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Tasks</p>
-              <p className="mt-1 text-sm font-semibold text-white">{allSelectedDateTasks.length}</p>
+          <div className="mb-3 grid grid-cols-4 divide-x divide-white/8 overflow-hidden rounded-[12px] border border-white/8 bg-slate-950/45">
+            <div className="px-2.5 py-2">
+              <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Tasks</p>
+              <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">{allSelectedDateTasks.length}</p>
             </div>
-            <div className="rounded-[16px] border border-white/8 bg-slate-900/45 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Done</p>
-              <p className="mt-1 text-sm font-semibold text-white">{completedCount}</p>
+            <div className="px-2.5 py-2">
+              <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Planned</p>
+              <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">{formatMinutes(plannedMinutes)}</p>
             </div>
-            <div className="rounded-[16px] border border-white/8 bg-slate-900/45 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Planned</p>
-              <p className="mt-1 text-sm font-semibold text-white">{formatMinutes(plannedMinutes)}</p>
+            <div className="px-2.5 py-2">
+              <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Done</p>
+              <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">{completionPercent}%</p>
+            </div>
+            <div className="px-2.5 py-2">
+              <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Studied</p>
+              <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">{formatMinutes(studiedMinutes)}</p>
             </div>
           </div>
 
           {isSelectionMode ? (
-            <div className="mb-3 rounded-[18px] border border-white/10 bg-slate-950/45 p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="mr-1 text-[11px] font-medium text-slate-300">
+            <div className="mb-3 rounded-[12px] border border-white/10 bg-slate-950/45 p-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="mr-1 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400">
                   {selectedVisibleCount} selected
                 </span>
                 <button
@@ -1124,23 +1413,29 @@ export function PlannerView() {
             </div>
           ) : null}
 
-          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle pr-1">
+          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle pr-0.5">
             {selectedDateTasks.length ? (
-              <div className="space-y-2.5">
+              <div className="space-y-1.5">
                 {selectedDateTasks.map((task) => {
                   const index = allSelectedDateTasks.findIndex((entry) => entry.id === task.id);
                   const durationLabel = formatMinutes(getStudyBlockMinutes(task));
                   const tone = getMonthCategoryTone(task.category);
+                  const isFirst = index <= 0;
+                  const isLast = index === -1 || index >= allSelectedDateTasks.length - 1;
 
                   return (
                     <article
                       key={task.id}
-                      className={`relative overflow-hidden rounded-[18px] border border-white/10 bg-slate-900/55 p-3 transition ${
-                        task.completed ? "opacity-60" : ""
-                      }`}
+                      className={cn(
+                        "group relative rounded-[12px] border border-white/8 bg-slate-900/45 px-2.5 py-2 transition",
+                        task.completed ? "opacity-65" : "hover:border-white/15 hover:bg-slate-900/65",
+                      )}
                     >
-                      <span className={`absolute inset-y-3 left-0 w-[3px] rounded-r-full ${tone.dotClassName}`} aria-hidden="true" />
-                      <div className="flex items-start gap-3">
+                      <span
+                        className={cn("absolute inset-y-1.5 left-0 w-[2px] rounded-r-full", tone.dotClassName)}
+                        aria-hidden="true"
+                      />
+                      <div className="flex items-center gap-2 pl-1.5">
                         {isSelectionMode ? (
                           <input
                             type="checkbox"
@@ -1155,7 +1450,7 @@ export function PlannerView() {
                               );
                             }}
                             aria-label={`Select ${task.task}`}
-                            className="mt-0.5 h-5 w-5 rounded border-white/15 bg-slate-950 text-cyan-300"
+                            className="h-4 w-4 shrink-0 rounded border-white/15 bg-slate-950 text-cyan-300"
                             disabled={isBulkPending}
                           />
                         ) : (
@@ -1166,61 +1461,56 @@ export function PlannerView() {
                               void toggleTask(task, event.target.checked);
                             }}
                             aria-label={`Mark ${task.task} complete`}
-                            className="mt-0.5 h-5 w-5 rounded border-white/15 bg-slate-950 text-cyan-300"
+                            className="h-4 w-4 shrink-0 rounded border-white/15 bg-slate-950 text-cyan-300"
                           />
                         )}
 
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <CategoryBadge category={task.category} />
-                            <span className="inline-flex items-center rounded-full border border-white/10 px-2.5 py-1 text-xs text-slate-300">
-                              {durationLabel}
-                            </span>
-                            {task.reminderAt ? (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs text-cyan-100">
-                                <Bell className="h-3.5 w-3.5" />
-                                {formatDateTimeLabel(task.reminderAt)}
-                              </span>
-                            ) : null}
-                          </div>
-
-                          <h4
-                            className={`mt-2 text-base font-semibold text-white ${
-                              task.completed ? "line-through decoration-white/45" : ""
-                            }`}
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <span
+                            className={cn(
+                              "inline-flex shrink-0 items-center rounded-md border border-white/10 bg-white/[0.03] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.04em] text-slate-300",
+                            )}
+                          >
+                            {task.category}
+                          </span>
+                          <span
+                            className={cn(
+                              "min-w-0 flex-1 truncate text-[13px] leading-5",
+                              task.completed ? "text-slate-400 line-through decoration-white/25" : "text-white",
+                            )}
+                            title={task.task}
                           >
                             {task.task}
-                          </h4>
+                          </span>
+                          <span className="shrink-0 text-[11px] tabular-nums text-slate-500">{durationLabel}</span>
                         </div>
 
-                        <div className="flex flex-col items-end gap-2">
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              className={iconButtonClassName}
-                              disabled={index <= 0}
-                              onClick={() => {
-                                void moveTask(task, -1);
-                              }}
-                              aria-label={`Move ${task.task} up`}
-                            >
-                              <ArrowUp className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              className={iconButtonClassName}
-                              disabled={index === -1 || index >= allSelectedDateTasks.length - 1}
-                              onClick={() => {
-                                void moveTask(task, 1);
-                              }}
-                              aria-label={`Move ${task.task} down`}
-                            >
-                              <ArrowDown className="h-4 w-4" />
-                            </button>
-                          </div>
+                        <div className="flex shrink-0 items-center gap-0.5">
                           <button
                             type="button"
-                            className={iconButtonClassName}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                            disabled={isFirst}
+                            onClick={() => {
+                              void moveTask(task, -1);
+                            }}
+                            aria-label={`Move ${task.task} up`}
+                          >
+                            <ArrowUp className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                            disabled={isLast}
+                            onClick={() => {
+                              void moveTask(task, 1);
+                            }}
+                            aria-label={`Move ${task.task} down`}
+                          >
+                            <ArrowDown className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-white/[0.06] hover:text-white"
                             aria-label={`Edit ${task.task}`}
                             onClick={() => {
                               setEditorTask(task);
@@ -1228,10 +1518,16 @@ export function PlannerView() {
                               setShowEditor(true);
                             }}
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Pencil className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </div>
+                      {task.reminderAt ? (
+                        <p className="mt-1 flex items-center gap-1 pl-[1.875rem] text-[10.5px] text-cyan-200/80">
+                          <Bell className="h-3 w-3" aria-hidden="true" />
+                          <span className="truncate">{formatDateTimeLabel(task.reminderAt)}</span>
+                        </p>
+                      ) : null}
                     </article>
                   );
                 })}
@@ -1245,11 +1541,16 @@ export function PlannerView() {
                     : "Add a task and build the day from a blank list."
                 }
                 action={
-                  <button type="button" className={primaryButtonClassName} onClick={() => openNewTask(selectedDate)}>
-                    <Plus className="h-4 w-4" />
+                  <button
+                    type="button"
+                    className="inline-flex h-8 items-center gap-1 rounded-[10px] bg-cyan-300/90 px-3 text-[11px] font-semibold text-slate-950 transition hover:bg-cyan-200"
+                    onClick={() => openNewTask(selectedDate)}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
                     Add task
                   </button>
                 }
+                compact
               />
             )}
           </div>

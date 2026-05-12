@@ -356,6 +356,169 @@ async fn export_notebook_page(
     Ok(path.to_string_lossy().to_string())
 }
 
+#[tauri::command]
+async fn export_notebook_pdf(
+    app: tauri::AppHandle,
+    suggested_file_name: String,
+    data_b64: String,
+) -> Result<String, String> {
+    use base64::Engine as _;
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&data_b64)
+        .map_err(|e| format!("Invalid PDF base64 data: {e}"))?;
+
+    const MAX_BYTES: usize = 120 * 1024 * 1024;
+    if bytes.len() > MAX_BYTES {
+        return Err(format!("PDF export exceeds 120 MB limit ({} bytes)", bytes.len()));
+    }
+    if bytes.len() < 4 || &bytes[..4] != b"%PDF" {
+        return Err("Generated export is not a valid PDF.".to_string());
+    }
+
+    let fallback_name = "notebook-page.pdf".to_string();
+    let mut file_name = if suggested_file_name.trim().is_empty() {
+        fallback_name
+    } else {
+        suggested_file_name
+    };
+    if !file_name.to_lowercase().ends_with(".pdf") {
+        file_name.push_str(".pdf");
+    }
+
+    let (tx, mut rx) = tauri::async_runtime::channel(1);
+    app.dialog().file().set_file_name(file_name).save_file(move |file| {
+        let _ = tx.try_send(file);
+    });
+
+    let selected_file = rx
+        .recv()
+        .await
+        .ok_or_else(|| "Unable to receive export destination.".to_string())?
+        .ok_or_else(|| "Export canceled by user.".to_string())?;
+
+    let mut path: PathBuf = selected_file
+        .into_path()
+        .map_err(|error| format!("Unable to resolve selected export path: {error}"))?;
+    if path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| !ext.eq_ignore_ascii_case("pdf"))
+        .unwrap_or(true)
+    {
+        path.set_extension("pdf");
+    }
+
+    fs::write(&path, bytes).map_err(|error| format!("Unable to write notebook PDF export: {error}"))?;
+
+    Ok(path.to_string_lossy().to_string())
+}
+
+fn is_valid_pdf_filename(filename: &str) -> bool {
+    if filename.is_empty() || filename.contains('/') || filename.contains('\\') || filename.contains("..") {
+        return false;
+    }
+    let ext = filename.rsplit('.').next().unwrap_or("").to_lowercase();
+    ext == "pdf"
+}
+
+#[tauri::command]
+fn save_notebook_pdf(app: tauri::AppHandle, data_b64: String) -> Result<String, String> {
+    use base64::Engine as _;
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&data_b64)
+        .map_err(|e| format!("Invalid base64 data: {e}"))?;
+
+    const MAX_BYTES: usize = 100 * 1024 * 1024;
+    if bytes.len() > MAX_BYTES {
+        return Err(format!("PDF exceeds 100 MB limit ({} bytes)", bytes.len()));
+    }
+    if bytes.len() < 4 || &bytes[..4] != b"%PDF" {
+        return Err("File is not a valid PDF (missing %PDF header).".to_string());
+    }
+
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Unable to resolve app data directory: {e}"))?;
+
+    let assets_dir = data_dir.join("notebook-pdfs");
+    fs::create_dir_all(&assets_dir)
+        .map_err(|e| format!("Unable to create notebook-pdfs directory: {e}"))?;
+
+    let file_name = format!("{}.pdf", uuid::Uuid::new_v4());
+    let file_path = assets_dir.join(&file_name);
+
+    fs::write(&file_path, &bytes)
+        .map_err(|e| format!("Unable to write PDF file: {e}"))?;
+
+    Ok(file_name)
+}
+
+#[derive(serde::Serialize)]
+struct NotebookPdfData {
+    data_b64: String,
+}
+
+#[tauri::command]
+fn read_notebook_pdf_as_base64(app: tauri::AppHandle, filename: String) -> Result<NotebookPdfData, String> {
+    use base64::Engine as _;
+
+    if !is_valid_pdf_filename(&filename) {
+        return Err("Invalid PDF filename.".to_string());
+    }
+
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Unable to resolve app data directory: {e}"))?;
+
+    let file_path = data_dir.join("notebook-pdfs").join(&filename);
+
+    let bytes = fs::read(&file_path).map_err(|e| format!("Unable to read PDF file: {e}"))?;
+
+    let data_b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+
+    Ok(NotebookPdfData { data_b64 })
+}
+
+fn nbpdf_protocol_handler(
+    app: &tauri::AppHandle,
+    request: tauri::http::Request<Vec<u8>>,
+) -> tauri::http::Response<Vec<u8>> {
+    fn err(status: u16, body: &[u8]) -> tauri::http::Response<Vec<u8>> {
+        tauri::http::Response::builder()
+            .status(status)
+            .header("Content-Type", "text/plain")
+            .body(body.to_vec())
+            .unwrap()
+    }
+
+    let path = request.uri().path();
+    let file_name = path.trim_start_matches('/');
+
+    if !is_valid_pdf_filename(file_name) {
+        return err(403, b"Forbidden");
+    }
+
+    let data_dir = match app.path().app_data_dir() {
+        Ok(d) => d,
+        Err(_) => return err(500, b"Internal error"),
+    };
+
+    let file_path = data_dir.join("notebook-pdfs").join(file_name);
+
+    match fs::read(&file_path) {
+        Ok(bytes) => tauri::http::Response::builder()
+            .status(200)
+            .header("Content-Type", "application/pdf")
+            .body(bytes)
+            .unwrap(),
+        Err(_) => err(404, b"Not found"),
+    }
+}
+
 fn is_valid_image_filename(filename: &str) -> bool {
     if filename.is_empty() || filename.contains('/') || filename.contains('\\') || filename.contains("..") {
         return false;
@@ -442,6 +605,7 @@ fn purge_orphaned_notebook_images(
 fn main() {
     tauri::Builder::default()
         .register_uri_scheme_protocol("nbimg", |ctx, request| nbimg_protocol_handler(ctx.app_handle(), request))
+        .register_uri_scheme_protocol("nbpdf", |ctx, request| nbpdf_protocol_handler(ctx.app_handle(), request))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
@@ -487,8 +651,11 @@ fn main() {
             launch_path,
             open_notification_settings,
             export_notebook_page,
+            export_notebook_pdf,
             save_notebook_image,
             read_notebook_image_as_base64,
+            save_notebook_pdf,
+            read_notebook_pdf_as_base64,
             updater::check_for_updates,
             updater::check_for_update,
             updater::install_update,

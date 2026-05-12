@@ -156,23 +156,19 @@ export function NavigationButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "group flex w-full items-center gap-3 rounded-[18px] border px-3.5 py-3 text-left transition",
+        "group flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-left transition-colors",
         active
-          ? "border-cyan-300/35 bg-gradient-to-r from-cyan-300/16 to-blue-400/14 text-white shadow-[0_12px_28px_rgba(64,177,255,0.14)]"
-          : "border-transparent bg-transparent text-slate-300 hover:border-white/10 hover:bg-white/[0.04] hover:text-white",
+          ? "bg-white/[0.06] text-white"
+          : "text-slate-400 hover:bg-white/[0.03] hover:text-slate-200",
       )}
     >
-      <div
+      <Icon
         className={cn(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition",
-          active
-            ? "border-cyan-200/20 bg-white/10 text-cyan-100"
-            : "border-white/10 bg-white/[0.04] text-slate-300 group-hover:text-white",
+          "h-4 w-4 shrink-0 transition-colors",
+          active ? "text-cyan-200" : "text-slate-500 group-hover:text-slate-300",
         )}
-      >
-        <Icon className="h-5 w-5" />
-      </div>
-      <div className="text-sm font-semibold tracking-[0.02em]">{label}</div>
+      />
+      <span className="text-[13px] font-medium tracking-[0.01em]">{label}</span>
     </button>
   );
 }
@@ -191,7 +187,7 @@ export function MobileNav({
   onSelect: (section: SectionId) => void;
 }) {
   return (
-    <div className="glass-panel flex gap-2 overflow-x-auto p-2 min-[1680px]:hidden">
+    <div className="glass-panel flex gap-1.5 overflow-x-auto p-1.5 min-[1680px]:hidden">
       {items.map((item) => {
         const Icon = item.icon;
         const active = item.id === activeSection;
@@ -201,13 +197,18 @@ export function MobileNav({
             type="button"
             onClick={() => onSelect(item.id)}
             className={cn(
-              "flex min-w-[108px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl px-4 py-3 text-sm font-medium transition sm:min-w-[120px]",
+              "flex min-w-[104px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-[13px] font-medium transition-colors",
               active
-                ? "bg-gradient-to-r from-cyan-300/20 to-blue-400/15 text-white"
-                : "bg-transparent text-slate-400 hover:bg-white/[0.04] hover:text-white",
+                ? "bg-white/[0.06] text-white"
+                : "bg-transparent text-slate-400 hover:bg-white/[0.03] hover:text-slate-200",
             )}
           >
-            <Icon className="h-4 w-4" />
+            <Icon
+              className={cn(
+                "h-4 w-4",
+                active ? "text-cyan-200" : "text-slate-500",
+              )}
+            />
             {item.label}
           </button>
         );

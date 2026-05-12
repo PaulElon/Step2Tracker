@@ -164,6 +164,45 @@ export interface NotebookFolder {
   updatedAt: string;
 }
 
+export type NotebookPageKind = "tiptap" | "pdf";
+
+export type PdfViewMode = "horizontal" | "vertical";
+
+export interface PdfAnnotationQuad {
+  // PDF user-space coordinates (origin bottom-left for PDF page).
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface PdfAnnotation {
+  id: string;
+  kind: "highlight";
+  pageIndex: number; // zero-based index of the PDF page
+  color: string;
+  quads: PdfAnnotationQuad[];
+  textSnippet?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PdfOutlineItemKind = "outline" | "note";
+
+export interface PdfOutlineItem {
+  id: string;
+  title: string;
+  pageIndex: number; // zero-based index of the PDF page
+  y?: number;
+  depth?: number;
+  source: "embedded" | "manual";
+  kind?: PdfOutlineItemKind;
+  noteText?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  children?: PdfOutlineItem[];
+}
+
 export interface NotebookPage {
   id: string;
   title: string;
@@ -173,6 +212,17 @@ export interface NotebookPage {
   order: number;
   createdAt: string;
   updatedAt: string;
+  // Stage B (PDF). Absent kind = "tiptap" page (existing native behavior).
+  kind?: NotebookPageKind;
+  pdfFilename?: string;
+  pdfOriginalName?: string;
+  pdfPageCount?: number;
+  // Stage C (PDF highlights). Absent/empty = no annotations.
+  pdfAnnotations?: PdfAnnotation[];
+  // Stage D (PDF viewer polish). Absent = "horizontal" (single-page).
+  pdfViewMode?: PdfViewMode;
+  // Stage D (PDF outline/navigation). Absent/empty = no saved outline.
+  pdfOutline?: PdfOutlineItem[];
 }
 
 export interface NotebookDocument {
