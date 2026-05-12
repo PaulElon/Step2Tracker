@@ -470,6 +470,28 @@ export function TiptapEditor({
                 return { width: String(attrs.width) };
               },
             },
+            height: {
+              default: null,
+              parseHTML: (el: HTMLElement) => {
+                const h = el.getAttribute("height");
+                if (h) return h;
+                const sh = el.style.height;
+                if (sh && sh !== "auto") return sh.replace(/px$/, "");
+                return null;
+              },
+              renderHTML: (attrs: Record<string, unknown>) => {
+                if (!attrs.height) return {};
+                return { height: String(attrs.height) };
+              },
+            },
+            dataAlign: {
+              default: null,
+              parseHTML: (el: HTMLElement) => el.getAttribute("data-align") || null,
+              renderHTML: (attrs: Record<string, unknown>) => {
+                if (!attrs.dataAlign) return {};
+                return { "data-align": String(attrs.dataAlign) };
+              },
+            },
           };
         },
         addNodeView() {

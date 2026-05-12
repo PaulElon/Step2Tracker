@@ -2702,62 +2702,181 @@ button {
 
 .notebook-image-node {
   position: relative;
-  display: inline-block;
   max-width: 100%;
-  /* block-level gap */
   margin: 0.25rem 0;
 }
 
-.notebook-image-node--selected img {
+/* Alignment variants — applied to the NodeViewWrapper. */
+.notebook-image-node--align-inline,
+.notebook-image-node--align-left {
+  display: inline-block;
+  margin-right: 0.5rem;
+}
+
+.notebook-image-node--align-left .notebook-image-node__inner {
+  float: left;
+  margin-right: 0.75rem;
+}
+
+.notebook-image-node--align-right {
+  display: inline-block;
+}
+
+.notebook-image-node--align-right .notebook-image-node__inner {
+  float: right;
+  margin-left: 0.75rem;
+}
+
+.notebook-image-node--align-center {
+  display: block;
+}
+
+.notebook-image-node--align-center .notebook-image-node__inner {
+  margin-left: auto;
+  margin-right: auto;
+  display: table;
+}
+
+.notebook-image-node--align-fit {
+  display: block;
+}
+
+.notebook-image-node--align-fit .notebook-image-node__inner {
+  width: 100%;
+}
+
+.notebook-image-node--align-fit .notebook-image-node__inner img {
+  width: 100%;
+}
+
+.notebook-image-node__inner {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.notebook-image-node--selected .notebook-image-node__inner img {
   outline: 2px solid rgba(99, 179, 237, 0.72);
   outline-offset: 2px;
   border-radius: 2px;
 }
 
-.notebook-image-node__delete {
+/* Selected-image floating toolbar */
+.notebook-image-node__toolbar {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  display: flex;
+  top: -34px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  line-height: 1;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 4px;
-  background: rgba(15, 23, 42, 0.82);
-  color: rgba(226, 232, 240, 0.9);
-  cursor: pointer;
+  gap: 2px;
+  padding: 3px 4px;
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid rgba(99, 179, 237, 0.4);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  z-index: 20;
   user-select: none;
-  z-index: 10;
+  white-space: nowrap;
 }
 
-.notebook-image-node__delete:hover {
-  background: rgba(239, 68, 68, 0.72);
-  border-color: rgba(239, 68, 68, 0.6);
+.notebook-image-node__tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  min-width: 24px;
+  padding: 0 5px;
+  font-size: 12px;
+  line-height: 1;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.85);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.notebook-image-node__tool:hover {
+  background: rgba(56, 189, 248, 0.18);
   color: #fff;
 }
 
-.notebook-image-node__resize-handle {
-  position: absolute;
-  bottom: 4px;
-  right: 4px;
-  width: 14px;
+.notebook-image-node__tool.is-active {
+  background: rgba(34, 211, 238, 0.22);
+  color: rgba(164, 245, 253, 1);
+  border-color: rgba(34, 211, 238, 0.45);
+}
+
+.notebook-image-node__tool--danger:hover {
+  background: rgba(239, 68, 68, 0.5);
+  color: #fff;
+}
+
+.notebook-image-node__tool-sep {
+  display: inline-block;
+  width: 1px;
   height: 14px;
-  cursor: se-resize;
-  background: rgba(99, 179, 237, 0.85);
-  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  margin: 0 3px;
+  background: rgba(148, 163, 184, 0.35);
+}
+
+/* Resize handles */
+.notebook-image-node__handle {
+  position: absolute;
+  background: rgba(99, 179, 237, 0.92);
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
   border-radius: 3px;
   z-index: 10;
   user-select: none;
   touch-action: none;
 }
 
-.notebook-image-node__resize-handle:hover {
+.notebook-image-node__handle:hover {
   background: rgba(99, 179, 237, 1);
+}
+
+.notebook-image-node__handle--left {
+  top: 50%;
+  left: -5px;
+  width: 9px;
+  height: 22px;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.notebook-image-node__handle--right {
+  top: 50%;
+  right: -5px;
+  width: 9px;
+  height: 22px;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.notebook-image-node__handle--top {
+  top: -5px;
+  left: 50%;
+  width: 22px;
+  height: 9px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.notebook-image-node__handle--bottom {
+  bottom: -5px;
+  left: 50%;
+  width: 22px;
+  height: 9px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.notebook-image-node__handle--corner {
+  bottom: -5px;
+  right: -5px;
+  width: 12px;
+  height: 12px;
+  cursor: se-resize;
 }
 
 .notebook-image-node__width-badge {
@@ -2773,4 +2892,30 @@ button {
   pointer-events: none;
   user-select: none;
   z-index: 10;
+}
+
+/* ── Editable-text word spacing (visual only) ─────────────────────────────── */
+/* Slight word-spacing on user-editable text contexts to relieve cramping.
+   Not applied to non-editable UI labels/buttons/nav. */
+input,
+textarea,
+[contenteditable="true"],
+.ProseMirror,
+.notebook-editor-input {
+  word-spacing: 0.05em;
+}
+
+/* Protect monospace/code/keyboard/tabular contexts. */
+pre,
+code,
+kbd,
+samp,
+.font-mono,
+.ProseMirror pre,
+.ProseMirror code,
+.ProseMirror pre code,
+input[type="number"],
+input.font-mono,
+textarea.font-mono {
+  word-spacing: normal;
 }
