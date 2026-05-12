@@ -15,6 +15,7 @@ export interface NotebookFolderExportResult {
   bytes: Uint8Array;
   suggestedFileName: string;
   documentCount: number;
+  folderCount: number;
   warnings: string[];
 }
 
@@ -81,16 +82,68 @@ export async function exportNotebookDocumentToBytes(
   };
 }
 
-export async function exportNotebookFolderToZip(
-  folder: NotebookFolder,
-  documents: NotebookDocument[],
-): Promise<NotebookFolderExportResult> {
-  const folderSlug = sanitizeNotebookFileNameSegment(folder.name || "Untitled Folder");
-  const zip = new JSZip();
-  const warnings: string[] = [];
-  let documentCount = 0;
+// Maps zip directory path → set of already-claimed entry names (files + dirs).
+type NameRegistry = Map<string, Set<string>>;
 
-  for (const doc of documents) {
+function claimFileName(registry: NameRegistry, dirPath: string, base: string, ext: string): string {
+  let bucket = registry.get(dirPath);
+  if (!bucket) {
+    bucket = new Set();
+    registry.set(dirPath, bucket);
+  }
+  let candidate = `${base}.${ext}`;
+  if (!bucket.has(candidate)) {
+    bucket.add(candidate);
+    return candidate;
+  }
+  let n = 2;
+  while (true) {
+    candidate = `${base} (${n}).${ext}`;
+    if (!bucket.has(candidate)) {
+      bucket.add(candidate);
+      return candidate;
+    }
+    n++;
+  }
+}
+
+function claimDirName(registry: NameRegistry, dirPath: string, base: string): string {
+  let bucket = registry.get(dirPath);
+  if (!bucket) {
+    bucket = new Set();
+    registry.set(dirPath, bucket);
+  }
+  if (!bucket.has(base)) {
+    bucket.add(base);
+    return base;
+  }
+  let n = 2;
+  while (true) {
+    const candidate = `${base} (${n})`;
+    if (!bucket.has(candidate)) {
+      bucket.add(candidate);
+      return candidate;
+    }
+    n++;
+  }
+}
+
+async function addFolderContentsToZip(
+  zipNode: JSZip,
+  zipDirPath: string,
+  targetFolder: NotebookFolder,
+  allFolders: NotebookFolder[],
+  allDocuments: NotebookDocument[],
+  registry: NameRegistry,
+  warnings: string[],
+): Promise<{ documentCount: number; folderCount: number }> {
+  let documentCount = 0;
+  let folderCount = 1; // count the folder we are currently processing
+
+  const childDocuments = allDocuments.filter((doc) => doc.folderId === targetFolder.id);
+  const childFolders = allFolders.filter((f) => f.parentFolderId === targetFolder.id);
+
+  for (const doc of childDocuments) {
     const pages = sortPagesByOrder(doc.pages);
     if (pages.length === 0) continue;
 
@@ -101,11 +154,14 @@ export async function exportNotebookFolderToZip(
       if (missingImages.length > 0) {
         warnings.push(`"${doc.title}": ${missingImages.length} image(s) could not be embedded.`);
       }
-      zip.file(`${docSlug}.pdf`, bytes);
+      const fileName = claimFileName(registry, zipDirPath, docSlug, "pdf");
+      zipNode.file(fileName, bytes);
     } else {
-      const padLen = String(pages.length).length;
-      const docFolder = zip.folder(docSlug);
+      const dirName = claimDirName(registry, zipDirPath, docSlug);
+      const docFolder = zipNode.folder(dirName);
       if (!docFolder) continue;
+      const docPath = `${zipDirPath}/${dirName}`;
+      const padLen = String(pages.length).length;
       for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
         const pageNum = String(i + 1).padStart(padLen, "0");
@@ -114,11 +170,55 @@ export async function exportNotebookFolderToZip(
         if (missingImages.length > 0) {
           warnings.push(`"${doc.title}/${page.title}": ${missingImages.length} image(s) could not be embedded.`);
         }
-        docFolder.file(`${pageNum}-${pageSlug}.pdf`, bytes);
+        const pageFileName = claimFileName(registry, docPath, `${pageNum}-${pageSlug}`, "pdf");
+        docFolder.file(pageFileName, bytes);
       }
     }
     documentCount++;
   }
+
+  for (const childFolder of childFolders) {
+    const childSlug = sanitizeNotebookFileNameSegment(childFolder.name || "Untitled Folder");
+    const childDirName = claimDirName(registry, zipDirPath, childSlug);
+    const childZipNode = zipNode.folder(childDirName);
+    if (!childZipNode) continue;
+    const childPath = `${zipDirPath}/${childDirName}`;
+    const counts = await addFolderContentsToZip(
+      childZipNode,
+      childPath,
+      childFolder,
+      allFolders,
+      allDocuments,
+      registry,
+      warnings,
+    );
+    documentCount += counts.documentCount;
+    folderCount += counts.folderCount;
+  }
+
+  return { documentCount, folderCount };
+}
+
+export async function exportNotebookFolderToZip(
+  folder: NotebookFolder,
+  allFolders: NotebookFolder[],
+  allDocuments: NotebookDocument[],
+): Promise<NotebookFolderExportResult> {
+  const folderSlug = sanitizeNotebookFileNameSegment(folder.name || "Untitled Folder");
+  const zip = new JSZip();
+  const warnings: string[] = [];
+  const registry: NameRegistry = new Map();
+
+  // Zip root is represented by an empty string path.
+  const { documentCount, folderCount } = await addFolderContentsToZip(
+    zip,
+    "",
+    folder,
+    allFolders,
+    allDocuments,
+    registry,
+    warnings,
+  );
 
   if (documentCount === 0) {
     throw new Error("This folder has no exportable documents.");
@@ -129,6 +229,7 @@ export async function exportNotebookFolderToZip(
     bytes: zipBytes,
     suggestedFileName: `${folderSlug}.zip`,
     documentCount,
+    folderCount,
     warnings,
   };
 }

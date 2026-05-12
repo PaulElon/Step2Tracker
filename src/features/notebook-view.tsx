@@ -955,10 +955,10 @@ export function NotebookView() {
     setStatus(null);
     try {
       await flushPendingNotebookSave();
-      const folderDocuments = sortedDocuments.filter((doc) => (doc.folderId ?? null) === folder.id);
-      const result = await exportNotebookFolderToZip(folder, folderDocuments);
+      const result = await exportNotebookFolderToZip(folder, sortedFolders, sortedDocuments);
       const savedPath = await exportNotebookZipBytes(result.suggestedFileName, result.bytes);
-      const parts: string[] = [`Exported ${result.documentCount} document(s) to ${savedPath}.`];
+      const folderLabel = result.folderCount > 1 ? ` across ${result.folderCount} folder(s)` : "";
+      const parts: string[] = [`Exported ${result.documentCount} document(s)${folderLabel} to ${savedPath}.`];
       if (result.warnings.length > 0) parts.push(result.warnings.join(" "));
       setStatus({ kind: "success", message: parts.join(" ") });
     } catch (error) {
