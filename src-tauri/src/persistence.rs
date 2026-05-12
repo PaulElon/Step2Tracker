@@ -490,6 +490,16 @@ pub struct NotebookPage {
     pub created_at: String,
     #[serde(default)]
     pub updated_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pdf_filename: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pdf_original_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pdf_page_count: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pdf_annotations: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -4029,6 +4039,7 @@ fn materialize_notebook_documents_from_pages(preferences: &mut Preferences) {
                 order: 0,
                 created_at: page.created_at.clone(),
                 updated_at: page.updated_at.clone(),
+                ..NotebookPage::default()
             };
             NotebookDocument {
                 id: page.id.clone(),
@@ -4737,6 +4748,7 @@ mod tests {
                 order: 2,
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-02T00:00:00Z".into(),
+                ..NotebookPage::default()
             },
             NotebookPage {
                 id: "page-2".into(),
@@ -4747,6 +4759,7 @@ mod tests {
                 order: 1,
                 created_at: "2026-01-03T00:00:00Z".into(),
                 updated_at: "2026-01-04T00:00:00Z".into(),
+                ..NotebookPage::default()
             },
         ];
 
@@ -4799,6 +4812,7 @@ mod tests {
             order: 0,
             created_at: "2026-01-01T00:00:00Z".into(),
             updated_at: "2026-01-01T00:00:00Z".into(),
+            ..NotebookPage::default()
         }];
         prefs.notebook_documents = vec![NotebookDocument {
             id: "doc-existing".into(),
@@ -4835,6 +4849,7 @@ mod tests {
             order: 0,
             created_at: "2026-03-01T00:00:00Z".into(),
             updated_at: "2026-03-02T00:00:00Z".into(),
+            ..NotebookPage::default()
         };
         let mut base = default_preferences();
         base.notebook_pages = vec![page];
@@ -4883,6 +4898,7 @@ mod tests {
             order: 5,
             created_at: "2026-04-01T00:00:00Z".into(),
             updated_at: "2026-04-01T00:00:00Z".into(),
+            ..NotebookPage::default()
         };
         let mut prefs = default_preferences();
         prefs.notebook_pages = vec![page];
