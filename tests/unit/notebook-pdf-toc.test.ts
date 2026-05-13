@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { generateNotebookPdfOutlineFromTocLines } from "../../src/lib/notebook-pdf-toc.ts";
+import {
+  capNotebookPdfTocPreviewEntries,
+  countNotebookPdfTocEntries,
+  generateNotebookPdfOutlineFromTocLines,
+} from "../../src/lib/notebook-pdf-toc.ts";
 
 test("generateNotebookPdfOutlineFromTocLines builds hierarchy from printed TOC rows", () => {
   const result = generateNotebookPdfOutlineFromTocLines(
@@ -152,5 +156,76 @@ test("generateNotebookPdfOutlineFromTocLines infers direct mapping from matching
   assert.deepEqual(result.entries, [
     { title: "Introduction", pageIndex: 4, depth: 0 },
     { title: "Methods", pageIndex: 5, depth: 0 },
+  ]);
+});
+
+test("countNotebookPdfTocEntries counts deeply nested children", () => {
+  const count = countNotebookPdfTocEntries([
+    {
+      title: "Root 1",
+      pageIndex: 0,
+      depth: 0,
+      children: [
+        {
+          title: "Child 1",
+          pageIndex: 1,
+          depth: 1,
+          children: [{ title: "Grandchild 1", pageIndex: 2, depth: 2 }],
+        },
+      ],
+    },
+    {
+      title: "Root 2",
+      pageIndex: 3,
+      depth: 0,
+      children: [{ title: "Child 2", pageIndex: 4, depth: 1 }],
+    },
+  ]);
+
+  assert.equal(count, 5);
+});
+
+test("capNotebookPdfTocPreviewEntries preserves nesting and reports remaining entries", () => {
+  const result = capNotebookPdfTocPreviewEntries(
+    [
+      {
+        title: "Root 1",
+        pageIndex: 0,
+        depth: 0,
+        children: [
+          {
+            title: "Child 1",
+            pageIndex: 1,
+            depth: 1,
+            children: [{ title: "Grandchild 1", pageIndex: 2, depth: 2 }],
+          },
+        ],
+      },
+      {
+        title: "Root 2",
+        pageIndex: 3,
+        depth: 0,
+      },
+    ],
+    3,
+  );
+
+  assert.equal(result.totalCount, 4);
+  assert.equal(result.shownCount, 3);
+  assert.equal(result.remainingCount, 1);
+  assert.deepEqual(result.entries, [
+    {
+      title: "Root 1",
+      pageIndex: 0,
+      depth: 0,
+      children: [
+        {
+          title: "Child 1",
+          pageIndex: 1,
+          depth: 1,
+          children: [{ title: "Grandchild 1", pageIndex: 2, depth: 2 }],
+        },
+      ],
+    },
   ]);
 });

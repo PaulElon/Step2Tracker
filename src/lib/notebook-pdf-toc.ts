@@ -29,6 +29,13 @@ export interface NotebookPdfTocGenerationResult {
   warning?: string;
 }
 
+export interface NotebookPdfTocPreviewCapResult {
+  entries: NotebookPdfTocOutlineEntry[];
+  shownCount: number;
+  totalCount: number;
+  remainingCount: number;
+}
+
 interface TocLineRecord extends NotebookPdfTocLineInput {
   order: number;
 }
@@ -355,6 +362,59 @@ function isStrongTocResult(entries: NotebookPdfTocOutlineEntry[], parsedCandidat
     return true;
   }
   return parsedCandidateCount >= MIN_STRONG_TOC_ENTRIES;
+}
+
+export function countNotebookPdfTocEntries(entries: NotebookPdfTocOutlineEntry[]): number {
+  return entries.reduce((total, item) => total + 1 + countNotebookPdfTocEntries(item.children ?? []), 0);
+}
+
+export function capNotebookPdfTocPreviewEntries(
+  entries: NotebookPdfTocOutlineEntry[],
+  maxEntries: number,
+): NotebookPdfTocPreviewCapResult {
+  const safeMaxEntries = Math.max(0, Math.trunc(maxEntries));
+  const totalCount = countNotebookPdfTocEntries(entries);
+
+  if (safeMaxEntries <= 0 || totalCount === 0) {
+    return {
+      entries: [],
+      shownCount: 0,
+      totalCount,
+      remainingCount: totalCount,
+    };
+  }
+
+  let shownCount = 0;
+  const walk = (items: NotebookPdfTocOutlineEntry[]): NotebookPdfTocOutlineEntry[] => {
+    const next: NotebookPdfTocOutlineEntry[] = [];
+    for (const item of items) {
+      if (shownCount >= safeMaxEntries) {
+        break;
+      }
+      shownCount += 1;
+      const node: NotebookPdfTocOutlineEntry = {
+        title: item.title,
+        pageIndex: item.pageIndex,
+        depth: item.depth,
+      };
+      if (item.children && item.children.length > 0) {
+        const children = walk(item.children);
+        if (children.length > 0) {
+          node.children = children;
+        }
+      }
+      next.push(node);
+    }
+    return next;
+  };
+
+  const cappedEntries = walk(entries);
+  return {
+    entries: cappedEntries,
+    shownCount,
+    totalCount,
+    remainingCount: Math.max(0, totalCount - shownCount),
+  };
 }
 
 function toTocLineRecords(lines: NotebookPdfTocLineInput[]): TocLineRecord[] {
