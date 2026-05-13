@@ -16,7 +16,6 @@ import {
   purgeOrphanedNotebookPdfs,
   uploadNotebookPdf,
 } from "../lib/notebook-pdf";
-import { createNotebookDocxExport, parseNotebookDocxImport } from "../lib/notebook-docx";
 import { exportNotebookDocumentToBytes, exportNotebookFolderToZip } from "../lib/notebook-export";
 import {
   buildNotebookExportFileName,
@@ -158,6 +157,10 @@ function isDocxImportCandidate(file: File) {
     return true;
   }
   return file.name.trim().toLowerCase().endsWith(".docx");
+}
+
+async function loadNotebookDocxLib() {
+  return import("../lib/notebook-docx");
 }
 
 function stripPdfExtension(name: string) {
@@ -1280,6 +1283,7 @@ export function NotebookView() {
     try {
       await flushPendingNotebookSave();
       const fileName = buildNotebookExportFileName(activeDocument, activePage, "docx");
+      const { createNotebookDocxExport } = await loadNotebookDocxLib();
       const bytes = await createNotebookDocxExport(activeDocument.title, activePage.title, activePage.contentHtml);
       const savedPath = await exportNotebookDocxBytes(fileName, bytes);
       setStatus({
@@ -1328,7 +1332,7 @@ export function NotebookView() {
 
     try {
       const imported = isDocxImportCandidate(file)
-        ? await parseNotebookDocxImport(file)
+        ? await (await loadNotebookDocxLib()).parseNotebookDocxImport(file)
         : parseNotebookImport(file.name, await file.text());
       const targetFolderId = activeDocument?.folderId ?? currentFolderId ?? null;
       const targetFolderDocuments = notebookDocuments.filter((document) => (document.folderId ?? null) === targetFolderId);

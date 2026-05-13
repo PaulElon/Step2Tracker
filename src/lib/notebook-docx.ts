@@ -1,17 +1,4 @@
-import {
-  AlignmentType,
-  Document,
-  ExternalHyperlink,
-  HeadingLevel,
-  LevelFormat,
-  Packer,
-  Paragraph,
-  TextRun,
-  UnderlineType,
-  type IParagraphOptions,
-  type ParagraphChild,
-} from "docx";
-import mammoth from "mammoth";
+import type { IParagraphOptions, ParagraphChild } from "docx";
 import type { NotebookImportedPageDraft } from "./notebook-io";
 
 const DOCX_EXTENSION = ".docx";
@@ -19,6 +6,58 @@ const DOCX_ZIP_MAGIC_0 = 0x50;
 const DOCX_ZIP_MAGIC_1 = 0x4b;
 const DOCX_ZIP_MAGIC_2 = 0x03;
 const DOCX_ZIP_MAGIC_3 = 0x04;
+
+type DocxModule = typeof import("docx");
+type DocxParagraph = InstanceType<DocxModule["Paragraph"]>;
+type MammothConvertToHtml = (input: unknown) => Promise<{ value: string }>;
+
+let docxDependencyPromise: Promise<void> | null = null;
+let mammothDependencyPromise: Promise<void> | null = null;
+
+let AlignmentType!: DocxModule["AlignmentType"];
+let Document!: DocxModule["Document"];
+let ExternalHyperlink!: DocxModule["ExternalHyperlink"];
+let HeadingLevel!: DocxModule["HeadingLevel"];
+let LevelFormat!: DocxModule["LevelFormat"];
+let Packer!: DocxModule["Packer"];
+let Paragraph!: DocxModule["Paragraph"];
+let TextRun!: DocxModule["TextRun"];
+let UnderlineType!: DocxModule["UnderlineType"];
+let mammothConvertToHtml!: MammothConvertToHtml;
+
+async function ensureDocxDependency() {
+  if (!docxDependencyPromise) {
+    docxDependencyPromise = import("docx").then((module) => {
+      AlignmentType = module.AlignmentType;
+      Document = module.Document;
+      ExternalHyperlink = module.ExternalHyperlink;
+      HeadingLevel = module.HeadingLevel;
+      LevelFormat = module.LevelFormat;
+      Packer = module.Packer;
+      Paragraph = module.Paragraph;
+      TextRun = module.TextRun;
+      UnderlineType = module.UnderlineType;
+    });
+  }
+  await docxDependencyPromise;
+}
+
+async function ensureMammothDependency() {
+  if (!mammothDependencyPromise) {
+    mammothDependencyPromise = import("mammoth").then((module) => {
+      const mammothModule = module as {
+        default?: { convertToHtml?: MammothConvertToHtml };
+        convertToHtml?: MammothConvertToHtml;
+      };
+      const convertToHtml = mammothModule.default?.convertToHtml ?? mammothModule.convertToHtml;
+      if (!convertToHtml) {
+        throw new Error("Unable to load DOCX importer.");
+      }
+      mammothConvertToHtml = convertToHtml;
+    });
+  }
+  await mammothDependencyPromise;
+}
 
 type InlineStyleState = {
   bold: boolean;
@@ -168,8 +207,8 @@ function listLevelFromDepth(depth: number) {
 function blocksFromListElement(
   list: HTMLElement,
   depth: number,
-): Paragraph[] {
-  const blocks: Paragraph[] = [];
+): DocxParagraph[] {
+  const blocks: DocxParagraph[] = [];
   const isOrdered = list.tagName === "OL";
   const listItems = [...list.children].filter((child) => child.tagName === "LI");
   for (const li of listItems) {
@@ -201,7 +240,7 @@ function blocksFromListElement(
   return blocks;
 }
 
-function blocksFromElement(node: HTMLElement, listDepth = 0): Paragraph[] {
+function blocksFromElement(node: HTMLElement, listDepth = 0): DocxParagraph[] {
   const tag = node.tagName;
   if (tag === "UL" || tag === "OL") {
     return blocksFromListElement(node, listDepth);
@@ -243,7 +282,7 @@ function blocksFromElement(node: HTMLElement, listDepth = 0): Paragraph[] {
   return [fallback];
 }
 
-function bodyHtmlToParagraphs(bodyHtml: string): Paragraph[] {
+function bodyHtmlToParagraphs(bodyHtml: string): DocxParagraph[] {
   if (typeof DOMParser === "undefined") {
     const plainText = bodyHtml
       .replace(/<br\s*\/?>/gi, "\n")
@@ -272,7 +311,8 @@ export async function parseNotebookDocxImport(file: File): Promise<NotebookImpor
   }
 
   try {
-    const result = await mammoth.convertToHtml(buildMammothInput(bytes, buffer) as never);
+    await ensureMammothDependency();
+    const result = await mammothConvertToHtml(buildMammothInput(bytes, buffer) as never);
     const contentHtml = normalizeImportHtml(result.value);
     return {
       documentTitle: fileStem(file.name),
@@ -290,6 +330,7 @@ export async function createNotebookDocxExport(
   pageTitle: string,
   bodyHtml: string,
 ): Promise<Uint8Array> {
+  await ensureDocxDependency();
   const normalizedDocumentTitle = documentTitle.trim() || "Untitled Document";
   const normalizedPageTitle = pageTitle.trim() || "Page 1";
   const bodyParagraphs = bodyHtmlToParagraphs(bodyHtml);
