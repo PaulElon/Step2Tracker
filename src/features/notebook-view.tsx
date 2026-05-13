@@ -9,7 +9,14 @@ const NotebookPdfViewer = lazy(() =>
 import { richTextToPlain } from "../components/rich-text-editor";
 import { purgeOrphanedNotebookImages } from "../lib/notebook-images";
 import { createNotebookPdfExport } from "../lib/notebook-pdf-export";
-import { exportNotebookPdfBytes, exportNotebookZipBytes, uploadNotebookPdf, purgeOrphanedNotebookPdfs } from "../lib/notebook-pdf";
+import {
+  exportNotebookDocxBytes,
+  exportNotebookPdfBytes,
+  exportNotebookZipBytes,
+  purgeOrphanedNotebookPdfs,
+  uploadNotebookPdf,
+} from "../lib/notebook-pdf";
+import { createNotebookDocxExport, parseNotebookDocxImport } from "../lib/notebook-docx";
 import { exportNotebookDocumentToBytes, exportNotebookFolderToZip } from "../lib/notebook-export";
 import {
   buildNotebookExportFileName,
@@ -144,6 +151,13 @@ function isPdfImportCandidate(file: File) {
     return true;
   }
   return file.name.trim().toLowerCase().endsWith(".pdf");
+}
+
+function isDocxImportCandidate(file: File) {
+  if (file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+    return true;
+  }
+  return file.name.trim().toLowerCase().endsWith(".docx");
 }
 
 function stripPdfExtension(name: string) {
@@ -1246,6 +1260,46 @@ export function NotebookView() {
     }
   }
 
+  async function exportActivePageAsDocx() {
+    closeExportMenu();
+    closeEditorOverflowMenu();
+
+    if (!activeDocument || !activePage) {
+      setStatus({ kind: "error", message: "Select a document page to export." });
+      return;
+    }
+
+    if (activePage.kind === "pdf") {
+      setStatus({
+        kind: "error",
+        message: "DOCX export is only available for rich-text notebook pages.",
+      });
+      return;
+    }
+
+    try {
+      await flushPendingNotebookSave();
+      const fileName = buildNotebookExportFileName(activeDocument, activePage, "docx");
+      const bytes = await createNotebookDocxExport(activeDocument.title, activePage.title, activePage.contentHtml);
+      const savedPath = await exportNotebookDocxBytes(fileName, bytes);
+      setStatus({
+        kind: "success",
+        message: `DOCX export saved as ${savedPath}. Images and advanced layout fidelity may vary.`,
+      });
+    } catch (error) {
+      const message =
+        typeof error === "string"
+          ? error
+          : error instanceof Error && error.message
+            ? error.message
+            : "Unable to export this notebook page as DOCX.";
+      setStatus({
+        kind: "error",
+        message,
+      });
+    }
+  }
+
   async function importNotebookFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
@@ -1273,8 +1327,9 @@ export function NotebookView() {
     }
 
     try {
-      const raw = await file.text();
-      const imported = parseNotebookImport(file.name, raw);
+      const imported = isDocxImportCandidate(file)
+        ? await parseNotebookDocxImport(file)
+        : parseNotebookImport(file.name, await file.text());
       const targetFolderId = activeDocument?.folderId ?? currentFolderId ?? null;
       const targetFolderDocuments = notebookDocuments.filter((document) => (document.folderId ?? null) === targetFolderId);
       const nextOrder = targetFolderDocuments.reduce((maxOrder, document) => Math.max(maxOrder, document.order), -1) + 1;
@@ -1648,6 +1703,15 @@ export function NotebookView() {
               className="notebook-floating-menu__item"
             >
               Import notebook file
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void exportActivePageAsDocx();
+              }}
+              className="notebook-floating-menu__item"
+            >
+              Export page as DOCX
             </button>
             <button
               type="button"
@@ -2564,7 +2628,7 @@ export function NotebookView() {
       <input
         ref={importInputRef}
         type="file"
-        accept=".txt,.md,.markdown,.html,.htm,.pdf,text/plain,text/markdown,text/html,application/xhtml+xml,application/pdf"
+        accept=".txt,.md,.markdown,.html,.htm,.pdf,.docx,text/plain,text/markdown,text/html,application/xhtml+xml,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         className="hidden"
         onChange={(event) => {
           void importNotebookFile(event);

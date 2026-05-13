@@ -52,6 +52,39 @@ export async function exportNotebookZipBytes(suggestedFileName: string, bytes: U
   });
 }
 
+export async function exportNotebookDocxBytes(suggestedFileName: string, bytes: Uint8Array): Promise<string> {
+  if (
+    bytes.length < 4 ||
+    bytes[0] !== 0x50 ||
+    bytes[1] !== 0x4b ||
+    bytes[2] !== 0x03 ||
+    bytes[3] !== 0x04
+  ) {
+    throw new Error("Generated export is not a valid DOCX file.");
+  }
+
+  const fileName = ensureExtension(suggestedFileName, "docx", "notebook-page.docx");
+  const byteCopy = new Uint8Array(bytes.byteLength);
+  byteCopy.set(bytes);
+  const blob = new Blob([byteCopy.buffer], {
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+  const url = URL.createObjectURL(blob);
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.rel = "noopener";
+    anchor.style.display = "none";
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+  return fileName;
+}
+
 export async function purgeOrphanedNotebookPdfs(
   documents: NotebookDocument[],
   dryRun: boolean,
@@ -79,4 +112,10 @@ function base64ToBytes(b64: string): Uint8Array {
     bytes[index] = binary.charCodeAt(index);
   }
   return bytes;
+}
+
+function ensureExtension(fileName: string, ext: string, fallback: string) {
+  const trimmed = fileName.trim();
+  const resolved = trimmed || fallback;
+  return resolved.toLowerCase().endsWith(`.${ext}`) ? resolved : `${resolved}.${ext}`;
 }
