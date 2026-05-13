@@ -1,4 +1,5 @@
 import { core } from "@tauri-apps/api";
+import type { NotebookDocument } from "../types/models";
 
 const MAX_BYTES = 100 * 1024 * 1024;
 
@@ -48,6 +49,16 @@ export async function exportNotebookZipBytes(suggestedFileName: string, bytes: U
   return core.invoke<string>("export_notebook_zip", {
     suggestedFileName,
     dataB64: bytesToBase64(bytes),
+  });
+}
+
+export async function purgeOrphanedNotebookPdfs(
+  documents: NotebookDocument[],
+  dryRun: boolean,
+): Promise<string[]> {
+  return core.invoke<string[]>("purge_orphaned_notebook_pdfs", {
+    documentsJson: JSON.stringify(documents),
+    dryRun,
   });
 }
 

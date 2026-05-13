@@ -1,4 +1,4 @@
-import JSZip from "jszip";
+import type JSZip from "jszip";
 import { createNotebookPdfExport } from "./notebook-pdf-export";
 import { sanitizeNotebookFileNameSegment } from "./notebook-io";
 import type { NotebookDocument, NotebookFolder, NotebookPage } from "../types/models";
@@ -17,6 +17,11 @@ export interface NotebookFolderExportResult {
   documentCount: number;
   folderCount: number;
   warnings: string[];
+}
+
+async function loadJSZip(): Promise<typeof JSZip> {
+  const { default: JSZip } = await import("jszip");
+  return JSZip;
 }
 
 function sortPagesByOrder(pages: NotebookPage[]): NotebookPage[] {
@@ -59,6 +64,7 @@ export async function exportNotebookDocumentToBytes(
   }
 
   // Multi-page document: one PDF per page inside a zip
+  const JSZip = await loadJSZip();
   const zip = new JSZip();
   const padLen = String(pages.length).length;
   for (let i = 0; i < pages.length; i++) {
@@ -205,6 +211,7 @@ export async function exportNotebookFolderToZip(
   allDocuments: NotebookDocument[],
 ): Promise<NotebookFolderExportResult> {
   const folderSlug = sanitizeNotebookFileNameSegment(folder.name || "Untitled Folder");
+  const JSZip = await loadJSZip();
   const zip = new JSZip();
   const warnings: string[] = [];
   const registry: NameRegistry = new Map();

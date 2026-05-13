@@ -256,14 +256,8 @@ export type NotebookImportValidationResult = { ok: true } | { ok: false; reason:
 export async function validateNotebookImportFile(file: File): Promise<NotebookImportValidationResult> {
   const ext = getFileExtension(file.name);
 
-  if (ext === ".doc") {
-    return { ok: false, reason: "Word documents are not supported yet. Please export the file as PDF or plain text before importing." };
-  }
-  if (ext === ".docx") {
-    return { ok: false, reason: "Word documents are not supported yet. Please export the file as PDF or plain text before importing." };
-  }
-  if (ext === ".pdf") {
-    return { ok: false, reason: "PDF import is coming soon. For now, import TXT, Markdown, or HTML files only." };
+  if (ext === ".doc" || ext === ".docx") {
+    return { ok: false, reason: "Word documents are not supported. Please export the file as PDF or plain text before importing." };
   }
   if (!SUPPORTED_IMPORT_EXTENSIONS.has(ext)) {
     return { ok: false, reason: "Unsupported notebook import file. Please choose a TXT, Markdown, or HTML file." };
@@ -280,9 +274,9 @@ export async function validateNotebookImportFile(file: File): Promise<NotebookIm
   if (headerBytes[0] === 0xd0 && headerBytes[1] === 0xcf && headerBytes[2] === 0x11 && headerBytes[3] === 0xe0) {
     return { ok: false, reason: "This file appears to be binary and cannot be imported as notebook text." };
   }
-  // PDF: %PDF
+  // PDF: %PDF — a mislabeled PDF (e.g. a .txt with PDF bytes)
   if (headerBytes[0] === 0x25 && headerBytes[1] === 0x50 && headerBytes[2] === 0x44 && headerBytes[3] === 0x46) {
-    return { ok: false, reason: "PDF import is coming soon. For now, import TXT, Markdown, or HTML files only." };
+    return { ok: false, reason: "This file appears to be binary and cannot be imported as notebook text." };
   }
   // PNG: \x89PNG
   if (headerBytes[0] === 0x89 && headerBytes[1] === 0x50 && headerBytes[2] === 0x4e && headerBytes[3] === 0x47) {
