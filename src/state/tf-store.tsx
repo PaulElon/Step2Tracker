@@ -114,7 +114,7 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    reload();
+    void reload();
   }, [reload]);
 
   const reset = useCallback(async () => {

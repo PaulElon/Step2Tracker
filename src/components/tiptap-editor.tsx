@@ -84,8 +84,9 @@ const FontSizeExtension = Extension.create({
             default: null,
             parseHTML: (element: HTMLElement) => element.style.fontSize || null,
             renderHTML: (attributes: Record<string, unknown>) => {
-              if (!attributes.fontSize) return {};
-              return { style: `font-size: ${String(attributes.fontSize)}` };
+              const fontSize = getRenderableAttribute(attributes.fontSize);
+              if (!fontSize) return {};
+              return { style: `font-size: ${fontSize}` };
             },
           },
         },
@@ -141,6 +142,12 @@ function toggleChecklist(editor: Editor, focus = false) {
   const chain = editor.chain();
   if (focus) chain.focus();
   chain.toggleTaskList().run();
+}
+
+function getRenderableAttribute(value: unknown) {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
 }
 
 // ─── SVG icon components ─────────────────────────────────────────────────────
@@ -466,8 +473,9 @@ export function TiptapEditor({
                 return null;
               },
               renderHTML: (attrs: Record<string, unknown>) => {
-                if (!attrs.width) return {};
-                return { width: String(attrs.width) };
+                const width = getRenderableAttribute(attrs.width);
+                if (!width) return {};
+                return { width };
               },
             },
             height: {
@@ -480,16 +488,18 @@ export function TiptapEditor({
                 return null;
               },
               renderHTML: (attrs: Record<string, unknown>) => {
-                if (!attrs.height) return {};
-                return { height: String(attrs.height) };
+                const height = getRenderableAttribute(attrs.height);
+                if (!height) return {};
+                return { height };
               },
             },
             dataAlign: {
               default: null,
               parseHTML: (el: HTMLElement) => el.getAttribute("data-align") || null,
               renderHTML: (attrs: Record<string, unknown>) => {
-                if (!attrs.dataAlign) return {};
-                return { "data-align": String(attrs.dataAlign) };
+                const dataAlign = getRenderableAttribute(attrs.dataAlign);
+                if (!dataAlign) return {};
+                return { "data-align": dataAlign };
               },
             },
             lockAspect: {
@@ -1119,16 +1129,18 @@ export function TiptapEditor({
         <DropdownItem
           active={isTaskList}
           onClick={() => {
-            if (canToggleChecklist) { editor && toggleChecklist(editor, true); }
+            if (canToggleChecklist && editor) {
+              toggleChecklist(editor, true);
+            }
             closeMenu();
           }}
         >
           ☑ Checklist
         </DropdownItem>
-        <DropdownItem onClick={() => { editor && handleListIndent(editor, "indent", true); closeMenu(); }}>
+        <DropdownItem onClick={() => { if (editor) handleListIndent(editor, "indent", true); closeMenu(); }}>
           → Indent
         </DropdownItem>
-        <DropdownItem onClick={() => { editor && handleListIndent(editor, "outdent", true); closeMenu(); }}>
+        <DropdownItem onClick={() => { if (editor) handleListIndent(editor, "outdent", true); closeMenu(); }}>
           ← Outdent
         </DropdownItem>
         <DropdownItem onClick={() => { editor?.chain().focus().setHorizontalRule().run(); closeMenu(); }}>

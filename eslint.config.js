@@ -40,4 +40,16 @@ export default defineConfig([
       "react-refresh/only-export-components": "off",
     },
   },
+  {
+    files: ["tests/**/*.ts"],
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: {
+      globals: globals.node,
+      parserOptions: {
+        projectService: false,
+        project: "./tsconfig.tests.json",
+        tsconfigRootDir: fileURLToPath(new URL(".", import.meta.url)),
+      },
+    },
+  },
 ]);
