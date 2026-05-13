@@ -14,6 +14,8 @@ export interface NotebookPdfOutlineTextPage {
 export interface NotebookPdfGeneratedOutlineEntry {
   title: string;
   pageIndex: number;
+  depth?: number;
+  children?: NotebookPdfGeneratedOutlineEntry[];
 }
 
 export interface NotebookPdfOutlineGenerationOptions {
