@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PageViewport, PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
+import {
+  generateNotebookPdfOutline,
+  type NotebookPdfOutlineTextPage,
+} from "../lib/notebook-pdf-outline";
 import { readNotebookPdfBytes } from "../lib/notebook-pdf";
 import type {
   PdfAnnotation,
@@ -25,6 +29,9 @@ const NOTE_TITLE_MAX_LENGTH = 60;
 const OUTLINE_NAVIGATION_DELAY_MS = 220;
 const OUTLINE_MAX_DEPTH = 12;
 const EMBEDDED_NOTE_TITLE_PREFIX = /^Note:\s*/i;
+const AUTO_OUTLINE_MAX_PAGES_TO_SCAN = 36;
+const AUTO_OUTLINE_MAX_GENERATED_ENTRIES = 60;
+const AUTO_OUTLINE_MAX_ITEMS_PER_PAGE = 2500;
 
 // Vertical scroll virtualization: only render pages within this buffer around the current page.
 const VIRT_BUFFER_ABOVE = 2;
@@ -83,6 +90,11 @@ interface PageInfo {
   viewport: PageViewport;
   textLayerEl: HTMLDivElement;
   containerEl: HTMLDivElement;
+}
+
+interface PdfJsTextItemLike {
+  str?: unknown;
+  transform?: unknown;
 }
 
 function createHighlightId(): string {
@@ -235,6 +247,30 @@ function toPdfJsOutlineNodes(value: unknown): PdfJsOutlineNode[] {
     }
   }
   return result;
+}
+
+function isPdfJsTextItemLike(value: unknown): value is PdfJsTextItemLike {
+  return !!value && typeof value === "object";
+}
+
+function parseTextItemTransform(value: unknown): { x: number; y: number; fontSize: number; scaleY: number } | null {
+  if (!Array.isArray(value) || value.length < 6) {
+    return null;
+  }
+  const values = value.map((entry) => Number(entry));
+  const x = values[4];
+  const y = values[5];
+  const a = values[0];
+  const d = values[3];
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+  const fontSize = Math.max(Math.abs(a), Math.abs(d));
+  const scaleY = Math.abs(d);
+  if (!Number.isFinite(fontSize) || fontSize <= 0 || !Number.isFinite(scaleY) || scaleY <= 0) {
+    return null;
+  }
+  return { x, y, fontSize, scaleY };
 }
 
 function getDestinationTop(dest: unknown[]): number | undefined {
@@ -493,6 +529,32 @@ function removeOutlineItem(items: PdfOutlineItem[], itemId: string): PdfOutlineI
       }
       return { ...item, children };
     });
+}
+
+function removeManualOutlineTitles(items: PdfOutlineItem[]): PdfOutlineItem[] {
+  const next: PdfOutlineItem[] = [];
+  for (const item of items) {
+    const itemKind = getOutlineItemKind(item);
+    if (item.source === "manual" && itemKind === "outline") {
+      if (item.children && item.children.length > 0) {
+        next.push(...removeManualOutlineTitles(item.children));
+      }
+      continue;
+    }
+    const children = item.children ? removeManualOutlineTitles(item.children) : [];
+    if (children.length > 0) {
+      next.push({ ...item, children });
+      continue;
+    }
+    if (item.children && item.children.length > 0) {
+      const withoutChildren = { ...item };
+      delete withoutChildren.children;
+      next.push(withoutChildren);
+      continue;
+    }
+    next.push(item);
+  }
+  return next;
 }
 
 function findOutlineItem(items: PdfOutlineItem[], itemId: string): PdfOutlineItem | null {
@@ -770,6 +832,7 @@ export function NotebookPdfViewer({
   const [outlineTitleDraft, setOutlineTitleDraft] = useState("");
   const [outlineNoteDraft, setOutlineNoteDraft] = useState("");
   const [outlineEditState, setOutlineEditState] = useState<OutlineEditState | null>(null);
+  const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
   const [outlineStatus, setOutlineStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [outlineError, setOutlineError] = useState<string | null>(null);
   const [highlightMode, setHighlightMode] = useState(false);
@@ -866,6 +929,7 @@ export function NotebookPdfViewer({
     setOutlineTitleDraft("");
     setOutlineNoteDraft("");
     setOutlineEditState(null);
+    setIsGeneratingOutline(false);
     setOutlineStatus("idle");
     setOutlineError(null);
     pageInfosRef.current.clear();
@@ -1295,6 +1359,127 @@ export function NotebookPdfViewer({
     setHint(`Added note on page ${noteItem.pageIndex + 1}.`);
   }, [getCurrentPdfTarget, outlineNoteDraft]);
 
+  const collectTextPagesForAutoOutline = useCallback(
+    async (doc: PDFDocumentProxy): Promise<NotebookPdfOutlineTextPage[]> => {
+      const maxPages = Math.min(doc.numPages, AUTO_OUTLINE_MAX_PAGES_TO_SCAN);
+      const pages: NotebookPdfOutlineTextPage[] = [];
+
+      for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
+        const page = await doc.getPage(pageIndex + 1);
+        try {
+          const textContent: unknown = await page.getTextContent();
+          const rawItems = Array.isArray((textContent as { items?: unknown }).items)
+            ? ((textContent as { items: unknown[] }).items as unknown[])
+            : [];
+          const pageItems: NotebookPdfOutlineTextPage["items"] = [];
+          for (
+            let itemIndex = 0;
+            itemIndex < rawItems.length && pageItems.length < AUTO_OUTLINE_MAX_ITEMS_PER_PAGE;
+            itemIndex += 1
+          ) {
+            const candidate = rawItems[itemIndex];
+            if (!isPdfJsTextItemLike(candidate)) {
+              continue;
+            }
+            const text = typeof candidate.str === "string" ? candidate.str : "";
+            if (!text.trim()) {
+              continue;
+            }
+            const transform = parseTextItemTransform(candidate.transform);
+            if (!transform) {
+              continue;
+            }
+            pageItems.push({
+              text,
+              x: transform.x,
+              y: transform.y,
+              fontSize: transform.fontSize,
+              transformScaleY: transform.scaleY,
+            });
+          }
+          if (pageItems.length > 0) {
+            pages.push({ pageIndex, items: pageItems });
+          }
+        } finally {
+          page.cleanup();
+        }
+      }
+
+      return pages;
+    },
+    [],
+  );
+
+  const handleGenerateOutline = useCallback(async () => {
+    if (load.kind !== "ready" || isGeneratingOutline) {
+      return;
+    }
+    const changeOutline = onChangeOutlineRef.current;
+    if (!changeOutline) {
+      return;
+    }
+
+    const existingOutline = outlineRef.current ?? [];
+    const existingManualOutlineCount = countOutlineItems(
+      existingOutline,
+      (item) => item.source === "manual" && isOutlineEntry(item),
+    );
+
+    if (
+      existingManualOutlineCount > 0 &&
+      typeof window !== "undefined" &&
+      typeof window.confirm === "function"
+    ) {
+      const shouldReplace = window.confirm(
+        "Replace existing manual outline titles with generated titles? Notes will be kept.",
+      );
+      if (!shouldReplace) {
+        return;
+      }
+    }
+
+    setIsGeneratingOutline(true);
+    setOutlineFormMode(null);
+    setOutlineEditState(null);
+    setHint(null);
+
+    try {
+      const pages = await collectTextPagesForAutoOutline(load.doc);
+      const generatedEntries = generateNotebookPdfOutline(pages, {
+        maxPagesToScan: AUTO_OUTLINE_MAX_PAGES_TO_SCAN,
+        maxGeneratedEntries: AUTO_OUTLINE_MAX_GENERATED_ENTRIES,
+      });
+
+      if (generatedEntries.length === 0) {
+        setHint("No strong headings found.");
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const generatedOutlineItems: PdfOutlineItem[] = generatedEntries.map((entry) => ({
+        id: createOutlineId("manual"),
+        title: entry.title,
+        pageIndex: entry.pageIndex,
+        source: "manual",
+        kind: "outline",
+        createdAt: now,
+        updatedAt: now,
+      }));
+
+      const preservedOutline = removeManualOutlineTitles(existingOutline);
+      const nextOutline = [...preservedOutline, ...generatedOutlineItems];
+      if (getOutlineFingerprint(existingOutline) !== getOutlineFingerprint(nextOutline)) {
+        changeOutline(nextOutline);
+      }
+      setOutlineFilter("outline");
+      setHint(`Generated ${generatedOutlineItems.length} title(s). Review and edit as needed.`);
+    } catch {
+      setHint("Unable to generate outline. Existing entries were not changed.");
+    } finally {
+      setIsGeneratingOutline(false);
+    }
+  }, [collectTextPagesForAutoOutline, isGeneratingOutline, load]);
+
   const handleDeleteOutlineItem = useCallback((itemId: string) => {
     const existingOutline = outlineRef.current ?? [];
     const target = findOutlineItem(existingOutline, itemId);
@@ -1491,6 +1676,7 @@ export function NotebookPdfViewer({
   const canNext = load.kind === "ready" && pageNumber < numPages;
   const canZoomOut = zoomIndex > 0;
   const canZoomIn = zoomIndex < ZOOM_LEVELS.length - 1;
+  const canGenerateOutline = Boolean(onChangeOutline && load.kind === "ready" && !isGeneratingOutline);
   const canAddSidebarEntry = Boolean(onChangeOutline && load.kind === "ready");
   const totalOutlineCount = countOutlineItems(outlineItems, isOutlineEntry);
   const totalNoteCount = countOutlineItems(outlineItems, isNoteEntry);
@@ -1910,6 +2096,20 @@ export function NotebookPdfViewer({
               </div>
               {onChangeOutline ? (
                 <div className="notebook-pdf-outline-actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleGenerateOutline();
+                    }}
+                    disabled={!canGenerateOutline}
+                    title={
+                      load.kind === "ready"
+                        ? "Scan visible PDF text and suggest outline titles"
+                        : "Load a PDF first"
+                    }
+                  >
+                    {isGeneratingOutline ? "Generating…" : "Generate outline"}
+                  </button>
                   <button
                     type="button"
                     onClick={handleAddCustomOutline}
