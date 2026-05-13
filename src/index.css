@@ -34,6 +34,8 @@
   --primary-end: rgba(122, 184, 255, 0.18);
   --primary-border: rgba(96, 243, 223, 0.32);
   --selection: rgba(96, 243, 223, 0.24);
+  --ring-track: rgba(255, 255, 255, 0.12);
+  --ring-progress: rgb(94, 234, 212);
   --lane-review-start: rgba(215, 164, 255, 0.22);
   --lane-review-end: rgba(255, 182, 213, 0.12);
   --lane-review-border: rgba(215, 164, 255, 0.22);
@@ -74,6 +76,8 @@
   --primary-end: rgba(255, 95, 163, 0.18);
   --primary-border: rgba(194, 0, 101, 0.45);
   --selection: rgba(194, 0, 101, 0.18);
+  --ring-track: rgba(194, 0, 101, 0.18);
+  --ring-progress: rgb(194, 0, 101);
   --lane-review-start: rgba(194, 0, 101, 0.18);
   --lane-review-end: rgba(255, 95, 163, 0.1);
   --lane-review-border: rgba(194, 0, 101, 0.22);
@@ -133,6 +137,8 @@
   --primary-end: rgba(88, 86, 214, 0.16);
   --primary-border: rgba(0, 122, 255, 0.45);
   --selection: rgba(0, 122, 255, 0.25);
+  --ring-track: rgba(60, 60, 67, 0.20);
+  --ring-progress: rgb(0, 122, 255);
   --lane-review-start: rgba(88, 86, 214, 0.14);
   --lane-review-end: rgba(175, 82, 222, 0.08);
   --lane-review-border: rgba(88, 86, 214, 0.30);
@@ -172,6 +178,8 @@
   --primary-end: rgba(96, 165, 250, 0.22);
   --primary-border: rgba(37, 99, 235, 0.55);
   --selection: rgba(37, 99, 235, 0.35);
+  --ring-track: rgba(96, 165, 250, 0.20);
+  --ring-progress: rgb(96, 165, 250);
   --lane-review-start: rgba(167, 139, 250, 0.28);
   --lane-review-end: rgba(196, 181, 253, 0.16);
   --lane-review-border: rgba(167, 139, 250, 0.28);
@@ -494,6 +502,66 @@ button {
 :root[data-theme="maggiepink"] select,
 :root[data-theme="maggiepink"] option {
   color: var(--rich-text);
+}
+
+/* ----------------------------------------------------------------- */
+/* Light-background theme: color-toned text contrast fixes            */
+/* Tailwind *-100 / *-200 pastel text classes are for dark surfaces   */
+/* and are invisible / near-invisible on light backgrounds.           */
+/* Override to dark text so badges, tiles, and labels stay readable.  */
+/* ----------------------------------------------------------------- */
+
+/* Review square / category hero tile / category badges */
+:root[data-theme="light"] .text-violet-100,
+:root[data-theme="light"] .text-violet-200,
+:root[data-theme="light"] .text-cyan-100,
+:root[data-theme="light"] .text-cyan-200,
+:root[data-theme="light"] .text-blue-100,
+:root[data-theme="light"] .text-blue-200,
+:root[data-theme="light"] .text-pink-100,
+:root[data-theme="light"] .text-pink-200,
+:root[data-theme="light"] .text-amber-100,
+:root[data-theme="light"] .text-amber-200,
+:root[data-theme="light"] .text-emerald-100,
+:root[data-theme="light"] .text-emerald-200,
+:root[data-theme="light"] .text-rose-100,
+:root[data-theme="light"] .text-rose-200,
+:root[data-theme="maggiepink"] .text-violet-100,
+:root[data-theme="maggiepink"] .text-violet-200,
+:root[data-theme="maggiepink"] .text-cyan-100,
+:root[data-theme="maggiepink"] .text-cyan-200,
+:root[data-theme="maggiepink"] .text-blue-100,
+:root[data-theme="maggiepink"] .text-blue-200,
+:root[data-theme="maggiepink"] .text-pink-100,
+:root[data-theme="maggiepink"] .text-pink-200,
+:root[data-theme="maggiepink"] .text-amber-100,
+:root[data-theme="maggiepink"] .text-amber-200,
+:root[data-theme="maggiepink"] .text-emerald-100,
+:root[data-theme="maggiepink"] .text-emerald-200,
+:root[data-theme="maggiepink"] .text-rose-100,
+:root[data-theme="maggiepink"] .text-rose-200 {
+  color: var(--rich-text) !important;
+}
+
+/* Priority heading text: *-300 variants are vivid on dark but washed-out on light */
+:root[data-theme="light"] .text-amber-300,
+:root[data-theme="maggiepink"] .text-amber-300 {
+  color: #92400e !important; /* amber-800 — readable warm amber on white/pink */
+}
+
+:root[data-theme="light"] .text-rose-300,
+:root[data-theme="maggiepink"] .text-rose-300 {
+  color: #be123c !important; /* rose-700 — readable on white/pink */
+}
+
+:root[data-theme="light"] .text-cyan-300,
+:root[data-theme="maggiepink"] .text-cyan-300 {
+  color: #0e7490 !important; /* cyan-700 — readable on white/pink */
+}
+
+:root[data-theme="light"] .text-violet-300,
+:root[data-theme="maggiepink"] .text-violet-300 {
+  color: #6d28d9 !important; /* violet-700 — readable on white/pink */
 }
 
 /* Rich text editor list styling */
