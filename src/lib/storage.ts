@@ -137,6 +137,10 @@ function sanitizeText(value: unknown) {
   return "";
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object";
+}
+
 function sanitizeNumber(value: unknown, fallback = 0) {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -923,31 +927,32 @@ function normalizePdfOutline(raw: unknown): PdfOutlineItem[] {
   return result;
 }
 
-function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbackId?: string): NotebookPage {
+function normalizeNotebookPage(input: unknown, fallbackId?: string): NotebookPage {
   const timestamp = nowIso();
-  const safeCreatedAt = sanitizeText(input?.createdAt) || timestamp;
-  const safeUpdatedAt = sanitizeText(input?.updatedAt) || timestamp;
-  const folderId = typeof input?.folderId === "string" ? input.folderId.trim() : "";
-  const rawKind = typeof input?.kind === "string" ? input.kind : undefined;
-  const pdfFilenameRaw = typeof input?.pdfFilename === "string" ? input.pdfFilename.trim() : "";
+  const source = isRecord(input) ? input : {};
+  const safeCreatedAt = sanitizeText(source.createdAt) || timestamp;
+  const safeUpdatedAt = sanitizeText(source.updatedAt) || timestamp;
+  const folderId = typeof source.folderId === "string" ? source.folderId.trim() : "";
+  const rawKind = typeof source.kind === "string" ? source.kind : undefined;
+  const pdfFilenameRaw = typeof source.pdfFilename === "string" ? source.pdfFilename.trim() : "";
   const pdfFilename = NOTEBOOK_PDF_FILENAME_PATTERN.test(pdfFilenameRaw) ? pdfFilenameRaw : "";
   const isPdf = rawKind === "pdf" && pdfFilename !== "";
   const pdfOriginalName =
-    isPdf && typeof input?.pdfOriginalName === "string" ? input.pdfOriginalName.trim() : "";
-  const rawPageCount = sanitizeNumber(input?.pdfPageCount, 0);
+    isPdf && typeof source.pdfOriginalName === "string" ? source.pdfOriginalName.trim() : "";
+  const rawPageCount = sanitizeNumber(source.pdfPageCount, 0);
   const pdfPageCount = isPdf && rawPageCount > 0 ? Math.trunc(rawPageCount) : undefined;
-  const pdfAnnotations = isPdf ? normalizePdfAnnotations(input?.pdfAnnotations) : [];
-  const pdfOutline = isPdf ? normalizePdfOutline(input?.pdfOutline) : [];
-  const rawViewMode = typeof input?.pdfViewMode === "string" ? input.pdfViewMode : undefined;
+  const pdfAnnotations = isPdf ? normalizePdfAnnotations(source.pdfAnnotations) : [];
+  const pdfOutline = isPdf ? normalizePdfOutline(source.pdfOutline) : [];
+  const rawViewMode = typeof source.pdfViewMode === "string" ? source.pdfViewMode : undefined;
   const pdfViewMode =
     isPdf && (rawViewMode === "horizontal" || rawViewMode === "vertical") ? rawViewMode : undefined;
   const base: NotebookPage = {
-    id: sanitizeText(input?.id) || fallbackId || createId("nb-page"),
-    title: sanitizeText(input?.title) || "Untitled",
-    contentHtml: typeof input?.contentHtml === "string" ? input.contentHtml : "",
-    favorited: input?.favorited === true,
+    id: sanitizeText(source.id) || fallbackId || createId("nb-page"),
+    title: sanitizeText(source.title) || "Untitled",
+    contentHtml: typeof source.contentHtml === "string" ? source.contentHtml : "",
+    favorited: source.favorited === true,
     folderId: folderId || undefined,
-    order: Math.trunc(sanitizeNumber(input?.order, 0)),
+    order: Math.trunc(sanitizeNumber(source.order, 0)),
     createdAt: safeCreatedAt,
     updatedAt: safeUpdatedAt,
   };
@@ -973,30 +978,32 @@ function normalizeNotebookPage(input: Partial<NotebookPage> | undefined, fallbac
   return base;
 }
 
-function normalizeNotebookFolder(input: Partial<NotebookFolder> | undefined, fallbackId?: string): NotebookFolder {
+function normalizeNotebookFolder(input: unknown, fallbackId?: string): NotebookFolder {
   const timestamp = nowIso();
-  const safeCreatedAt = sanitizeText(input?.createdAt) || timestamp;
-  const safeUpdatedAt = sanitizeText(input?.updatedAt) || timestamp;
-  const parentFolderId = typeof input?.parentFolderId === "string" ? input.parentFolderId.trim() : "";
+  const source = isRecord(input) ? input : {};
+  const safeCreatedAt = sanitizeText(source.createdAt) || timestamp;
+  const safeUpdatedAt = sanitizeText(source.updatedAt) || timestamp;
+  const parentFolderId = typeof source.parentFolderId === "string" ? source.parentFolderId.trim() : "";
   return {
-    id: sanitizeText(input?.id) || fallbackId || createId("nb-folder"),
-    name: sanitizeText(input?.name) || "Untitled Folder",
+    id: sanitizeText(source.id) || fallbackId || createId("nb-folder"),
+    name: sanitizeText(source.name) || "Untitled Folder",
     parentFolderId: parentFolderId || undefined,
-    favorited: input?.favorited === true,
-    order: Math.trunc(sanitizeNumber(input?.order, 0)),
+    favorited: source.favorited === true,
+    order: Math.trunc(sanitizeNumber(source.order, 0)),
     createdAt: safeCreatedAt,
     updatedAt: safeUpdatedAt,
   };
 }
 
-function normalizeNotebookDocument(input: Partial<NotebookDocument> | undefined, fallbackId?: string): NotebookDocument {
+function normalizeNotebookDocument(input: unknown, fallbackId?: string): NotebookDocument {
   const timestamp = nowIso();
-  const safeCreatedAt = sanitizeText(input?.createdAt) || timestamp;
-  const safeUpdatedAt = sanitizeText(input?.updatedAt) || timestamp;
-  const folderId = typeof input?.folderId === "string" ? input.folderId.trim() : "";
-  const hasPages = Array.isArray(input?.pages) && input.pages.length > 0;
+  const source = isRecord(input) ? input : {};
+  const safeCreatedAt = sanitizeText(source.createdAt) || timestamp;
+  const safeUpdatedAt = sanitizeText(source.updatedAt) || timestamp;
+  const folderId = typeof source.folderId === "string" ? source.folderId.trim() : "";
+  const hasPages = Array.isArray(source.pages) && source.pages.length > 0;
   const pages = hasPages
-    ? normalizeNotebookPages(input?.pages)
+    ? normalizeNotebookPages(source.pages)
     : [
         {
           id: createId("nb-page"),
@@ -1008,11 +1015,11 @@ function normalizeNotebookDocument(input: Partial<NotebookDocument> | undefined,
         },
       ];
   return {
-    id: sanitizeText(input?.id) || fallbackId || createId("nb-doc"),
-    title: sanitizeText(input?.title) || "Untitled Document",
+    id: sanitizeText(source.id) || fallbackId || createId("nb-doc"),
+    title: sanitizeText(source.title) || "Untitled Document",
     folderId: folderId || undefined,
-    favorited: input?.favorited === true,
-    order: Math.trunc(sanitizeNumber(input?.order, 0)),
+    favorited: source.favorited === true,
+    order: Math.trunc(sanitizeNumber(source.order, 0)),
     pages,
     createdAt: safeCreatedAt,
     updatedAt: safeUpdatedAt,

@@ -73,6 +73,11 @@ interface PdfRefProxy {
   gen: number;
 }
 
+interface PdfPoint {
+  x: number;
+  y: number;
+}
+
 interface PageInfo {
   pageIndex: number;
   viewport: PageViewport;
@@ -198,6 +203,40 @@ function isRefProxy(value: unknown): value is PdfRefProxy {
   return Number.isInteger(candidate.num) && Number.isInteger(candidate.gen);
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function getPdfPoint(viewport: PageViewport, x: number, y: number): PdfPoint | null {
+  const point: unknown = viewport.convertToPdfPoint(x, y);
+  if (!Array.isArray(point) || point.length < 2) {
+    return null;
+  }
+  const pdfX: unknown = point[0];
+  const pdfY: unknown = point[1];
+  if (!isFiniteNumber(pdfX) || !isFiniteNumber(pdfY)) {
+    return null;
+  }
+  return { x: pdfX, y: pdfY };
+}
+
+function isPdfJsOutlineNode(value: unknown): value is PdfJsOutlineNode {
+  return !!value && typeof value === "object";
+}
+
+function toPdfJsOutlineNodes(value: unknown): PdfJsOutlineNode[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const result: PdfJsOutlineNode[] = [];
+  for (const item of value) {
+    if (isPdfJsOutlineNode(item)) {
+      result.push(item);
+    }
+  }
+  return result;
+}
+
 function getDestinationTop(dest: unknown[]): number | undefined {
   const mode = dest[1];
   const modeName =
@@ -228,7 +267,7 @@ async function resolvePdfDestination(
     return null;
   }
 
-  const target = dest[0];
+  const target: unknown = dest[0];
   let pageIndex = Number.NaN;
   if (typeof target === "number" && Number.isFinite(target)) {
     pageIndex = Math.trunc(target);
@@ -242,14 +281,26 @@ async function resolvePdfDestination(
   return Number.isFinite(top) ? { pageIndex, y: top } : { pageIndex };
 }
 
-interface PdfJsOutlineNode {
-  title?: unknown;
-  dest?: unknown;
-  items?: PdfJsOutlineNode[];
+type PdfJsOutlineNode = Awaited<ReturnType<PDFDocumentProxy["getOutline"]>> extends Array<infer Item>
+  ? Item
+  : never;
+
+interface OutlineFingerprintItem {
+  id: string;
+  title: string;
+  pageIndex: number;
+  y?: number;
+  depth?: number;
+  source: PdfOutlineItem["source"];
+  kind: PdfOutlineItem["kind"];
+  noteText?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  children?: OutlineFingerprintItem[];
 }
 
 async function extractEmbeddedOutline(pdfDoc: PDFDocumentProxy): Promise<PdfOutlineItem[]> {
-  const outline = await pdfDoc.getOutline().catch(() => null);
+  const outline: unknown = await pdfDoc.getOutline().catch(() => null);
   if (!Array.isArray(outline) || outline.length === 0) {
     return [];
   }
@@ -263,7 +314,7 @@ async function extractEmbeddedOutline(pdfDoc: PDFDocumentProxy): Promise<PdfOutl
       const node = nodes[index];
       const nodePath = path ? `${path}-${index}` : String(index);
       const parsedTitle = parseEmbeddedOutlineTitle(node.title);
-      const childrenRaw = Array.isArray(node.items) ? node.items : [];
+      const childrenRaw = toPdfJsOutlineNodes(node.items);
       if (!parsedTitle) {
         if (childrenRaw.length > 0) {
           result.push(...(await walk(childrenRaw, depth, nodePath)));
@@ -302,7 +353,11 @@ async function extractEmbeddedOutline(pdfDoc: PDFDocumentProxy): Promise<PdfOutl
     return result;
   }
 
-  return walk(outline as PdfJsOutlineNode[], 0, "");
+  return walk(
+    toPdfJsOutlineNodes(outline),
+    0,
+    "",
+  );
 }
 
 function buildAnnotationFromSelection(
@@ -331,20 +386,15 @@ function buildAnnotationFromSelection(
       const y1 = rect.top - containerRect.top;
       const x2 = rect.right - containerRect.left;
       const y2 = rect.bottom - containerRect.top;
-      const [pdfX1, pdfY1] = viewport.convertToPdfPoint(x1, y1);
-      const [pdfX2, pdfY2] = viewport.convertToPdfPoint(x2, y2);
-      if (
-        !Number.isFinite(pdfX1) ||
-        !Number.isFinite(pdfY1) ||
-        !Number.isFinite(pdfX2) ||
-        !Number.isFinite(pdfY2)
-      ) {
+      const startPoint = getPdfPoint(viewport, x1, y1);
+      const endPoint = getPdfPoint(viewport, x2, y2);
+      if (!startPoint || !endPoint) {
         continue;
       }
-      const minX = Math.min(pdfX1, pdfX2);
-      const minY = Math.min(pdfY1, pdfY2);
-      const width = Math.abs(pdfX2 - pdfX1);
-      const height = Math.abs(pdfY2 - pdfY1);
+      const minX = Math.min(startPoint.x, endPoint.x);
+      const minY = Math.min(startPoint.y, endPoint.y);
+      const width = Math.abs(endPoint.x - startPoint.x);
+      const height = Math.abs(endPoint.y - startPoint.y);
       if (width <= 0 || height <= 0) {
         continue;
       }
@@ -412,21 +462,23 @@ function outlineHasSource(items: PdfOutlineItem[], source: PdfOutlineItem["sourc
 }
 
 function getOutlineFingerprint(items: PdfOutlineItem[]): string {
-  return JSON.stringify(
-    items.map((item) => ({
-      id: item.id,
-      title: item.title,
-      pageIndex: item.pageIndex,
-      y: item.y,
-      depth: item.depth,
-      source: item.source,
-      kind: getOutlineItemKind(item),
-      noteText: item.noteText,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-      children: item.children ? JSON.parse(getOutlineFingerprint(item.children)) : undefined,
-    })),
-  );
+  return JSON.stringify(buildOutlineFingerprint(items));
+}
+
+function buildOutlineFingerprint(items: PdfOutlineItem[]): OutlineFingerprintItem[] {
+  return items.map((item) => ({
+    id: item.id,
+    title: item.title,
+    pageIndex: item.pageIndex,
+    y: item.y,
+    depth: item.depth,
+    source: item.source,
+    kind: getOutlineItemKind(item),
+    noteText: item.noteText,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    children: item.children ? buildOutlineFingerprint(item.children) : undefined,
+  }));
 }
 
 function removeOutlineItem(items: PdfOutlineItem[], itemId: string): PdfOutlineItem[] {
@@ -533,7 +585,7 @@ function PdfRenderedPage({
     let renderTask: ReturnType<PDFPageProxy["render"]> | null = null;
     let textLayerInstance: pdfjs.TextLayer | null = null;
 
-    (async () => {
+    void (async () => {
       try {
         const page = await doc.getPage(pageIndex + 1);
         if (token !== renderTokenRef.current) {
@@ -820,7 +872,7 @@ export function NotebookPdfViewer({
     setMeasuredHeights(new Map());
     pendingScrollPageRef.current = null;
 
-    (async () => {
+    void (async () => {
       try {
         const bytes = await readNotebookPdfBytes(filename);
         if (cancelled) {
@@ -876,7 +928,7 @@ export function NotebookPdfViewer({
     setOutlineStatus("loading");
     setOutlineError(null);
 
-    (async () => {
+    void (async () => {
       try {
         const embeddedOutline = await extractEmbeddedOutline(readyDoc);
         if (cancelled) {
