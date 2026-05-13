@@ -1,7 +1,24 @@
-import html2canvas from "html2canvas";
-import { PDFDocument, PDFDict, PDFName, PDFNumber, PDFString, PDFArray, rgb } from "pdf-lib";
-import type { PDFRef, RGB } from "pdf-lib";
+import type { PDFDocument, PDFDict, PDFName, PDFRef, PDFString, PDFArray, RGB } from "pdf-lib";
 import { embedNotebookImagesInHtml } from "./notebook-images";
+
+type PdfLib = typeof import("pdf-lib");
+
+let _pdfLibCache: PdfLib | null = null;
+async function loadPdfLib(): Promise<PdfLib> {
+  if (!_pdfLibCache) _pdfLibCache = await import("pdf-lib");
+  return _pdfLibCache;
+}
+
+type Html2CanvasFn = typeof import("html2canvas").default;
+
+let _html2canvasCache: Html2CanvasFn | null = null;
+async function loadHtml2canvas(): Promise<Html2CanvasFn> {
+  if (!_html2canvasCache) {
+    const mod = await import("html2canvas");
+    _html2canvasCache = mod.default;
+  }
+  return _html2canvasCache;
+}
 import { readNotebookPdfBytes } from "./notebook-pdf";
 import type { NotebookPage, PdfOutlineItem } from "../types/models";
 
@@ -44,6 +61,8 @@ async function createImportedPdfExport(page: NotebookPage): Promise<NotebookPdfE
     return { bytes: sourceBytes, missingImages: [], embeddedHighlights: 0, embeddedBookmarks: 0 };
   }
 
+  const pdfLib = await loadPdfLib();
+  const { PDFDocument, rgb } = pdfLib;
   const pdf = await PDFDocument.load(sourceBytes, { ignoreEncryption: true });
   const pages = pdf.getPages();
   let embeddedHighlights = 0;
@@ -53,7 +72,7 @@ async function createImportedPdfExport(page: NotebookPage): Promise<NotebookPdfE
     if (!pdfPage) {
       continue;
     }
-    const color = parseHighlightColor(annotation.color);
+    const color = parseHighlightColor(annotation.color, rgb);
     for (const quad of annotation.quads) {
       if (
         !Number.isFinite(quad.x) ||
@@ -78,7 +97,7 @@ async function createImportedPdfExport(page: NotebookPage): Promise<NotebookPdfE
     }
   }
 
-  const embeddedBookmarks = embedPdfOutline(pdf, outlineItems);
+  const embeddedBookmarks = embedPdfOutline(pdf, outlineItems, pdfLib);
 
   return {
     bytes: await pdf.save(),
@@ -98,6 +117,8 @@ async function createTiptapPdfExport(
   const embedded = await embedNotebookImagesInHtml(preparedHtml);
   const renderRoot = createRenderRoot(embedded.html, editorElement);
 
+  const [html2canvas, pdfLib] = await Promise.all([loadHtml2canvas(), loadPdfLib()]);
+
   try {
     document.body.appendChild(renderRoot);
     await waitForFonts();
@@ -114,7 +135,7 @@ async function createTiptapPdfExport(
     });
 
     return {
-      bytes: await buildPdfFromCanvas(canvas),
+      bytes: await buildPdfFromCanvas(canvas, pdfLib),
       missingImages: embedded.missingImages,
       embeddedHighlights: highlightOverlayCount,
       embeddedBookmarks: 0,
@@ -294,7 +315,8 @@ function getHighlightColor(mark: HTMLElement): string | null {
   return color;
 }
 
-async function buildPdfFromCanvas(canvas: HTMLCanvasElement): Promise<Uint8Array> {
+async function buildPdfFromCanvas(canvas: HTMLCanvasElement, pdfLib: PdfLib): Promise<Uint8Array> {
+  const { PDFDocument } = pdfLib;
   const pdf = await PDFDocument.create();
   const contentWidth = PDF_PAGE_WIDTH - PDF_MARGIN * 2;
   const contentHeight = PDF_PAGE_HEIGHT - PDF_MARGIN * 2;
@@ -419,11 +441,12 @@ function flattenOutlineItems(items: PdfOutlineItem[]): FlatOutlineEntry[] {
   return result;
 }
 
-function embedPdfOutline(pdf: PDFDocument, entries: FlatOutlineEntry[]): number {
+function embedPdfOutline(pdf: PDFDocument, entries: FlatOutlineEntry[], pdfLib: PdfLib): number {
   if (entries.length === 0) {
     return 0;
   }
 
+  const { PDFArray, PDFDict, PDFName, PDFNumber, PDFString } = pdfLib;
   const ctx = pdf.context;
   const pages = pdf.getPages();
   const validEntries = entries.filter((e) => e.pageIndex < pages.length);
@@ -477,7 +500,7 @@ function embedPdfOutline(pdf: PDFDocument, entries: FlatOutlineEntry[]): number 
   return validEntries.length;
 }
 
-function parseHighlightColor(value: string): RGB {
+function parseHighlightColor(value: string, rgb: (r: number, g: number, b: number) => RGB): RGB {
   const normalized = value.trim();
   const match = normalized.match(/^#?([0-9a-f]{6})$/i);
   if (!match) {

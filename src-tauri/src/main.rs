@@ -661,6 +661,85 @@ fn purge_orphaned_notebook_images(
     Ok(deleted)
 }
 
+#[tauri::command]
+fn purge_orphaned_notebook_pdfs(
+    app: tauri::AppHandle,
+    documents_json: String,
+    dry_run: bool,
+) -> Result<Vec<String>, String> {
+    use std::collections::HashSet;
+
+    let _: serde_json::Value = serde_json::from_str(&documents_json)
+        .map_err(|e| format!("Invalid documents JSON: {e}"))?;
+
+    // Scan the raw JSON for any string value that ends with ".pdf" and is a valid
+    // PDF filename. The stored field is pdfFilename:"<uuid>.pdf"; scanning the raw
+    // JSON is conservative: false positives only mean keeping extra files, never
+    // deleting referenced ones.
+    let mut referenced: HashSet<String> = HashSet::new();
+    let suffix = ".pdf\"";
+    let mut haystack = documents_json.as_str();
+    while let Some(pos) = haystack.find(suffix) {
+        let before = &haystack[..pos];
+        // Walk backwards to the preceding quote that opens this JSON string value.
+        let start = before.rfind('"').map(|i| i + 1).unwrap_or(0);
+        let candidate = &haystack[start..pos + 4]; // includes ".pdf", excludes closing quote
+        if is_valid_pdf_filename(candidate) {
+            referenced.insert(candidate.to_string());
+        }
+        haystack = &haystack[pos + suffix.len()..];
+    }
+
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Unable to resolve app data directory: {e}"))?;
+
+    let pdfs_dir = data_dir.join("notebook-pdfs");
+
+    if !pdfs_dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let entries = fs::read_dir(&pdfs_dir)
+        .map_err(|e| format!("Unable to read notebook-pdfs directory: {e}"))?;
+
+    let mut orphans: Vec<String> = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Unable to read directory entry: {e}"))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| format!("Unable to get file type: {e}"))?;
+
+        if file_type.is_dir() {
+            continue;
+        }
+
+        let filename = entry.file_name().to_string_lossy().to_string();
+        if !is_valid_pdf_filename(&filename) {
+            continue;
+        }
+
+        if !referenced.contains(&filename) {
+            orphans.push(filename);
+        }
+    }
+
+    if dry_run {
+        return Ok(orphans);
+    }
+
+    let mut deleted: Vec<String> = Vec::new();
+    for filename in &orphans {
+        let file_path = pdfs_dir.join(filename);
+        if fs::remove_file(&file_path).is_ok() {
+            deleted.push(filename.clone());
+        }
+    }
+
+    Ok(deleted)
+}
+
 fn main() {
     tauri::Builder::default()
         .register_uri_scheme_protocol("nbimg", |ctx, request| nbimg_protocol_handler(ctx.app_handle(), request))
@@ -719,7 +798,8 @@ fn main() {
             updater::check_for_updates,
             updater::check_for_update,
             updater::install_update,
-            purge_orphaned_notebook_images
+            purge_orphaned_notebook_images,
+            purge_orphaned_notebook_pdfs
         ])
         .run(tauri::generate_context!())
         .expect("error while running TimeFolio Study Tracker");

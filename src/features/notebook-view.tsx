@@ -7,7 +7,7 @@ import { NotebookPdfViewer } from "../components/notebook-pdf-viewer";
 import { richTextToPlain } from "../components/rich-text-editor";
 import { purgeOrphanedNotebookImages } from "../lib/notebook-images";
 import { createNotebookPdfExport } from "../lib/notebook-pdf-export";
-import { exportNotebookPdfBytes, exportNotebookZipBytes, uploadNotebookPdf } from "../lib/notebook-pdf";
+import { exportNotebookPdfBytes, exportNotebookZipBytes, uploadNotebookPdf, purgeOrphanedNotebookPdfs } from "../lib/notebook-pdf";
 import { exportNotebookDocumentToBytes, exportNotebookFolderToZip } from "../lib/notebook-export";
 import {
   buildNotebookExportFileName,
@@ -1158,26 +1158,40 @@ export function NotebookView() {
     setStatus(null);
   }
 
-  async function handleCleanImages() {
+  async function handleCleanAssets() {
     await flushPendingNotebookSave();
     try {
-      const orphans = await purgeOrphanedNotebookImages(notebookDocuments, true);
-      if (orphans.length === 0) {
-        setStatus({ kind: "success", message: "No orphaned images found." });
+      const [orphanImages, orphanPdfs] = await Promise.all([
+        purgeOrphanedNotebookImages(notebookDocuments, true),
+        purgeOrphanedNotebookPdfs(notebookDocuments, true),
+      ]);
+      const total = orphanImages.length + orphanPdfs.length;
+      if (total === 0) {
+        setStatus({ kind: "success", message: "No orphaned assets found." });
         return;
       }
-      if (!window.confirm(`Found ${orphans.length} unused image file(s). Delete them permanently?`)) {
+      const parts: string[] = [];
+      if (orphanImages.length > 0) parts.push(`${orphanImages.length} image(s)`);
+      if (orphanPdfs.length > 0) parts.push(`${orphanPdfs.length} PDF(s)`);
+      if (!window.confirm(`Found ${parts.join(" and ")} unused. Delete them permanently?`)) {
         return;
       }
-      const deleted = await purgeOrphanedNotebookImages(notebookDocuments, false);
-      setStatus({ kind: "success", message: `Deleted ${deleted.length} unused image file(s).` });
+      const [deletedImages, deletedPdfs] = await Promise.all([
+        purgeOrphanedNotebookImages(notebookDocuments, false),
+        purgeOrphanedNotebookPdfs(notebookDocuments, false),
+      ]);
+      const deletedTotal = deletedImages.length + deletedPdfs.length;
+      const deletedParts: string[] = [];
+      if (deletedImages.length > 0) deletedParts.push(`${deletedImages.length} image(s)`);
+      if (deletedPdfs.length > 0) deletedParts.push(`${deletedPdfs.length} PDF(s)`);
+      setStatus({ kind: "success", message: `Deleted ${deletedParts.join(" and ")} (${deletedTotal} file(s)).` });
     } catch (error) {
       const message =
         typeof error === "string"
           ? error
           : error instanceof Error && error.message
             ? error.message
-            : "Unable to clean images.";
+            : "Unable to clean assets.";
       setStatus({ kind: "error", message });
     }
   }
@@ -1636,12 +1650,12 @@ export function NotebookView() {
             <button
               type="button"
               onClick={() => {
-                void handleCleanImages();
+                void handleCleanAssets();
                 closeEditorOverflowMenu();
               }}
               className="notebook-floating-menu__item"
             >
-              Clean Images
+              Clean Assets
             </button>
             <button
               type="button"
