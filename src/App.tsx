@@ -24,7 +24,8 @@ import { MobileNav, NavigationButton } from "./components/ui";
 import { DashboardView } from "./features/dashboard-view";
 import { NotebookView } from "./features/notebook-view";
 import { PlannerView } from "./features/planner-view";
-import { PortfolioView, isPortfolioSection } from "./features/portfolio-view";
+import { PortfolioView } from "./features/portfolio-view";
+import { isPortfolioSection } from "./features/portfolio-section";
 import { SettingsView } from "./features/settings-view";
 import { getDateRange, sumStudyMinutes } from "./lib/analytics";
 import { daysBetween, formatHoursValue, formatLongDate, formatSavedAt } from "./lib/datetime";
@@ -668,7 +669,7 @@ export default function App() {
     await invoke("install_update");
   }
 
-  async function handleSendTestAlert() {
+  function handleSendTestAlert() {
     void sendNativeReminder("TimeFolio Study Tracker", "Alerts are working.");
   }
 

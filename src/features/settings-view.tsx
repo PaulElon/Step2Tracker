@@ -318,7 +318,9 @@ function ResourcesPanel({
                 <>
                   <button
                     type="button"
-                    onClick={() => handleOpen(link.url)}
+                    onClick={() => {
+                      void handleOpen(link.url);
+                    }}
                     className="flex-1 text-left"
                   >
                     <p className="text-sm font-semibold text-white">{link.label}</p>
@@ -328,7 +330,9 @@ function ResourcesPanel({
                     type="button"
                     aria-label={`Open ${link.label}`}
                     className="rounded-full p-2 text-slate-300 transition hover:text-white"
-                    onClick={() => handleOpen(link.url)}
+                    onClick={() => {
+                      void handleOpen(link.url);
+                    }}
                   >
                     <ExternalLink className="h-4 w-4" />
                   </button>

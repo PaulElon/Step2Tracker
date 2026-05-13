@@ -1472,9 +1472,8 @@ export function NotebookPdfViewer({
           const page = await doc.getPage(pageIndex + 1);
           try {
             const textContent: unknown = await page.getTextContent();
-            const rawItems = Array.isArray((textContent as { items?: unknown }).items)
-              ? ((textContent as { items: unknown[] }).items as unknown[])
-              : [];
+            const maybeItems = (textContent as { items?: unknown }).items;
+            const rawItems: unknown[] = Array.isArray(maybeItems) ? maybeItems : [];
             const pageItems: NotebookPdfOutlineTextPage["items"] = [];
             for (
               let itemIndex = 0;

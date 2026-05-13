@@ -19,23 +19,12 @@ import Underline from "@tiptap/extension-underline";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import type { NotebookEditorProps } from "./notebook-editor-adapter";
+import { getHighlightHtmlAttributes } from "./tiptap-highlight";
 import { uploadNotebookImage } from "../lib/notebook-images";
 
 type MenuId = "style" | "textColor" | "highlight" | "align" | "list" | "table" | "link";
 type OpenMenu = MenuId | null;
 type ListItemType = "listItem" | "taskItem";
-
-export function getHighlightHtmlAttributes(attributes: Record<string, unknown>) {
-  const bg = typeof attributes.color === "string" && attributes.color ? attributes.color : null;
-  if (!bg) {
-    return {};
-  }
-
-  return {
-    "data-color": bg,
-    style: `background-color: ${bg}; color: #1e293b`,
-  };
-}
 
 const HighlightWithContrast = Highlight.extend({
   addAttributes() {

@@ -245,7 +245,7 @@ export function deriveTfTrackerRuleName(target: string, kind: TfTrackerRuleKind)
 }
 
 function normalizeTrackerRule(
-  value: TfTrackerRuleInput | unknown,
+  value: TfTrackerRuleInput,
   kind: TfTrackerRuleKind,
   index: number,
 ): TfTrackerRule | null {
@@ -267,14 +267,13 @@ function normalizeTrackerRule(
     return null;
   }
 
-  const raw = value as Record<string, unknown>;
-  const target = safeString(raw.target).trim();
+  const target = value.target.trim();
   if (!target) {
     return null;
   }
 
-  const id = safeString(raw.id).trim() || buildTrackerRuleId(kind, index, target);
-  const name = safeString(raw.name).trim() || deriveTfTrackerRuleName(target, kind);
+  const id = value.id.trim() || buildTrackerRuleId(kind, index, target);
+  const name = value.name.trim() || deriveTfTrackerRuleName(target, kind);
 
   return {
     id,
@@ -290,7 +289,7 @@ function normalizeTrackerRuleArray(value: unknown, kind: TfTrackerRuleKind): TfT
   }
 
   return value
-    .map((entry, index) => normalizeTrackerRule(entry as TfTrackerRuleInput | unknown, kind, index))
+    .map((entry, index) => normalizeTrackerRule(entry as TfTrackerRuleInput, kind, index))
     .filter((entry): entry is TfTrackerRule => entry !== null);
 }
 

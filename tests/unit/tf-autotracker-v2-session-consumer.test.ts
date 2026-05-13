@@ -4,7 +4,6 @@ import test from "node:test";
 import {
   createAutoTrackerV2InitialState,
   type AutoTrackerV2FinalizedSession,
-  type AutoTrackerV2SessionMachineEvent,
   type AutoTrackerV2Target,
 } from "../../src/lib/tf-autotracker-v2-session-machine.js";
 import {

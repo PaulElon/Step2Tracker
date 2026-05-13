@@ -6,7 +6,7 @@ import { NotebookEditorAdapter } from "../components/notebook-editor-adapter";
 const NotebookPdfViewer = lazy(() =>
   import("../components/notebook-pdf-viewer").then((m) => ({ default: m.NotebookPdfViewer })),
 );
-import { richTextToPlain } from "../components/rich-text-editor";
+import { richTextToPlain } from "../components/rich-text-utils";
 import { purgeOrphanedNotebookImages } from "../lib/notebook-images";
 import { createNotebookPdfExport } from "../lib/notebook-pdf-export";
 import {
@@ -2022,7 +2022,7 @@ export function NotebookView() {
                             onClick={(event) => {
                               event.stopPropagation();
                               closeTileActionMenu();
-                              handleDeleteDocument(document);
+                              void handleDeleteDocument(document);
                             }}
                             className={`${compactMenuDangerItemClass} hover:bg-rose-500/10`}
                           >
@@ -2422,7 +2422,9 @@ export function NotebookView() {
                         <div className="flex shrink-0 items-center gap-1">
                           <button
                             type="button"
-                            onClick={() => addPageToDocument(activeDocument)}
+                            onClick={() => {
+                              void addPageToDocument(activeDocument);
+                            }}
                             className={`${editorTabCompactActionClass} border-dashed border-sky-200/70 bg-[color:var(--surface-muted)] text-slate-500 hover:border-sky-200/80 hover:bg-[color:var(--field-bg)] hover:text-slate-700`}
                             aria-label="Add page"
                             title="Add page"
@@ -2558,7 +2560,9 @@ export function NotebookView() {
                         <p className="notebook-editor-empty-copy mt-2 max-w-md">Existing data stays untouched until you explicitly create a new page.</p>
                         <button
                           type="button"
-                          onClick={() => addPageToDocument(activeDocument)}
+                          onClick={() => {
+                            void addPageToDocument(activeDocument);
+                          }}
                           className="mt-4 inline-flex h-10 items-center rounded-xl border border-sky-200/70 bg-sky-50 px-4 text-sm font-medium text-sky-700 transition hover:border-sky-200/90 hover:bg-sky-100"
                         >
                           Create First Page

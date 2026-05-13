@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getHighlightHtmlAttributes } from "../../src/components/tiptap-editor.tsx";
+import { getHighlightHtmlAttributes } from "../../src/components/tiptap-highlight";
 
 test("getHighlightHtmlAttributes emits a readable foreground color for saved highlights", () => {
   assert.deepEqual(getHighlightHtmlAttributes({ color: "#fef08a" }), {

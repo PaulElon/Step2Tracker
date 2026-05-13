@@ -1,23 +1,10 @@
 import type { JSX } from "react";
 import { ErrorLogView } from "./error-log-view";
 import { PortfolioOverview } from "./portfolio/portfolio-overview";
+import type { PortfolioSectionId } from "./portfolio-section";
 import { PracticeTestsView } from "./practice-tests-view";
 import { TimeFolioView } from "./timefolio-view";
 import { WeakTopicsView } from "./weak-topics-view";
-import { FF } from "../lib/feature-flags";
-import type { SectionId } from "../types/models";
-
-export type PortfolioSectionId = "tests" | "weakTopics" | "errorLog" | "timefolio";
-
-export function isPortfolioSection(section: SectionId): section is PortfolioSectionId {
-  if (section === "tests" || section === "weakTopics" || section === "errorLog") {
-    return true;
-  }
-  if (section === "timefolio" && FF.timefolio) {
-    return true;
-  }
-  return false;
-}
 
 export function PortfolioView({
   activeSection,
