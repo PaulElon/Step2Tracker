@@ -656,19 +656,21 @@ export function ErrorLogView() {
     });
   }, [filtered, sortKey]);
 
-  useEffect(() => {
+  const resolvedSelectedEntryId = useMemo(() => {
     if (sorted.length === 0) {
-      if (selectedEntryId !== null) setSelectedEntryId(null);
-      return;
+      return null;
     }
-    if (!selectedEntryId || !sorted.some((entry) => entry.id === selectedEntryId)) {
-      setSelectedEntryId(sorted[0].id);
+
+    if (selectedEntryId && sorted.some((entry) => entry.id === selectedEntryId)) {
+      return selectedEntryId;
     }
+
+    return sorted[0].id;
   }, [sorted, selectedEntryId]);
 
   const selectedEntry = useMemo(
-    () => (selectedEntryId ? entries.find((entry) => entry.id === selectedEntryId) ?? null : null),
-    [entries, selectedEntryId],
+    () => (resolvedSelectedEntryId ? entries.find((entry) => entry.id === resolvedSelectedEntryId) ?? null : null),
+    [entries, resolvedSelectedEntryId],
   );
 
   const totalMissed = entries.length;
@@ -696,7 +698,7 @@ export function ErrorLogView() {
   }, [entries]);
 
   const nextReviewSuggestions = useMemo(() => {
-    const others = entries.filter((entry) => entry.id !== selectedEntryId);
+    const others = entries.filter((entry) => entry.id !== resolvedSelectedEntryId);
     return [...others]
       .sort((a, b) => {
         const aRepeat = a.isRepeatMiss ? 0 : 1;
@@ -708,7 +710,7 @@ export function ErrorLogView() {
         return b.createdAt.localeCompare(a.createdAt);
       })
       .slice(0, 3);
-  }, [entries, selectedEntryId]);
+  }, [entries, resolvedSelectedEntryId]);
 
   const activeFilterCount = [
     filterSource !== "All",
@@ -827,7 +829,7 @@ export function ErrorLogView() {
         <EntryList
           entries={sorted}
           totalEntries={entries.length}
-          selectedId={selectedEntryId}
+          selectedId={resolvedSelectedEntryId}
           filtersActive={filtersActive}
           onSelect={setSelectedEntryId}
           onCreate={openCreate}

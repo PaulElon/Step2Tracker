@@ -36,6 +36,8 @@ const priorityHeadingStyle: Record<string, string> = {
   Low: "text-cyan-300",
 };
 
+const historyPriorityOrder: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+
 function toTitleCase(str: string): string {
   return str.replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
 }
@@ -307,8 +309,6 @@ function HistoryModal({
   const id = useId();
   const titleId = `${id}-history-title`;
 
-  const priorityOrder: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
-
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const result = q
@@ -329,7 +329,7 @@ function HistoryModal({
       case "priority":
         result.sort(
           (a, b) =>
-            (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3) ||
+            (historyPriorityOrder[a.priority] ?? 3) - (historyPriorityOrder[b.priority] ?? 3) ||
             b.lastSeenAt.localeCompare(a.lastSeenAt),
         );
         break;
