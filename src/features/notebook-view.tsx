@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { Maximize2, Minimize2, PanelLeftOpen } from "lucide-react";
 import { ModalShell } from "../components/modal-shell";
 import { NotebookEditorAdapter } from "../components/notebook-editor-adapter";
-import { NotebookPdfViewer } from "../components/notebook-pdf-viewer";
+const NotebookPdfViewer = lazy(() =>
+  import("../components/notebook-pdf-viewer").then((m) => ({ default: m.NotebookPdfViewer })),
+);
 import { richTextToPlain } from "../components/rich-text-editor";
 import { purgeOrphanedNotebookImages } from "../lib/notebook-images";
 import { createNotebookPdfExport } from "../lib/notebook-pdf-export";
@@ -2405,57 +2407,65 @@ export function NotebookView() {
 
                           <div className="flex min-h-0 flex-1">
                             {activePage.kind === "pdf" && activePage.pdfFilename ? (
-                              <NotebookPdfViewer
-                                key={activePage.id}
-                                filename={activePage.pdfFilename}
-                                originalName={activePage.pdfOriginalName ?? activePage.title}
-                                annotations={activePage.pdfAnnotations}
-                                viewMode={activePage.pdfViewMode ?? "horizontal"}
-                                outline={activePage.pdfOutline}
-                                onChangeViewMode={(next) => {
-                                  updateActivePage((page) => ({
-                                    ...page,
-                                    pdfViewMode: next,
-                                    updatedAt: nowIso(),
-                                  }));
-                                }}
-                                onPageCount={(count) => {
-                                  if (activePage.pdfPageCount === count) {
-                                    return;
-                                  }
-                                  updateActivePage((page) => ({
-                                    ...page,
-                                    pdfPageCount: count,
-                                    updatedAt: nowIso(),
-                                  }));
-                                }}
-                                onChangeOutline={(outline) => {
-                                  updateActivePage((page) => ({
-                                    ...page,
-                                    pdfOutline: outline,
-                                    updatedAt: nowIso(),
-                                  }));
-                                }}
-                                onAddAnnotation={(annotation) => {
-                                  updateActivePage((page) => ({
-                                    ...page,
-                                    pdfAnnotations: [
-                                      ...(page.pdfAnnotations ?? []),
-                                      annotation,
-                                    ],
-                                    updatedAt: nowIso(),
-                                  }));
-                                }}
-                                onDeleteAnnotation={(annotationId) => {
-                                  updateActivePage((page) => ({
-                                    ...page,
-                                    pdfAnnotations: (page.pdfAnnotations ?? []).filter(
-                                      (existing) => existing.id !== annotationId,
-                                    ),
-                                    updatedAt: nowIso(),
-                                  }));
-                                }}
-                              />
+                              <Suspense
+                                fallback={
+                                  <div className="flex flex-1 items-center justify-center rounded-[24px] bg-[color:var(--panel-bg)]">
+                                    <span className="text-sm text-[color:var(--text-muted)]">Loading PDF viewer…</span>
+                                  </div>
+                                }
+                              >
+                                <NotebookPdfViewer
+                                  key={activePage.id}
+                                  filename={activePage.pdfFilename}
+                                  originalName={activePage.pdfOriginalName ?? activePage.title}
+                                  annotations={activePage.pdfAnnotations}
+                                  viewMode={activePage.pdfViewMode ?? "horizontal"}
+                                  outline={activePage.pdfOutline}
+                                  onChangeViewMode={(next) => {
+                                    updateActivePage((page) => ({
+                                      ...page,
+                                      pdfViewMode: next,
+                                      updatedAt: nowIso(),
+                                    }));
+                                  }}
+                                  onPageCount={(count) => {
+                                    if (activePage.pdfPageCount === count) {
+                                      return;
+                                    }
+                                    updateActivePage((page) => ({
+                                      ...page,
+                                      pdfPageCount: count,
+                                      updatedAt: nowIso(),
+                                    }));
+                                  }}
+                                  onChangeOutline={(outline) => {
+                                    updateActivePage((page) => ({
+                                      ...page,
+                                      pdfOutline: outline,
+                                      updatedAt: nowIso(),
+                                    }));
+                                  }}
+                                  onAddAnnotation={(annotation) => {
+                                    updateActivePage((page) => ({
+                                      ...page,
+                                      pdfAnnotations: [
+                                        ...(page.pdfAnnotations ?? []),
+                                        annotation,
+                                      ],
+                                      updatedAt: nowIso(),
+                                    }));
+                                  }}
+                                  onDeleteAnnotation={(annotationId) => {
+                                    updateActivePage((page) => ({
+                                      ...page,
+                                      pdfAnnotations: (page.pdfAnnotations ?? []).filter(
+                                        (existing) => existing.id !== annotationId,
+                                      ),
+                                      updatedAt: nowIso(),
+                                    }));
+                                  }}
+                                />
+                              </Suspense>
                             ) : (
                               <NotebookEditorAdapter
                                 value={activePage.contentHtml}
