@@ -820,6 +820,14 @@ function normalizePdfOutlineTitle(value: unknown): string {
   return value.replace(/\s+/g, " ").trim().slice(0, NOTEBOOK_PDF_OUTLINE_MAX_TITLE_LENGTH);
 }
 
+function stripPdfNotePrefix(value: string): string {
+  return value.replace(/^Note:\s*/i, "").trim();
+}
+
+function derivePdfNoteTitle(noteText: string): string {
+  return normalizePdfOutlineTitle(noteText).slice(0, 60) || "Note";
+}
+
 function normalizePdfNoteText(value: unknown): string {
   if (typeof value !== "string") {
     return "";
@@ -842,8 +850,19 @@ function normalizePdfOutlineItem(input: unknown, fallbackDepth: number): PdfOutl
   }
   const pageIndex = Math.trunc(pageIndexNum);
   const id = sanitizeText(raw.id) || createId("nb-pdf-outline");
-  const kind = raw.kind === "note" && raw.source !== "embedded" ? "note" : "outline";
-  const source = kind === "note" || raw.source === "manual" ? "manual" : "embedded";
+  const source = raw.source === "manual" ? "manual" : "embedded";
+  const embeddedNoteTitle =
+    source === "embedded" && raw.kind !== "outline"
+      ? stripPdfNotePrefix(title)
+      : "";
+  const rawNoteText = normalizePdfNoteText(raw.noteText);
+  const noteText = rawNoteText ? stripPdfNotePrefix(rawNoteText) : embeddedNoteTitle;
+  const kind =
+    source === "embedded" && (raw.kind === "note" || /^Note:\s*/i.test(title) || /^Note:\s*/i.test(rawNoteText))
+      ? "note"
+      : raw.kind === "note"
+        ? "note"
+        : "outline";
   const item: PdfOutlineItem = {
     id,
     title,
@@ -851,11 +870,11 @@ function normalizePdfOutlineItem(input: unknown, fallbackDepth: number): PdfOutl
     source,
   };
   if (kind === "note") {
-    const noteText = normalizePdfNoteText(raw.noteText);
     if (!noteText) {
       return null;
     }
     item.kind = "note";
+    item.title = derivePdfNoteTitle(noteText);
     item.noteText = noteText;
   } else if (raw.kind === "outline") {
     item.kind = "outline";

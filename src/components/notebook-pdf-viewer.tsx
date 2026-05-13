@@ -3,7 +3,13 @@ import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PageViewport, PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { readNotebookPdfBytes } from "../lib/notebook-pdf";
-import type { PdfAnnotation, PdfAnnotationQuad, PdfOutlineItem, PdfViewMode } from "../types/models";
+import type {
+  PdfAnnotation,
+  PdfAnnotationQuad,
+  PdfOutlineItem,
+  PdfOutlineItemKind,
+  PdfViewMode,
+} from "../types/models";
 
 if (typeof pdfjs.GlobalWorkerOptions.workerSrc !== "string" || !pdfjs.GlobalWorkerOptions.workerSrc) {
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -18,6 +24,15 @@ const NOTE_TEXT_MAX_LENGTH = 1000;
 const NOTE_TITLE_MAX_LENGTH = 60;
 const OUTLINE_NAVIGATION_DELAY_MS = 220;
 const OUTLINE_MAX_DEPTH = 12;
+const EMBEDDED_NOTE_TITLE_PREFIX = /^Note:\s*/i;
+
+// Vertical scroll virtualization: only render pages within this buffer around the current page.
+const VIRT_BUFFER_ABOVE = 2;
+const VIRT_BUFFER_BELOW = 3;
+// Must match the gap-3 (0.75rem) used on the vertical viewport flex container.
+const PAGE_GAP_PX = 12;
+// Fallback page height estimate (px at zoom=1) for pages not yet rendered.
+const VIRT_HEIGHT_FALLBACK = 900;
 
 const HIGHLIGHT_COLORS = [
   { id: "yellow", value: "#fde047", label: "Yellow" },
@@ -97,6 +112,37 @@ function deriveNoteTitle(noteText: string): string {
   return normalizeOutlineTitle(noteText, NOTE_TITLE_MAX_LENGTH) || "Note";
 }
 
+function stripEmbeddedNotePrefix(value: string): string {
+  return value.replace(EMBEDDED_NOTE_TITLE_PREFIX, "").trim();
+}
+
+function parseEmbeddedOutlineTitle(
+  value: unknown,
+): { title: string; kind: PdfOutlineItemKind; noteText?: string } | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.replace(/\r\n?/g, "\n").trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const noteText = stripEmbeddedNotePrefix(trimmed);
+  if (EMBEDDED_NOTE_TITLE_PREFIX.test(trimmed) && noteText) {
+    return {
+      title: deriveNoteTitle(noteText),
+      kind: "note",
+      noteText: normalizeNoteText(noteText),
+    };
+  }
+
+  return {
+    title: normalizeOutlineTitle(trimmed, EMBEDDED_OUTLINE_TITLE_MAX_LENGTH),
+    kind: "outline",
+  };
+}
+
 function getOutlineSortCreatedAt(item: PdfOutlineItem): string {
   return item.createdAt ?? "";
 }
@@ -120,7 +166,10 @@ function sortOutlineItemsByPageAndCreatedAt(items: PdfOutlineItem[]): PdfOutline
 }
 
 function getOutlineItemDisplayText(item: PdfOutlineItem): string {
-  return item.kind === "note" ? item.noteText ?? item.title : item.title;
+  if (item.kind !== "note") {
+    return item.title;
+  }
+  return item.noteText || stripEmbeddedNotePrefix(item.title) || item.title;
 }
 
 function quadToViewportRect(quad: PdfAnnotationQuad, viewport: PageViewport) {
@@ -213,9 +262,15 @@ async function extractEmbeddedOutline(pdfDoc: PDFDocumentProxy): Promise<PdfOutl
     for (let index = 0; index < nodes.length; index += 1) {
       const node = nodes[index];
       const nodePath = path ? `${path}-${index}` : String(index);
-      const title = normalizeOutlineTitle(node.title, EMBEDDED_OUTLINE_TITLE_MAX_LENGTH);
+      const parsedTitle = parseEmbeddedOutlineTitle(node.title);
       const childrenRaw = Array.isArray(node.items) ? node.items : [];
-      const resolved = title ? await resolvePdfDestination(pdfDoc, node.dest) : null;
+      if (!parsedTitle) {
+        if (childrenRaw.length > 0) {
+          result.push(...(await walk(childrenRaw, depth, nodePath)));
+        }
+        continue;
+      }
+      const resolved = await resolvePdfDestination(pdfDoc, node.dest);
       if (!resolved) {
         if (childrenRaw.length > 0) {
           result.push(...(await walk(childrenRaw, depth, nodePath)));
@@ -224,12 +279,15 @@ async function extractEmbeddedOutline(pdfDoc: PDFDocumentProxy): Promise<PdfOutl
       }
       const item: PdfOutlineItem = {
         id: `nb-pdf-outline-embedded-${nodePath}-${resolved.pageIndex}`,
-        title,
+        title: parsedTitle.title,
         pageIndex: resolved.pageIndex,
         depth,
         source: "embedded",
-        kind: "outline",
+        kind: parsedTitle.kind,
       };
+      if (parsedTitle.kind === "note" && parsedTitle.noteText) {
+        item.noteText = parsedTitle.noteText;
+      }
       if (resolved.y !== undefined) {
         item.y = resolved.y;
       }
@@ -442,7 +500,7 @@ interface PdfRenderedPageProps {
   annotations: PdfAnnotation[];
   onDeleteHighlight: (annotationId: string) => void;
   registerInfo: (pageIndex: number, info: PageInfo | null) => void;
-  onRendered?: (pageIndex: number) => void;
+  onRendered?: (pageIndex: number, cssHeight: number, container: HTMLElement) => void;
   ariaLabel: string;
 }
 
@@ -529,7 +587,10 @@ function PdfRenderedPage({
         if (token !== renderTokenRef.current) {
           return;
         }
-        onRendered?.(pageIndex);
+        const container = containerRef.current;
+        if (container) {
+          onRendered?.(pageIndex, cssHeight, container);
+        }
       } catch (error) {
         if (token !== renderTokenRef.current) {
           return;
@@ -665,6 +726,11 @@ export function NotebookPdfViewer({
   const [hasSelection, setHasSelection] = useState(false);
   const [selectionPageIndex, setSelectionPageIndex] = useState<number | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  // Measured page heights keyed by page index; each entry includes the zoom level so heights from
+  // a different zoom are ignored automatically, with no need for a separate clear effect.
+  const [measuredHeights, setMeasuredHeights] = useState<Map<number, { height: number; zoom: number }>>(
+    () => new Map(),
+  );
   const rootRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const pageInfosRef = useRef<Map<number, PageInfo>>(new Map());
@@ -676,6 +742,7 @@ export function NotebookPdfViewer({
   const outlineEditNoteInputRef = useRef<HTMLTextAreaElement | null>(null);
   const outlineNavigationTimerRef = useRef<number | null>(null);
   const outlineEditStateRef = useRef<OutlineEditState | null>(null);
+  const pendingScrollPageRef = useRef<number | null>(null);
   const outlineRef = useRef<PdfOutlineItem[]>(outline ?? EMPTY_OUTLINE);
   const onChangeOutlineRef = useRef(onChangeOutline);
   const clearOutlineNavigationTimer = useCallback(() => {
@@ -750,6 +817,8 @@ export function NotebookPdfViewer({
     setOutlineStatus("idle");
     setOutlineError(null);
     pageInfosRef.current.clear();
+    setMeasuredHeights(new Map());
+    pendingScrollPageRef.current = null;
 
     (async () => {
       try {
@@ -853,6 +922,23 @@ export function NotebookPdfViewer({
       pageInfosRef.current.delete(pageIndex);
     }
   }, []);
+
+  // Called by PdfRenderedPage when a canvas render completes.
+  // Stores the measured height for spacer accuracy and fulfills any pending jump to this page.
+  const handlePageRendered = useCallback(
+    (pageIndex: number, cssHeight: number, container: HTMLElement) => {
+      setMeasuredHeights((prev) => {
+        const next = new Map(prev);
+        next.set(pageIndex, { height: cssHeight, zoom });
+        return next;
+      });
+      if (viewMode === "vertical" && pendingScrollPageRef.current === pageIndex) {
+        pendingScrollPageRef.current = null;
+        container.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+      }
+    },
+    [viewMode, zoom],
+  );
 
   // Watch selection state for the manual Highlight button enable/disable.
   useEffect(() => {
@@ -986,16 +1072,14 @@ export function NotebookPdfViewer({
       const clamped = Math.max(1, Math.min(next, load.doc.numPages));
       setPageNumber(clamped);
       if (viewMode === "vertical") {
-        const scrollToPage = () => {
-          const info = pageInfosRef.current.get(clamped - 1);
-          if (!info) {
-            return false;
-          }
+        const targetIndex = clamped - 1;
+        const info = pageInfosRef.current.get(targetIndex);
+        if (info) {
+          // Page is already rendered in the current window; scroll immediately.
           info.containerEl.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
-          return true;
-        };
-        if (!scrollToPage()) {
-          window.setTimeout(scrollToPage, 80);
+        } else {
+          // Page just entered the render window and is still rendering; scroll when canvas is ready.
+          pendingScrollPageRef.current = targetIndex;
         }
       } else {
         const scrollEl = viewportRef.current;
@@ -1380,16 +1464,44 @@ export function NotebookPdfViewer({
   const toolbarButtonClass = "notebook-pdf-toolbar-button";
   const activeToolbarButtonClass = "notebook-pdf-toolbar-button is-active";
 
-  // Pages to render.
+  // Pages to render: horizontal renders only the current page; vertical renders a bounded window.
   const pagesToRender = useMemo(() => {
     if (load.kind !== "ready") {
       return [] as number[];
     }
-    if (viewMode === "vertical") {
-      return Array.from({ length: load.doc.numPages }, (_, index) => index);
+    if (viewMode !== "vertical") {
+      return [Math.max(0, Math.min(pageNumber - 1, load.doc.numPages - 1))];
     }
-    return [Math.max(0, Math.min(pageNumber - 1, load.doc.numPages - 1))];
+    // Vertical virtualization: render only pages near the current page.
+    const center = pageNumber - 1; // 0-indexed
+    const start = Math.max(0, center - VIRT_BUFFER_ABOVE);
+    const end = Math.min(load.doc.numPages - 1, center + VIRT_BUFFER_BELOW);
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
   }, [load, viewMode, pageNumber]);
+
+  // Estimate the rendered height of a page. Uses the measured value once the page has rendered,
+  // otherwise falls back to a scaled A4-ish estimate.
+  const getEstimatedPageHeight = (pageIndex: number): number => {
+    const entry = measuredHeights.get(pageIndex);
+    // Only use the stored height if it was measured at the current zoom level.
+    return entry && entry.zoom === zoom ? entry.height : Math.round(VIRT_HEIGHT_FALLBACK * zoom);
+  };
+  // Total height occupied by a contiguous range of unrendered pages, including inter-page gaps.
+  // Flex gap handles the boundary gap between the spacer and the first/last rendered page.
+  const getSpacerHeight = (fromIndex: number, toIndex: number): number => {
+    if (fromIndex > toIndex) return 0;
+    let total = 0;
+    for (let i = fromIndex; i <= toIndex; i++) {
+      total += getEstimatedPageHeight(i);
+    }
+    return total + Math.max(0, toIndex - fromIndex) * PAGE_GAP_PX;
+  };
+  const vertRenderStart = viewMode === "vertical" && pagesToRender.length > 0 ? pagesToRender[0] : 0;
+  const vertRenderEnd =
+    viewMode === "vertical" && pagesToRender.length > 0 ? pagesToRender[pagesToRender.length - 1] : 0;
+  const topSpacerHeight = viewMode === "vertical" && numPages > 0 ? getSpacerHeight(0, vertRenderStart - 1) : 0;
+  const bottomSpacerHeight =
+    viewMode === "vertical" && numPages > 0 ? getSpacerHeight(vertRenderEnd + 1, numPages - 1) : 0;
 
   const renderOutlineItems = (items: PdfOutlineItem[], fallbackDepth = 0) =>
     items.map((item) => {
@@ -1901,6 +2013,28 @@ export function NotebookPdfViewer({
             <div className="m-auto text-xs text-slate-500">Loading PDF…</div>
           ) : load.kind === "error" ? (
             <div className="m-auto max-w-md px-3 py-4 text-center text-xs text-rose-600">{load.message}</div>
+          ) : viewMode === "vertical" ? (
+            <>
+              {topSpacerHeight > 0 ? (
+                <div style={{ height: `${topSpacerHeight}px`, flexShrink: 0 }} aria-hidden="true" />
+              ) : null}
+              {pagesToRender.map((pageIndex) => (
+                <PdfRenderedPage
+                  key={pageIndex}
+                  doc={(load as { kind: "ready"; doc: PDFDocumentProxy }).doc}
+                  pageIndex={pageIndex}
+                  zoom={zoom}
+                  annotations={annotationsList}
+                  onDeleteHighlight={handleDeleteHighlight}
+                  registerInfo={registerInfo}
+                  onRendered={handlePageRendered}
+                  ariaLabel={`${headerLabel} — page ${pageIndex + 1}`}
+                />
+              ))}
+              {bottomSpacerHeight > 0 ? (
+                <div style={{ height: `${bottomSpacerHeight}px`, flexShrink: 0 }} aria-hidden="true" />
+              ) : null}
+            </>
           ) : (
             pagesToRender.map((pageIndex) => (
               <PdfRenderedPage
