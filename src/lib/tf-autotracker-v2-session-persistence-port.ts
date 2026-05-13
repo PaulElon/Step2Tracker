@@ -18,20 +18,20 @@ export class InMemoryAutoTrackerV2SessionPersistencePort
     this.#snapshot = snapshot ? cloneSnapshot(snapshot) : createEmptySnapshot();
   }
 
-  async readSnapshot(): Promise<AutoTrackerV2SessionRepositorySnapshot> {
-    return cloneSnapshot(this.#snapshot);
+  readSnapshot(): Promise<AutoTrackerV2SessionRepositorySnapshot> {
+    return Promise.resolve(cloneSnapshot(this.#snapshot));
   }
 
-  async writeSnapshot(
+  writeSnapshot(
     snapshot: AutoTrackerV2SessionRepositorySnapshot,
   ): Promise<AutoTrackerV2SessionRepositorySnapshot> {
     this.#snapshot = cloneSnapshot(snapshot);
-    return cloneSnapshot(this.#snapshot);
+    return Promise.resolve(cloneSnapshot(this.#snapshot));
   }
 
-  async resetSnapshot(): Promise<AutoTrackerV2SessionRepositorySnapshot> {
+  resetSnapshot(): Promise<AutoTrackerV2SessionRepositorySnapshot> {
     this.#snapshot = createEmptySnapshot();
-    return cloneSnapshot(this.#snapshot);
+    return Promise.resolve(cloneSnapshot(this.#snapshot));
   }
 }
 

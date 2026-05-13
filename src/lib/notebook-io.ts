@@ -8,7 +8,7 @@ export interface NotebookImportedPageDraft {
   contentHtml: string;
 }
 
-const INVALID_FILE_NAME_CHARS = /[<>:"/\\|?*\x00-\x1F]/g;
+const INVALID_FILE_NAME_CHARS = /[<>:"/\\|?*]/g;
 const LEADING_OR_TRAILING_DOTS = /^[.-]+|[.-]+$/g;
 const COLLAPSE_MULTIPLE_DASHES = /-+/g;
 
@@ -177,10 +177,15 @@ function parseNotebookTextImport(fileName: string, contents: string): NotebookIm
   };
 }
 
+function stripControlCharacters(value: string) {
+  return Array.from(value)
+    .filter((char) => char.charCodeAt(0) >= 0x20)
+    .join("");
+}
+
 export function sanitizeNotebookFileNameSegment(value: string) {
   const fallback = "notebook-page";
-  const cleaned = value
-    .trim()
+  const cleaned = stripControlCharacters(value.trim())
     .replace(INVALID_FILE_NAME_CHARS, "")
     .replace(/\s+/g, "-")
     .replace(COLLAPSE_MULTIPLE_DASHES, "-")

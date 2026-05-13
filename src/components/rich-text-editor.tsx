@@ -159,8 +159,7 @@ export function RichTextEditor({
       setEditorContent(ref.current, value);
       valueRef.current = value;
     }
-
-  }, []);
+  }, [value]);
 
   function flush() {
     if (!ref.current) return;
@@ -256,9 +255,4 @@ export function RichTextRender({ html, className }: { html: string; className?: 
     }
   }, [html]);
   return <span ref={ref} className={className} />;
-}
-
-export function richTextToPlain(html: string): string {
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  return doc.body.textContent ?? "";
 }

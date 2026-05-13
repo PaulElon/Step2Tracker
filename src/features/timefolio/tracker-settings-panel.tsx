@@ -370,8 +370,8 @@ function appendWrittenPreviewSessionId(
   return next;
 }
 
-async function getLatestAutoTrackerSpansPlaceholder(): Promise<NativeTrackerSpanInput[]> {
-  return [];
+function getLatestAutoTrackerSpansPlaceholder(): Promise<NativeTrackerSpanInput[]> {
+  return Promise.resolve([]);
 }
 
 function DataStatCard({
@@ -748,7 +748,9 @@ function TrackerGroupCard({
         </span>
         <button
           type="button"
-          onClick={onSave}
+          onClick={() => {
+            void onSave();
+          }}
           disabled={isSaving || isDisabled || !isDirty}
           className="rounded-lg border border-slate-700 bg-slate-800/90 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
@@ -806,7 +808,15 @@ function TrackerGroupCard({
 }
 
 export function TrackerSettingsPanel() {
-  const { state, isLoading, error, reload, reset, saveState, importNativeSpans, upsertSessionLog } = useTimeFolioStore();
+  const store = useTimeFolioStore();
+  const { state, isLoading, error } = store;
+  const reload = (...args: Parameters<typeof store.reload>) => store.reload(...args);
+  const reset = (...args: Parameters<typeof store.reset>) => store.reset(...args);
+  const saveState = (...args: Parameters<typeof store.saveState>) => store.saveState(...args);
+  const importNativeSpans = (...args: Parameters<typeof store.importNativeSpans>) =>
+    store.importNativeSpans(...args);
+  const upsertSessionLog = (...args: Parameters<typeof store.upsertSessionLog>) =>
+    store.upsertSessionLog(...args);
   const [draftPrefs, setDraftPrefs] = useState<TfTrackerPrefs>(() => cloneTrackerPrefs(state.trackerPrefs));
   const [savingKey, setSavingKey] = useState<TrackerGroupKey | null>(null);
   const [dataMessage, setDataMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
@@ -1217,7 +1227,9 @@ export function TrackerSettingsPanel() {
         title="Tracker Settings"
         message={error}
         actionLabel="Retry"
-        onAction={reload}
+        onAction={() => {
+          void reload();
+        }}
       />
     );
   }
@@ -1235,7 +1247,7 @@ export function TrackerSettingsPanel() {
         "website",
       ),
       [groupConfig.listKeys.app]: sanitizeTrackerRules(draftPrefs[groupConfig.listKeys.app], "app"),
-    } as TfTrackerPrefs;
+    };
 
     setSavingKey(groupKey);
     try {
@@ -1248,7 +1260,7 @@ export function TrackerSettingsPanel() {
     }
   }
 
-  async function handleExportData() {
+  function handleExportData() {
     const fileName = getBackupFileName();
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -2192,7 +2204,9 @@ export function TrackerSettingsPanel() {
             <div>A rollback snapshot is available for this session.</div>
             <button
               type="button"
-              onClick={handleRestorePreviousState}
+              onClick={() => {
+                void handleRestorePreviousState();
+              }}
               disabled={isDataBusy}
               className="rounded-lg border border-amber-400/30 bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-100 transition-colors hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -2211,7 +2225,9 @@ export function TrackerSettingsPanel() {
               ref={importInputRef}
               type="file"
               accept=".json,application/json"
-              onChange={handleImportFileChange}
+              onChange={(event) => {
+                void handleImportFileChange(event);
+              }}
               disabled={isDataBusy}
               className="block w-full rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-200 file:mr-4 file:rounded-md file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-100 hover:file:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
             />
@@ -2227,7 +2243,9 @@ export function TrackerSettingsPanel() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={handleConfirmImportData}
+                    onClick={() => {
+                      void handleConfirmImportData();
+                    }}
                     disabled={isDataBusy}
                     className="rounded-lg border border-cyan-500/30 bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
                   >
@@ -2281,7 +2299,9 @@ export function TrackerSettingsPanel() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={handleConfirmResetData}
+                    onClick={() => {
+                      void handleConfirmResetData();
+                    }}
                     disabled={isDataBusy || !canConfirmReset}
                     className="rounded-lg border border-rose-400/40 bg-rose-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
                   >
@@ -2319,7 +2339,9 @@ export function TrackerSettingsPanel() {
             <div className="flex flex-col gap-2">
               <button
                 type="button"
-                onClick={handleRefreshAutoTrackerStatus}
+                onClick={() => {
+                  void handleRefreshAutoTrackerStatus();
+                }}
                 disabled={isAutoTrackerRefreshing}
                 className="rounded-lg border border-teal-500/30 bg-teal-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -2327,7 +2349,9 @@ export function TrackerSettingsPanel() {
               </button>
               <button
                 type="button"
-                onClick={handleImportLatestAutoTrackerSpans}
+                onClick={() => {
+                  void handleImportLatestAutoTrackerSpans();
+                }}
                 disabled={isAutoTrackerImporting}
                 className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-3 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -2474,7 +2498,9 @@ export function TrackerSettingsPanel() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={handleV2Probe}
+                  onClick={() => {
+                    void handleV2Probe();
+                  }}
                   disabled={anyBusy || isSamplerRunning}
                   className="rounded-lg border border-violet-500/30 bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -2482,7 +2508,9 @@ export function TrackerSettingsPanel() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleV2CaptureOnce}
+                  onClick={() => {
+                    void handleV2CaptureOnce();
+                  }}
                   disabled={anyBusy || isSamplerRunning}
                   className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -2499,7 +2527,13 @@ export function TrackerSettingsPanel() {
                 {FF.autotrackerV2NativeSampler ? (
                   <button
                     type="button"
-                    onClick={isSamplerRunning ? handleV2StopNativeSampler : handleV2StartNativeSampler}
+                    onClick={() => {
+                      if (isSamplerRunning) {
+                        void handleV2StopNativeSampler();
+                        return;
+                      }
+                      void handleV2StartNativeSampler();
+                    }}
                     disabled={
                       isSamplerRunning
                         ? v2SamplerActionBusy
@@ -2528,7 +2562,9 @@ export function TrackerSettingsPanel() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleV2RefreshSnapshot}
+                  onClick={() => {
+                    void handleV2RefreshSnapshot();
+                  }}
                   disabled={anyBusy || isSamplerRunning}
                   className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -2546,7 +2582,9 @@ export function TrackerSettingsPanel() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleV2ClearBuffer}
+                  onClick={() => {
+                    void handleV2ClearBuffer();
+                  }}
                   disabled={anyBusy || isSamplerRunning}
                   className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                 >

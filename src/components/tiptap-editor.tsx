@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { EditorContent, useEditor, ReactNodeViewRenderer } from "@tiptap/react";
 import { Extension, type Editor } from "@tiptap/core";
 import { NotebookImageNodeView } from "./notebook-image-node-view";
-import { Plugin, NodeSelection } from "@tiptap/pm/state";
+import { NodeSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -19,23 +19,12 @@ import Underline from "@tiptap/extension-underline";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import type { NotebookEditorProps } from "./notebook-editor-adapter";
+import { getHighlightHtmlAttributes } from "./tiptap-highlight";
 import { uploadNotebookImage } from "../lib/notebook-images";
 
 type MenuId = "style" | "textColor" | "highlight" | "align" | "list" | "table" | "link";
 type OpenMenu = MenuId | null;
 type ListItemType = "listItem" | "taskItem";
-
-export function getHighlightHtmlAttributes(attributes: Record<string, unknown>) {
-  const bg = typeof attributes.color === "string" && attributes.color ? attributes.color : null;
-  if (!bg) {
-    return {};
-  }
-
-  return {
-    "data-color": bg,
-    style: `background-color: ${bg}; color: #1e293b`,
-  };
-}
 
 const HighlightWithContrast = Highlight.extend({
   addAttributes() {
@@ -84,8 +73,9 @@ const FontSizeExtension = Extension.create({
             default: null,
             parseHTML: (element: HTMLElement) => element.style.fontSize || null,
             renderHTML: (attributes: Record<string, unknown>) => {
-              if (!attributes.fontSize) return {};
-              return { style: `font-size: ${String(attributes.fontSize)}` };
+              const fontSize = getRenderableAttribute(attributes.fontSize);
+              if (!fontSize) return {};
+              return { style: `font-size: ${fontSize}` };
             },
           },
         },
@@ -141,6 +131,25 @@ function toggleChecklist(editor: Editor, focus = false) {
   const chain = editor.chain();
   if (focus) chain.focus();
   chain.toggleTaskList().run();
+}
+
+function getRenderableAttribute(value: unknown) {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+function getEditorAttributes(editor: Editor, extensionName: string): Record<string, unknown> {
+  const attributes = editor.getAttributes(extensionName) as unknown;
+  if (attributes && typeof attributes === "object") {
+    return attributes as Record<string, unknown>;
+  }
+  return {};
+}
+
+function getEditorAttributeString(editor: Editor, extensionName: string, attributeName: string) {
+  const value = getEditorAttributes(editor, extensionName)[attributeName];
+  return typeof value === "string" ? value : "";
 }
 
 // ─── SVG icon components ─────────────────────────────────────────────────────
@@ -327,9 +336,6 @@ export function TiptapEditor({
   editorKey,
 }: NotebookEditorProps) {
   const normalizedEditorKey = editorKey ?? "__default__";
-  const initialValueRef = useRef(value || "");
-  const onChangeRef = useRef(onChange);
-  const valueRef = useRef(value || "");
   const lastAppliedEditorKeyRef = useRef<string | null>(null);
   const isApplyingExternalContentRef = useRef(false);
 
@@ -341,16 +347,9 @@ export function TiptapEditor({
   const toolbarRef = useRef<HTMLDivElement>(null);
   const fontSizeInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const setFontSizeLocalRef = useRef(setFontSizeLocal);
-  const uploadHandlerRef = useRef<(file: File) => Promise<void>>(async () => {});
   const dragCounterRef = useRef(0);
-  setFontSizeLocalRef.current = setFontSizeLocal;
 
-  onChangeRef.current = onChange;
-  valueRef.current = value || "";
-
-  // Always-current upload handler; captured by the ProseMirror plugin via ref.
-  uploadHandlerRef.current = async (file: File) => {
+  async function uploadImageToCurrentEditor(file: File) {
     setIsUploading(true);
     try {
       const src = await uploadNotebookImage(file);
@@ -360,7 +359,7 @@ export function TiptapEditor({
     } finally {
       setIsUploading(false);
     }
-  };
+  }
 
   // React-level file-drop handlers on the outer wrapper. Tauri's WKWebView does not
   // always deliver native file-drop events to ProseMirror's DOM listener, so we
@@ -385,7 +384,7 @@ export function TiptapEditor({
     if (dragCounterRef.current === 0) setIsDragOver(false);
   }, []);
 
-  const handleWrapperDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+  const handleWrapperDrop = (e: React.DragEvent<HTMLDivElement>) => {
     dragCounterRef.current = 0;
     setIsDragOver(false);
     // Only intercept file drops; let ProseMirror handle text DnD.
@@ -394,8 +393,8 @@ export function TiptapEditor({
     if (!imageFile) return;
     e.preventDefault();
     e.stopPropagation();
-    void uploadHandlerRef.current(imageFile);
-  }, []);
+    void uploadImageToCurrentEditor(imageFile);
+  };
 
   const toggleMenu = useCallback((id: MenuId) => {
     setOpenMenu((prev) => (prev === id ? null : id));
@@ -466,8 +465,9 @@ export function TiptapEditor({
                 return null;
               },
               renderHTML: (attrs: Record<string, unknown>) => {
-                if (!attrs.width) return {};
-                return { width: String(attrs.width) };
+                const width = getRenderableAttribute(attrs.width);
+                if (!width) return {};
+                return { width };
               },
             },
             height: {
@@ -480,16 +480,18 @@ export function TiptapEditor({
                 return null;
               },
               renderHTML: (attrs: Record<string, unknown>) => {
-                if (!attrs.height) return {};
-                return { height: String(attrs.height) };
+                const height = getRenderableAttribute(attrs.height);
+                if (!height) return {};
+                return { height };
               },
             },
             dataAlign: {
               default: null,
               parseHTML: (el: HTMLElement) => el.getAttribute("data-align") || null,
               renderHTML: (attrs: Record<string, unknown>) => {
-                if (!attrs.dataAlign) return {};
-                return { "data-align": String(attrs.dataAlign) };
+                const dataAlign = getRenderableAttribute(attrs.dataAlign);
+                if (!dataAlign) return {};
+                return { "data-align": dataAlign };
               },
             },
             lockAspect: {
@@ -645,35 +647,6 @@ export function TiptapEditor({
           };
         },
       }),
-      Extension.create({
-        name: "imageUpload",
-        addProseMirrorPlugins() {
-          return [
-            new Plugin({
-              props: {
-                handlePaste(_view, event) {
-                  const items = Array.from(event.clipboardData?.items ?? []);
-                  const imageItem = items.find((i) => i.type.startsWith("image/"));
-                  if (!imageItem) return false;
-                  const file = imageItem.getAsFile();
-                  if (!file) return false;
-                  event.preventDefault();
-                  void uploadHandlerRef.current(file);
-                  return true;
-                },
-                handleDrop(_view, event) {
-                  const files = Array.from(event.dataTransfer?.files ?? []);
-                  const imageFile = files.find((f) => f.type.startsWith("image/"));
-                  if (!imageFile) return false;
-                  event.preventDefault();
-                  void uploadHandlerRef.current(imageFile);
-                  return true;
-                },
-              },
-            }),
-          ];
-        },
-      }),
     ],
     [],
   );
@@ -685,19 +658,35 @@ export function TiptapEditor({
 
   const editor = useEditor(
     {
-      content: initialValueRef.current,
+      content: value || "",
       extensions,
       editorProps,
       onUpdate: ({ editor: nextEditor }) => {
         if (isApplyingExternalContentRef.current) return;
-        onChangeRef.current(nextEditor.getHTML());
+        onChange(nextEditor.getHTML());
       },
       onSelectionUpdate: ({ editor: nextEditor }) => {
-        const fs = nextEditor.getAttributes("textStyle")?.fontSize;
+        const fs = getEditorAttributeString(nextEditor, "textStyle", "fontSize");
         if (fs) {
           const n = parseInt(String(fs), 10);
-          if (!isNaN(n) && n > 0) setFontSizeLocalRef.current(n);
+          if (!isNaN(n) && n > 0) setFontSizeLocal(n);
         }
+      },
+      onPaste: (event) => {
+        const items = Array.from(event.clipboardData?.items ?? []);
+        const imageItem = items.find((item) => item.type.startsWith("image/"));
+        if (!imageItem) return;
+        const file = imageItem.getAsFile();
+        if (!file) return;
+        event.preventDefault();
+        void uploadImageToCurrentEditor(file);
+      },
+      onDrop: (event) => {
+        const files = Array.from(event.dataTransfer?.files ?? []);
+        const imageFile = files.find((file) => file.type.startsWith("image/"));
+        if (!imageFile) return;
+        event.preventDefault();
+        void uploadImageToCurrentEditor(imageFile);
       },
     },
     [],
@@ -706,7 +695,7 @@ export function TiptapEditor({
   useEffect(() => {
     if (!editor) return;
     if (lastAppliedEditorKeyRef.current === normalizedEditorKey) return;
-    const nextHtml = valueRef.current;
+    const nextHtml = value || "";
     isApplyingExternalContentRef.current = true;
     try {
       editor.commands.setContent(nextHtml, false as never);
@@ -714,7 +703,7 @@ export function TiptapEditor({
       isApplyingExternalContentRef.current = false;
     }
     lastAppliedEditorKeyRef.current = normalizedEditorKey;
-  }, [editor, normalizedEditorKey]);
+  }, [editor, normalizedEditorKey, value]);
 
   const applyFontSize = useCallback(
     (size: number) => {
@@ -730,8 +719,8 @@ export function TiptapEditor({
   const addEditLink = useCallback(() => {
     if (!editor) return;
     closeMenu();
-    const currentHref = editor.getAttributes("link").href;
-    const nextHref = window.prompt("Enter link URL", typeof currentHref === "string" ? currentHref : "");
+    const currentHref = getEditorAttributeString(editor, "link", "href");
+    const nextHref = window.prompt("Enter link URL", currentHref);
     if (nextHref == null) return;
     const trimmedHref = nextHref.trim();
     if (!trimmedHref) return;
@@ -755,7 +744,7 @@ export function TiptapEditor({
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    void uploadHandlerRef.current(file);
+    void uploadImageToCurrentEditor(file);
   };
 
   const setTextColor = (color: string | null) => {
@@ -850,8 +839,8 @@ export function TiptapEditor({
   const isAlignLeft = editor ? editor.isActive({ textAlign: "left" }) : false;
   const isAlignCenter = editor ? editor.isActive({ textAlign: "center" }) : false;
   const isAlignRight = editor ? editor.isActive({ textAlign: "right" }) : false;
-  const textColor = editor ? (editor.getAttributes("textStyle").color ?? "") : "";
-  const highlightColor = editor ? (editor.getAttributes("highlight").color ?? "") : "";
+  const textColor = editor ? getEditorAttributeString(editor, "textStyle", "color") : "";
+  const highlightColor = editor ? getEditorAttributeString(editor, "highlight", "color") : "";
   const canToggleChecklist = editor ? editor.can().chain().toggleTaskList().run() : false;
   const canAddRow = isTable && (editor?.can().chain().focus().addRowAfter().run() ?? false);
   const canDeleteRow = isTable && (editor?.can().chain().focus().deleteRow().run() ?? false);
@@ -1119,16 +1108,18 @@ export function TiptapEditor({
         <DropdownItem
           active={isTaskList}
           onClick={() => {
-            if (canToggleChecklist) { editor && toggleChecklist(editor, true); }
+            if (canToggleChecklist && editor) {
+              toggleChecklist(editor, true);
+            }
             closeMenu();
           }}
         >
           ☑ Checklist
         </DropdownItem>
-        <DropdownItem onClick={() => { editor && handleListIndent(editor, "indent", true); closeMenu(); }}>
+        <DropdownItem onClick={() => { if (editor) handleListIndent(editor, "indent", true); closeMenu(); }}>
           → Indent
         </DropdownItem>
-        <DropdownItem onClick={() => { editor && handleListIndent(editor, "outdent", true); closeMenu(); }}>
+        <DropdownItem onClick={() => { if (editor) handleListIndent(editor, "outdent", true); closeMenu(); }}>
           ← Outdent
         </DropdownItem>
         <DropdownItem onClick={() => { editor?.chain().focus().setHorizontalRule().run(); closeMenu(); }}>

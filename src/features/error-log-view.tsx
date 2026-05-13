@@ -15,7 +15,8 @@ import {
   X,
 } from "lucide-react";
 import { ModalShell } from "../components/modal-shell";
-import { RichTextEditor, RichTextRender, richTextToPlain } from "../components/rich-text-editor";
+import { RichTextEditor, RichTextRender } from "../components/rich-text-editor";
+import { richTextToPlain } from "../components/rich-text-utils";
 import { primaryButtonClassName, secondaryButtonClassName } from "../lib/ui";
 import {
   ERROR_LOG_FOLLOW_UP_ACTION_VALUES,

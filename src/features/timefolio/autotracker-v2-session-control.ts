@@ -85,7 +85,10 @@ function formatElapsedLabel(elapsedMs: number): string {
 }
 
 export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
-  const { state, upsertSessionLog } = useTimeFolioStore();
+  const store = useTimeFolioStore();
+  const { state } = store;
+  const upsertSessionLog = (...args: Parameters<typeof store.upsertSessionLog>) =>
+    store.upsertSessionLog(...args);
   const [v2SamplerStatus, setV2SamplerStatus] = useState<AutoTrackerV2NativeSamplerStatus | null>(
     null,
   );

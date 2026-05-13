@@ -312,7 +312,7 @@ export async function parseNotebookDocxImport(file: File): Promise<NotebookImpor
 
   try {
     await ensureMammothDependency();
-    const result = await mammothConvertToHtml(buildMammothInput(bytes, buffer) as never);
+    const result = await mammothConvertToHtml(buildMammothInput(bytes, buffer));
     const contentHtml = normalizeImportHtml(result.value);
     return {
       documentTitle: fileStem(file.name),
