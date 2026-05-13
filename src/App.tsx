@@ -292,14 +292,13 @@ function SidebarCountdown() {
   const [time, setTime] = useState("23:59");
   const [mode, setMode] = useState<ExamDisplayMode>("days");
   const [showHrMin, setShowHrMin] = useState(false);
-  const [, setTick] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const id = window.setInterval(() => setTick((t) => t + 1), 60_000);
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(id);
   }, []);
 
-  const now = Date.now();
   const allTimers = state.preferences.examTimers;
   const activeTimers = allTimers
     .filter((t) => {

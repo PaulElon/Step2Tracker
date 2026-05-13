@@ -159,8 +159,7 @@ export function RichTextEditor({
       setEditorContent(ref.current, value);
       valueRef.current = value;
     }
-
-  }, []);
+  }, [value]);
 
   function flush() {
     if (!ref.current) return;
