@@ -29,8 +29,8 @@ const NOTE_TITLE_MAX_LENGTH = 60;
 const OUTLINE_NAVIGATION_DELAY_MS = 220;
 const OUTLINE_MAX_DEPTH = 12;
 const EMBEDDED_NOTE_TITLE_PREFIX = /^Note:\s*/i;
-const AUTO_OUTLINE_MAX_PAGES_TO_SCAN = 36;
-const AUTO_OUTLINE_MAX_GENERATED_ENTRIES = 60;
+const AUTO_OUTLINE_SCAN_BATCH_SIZE = 15;
+const AUTO_OUTLINE_MAX_GENERATED_ENTRIES = 750;
 const AUTO_OUTLINE_MAX_ITEMS_PER_PAGE = 2500;
 
 // Vertical scroll virtualization: only render pages within this buffer around the current page.
@@ -90,6 +90,16 @@ interface PageInfo {
   viewport: PageViewport;
   textLayerEl: HTMLDivElement;
   containerEl: HTMLDivElement;
+}
+
+interface OutlineGenerationProgress {
+  currentPage: number;
+  totalPages: number;
+  generatedCount: number;
+}
+
+interface OutlineGenerationCancelToken {
+  cancelled: boolean;
 }
 
 interface PdfJsTextItemLike {
@@ -271,6 +281,26 @@ function parseTextItemTransform(value: unknown): { x: number; y: number; fontSiz
     return null;
   }
   return { x, y, fontSize, scaleY };
+}
+
+class OutlineGenerationCancelledError extends Error {
+  constructor() {
+    super("Outline generation cancelled.");
+    this.name = "OutlineGenerationCancelledError";
+  }
+}
+
+function isOutlineGenerationCancelledError(error: unknown): boolean {
+  return error instanceof OutlineGenerationCancelledError;
+}
+
+async function yieldToBrowser(): Promise<void> {
+  if (typeof window === "undefined") {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    window.setTimeout(resolve, 0);
+  });
 }
 
 function getDestinationTop(dest: unknown[]): number | undefined {
@@ -833,6 +863,7 @@ export function NotebookPdfViewer({
   const [outlineNoteDraft, setOutlineNoteDraft] = useState("");
   const [outlineEditState, setOutlineEditState] = useState<OutlineEditState | null>(null);
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
+  const [outlineGenerationProgress, setOutlineGenerationProgress] = useState<OutlineGenerationProgress | null>(null);
   const [outlineStatus, setOutlineStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [outlineError, setOutlineError] = useState<string | null>(null);
   const [highlightMode, setHighlightMode] = useState(false);
@@ -859,6 +890,7 @@ export function NotebookPdfViewer({
   const outlineEditStateRef = useRef<OutlineEditState | null>(null);
   const pendingScrollPageRef = useRef<number | null>(null);
   const outlineRef = useRef<PdfOutlineItem[]>(outline ?? EMPTY_OUTLINE);
+  const outlineGenerationCancelRef = useRef<OutlineGenerationCancelToken | null>(null);
   const onChangeOutlineRef = useRef(onChangeOutline);
   const clearOutlineNavigationTimer = useCallback(() => {
     if (outlineNavigationTimerRef.current !== null) {
@@ -929,7 +961,9 @@ export function NotebookPdfViewer({
     setOutlineTitleDraft("");
     setOutlineNoteDraft("");
     setOutlineEditState(null);
+    outlineGenerationCancelRef.current = { cancelled: true };
     setIsGeneratingOutline(false);
+    setOutlineGenerationProgress(null);
     setOutlineStatus("idle");
     setOutlineError(null);
     pageInfosRef.current.clear();
@@ -1360,49 +1394,83 @@ export function NotebookPdfViewer({
   }, [getCurrentPdfTarget, outlineNoteDraft]);
 
   const collectTextPagesForAutoOutline = useCallback(
-    async (doc: PDFDocumentProxy): Promise<NotebookPdfOutlineTextPage[]> => {
-      const maxPages = Math.min(doc.numPages, AUTO_OUTLINE_MAX_PAGES_TO_SCAN);
+    async (
+      doc: PDFDocumentProxy,
+      options: {
+        maxGeneratedEntries: number;
+        batchSize: number;
+        cancelToken: OutlineGenerationCancelToken;
+        onProgress?: (progress: OutlineGenerationProgress) => void;
+      },
+    ): Promise<NotebookPdfOutlineTextPage[]> => {
+      const maxPages = Math.max(0, Math.trunc(doc.numPages));
+      const batchSize = Math.max(1, Math.trunc(options.batchSize));
       const pages: NotebookPdfOutlineTextPage[] = [];
 
-      for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
-        const page = await doc.getPage(pageIndex + 1);
-        try {
-          const textContent: unknown = await page.getTextContent();
-          const rawItems = Array.isArray((textContent as { items?: unknown }).items)
-            ? ((textContent as { items: unknown[] }).items as unknown[])
-            : [];
-          const pageItems: NotebookPdfOutlineTextPage["items"] = [];
-          for (
-            let itemIndex = 0;
-            itemIndex < rawItems.length && pageItems.length < AUTO_OUTLINE_MAX_ITEMS_PER_PAGE;
-            itemIndex += 1
-          ) {
-            const candidate = rawItems[itemIndex];
-            if (!isPdfJsTextItemLike(candidate)) {
-              continue;
-            }
-            const text = typeof candidate.str === "string" ? candidate.str : "";
-            if (!text.trim()) {
-              continue;
-            }
-            const transform = parseTextItemTransform(candidate.transform);
-            if (!transform) {
-              continue;
-            }
-            pageItems.push({
-              text,
-              x: transform.x,
-              y: transform.y,
-              fontSize: transform.fontSize,
-              transformScaleY: transform.scaleY,
-            });
-          }
-          if (pageItems.length > 0) {
-            pages.push({ pageIndex, items: pageItems });
-          }
-        } finally {
-          page.cleanup();
+      for (let batchStart = 0; batchStart < maxPages; batchStart += batchSize) {
+        if (options.cancelToken.cancelled) {
+          throw new OutlineGenerationCancelledError();
         }
+        const batchEnd = Math.min(batchStart + batchSize, maxPages);
+
+        for (let pageIndex = batchStart; pageIndex < batchEnd; pageIndex += 1) {
+          if (options.cancelToken.cancelled) {
+            throw new OutlineGenerationCancelledError();
+          }
+          const page = await doc.getPage(pageIndex + 1);
+          try {
+            const textContent: unknown = await page.getTextContent();
+            const rawItems = Array.isArray((textContent as { items?: unknown }).items)
+              ? ((textContent as { items: unknown[] }).items as unknown[])
+              : [];
+            const pageItems: NotebookPdfOutlineTextPage["items"] = [];
+            for (
+              let itemIndex = 0;
+              itemIndex < rawItems.length && pageItems.length < AUTO_OUTLINE_MAX_ITEMS_PER_PAGE;
+              itemIndex += 1
+            ) {
+              const candidate = rawItems[itemIndex];
+              if (!isPdfJsTextItemLike(candidate)) {
+                continue;
+              }
+              const text = typeof candidate.str === "string" ? candidate.str : "";
+              if (!text.trim()) {
+                continue;
+              }
+              const transform = parseTextItemTransform(candidate.transform);
+              if (!transform) {
+                continue;
+              }
+              pageItems.push({
+                text,
+                x: transform.x,
+                y: transform.y,
+                fontSize: transform.fontSize,
+                transformScaleY: transform.scaleY,
+              });
+            }
+            if (pageItems.length > 0) {
+              pages.push({ pageIndex, items: pageItems });
+            }
+          } finally {
+            page.cleanup();
+          }
+        }
+
+        const generatedCount = generateNotebookPdfOutline(pages, {
+          maxPagesToScan: maxPages,
+          maxGeneratedEntries: options.maxGeneratedEntries,
+        }).length;
+        options.onProgress?.({
+          currentPage: batchEnd,
+          totalPages: maxPages,
+          generatedCount,
+        });
+
+        if (generatedCount >= options.maxGeneratedEntries) {
+          break;
+        }
+        await yieldToBrowser();
       }
 
       return pages;
@@ -1439,16 +1507,36 @@ export function NotebookPdfViewer({
     }
 
     setIsGeneratingOutline(true);
+    const cancelToken: OutlineGenerationCancelToken = { cancelled: false };
+    outlineGenerationCancelRef.current = cancelToken;
+    setOutlineGenerationProgress({
+      currentPage: 0,
+      totalPages: load.doc.numPages,
+      generatedCount: 0,
+    });
     setOutlineFormMode(null);
     setOutlineEditState(null);
     setHint(null);
 
     try {
-      const pages = await collectTextPagesForAutoOutline(load.doc);
+      const pages = await collectTextPagesForAutoOutline(load.doc, {
+        maxGeneratedEntries: AUTO_OUTLINE_MAX_GENERATED_ENTRIES,
+        batchSize: AUTO_OUTLINE_SCAN_BATCH_SIZE,
+        cancelToken,
+        onProgress: (progress) => {
+          setOutlineGenerationProgress(progress);
+        },
+      });
+      if (cancelToken.cancelled) {
+        throw new OutlineGenerationCancelledError();
+      }
       const generatedEntries = generateNotebookPdfOutline(pages, {
-        maxPagesToScan: AUTO_OUTLINE_MAX_PAGES_TO_SCAN,
+        maxPagesToScan: load.doc.numPages,
         maxGeneratedEntries: AUTO_OUTLINE_MAX_GENERATED_ENTRIES,
       });
+      if (cancelToken.cancelled) {
+        throw new OutlineGenerationCancelledError();
+      }
 
       if (generatedEntries.length === 0) {
         setHint("No strong headings found.");
@@ -1472,13 +1560,35 @@ export function NotebookPdfViewer({
         changeOutline(nextOutline);
       }
       setOutlineFilter("outline");
-      setHint(`Generated ${generatedOutlineItems.length} title(s). Review and edit as needed.`);
-    } catch {
-      setHint("Unable to generate outline. Existing entries were not changed.");
+      if (generatedOutlineItems.length >= AUTO_OUTLINE_MAX_GENERATED_ENTRIES) {
+        setHint(
+          `Generated ${generatedOutlineItems.length} title(s), then stopped at the ${AUTO_OUTLINE_MAX_GENERATED_ENTRIES}-title limit. Review and edit as needed.`,
+        );
+      } else {
+        setHint(`Generated ${generatedOutlineItems.length} title(s). Review and edit as needed.`);
+      }
+    } catch (error) {
+      if (cancelToken.cancelled || isOutlineGenerationCancelledError(error)) {
+        setHint("Outline generation cancelled. Existing entries were not changed.");
+      } else {
+        setHint("Unable to generate outline. Existing entries were not changed.");
+      }
     } finally {
       setIsGeneratingOutline(false);
+      setOutlineGenerationProgress(null);
+      if (outlineGenerationCancelRef.current === cancelToken) {
+        outlineGenerationCancelRef.current = null;
+      }
     }
   }, [collectTextPagesForAutoOutline, isGeneratingOutline, load]);
+
+  const handleCancelOutlineGeneration = useCallback(() => {
+    const cancelToken = outlineGenerationCancelRef.current;
+    if (!cancelToken) {
+      return;
+    }
+    cancelToken.cancelled = true;
+  }, []);
 
   const handleDeleteOutlineItem = useCallback((itemId: string) => {
     const existingOutline = outlineRef.current ?? [];
@@ -2104,12 +2214,21 @@ export function NotebookPdfViewer({
                     disabled={!canGenerateOutline}
                     title={
                       load.kind === "ready"
-                        ? "Scan visible PDF text and suggest outline titles"
+                        ? "Scan all PDF pages and suggest outline titles"
                         : "Load a PDF first"
                     }
                   >
-                    {isGeneratingOutline ? "Generating…" : "Generate outline"}
+                    {isGeneratingOutline
+                      ? outlineGenerationProgress
+                        ? `Scanning ${outlineGenerationProgress.currentPage} / ${outlineGenerationProgress.totalPages}…`
+                        : "Generating…"
+                      : "Generate outline"}
                   </button>
+                  {isGeneratingOutline ? (
+                    <button type="button" onClick={handleCancelOutlineGeneration}>
+                      Cancel
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={handleAddCustomOutline}
@@ -2126,6 +2245,11 @@ export function NotebookPdfViewer({
                   >
                     Add note
                   </button>
+                </div>
+              ) : null}
+              {isGeneratingOutline && outlineGenerationProgress ? (
+                <div className="px-1 text-[11px] text-slate-500" role="status">
+                  {`Found ${outlineGenerationProgress.generatedCount} title(s) so far.`}
                 </div>
               ) : null}
               {outlineFormMode ? (
