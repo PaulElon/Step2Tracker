@@ -18,14 +18,15 @@ export interface NotebookPdfTocOutlineEntry {
 export interface NotebookPdfTocGenerationOptions {
   totalPages: number;
   maxGeneratedEntries: number;
+  textPages?: NotebookPdfOutlineTextPage[];
 }
 
 export interface NotebookPdfTocGenerationResult {
   entries: NotebookPdfTocOutlineEntry[];
   isStrong: boolean;
-  mappingStrategy: "naive" | "offset";
+  mappingMode: "direct" | "offset" | "approximate";
   pageNumberOffset: number;
-  approximatePageMapping: boolean;
+  warning?: string;
 }
 
 interface TocLineRecord extends NotebookPdfTocLineInput {
@@ -50,6 +51,13 @@ const MAX_TOC_LINE_LENGTH = 150;
 const MAX_TOC_WORDS = 22;
 const MIN_STRONG_TOC_ENTRIES = 3;
 const INDENT_CHILD_THRESHOLD = 14;
+const MAX_SAFE_OFFSET = 120;
+const MIN_TITLE_MATCH_LENGTH = 4;
+
+interface OffsetInferenceResult {
+  offset: number;
+  evidenceCount: number;
+}
 
 function normalizeSpace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
@@ -128,26 +136,124 @@ function parseTocLine(text: string): { title: string; printedPageNumber: number 
   return null;
 }
 
-function inferPageNumberOffset(candidates: ParsedTocCandidate[]): number {
+function inferPageNumberOffset(candidates: ParsedTocCandidate[]): OffsetInferenceResult {
   // Use low printed-page anchors when present; this catches front-matter offsets while
   // staying deterministic and conservative.
   const anchorOffsets = candidates
     .filter((candidate) => candidate.printedPageNumber <= 40 && candidate.sourcePageIndex <= 80)
     .map((candidate) => candidate.sourcePageIndex - (candidate.printedPageNumber - 1))
-    .filter((offset) => Number.isInteger(offset) && Math.abs(offset) <= 80);
+    .filter((offset) => Number.isInteger(offset) && Math.abs(offset) <= MAX_SAFE_OFFSET);
 
   if (anchorOffsets.length < 2) {
-    return 0;
+    return { offset: 0, evidenceCount: anchorOffsets.length };
   }
 
   anchorOffsets.sort((left, right) => left - right);
   const middle = Math.floor(anchorOffsets.length / 2);
   if (anchorOffsets.length % 2 === 1) {
-    return anchorOffsets[middle] ?? 0;
+    return { offset: anchorOffsets[middle] ?? 0, evidenceCount: anchorOffsets.length };
   }
   const left = anchorOffsets[middle - 1] ?? 0;
   const right = anchorOffsets[middle] ?? 0;
-  return Math.round((left + right) / 2);
+  return { offset: Math.round((left + right) / 2), evidenceCount: anchorOffsets.length };
+}
+
+function normalizeMatchKey(value: string): string {
+  return normalizeTitleKey(value)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function titlesLikelyMatch(left: string, right: string): boolean {
+  if (!left || !right) {
+    return false;
+  }
+  if (left === right) {
+    return true;
+  }
+  const shorter = left.length <= right.length ? left : right;
+  const longer = left.length > right.length ? left : right;
+  return shorter.length >= MIN_TITLE_MATCH_LENGTH && longer.startsWith(shorter);
+}
+
+function inferOffsetFromTitleMatches(
+  candidates: ParsedTocCandidate[],
+  textPages: NotebookPdfOutlineTextPage[],
+): OffsetInferenceResult {
+  if (!Array.isArray(textPages) || textPages.length === 0 || candidates.length === 0) {
+    return { offset: 0, evidenceCount: 0 };
+  }
+
+  const tocSourcePages = new Set<number>(candidates.map((candidate) => candidate.sourcePageIndex));
+  const lines = collectNotebookPdfTocLinesFromTextPages(textPages)
+    .filter((line) => !tocSourcePages.has(line.pageIndex))
+    .map((line) => ({
+      pageIndex: line.pageIndex,
+      key: normalizeMatchKey(cleanTocTitle(line.text)),
+    }))
+    .filter((line) => line.key.length >= MIN_TITLE_MATCH_LENGTH);
+
+  if (lines.length === 0) {
+    return { offset: 0, evidenceCount: 0 };
+  }
+
+  const offsetVotes = new Map<number, number>();
+  let evidenceCount = 0;
+
+  for (const candidate of candidates) {
+    const titleKey = normalizeMatchKey(candidate.title);
+    if (titleKey.length < MIN_TITLE_MATCH_LENGTH) {
+      continue;
+    }
+    const printedTargetPageIndex = candidate.printedPageNumber - 1;
+    let bestOffset: number | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const line of lines) {
+      if (!titlesLikelyMatch(titleKey, line.key)) {
+        continue;
+      }
+      const offset = line.pageIndex - printedTargetPageIndex;
+      if (!Number.isInteger(offset) || Math.abs(offset) > MAX_SAFE_OFFSET) {
+        continue;
+      }
+      const distance = Math.abs(offset);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestOffset = offset;
+      }
+    }
+    if (bestOffset === null) {
+      continue;
+    }
+    evidenceCount += 1;
+    offsetVotes.set(bestOffset, (offsetVotes.get(bestOffset) ?? 0) + 1);
+  }
+
+  if (evidenceCount < 2 || offsetVotes.size === 0) {
+    return { offset: 0, evidenceCount };
+  }
+
+  let winningOffset = 0;
+  let winningVotes = -1;
+  for (const [offset, votes] of offsetVotes.entries()) {
+    if (votes > winningVotes) {
+      winningOffset = offset;
+      winningVotes = votes;
+      continue;
+    }
+    if (votes === winningVotes) {
+      if (Math.abs(offset) < Math.abs(winningOffset)) {
+        winningOffset = offset;
+        continue;
+      }
+      if (Math.abs(offset) === Math.abs(winningOffset) && offset < winningOffset) {
+        winningOffset = offset;
+      }
+    }
+  }
+
+  return { offset: winningOffset, evidenceCount: winningVotes };
 }
 
 function inferDepthHint(candidate: ParsedTocCandidate, minXByPage: Map<number, number>): number {
@@ -301,9 +407,9 @@ export function generateNotebookPdfOutlineFromTocLines(
     return {
       entries: [],
       isStrong: false,
-      mappingStrategy: "naive",
+      mappingMode: "approximate",
       pageNumberOffset: 0,
-      approximatePageMapping: true,
+      warning: "Unable to map printed page numbers from the table of contents.",
     };
   }
 
@@ -318,11 +424,24 @@ export function generateNotebookPdfOutlineFromTocLines(
     }
   }
 
-  const offset = inferPageNumberOffset(parsedCandidates);
-  const mappingStrategy: "naive" | "offset" = offset === 0 ? "naive" : "offset";
+  const titleMatchOffset = inferOffsetFromTitleMatches(parsedCandidates, options.textPages ?? []);
+  const anchorOffset = inferPageNumberOffset(parsedCandidates);
+  const hasConfidentTitleOffset = titleMatchOffset.evidenceCount >= 2;
+  const hasConfidentAnchorOffset = anchorOffset.evidenceCount >= 2;
+  const resolvedOffset = hasConfidentTitleOffset
+    ? titleMatchOffset.offset
+    : hasConfidentAnchorOffset
+      ? anchorOffset.offset
+      : 0;
+  const mappingMode: "direct" | "offset" | "approximate" =
+    hasConfidentTitleOffset || hasConfidentAnchorOffset
+      ? resolvedOffset === 0
+        ? "direct"
+        : "offset"
+      : "approximate";
 
   const mappedCandidates: MappedTocCandidate[] = parsedCandidates.map((candidate) => {
-    const mapped = candidate.printedPageNumber - 1 + offset;
+    const mapped = candidate.printedPageNumber - 1 + resolvedOffset;
     return {
       ...candidate,
       depthHint: inferDepthHint(candidate, minXByPage),
@@ -331,12 +450,16 @@ export function generateNotebookPdfOutlineFromTocLines(
   });
 
   const entries = buildHierarchy(mappedCandidates, maxGeneratedEntries);
+  const warning =
+    mappingMode === "approximate"
+      ? "Printed TOC page numbers could not be calibrated exactly; page mapping is approximate."
+      : undefined;
   return {
     entries,
     isStrong: isStrongTocResult(entries, parsedCandidates.length),
-    mappingStrategy,
-    pageNumberOffset: offset,
-    approximatePageMapping: true,
+    mappingMode,
+    pageNumberOffset: resolvedOffset,
+    warning,
   };
 }
 

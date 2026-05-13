@@ -21,7 +21,8 @@ test("generateNotebookPdfOutlineFromTocLines builds hierarchy from printed TOC r
   );
 
   assert.equal(result.isStrong, true);
-  assert.equal(result.mappingStrategy, "naive");
+  assert.equal(result.mappingMode, "approximate");
+  assert.equal(typeof result.warning, "string");
   assert.deepEqual(result.entries, [
     {
       title: "Surgery",
@@ -57,6 +58,8 @@ test("generateNotebookPdfOutlineFromTocLines ignores non-TOC text, duplicates, a
   );
 
   assert.equal(result.isStrong, false);
+  assert.equal(result.mappingMode, "approximate");
+  assert.equal(typeof result.warning, "string");
   assert.deepEqual(result.entries, [
     {
       title: "Surgery",
@@ -89,8 +92,9 @@ test("generateNotebookPdfOutlineFromTocLines applies deterministic safe page map
   });
 
   assert.deepEqual(first, second);
-  assert.equal(first.mappingStrategy, "offset");
+  assert.equal(first.mappingMode, "offset");
   assert.equal(first.pageNumberOffset, 10);
+  assert.equal(first.warning, undefined);
   assert.deepEqual(first.entries, [
     {
       title: "Preface",
@@ -112,5 +116,41 @@ test("generateNotebookPdfOutlineFromTocLines applies deterministic safe page map
       pageIndex: 39,
       depth: 0,
     },
+  ]);
+});
+
+test("generateNotebookPdfOutlineFromTocLines infers direct mapping from matching scanned headings", () => {
+  const result = generateNotebookPdfOutlineFromTocLines(
+    [
+      { text: "Table of Contents", pageIndex: 1, x: 20 },
+      { text: "Introduction .... p.5", pageIndex: 1, x: 20 },
+      { text: "Methods .... p.6", pageIndex: 1, x: 20 },
+    ],
+    {
+      totalPages: 20,
+      maxGeneratedEntries: 100,
+      textPages: [
+        {
+          pageIndex: 1,
+          items: [{ text: "Introduction .... p.5", x: 20, y: 760, fontSize: 12 }],
+        },
+        {
+          pageIndex: 4,
+          items: [{ text: "Introduction", x: 40, y: 760, fontSize: 18 }],
+        },
+        {
+          pageIndex: 5,
+          items: [{ text: "Methods", x: 40, y: 760, fontSize: 18 }],
+        },
+      ],
+    },
+  );
+
+  assert.equal(result.mappingMode, "direct");
+  assert.equal(result.pageNumberOffset, 0);
+  assert.equal(result.warning, undefined);
+  assert.deepEqual(result.entries, [
+    { title: "Introduction", pageIndex: 4, depth: 0 },
+    { title: "Methods", pageIndex: 5, depth: 0 },
   ]);
 });

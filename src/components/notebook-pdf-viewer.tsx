@@ -107,6 +107,17 @@ interface OutlineGenerationCancelToken {
   cancelled: boolean;
 }
 
+type GeneratedOutlineSource = "table-of-contents" | "page-headings";
+
+interface PendingGeneratedOutlineReview {
+  entries: NotebookPdfTocOutlineEntry[];
+  source: GeneratedOutlineSource;
+  generatedCount: number;
+  reachedLimit: boolean;
+  mappingMode?: "direct" | "offset" | "approximate";
+  mappingWarning?: string;
+}
+
 interface PdfJsTextItemLike {
   str?: unknown;
   transform?: unknown;
@@ -526,6 +537,10 @@ function countOutlineItems(items: PdfOutlineItem[], predicate?: (item: PdfOutlin
   }, 0);
 }
 
+function countGeneratedOutlineEntries(items: NotebookPdfTocOutlineEntry[]): number {
+  return items.reduce((total, item) => total + 1 + countGeneratedOutlineEntries(item.children ?? []), 0);
+}
+
 function outlineHasSource(items: PdfOutlineItem[], source: PdfOutlineItem["source"]): boolean {
   return items.some(
     (item) => item.source === source || outlineHasSource(item.children ?? [], source),
@@ -892,6 +907,9 @@ export function NotebookPdfViewer({
   const [outlineEditState, setOutlineEditState] = useState<OutlineEditState | null>(null);
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
   const [outlineGenerationProgress, setOutlineGenerationProgress] = useState<OutlineGenerationProgress | null>(null);
+  const [pendingGeneratedOutlineReview, setPendingGeneratedOutlineReview] = useState<PendingGeneratedOutlineReview | null>(
+    null,
+  );
   const [outlineStatus, setOutlineStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [outlineError, setOutlineError] = useState<string | null>(null);
   const [highlightMode, setHighlightMode] = useState(false);
@@ -992,6 +1010,7 @@ export function NotebookPdfViewer({
     outlineGenerationCancelRef.current = { cancelled: true };
     setIsGeneratingOutline(false);
     setOutlineGenerationProgress(null);
+    setPendingGeneratedOutlineReview(null);
     setOutlineStatus("idle");
     setOutlineError(null);
     pageInfosRef.current.clear();
@@ -1510,28 +1529,8 @@ export function NotebookPdfViewer({
     if (load.kind !== "ready" || isGeneratingOutline) {
       return;
     }
-    const changeOutline = onChangeOutlineRef.current;
-    if (!changeOutline) {
+    if (!onChangeOutlineRef.current) {
       return;
-    }
-
-    const existingOutline = outlineRef.current ?? [];
-    const existingManualOutlineCount = countOutlineItems(
-      existingOutline,
-      (item) => item.source === "manual" && isOutlineEntry(item),
-    );
-
-    if (
-      existingManualOutlineCount > 0 &&
-      typeof window !== "undefined" &&
-      typeof window.confirm === "function"
-    ) {
-      const shouldReplace = window.confirm(
-        "Replace existing manual outline titles with generated titles? Notes will be kept.",
-      );
-      if (!shouldReplace) {
-        return;
-      }
     }
 
     setIsGeneratingOutline(true);
@@ -1544,6 +1543,7 @@ export function NotebookPdfViewer({
     });
     setOutlineFormMode(null);
     setOutlineEditState(null);
+    setPendingGeneratedOutlineReview(null);
     setHint(null);
 
     try {
@@ -1563,6 +1563,7 @@ export function NotebookPdfViewer({
         {
           totalPages: load.doc.numPages,
           maxGeneratedEntries: AUTO_OUTLINE_MAX_GENERATED_ENTRIES,
+          textPages: pages,
         },
       );
       const fallbackEntries = generateNotebookPdfOutline(pages, {
@@ -1582,36 +1583,37 @@ export function NotebookPdfViewer({
           }));
 
       if (generatedEntries.length === 0) {
+        setPendingGeneratedOutlineReview(null);
         setHint("No strong headings found.");
         return;
       }
 
-      const now = new Date().toISOString();
-      const generatedOutlineItems = buildGeneratedManualOutlineItems(generatedEntries, now);
-      const generatedCount = countOutlineItems(generatedOutlineItems, isOutlineEntry);
-
-      const preservedOutline = removeManualOutlineTitles(existingOutline);
-      const nextOutline = [...preservedOutline, ...generatedOutlineItems];
-      if (getOutlineFingerprint(existingOutline) !== getOutlineFingerprint(nextOutline)) {
-        changeOutline(nextOutline);
-      }
+      const generatedCount = countGeneratedOutlineEntries(generatedEntries);
+      const mappingWarning = usedTocEntries ? tocResult.warning : undefined;
+      setPendingGeneratedOutlineReview({
+        entries: generatedEntries,
+        source: usedTocEntries ? "table-of-contents" : "page-headings",
+        generatedCount,
+        reachedLimit: generatedCount >= AUTO_OUTLINE_MAX_GENERATED_ENTRIES,
+        mappingMode: usedTocEntries ? tocResult.mappingMode : undefined,
+        mappingWarning,
+      });
       setOutlineFilter("outline");
-      const mappingNote =
-        usedTocEntries && tocResult.approximatePageMapping ? " Page number mapping is best-effort." : "";
       if (generatedCount >= AUTO_OUTLINE_MAX_GENERATED_ENTRIES) {
         setHint(
           usedTocEntries
-            ? `Generated ${generatedCount} title(s) from table of contents, then stopped at the ${AUTO_OUTLINE_MAX_GENERATED_ENTRIES}-title limit. Review and edit as needed.${mappingNote}`
+            ? `Generated ${generatedCount} title(s) from table of contents, then stopped at the ${AUTO_OUTLINE_MAX_GENERATED_ENTRIES}-title limit. Review before inserting.`
             : `Generated ${generatedCount} title(s), then stopped at the ${AUTO_OUTLINE_MAX_GENERATED_ENTRIES}-title limit. Review and edit as needed.`,
         );
       } else {
         setHint(
           usedTocEntries
-            ? `Generated ${generatedCount} title(s) from table of contents. Review and edit as needed.${mappingNote}`
-            : `Generated ${generatedCount} title(s). Review and edit as needed.`,
+            ? `Generated ${generatedCount} title(s) from table of contents. Review before inserting.`
+            : `Generated ${generatedCount} title(s) from page headings. Review before inserting.`,
         );
       }
     } catch (error) {
+      setPendingGeneratedOutlineReview(null);
       if (cancelToken.cancelled || isOutlineGenerationCancelledError(error)) {
         setHint("Outline generation cancelled. Existing entries were not changed.");
       } else {
@@ -1633,6 +1635,40 @@ export function NotebookPdfViewer({
     }
     cancelToken.cancelled = true;
   }, []);
+
+  const handleInsertGeneratedOutlineReview = useCallback(() => {
+    const changeOutline = onChangeOutlineRef.current;
+    if (!changeOutline || !pendingGeneratedOutlineReview) {
+      return;
+    }
+    const existingOutline = outlineRef.current ?? [];
+    const existingManualOutlineCount = countOutlineItems(
+      existingOutline,
+      (item) => item.source === "manual" && isOutlineEntry(item),
+    );
+    const now = new Date().toISOString();
+    const generatedOutlineItems = buildGeneratedManualOutlineItems(pendingGeneratedOutlineReview.entries, now);
+    const generatedCount = countOutlineItems(generatedOutlineItems, isOutlineEntry);
+    const preservedOutline = removeManualOutlineTitles(existingOutline);
+    const nextOutline = [...preservedOutline, ...generatedOutlineItems];
+    if (getOutlineFingerprint(existingOutline) !== getOutlineFingerprint(nextOutline)) {
+      changeOutline(nextOutline);
+    }
+    setPendingGeneratedOutlineReview(null);
+    setOutlineFilter("outline");
+    const sourceLabel =
+      pendingGeneratedOutlineReview.source === "table-of-contents" ? "table of contents" : "page headings";
+    const actionLabel = existingManualOutlineCount > 0 ? "Replaced" : "Inserted";
+    setHint(`${actionLabel} ${generatedCount} generated title(s) from ${sourceLabel}. Notes and embedded outline were kept.`);
+  }, [pendingGeneratedOutlineReview]);
+
+  const handleDiscardGeneratedOutlineReview = useCallback(() => {
+    if (!pendingGeneratedOutlineReview) {
+      return;
+    }
+    setPendingGeneratedOutlineReview(null);
+    setHint("Discarded generated titles. Existing entries were not changed.");
+  }, [pendingGeneratedOutlineReview]);
 
   const handleDeleteOutlineItem = useCallback((itemId: string) => {
     const existingOutline = outlineRef.current ?? [];
@@ -2028,6 +2064,40 @@ export function NotebookPdfViewer({
       );
     });
 
+  const renderGeneratedOutlinePreviewItems = (
+    items: NotebookPdfTocOutlineEntry[],
+    fallbackDepth = 0,
+  ) =>
+    items.map((item, index) => {
+      const displayDepth = Math.max(
+        0,
+        Math.min(item.depth ?? fallbackDepth, OUTLINE_MAX_DEPTH),
+      );
+      const previewId = `generated-${displayDepth}-${index}-${item.pageIndex}-${item.title}`;
+      return (
+        <li key={previewId} className="notebook-pdf-outline-list-item">
+          <div className="notebook-pdf-outline-row" style={{ paddingLeft: `${displayDepth * 0.7}rem` }}>
+            <button
+              type="button"
+              className="notebook-pdf-outline-item is-outline is-manual"
+              onClick={() => goToPage(item.pageIndex + 1)}
+              title={`${item.title} — page ${item.pageIndex + 1}`}
+            >
+              <span className="notebook-pdf-outline-content">
+                <span className="notebook-pdf-outline-title">{item.title}</span>
+              </span>
+              <span className="notebook-pdf-outline-page">{item.pageIndex + 1}</span>
+            </button>
+          </div>
+          {item.children && item.children.length > 0 ? (
+            <ol className="notebook-pdf-outline-list">
+              {renderGeneratedOutlinePreviewItems(item.children, displayDepth + 1)}
+            </ol>
+          ) : null}
+        </li>
+      );
+    });
+
   return (
     <div
       ref={rootRef}
@@ -2368,6 +2438,49 @@ export function NotebookPdfViewer({
               {outlineStatus === "error" && outlineFilter !== "notes" && outlineError ? (
                 <div className="notebook-pdf-outline-empty text-rose-500">{outlineError}</div>
               ) : null}
+              {outlineFilter !== "notes" && pendingGeneratedOutlineReview ? (
+                <section className="notebook-pdf-outline-section" aria-label="Generated outline review">
+                  <div className="notebook-pdf-outline-section-label">
+                    <span>Review</span>
+                    <span>{pendingGeneratedOutlineReview.generatedCount}</span>
+                  </div>
+                  <div className="px-1 pb-2 text-[11px] text-slate-500">
+                    <div>
+                      Source:{" "}
+                      {pendingGeneratedOutlineReview.source === "table-of-contents"
+                        ? "Table of contents"
+                        : "Page headings"}
+                    </div>
+                    {pendingGeneratedOutlineReview.mappingMode ? (
+                      <div>
+                        Mapping:{" "}
+                        {pendingGeneratedOutlineReview.mappingMode === "direct"
+                          ? "Direct"
+                          : pendingGeneratedOutlineReview.mappingMode === "offset"
+                            ? "Offset"
+                            : "Approximate"}
+                      </div>
+                    ) : null}
+                    {pendingGeneratedOutlineReview.reachedLimit ? (
+                      <div>Stopped at the title limit; preview is capped.</div>
+                    ) : null}
+                    {pendingGeneratedOutlineReview.mappingWarning ? (
+                      <div className="text-amber-600">{pendingGeneratedOutlineReview.mappingWarning}</div>
+                    ) : null}
+                  </div>
+                  <div className="notebook-pdf-outline-actions pb-2">
+                    <button type="button" onClick={handleInsertGeneratedOutlineReview}>
+                      Insert / Replace generated titles
+                    </button>
+                    <button type="button" onClick={handleDiscardGeneratedOutlineReview}>
+                      Discard
+                    </button>
+                  </div>
+                  <ol className="notebook-pdf-outline-list">
+                    {renderGeneratedOutlinePreviewItems(pendingGeneratedOutlineReview.entries)}
+                  </ol>
+                </section>
+              ) : null}
               {outlineFilter !== "notes" && embeddedOutlineItems.length > 0 ? (
                 <section className="notebook-pdf-outline-section" aria-label="Embedded PDF outline">
                   <div className="notebook-pdf-outline-section-label">
@@ -2401,7 +2514,10 @@ export function NotebookPdfViewer({
                   </ol>
                 </section>
               ) : null}
-              {outlineStatus !== "loading" && outlineStatus !== "error" && filteredOutlineCount === 0 ? (
+              {outlineStatus !== "loading" &&
+              outlineStatus !== "error" &&
+              filteredOutlineCount === 0 &&
+              !(outlineFilter !== "notes" && pendingGeneratedOutlineReview) ? (
                 <div className="notebook-pdf-outline-empty">
                   {outlineFilter === "notes"
                     ? "No notes yet."
