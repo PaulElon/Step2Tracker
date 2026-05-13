@@ -7,7 +7,9 @@ import {
   type NotebookPdfOutlineTextPage,
 } from "../lib/notebook-pdf-outline";
 import {
+  capNotebookPdfTocPreviewEntries,
   collectNotebookPdfTocLinesFromTextPages,
+  countNotebookPdfTocEntries,
   generateNotebookPdfOutlineFromTocLines,
   type NotebookPdfTocOutlineEntry,
 } from "../lib/notebook-pdf-toc";
@@ -37,6 +39,7 @@ const EMBEDDED_NOTE_TITLE_PREFIX = /^Note:\s*/i;
 const AUTO_OUTLINE_SCAN_BATCH_SIZE = 15;
 const AUTO_OUTLINE_MAX_GENERATED_ENTRIES = 750;
 const AUTO_OUTLINE_MAX_ITEMS_PER_PAGE = 2500;
+const GENERATED_OUTLINE_PREVIEW_MAX_ENTRIES = 120;
 
 // Vertical scroll virtualization: only render pages within this buffer around the current page.
 const VIRT_BUFFER_ABOVE = 2;
@@ -537,10 +540,6 @@ function countOutlineItems(items: PdfOutlineItem[], predicate?: (item: PdfOutlin
   }, 0);
 }
 
-function countGeneratedOutlineEntries(items: NotebookPdfTocOutlineEntry[]): number {
-  return items.reduce((total, item) => total + 1 + countGeneratedOutlineEntries(item.children ?? []), 0);
-}
-
 function outlineHasSource(items: PdfOutlineItem[], source: PdfOutlineItem["source"]): boolean {
   return items.some(
     (item) => item.source === source || outlineHasSource(item.children ?? [], source),
@@ -994,6 +993,12 @@ export function NotebookPdfViewer({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (load.kind !== "ready") {
+      setPendingGeneratedOutlineReview(null);
+    }
+  }, [load.kind]);
 
   // Document load.
   useEffect(() => {
@@ -1532,6 +1537,18 @@ export function NotebookPdfViewer({
     if (!onChangeOutlineRef.current) {
       return;
     }
+    if (pendingGeneratedOutlineReview) {
+      let shouldReplacePendingReview = true;
+      if (typeof window !== "undefined" && typeof window.confirm === "function") {
+        shouldReplacePendingReview = window.confirm(
+          "A generated outline review is already pending. Start a new scan and replace that pending review? Existing saved outline entries will not change.",
+        );
+      }
+      if (!shouldReplacePendingReview) {
+        setHint("Kept the existing generated review. Insert or discard it before starting another scan.");
+        return;
+      }
+    }
 
     setIsGeneratingOutline(true);
     const cancelToken: OutlineGenerationCancelToken = { cancelled: false };
@@ -1588,7 +1605,7 @@ export function NotebookPdfViewer({
         return;
       }
 
-      const generatedCount = countGeneratedOutlineEntries(generatedEntries);
+      const generatedCount = countNotebookPdfTocEntries(generatedEntries);
       const mappingWarning = usedTocEntries ? tocResult.warning : undefined;
       setPendingGeneratedOutlineReview({
         entries: generatedEntries,
@@ -1626,7 +1643,7 @@ export function NotebookPdfViewer({
         outlineGenerationCancelRef.current = null;
       }
     }
-  }, [collectTextPagesForAutoOutline, isGeneratingOutline, load]);
+  }, [collectTextPagesForAutoOutline, isGeneratingOutline, load, pendingGeneratedOutlineReview]);
 
   const handleCancelOutlineGeneration = useCallback(() => {
     const cancelToken = outlineGenerationCancelRef.current;
@@ -1667,7 +1684,7 @@ export function NotebookPdfViewer({
       return;
     }
     setPendingGeneratedOutlineReview(null);
-    setHint("Discarded generated titles. Existing entries were not changed.");
+    setHint("Discarded the generated review only. Current outline entries were not changed.");
   }, [pendingGeneratedOutlineReview]);
 
   const handleDeleteOutlineItem = useCallback((itemId: string) => {
@@ -1867,6 +1884,10 @@ export function NotebookPdfViewer({
   const canZoomOut = zoomIndex > 0;
   const canZoomIn = zoomIndex < ZOOM_LEVELS.length - 1;
   const canGenerateOutline = Boolean(onChangeOutline && load.kind === "ready" && !isGeneratingOutline);
+  const canInsertGeneratedOutlineReview = Boolean(
+    onChangeOutline && pendingGeneratedOutlineReview && pendingGeneratedOutlineReview.generatedCount > 0,
+  );
+  const canDiscardGeneratedOutlineReview = Boolean(pendingGeneratedOutlineReview);
   const canAddSidebarEntry = Boolean(onChangeOutline && load.kind === "ready");
   const totalOutlineCount = countOutlineItems(outlineItems, isOutlineEntry);
   const totalNoteCount = countOutlineItems(outlineItems, isNoteEntry);
@@ -1888,6 +1909,14 @@ export function NotebookPdfViewer({
   const sortedNoteItems = sortOutlineItemsByPageAndCreatedAt(noteItems);
   const embeddedOutlineCount = countOutlineItems(embeddedOutlineItems, isOutlineEntry);
   const manualOutlineCount = countOutlineItems(manualOutlineItems, isOutlineEntry);
+  const generatedPreview = useMemo(
+    () =>
+      capNotebookPdfTocPreviewEntries(
+        pendingGeneratedOutlineReview?.entries ?? [],
+        GENERATED_OUTLINE_PREVIEW_MAX_ENTRIES,
+      ),
+    [pendingGeneratedOutlineReview],
+  );
 
   const toolbarButtonClass = "notebook-pdf-toolbar-button";
   const activeToolbarButtonClass = "notebook-pdf-toolbar-button is-active";
@@ -2326,9 +2355,12 @@ export function NotebookPdfViewer({
                       void handleGenerateOutline();
                     }}
                     disabled={!canGenerateOutline}
+                    aria-label="Generate outline from the current PDF"
                     title={
                       load.kind === "ready"
-                        ? "Scan all PDF pages and suggest outline titles"
+                        ? pendingGeneratedOutlineReview
+                          ? "Start a new scan and replace the pending generated review"
+                          : "Scan all PDF pages and suggest outline titles"
                         : "Load a PDF first"
                     }
                   >
@@ -2339,7 +2371,12 @@ export function NotebookPdfViewer({
                       : "Generate outline"}
                   </button>
                   {isGeneratingOutline ? (
-                    <button type="button" onClick={handleCancelOutlineGeneration}>
+                    <button
+                      type="button"
+                      onClick={handleCancelOutlineGeneration}
+                      aria-label="Cancel outline generation"
+                      title="Cancel the current outline scan"
+                    >
                       Cancel
                     </button>
                   ) : null}
@@ -2442,9 +2479,10 @@ export function NotebookPdfViewer({
                 <section className="notebook-pdf-outline-section" aria-label="Generated outline review">
                   <div className="notebook-pdf-outline-section-label">
                     <span>Review</span>
-                    <span>{pendingGeneratedOutlineReview.generatedCount}</span>
+                    <span>{generatedPreview.totalCount}</span>
                   </div>
                   <div className="px-1 pb-2 text-[11px] text-slate-500">
+                    <div>Generated titles: {pendingGeneratedOutlineReview.generatedCount}</div>
                     <div>
                       Source:{" "}
                       {pendingGeneratedOutlineReview.source === "table-of-contents"
@@ -2467,17 +2505,35 @@ export function NotebookPdfViewer({
                     {pendingGeneratedOutlineReview.mappingWarning ? (
                       <div className="text-amber-600">{pendingGeneratedOutlineReview.mappingWarning}</div>
                     ) : null}
+                    {generatedPreview.remainingCount > 0 ? (
+                      <div>
+                        Preview shows first {generatedPreview.shownCount} title(s). +{generatedPreview.remainingCount} more.
+                      </div>
+                    ) : null}
+                    <div>No outline changes are saved until you click Insert / Replace generated titles.</div>
                   </div>
                   <div className="notebook-pdf-outline-actions pb-2">
-                    <button type="button" onClick={handleInsertGeneratedOutlineReview}>
+                    <button
+                      type="button"
+                      onClick={handleInsertGeneratedOutlineReview}
+                      disabled={!canInsertGeneratedOutlineReview}
+                      aria-label="Insert generated titles into the outline"
+                      title="Apply the generated review to the current outline"
+                    >
                       Insert / Replace generated titles
                     </button>
-                    <button type="button" onClick={handleDiscardGeneratedOutlineReview}>
-                      Discard
+                    <button
+                      type="button"
+                      onClick={handleDiscardGeneratedOutlineReview}
+                      disabled={!canDiscardGeneratedOutlineReview}
+                      aria-label="Discard generated outline review"
+                      title="Discard this generated review only; current outline stays unchanged"
+                    >
+                      Discard generated review
                     </button>
                   </div>
                   <ol className="notebook-pdf-outline-list">
-                    {renderGeneratedOutlinePreviewItems(pendingGeneratedOutlineReview.entries)}
+                    {renderGeneratedOutlinePreviewItems(generatedPreview.entries)}
                   </ol>
                 </section>
               ) : null}
