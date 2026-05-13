@@ -95,10 +95,21 @@ test("validateNotebookImportFile accepts .html", async () => {
   assert.deepEqual(result, { ok: true });
 });
 
-test("validateNotebookImportFile rejects .docx by extension", async () => {
-  const result = await validateNotebookImportFile(makeTextFile("report.docx", "fake content"));
+test("validateNotebookImportFile accepts .docx when bytes are a docx/zip container", async () => {
+  const result = await validateNotebookImportFile(makeFile("report.docx", [0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]));
+  assert.deepEqual(result, { ok: true });
+});
+
+test("validateNotebookImportFile rejects invalid .docx bytes", async () => {
+  const result = await validateNotebookImportFile(makeTextFile("report.docx", "not a zip container"));
   assert.equal(result.ok, false);
-  assert.ok((result as { ok: false; reason: string }).reason.includes("Word documents"));
+  assert.ok((result as { ok: false; reason: string }).reason.includes("invalid"));
+});
+
+test("validateNotebookImportFile rejects legacy .doc with a clear message", async () => {
+  const result = await validateNotebookImportFile(makeTextFile("report.doc", "legacy"));
+  assert.equal(result.ok, false);
+  assert.ok((result as { ok: false; reason: string }).reason.includes("convert"));
 });
 
 test("validateNotebookImportFile rejects .pdf by extension", async () => {

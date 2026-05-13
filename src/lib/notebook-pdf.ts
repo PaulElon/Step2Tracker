@@ -52,6 +52,13 @@ export async function exportNotebookZipBytes(suggestedFileName: string, bytes: U
   });
 }
 
+export async function exportNotebookDocxBytes(suggestedFileName: string, bytes: Uint8Array): Promise<string> {
+  return core.invoke<string>("export_notebook_docx", {
+    suggestedFileName,
+    dataB64: bytesToBase64(bytes),
+  });
+}
+
 export async function purgeOrphanedNotebookPdfs(
   documents: NotebookDocument[],
   dryRun: boolean,

@@ -1,6 +1,6 @@
 import type { NotebookDocument, NotebookPage } from "../types/models";
 
-export type NotebookExportFormat = "txt" | "html" | "markdown" | "pdf";
+export type NotebookExportFormat = "txt" | "html" | "markdown" | "pdf" | "docx";
 
 export interface NotebookImportedPageDraft {
   documentTitle: string;
@@ -243,7 +243,7 @@ export function createNotebookHtmlExport(documentTitle: string, pageTitle: strin
   ].join("\n");
 }
 
-const SUPPORTED_IMPORT_EXTENSIONS = new Set([".txt", ".md", ".markdown", ".html", ".htm"]);
+const SUPPORTED_TEXT_IMPORT_EXTENSIONS = new Set([".txt", ".md", ".markdown", ".html", ".htm"]);
 
 function getFileExtension(fileName: string): string {
   const normalized = fileName.trim().toLowerCase();
@@ -256,10 +256,22 @@ export type NotebookImportValidationResult = { ok: true } | { ok: false; reason:
 export async function validateNotebookImportFile(file: File): Promise<NotebookImportValidationResult> {
   const ext = getFileExtension(file.name);
 
-  if (ext === ".doc" || ext === ".docx") {
-    return { ok: false, reason: "Word documents are not supported. Please export the file as PDF or plain text before importing." };
+  if (ext === ".doc") {
+    return { ok: false, reason: "Legacy .doc is not supported. Please convert the file to .docx first." };
   }
-  if (!SUPPORTED_IMPORT_EXTENSIONS.has(ext)) {
+
+  if (ext === ".docx") {
+    const headerBytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+    if (headerBytes[0] !== 0x50 || headerBytes[1] !== 0x4b || headerBytes[2] !== 0x03 || headerBytes[3] !== 0x04) {
+      return { ok: false, reason: "This .docx file appears invalid or corrupted." };
+    }
+    return { ok: true };
+  }
+  if (ext === ".pdf") {
+    return { ok: false, reason: "PDF imports are handled separately. Please use a .txt, .md, .html, or .docx file here." };
+  }
+
+  if (!SUPPORTED_TEXT_IMPORT_EXTENSIONS.has(ext)) {
     return { ok: false, reason: "Unsupported notebook import file. Please choose a TXT, Markdown, or HTML file." };
   }
 
