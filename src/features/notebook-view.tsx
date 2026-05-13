@@ -1284,7 +1284,7 @@ export function NotebookView() {
       const savedPath = await exportNotebookDocxBytes(fileName, bytes);
       setStatus({
         kind: "success",
-        message: `DOCX export saved as ${savedPath}. Images and advanced layout fidelity may vary.`,
+        message: `DOCX export saved to ${savedPath}. Images and advanced layout fidelity may vary.`,
       });
     } catch (error) {
       const message =
