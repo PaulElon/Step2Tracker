@@ -69,7 +69,7 @@ function ProgressRing({ percent, size = 132, stroke = 12 }: { percent: number; s
         cx={size / 2}
         cy={size / 2}
         r={radius}
-        stroke="rgba(255,255,255,0.07)"
+        stroke="var(--ring-track)"
         strokeWidth={stroke}
         fill="none"
       />
@@ -77,7 +77,7 @@ function ProgressRing({ percent, size = 132, stroke = 12 }: { percent: number; s
         cx={size / 2}
         cy={size / 2}
         r={radius}
-        stroke="rgb(94, 234, 212)"
+        stroke="var(--ring-progress)"
         strokeWidth={stroke}
         strokeLinecap="round"
         fill="none"
@@ -90,7 +90,7 @@ function ProgressRing({ percent, size = 132, stroke = 12 }: { percent: number; s
         y="50%"
         textAnchor="middle"
         dominantBaseline="central"
-        className="fill-white"
+        fill="currentColor"
         style={{ fontSize: size * 0.24, fontWeight: 600 }}
       >
         {Math.round(clamped)}%
