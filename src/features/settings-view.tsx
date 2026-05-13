@@ -23,7 +23,7 @@ import {
   Zap,
 } from "lucide-react";
 import { launchResource } from "../lib/launcher";
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { NavigationButton, Panel } from "../components/ui";
@@ -542,21 +542,7 @@ function AboutPanel() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (hasAutoCheckedRef.current) return;
-    hasAutoCheckedRef.current = true;
-
-    const lastCheckAt = localStorage.getItem(LAST_CHECK_KEY);
-    const elapsed = lastCheckAt
-      ? Date.now() - new Date(lastCheckAt).getTime()
-      : Infinity;
-
-    if (elapsed >= CHECK_INTERVAL_MS) {
-      void runCheck(false);
-    }
-  }, []);
-
-  async function runCheck(force: boolean) {
+  const runCheck = useCallback(async (force: boolean) => {
     if (!force && status.kind === "checking") return;
     setStatus({ kind: "checking" });
 
@@ -596,7 +582,24 @@ function AboutPanel() {
       const message = err instanceof Error ? err.message : String(err);
       setStatus({ kind: "error", message, checkedAt: now });
     }
-  }
+  }, [status.kind]);
+
+  useEffect(() => {
+    if (hasAutoCheckedRef.current) return;
+    hasAutoCheckedRef.current = true;
+
+    const lastCheckAt = localStorage.getItem(LAST_CHECK_KEY);
+    const elapsed = lastCheckAt
+      ? Date.now() - new Date(lastCheckAt).getTime()
+      : Infinity;
+
+    if (elapsed >= CHECK_INTERVAL_MS) {
+      const timer = window.setTimeout(() => {
+        void runCheck(false);
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+  }, [runCheck]);
 
   async function handleInstall() {
     setStatus({ kind: "installing" });
