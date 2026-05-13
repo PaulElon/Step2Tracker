@@ -6,6 +6,11 @@ import {
   generateNotebookPdfOutline,
   type NotebookPdfOutlineTextPage,
 } from "../lib/notebook-pdf-outline";
+import {
+  collectNotebookPdfTocLinesFromTextPages,
+  generateNotebookPdfOutlineFromTocLines,
+  type NotebookPdfTocOutlineEntry,
+} from "../lib/notebook-pdf-toc";
 import { readNotebookPdfBytes } from "../lib/notebook-pdf";
 import type {
   PdfAnnotation,
@@ -585,6 +590,29 @@ function removeManualOutlineTitles(items: PdfOutlineItem[]): PdfOutlineItem[] {
     next.push(item);
   }
   return next;
+}
+
+function buildGeneratedManualOutlineItems(
+  entries: NotebookPdfTocOutlineEntry[],
+  nowIso: string,
+  depth = 0,
+): PdfOutlineItem[] {
+  return entries.map((entry) => {
+    const item: PdfOutlineItem = {
+      id: createOutlineId("manual"),
+      title: entry.title,
+      pageIndex: entry.pageIndex,
+      depth: Math.max(0, Math.min(OUTLINE_MAX_DEPTH, entry.depth ?? depth)),
+      source: "manual",
+      kind: "outline",
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    if (entry.children && entry.children.length > 0) {
+      item.children = buildGeneratedManualOutlineItems(entry.children, nowIso, depth + 1);
+    }
+    return item;
+  });
 }
 
 function findOutlineItem(items: PdfOutlineItem[], itemId: string): PdfOutlineItem | null {
@@ -1530,13 +1558,28 @@ export function NotebookPdfViewer({
       if (cancelToken.cancelled) {
         throw new OutlineGenerationCancelledError();
       }
-      const generatedEntries = generateNotebookPdfOutline(pages, {
+      const tocResult = generateNotebookPdfOutlineFromTocLines(
+        collectNotebookPdfTocLinesFromTextPages(pages),
+        {
+          totalPages: load.doc.numPages,
+          maxGeneratedEntries: AUTO_OUTLINE_MAX_GENERATED_ENTRIES,
+        },
+      );
+      const fallbackEntries = generateNotebookPdfOutline(pages, {
         maxPagesToScan: load.doc.numPages,
         maxGeneratedEntries: AUTO_OUTLINE_MAX_GENERATED_ENTRIES,
       });
       if (cancelToken.cancelled) {
         throw new OutlineGenerationCancelledError();
       }
+      const usedTocEntries = tocResult.isStrong && tocResult.entries.length > 0;
+      const generatedEntries = usedTocEntries
+        ? tocResult.entries
+        : fallbackEntries.map((entry) => ({
+            title: entry.title,
+            pageIndex: entry.pageIndex,
+            depth: 0,
+          }));
 
       if (generatedEntries.length === 0) {
         setHint("No strong headings found.");
@@ -1544,15 +1587,8 @@ export function NotebookPdfViewer({
       }
 
       const now = new Date().toISOString();
-      const generatedOutlineItems: PdfOutlineItem[] = generatedEntries.map((entry) => ({
-        id: createOutlineId("manual"),
-        title: entry.title,
-        pageIndex: entry.pageIndex,
-        source: "manual",
-        kind: "outline",
-        createdAt: now,
-        updatedAt: now,
-      }));
+      const generatedOutlineItems = buildGeneratedManualOutlineItems(generatedEntries, now);
+      const generatedCount = countOutlineItems(generatedOutlineItems, isOutlineEntry);
 
       const preservedOutline = removeManualOutlineTitles(existingOutline);
       const nextOutline = [...preservedOutline, ...generatedOutlineItems];
@@ -1560,12 +1596,20 @@ export function NotebookPdfViewer({
         changeOutline(nextOutline);
       }
       setOutlineFilter("outline");
-      if (generatedOutlineItems.length >= AUTO_OUTLINE_MAX_GENERATED_ENTRIES) {
+      const mappingNote =
+        usedTocEntries && tocResult.approximatePageMapping ? " Page number mapping is best-effort." : "";
+      if (generatedCount >= AUTO_OUTLINE_MAX_GENERATED_ENTRIES) {
         setHint(
-          `Generated ${generatedOutlineItems.length} title(s), then stopped at the ${AUTO_OUTLINE_MAX_GENERATED_ENTRIES}-title limit. Review and edit as needed.`,
+          usedTocEntries
+            ? `Generated ${generatedCount} title(s) from table of contents, then stopped at the ${AUTO_OUTLINE_MAX_GENERATED_ENTRIES}-title limit. Review and edit as needed.${mappingNote}`
+            : `Generated ${generatedCount} title(s), then stopped at the ${AUTO_OUTLINE_MAX_GENERATED_ENTRIES}-title limit. Review and edit as needed.`,
         );
       } else {
-        setHint(`Generated ${generatedOutlineItems.length} title(s). Review and edit as needed.`);
+        setHint(
+          usedTocEntries
+            ? `Generated ${generatedCount} title(s) from table of contents. Review and edit as needed.${mappingNote}`
+            : `Generated ${generatedCount} title(s). Review and edit as needed.`,
+        );
       }
     } catch (error) {
       if (cancelToken.cancelled || isOutlineGenerationCancelledError(error)) {
