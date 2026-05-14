@@ -111,7 +111,7 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       }
     }
-  }, []);
+  }, [applyState]);
 
   useEffect(() => {
     void reload();
