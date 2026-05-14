@@ -1,6 +1,6 @@
 {
   "productName": "TimeFolio Study Tracker",
-  "version": "0.0.128",
+  "version": "0.0.150",
   "identifier": "com.paul.step2ckcommandcenter",
   "build": {
     "beforeDevCommand": "npm run dev",
