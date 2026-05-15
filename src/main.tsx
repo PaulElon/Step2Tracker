@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
+import { PublicLandingPage } from "./features/public-landing-page";
 import { AppStoreProvider } from "./state/app-store";
 
 const isTauriShell =
@@ -10,9 +11,13 @@ const isTauriShell =
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <AppStoreProvider>
-      <App />
-    </AppStoreProvider>
+    {isTauriShell ? (
+      <AppStoreProvider>
+        <App />
+      </AppStoreProvider>
+    ) : (
+      <PublicLandingPage />
+    )}
   </StrictMode>,
 );
 
