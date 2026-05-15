@@ -9,8 +9,51 @@ permissions:
   contents: write
 
 jobs:
-  publish-tauri:
+  prepare-release:
+    runs-on: ubuntu-latest
+    outputs:
+      app_version: ${{ steps.version.outputs.app_version }}
+      release_tag: ${{ steps.version.outputs.release_tag }}
+      release_name: ${{ steps.version.outputs.release_name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute CI release version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(node <<'NODE'
+          const fs = require('fs');
+
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const tauri = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8'));
+
+          const [major = '0', minor = '0'] = String(pkg.version || tauri.version || '0.0.0').split('.');
+          const runNumber = process.env.GITHUB_RUN_NUMBER || '0';
+
+          process.stdout.write(`${major}.${minor}.${runNumber}`);
+          NODE
+          )"
+
+          {
+            echo "app_version=$VERSION"
+            echo "release_tag=app-v$VERSION"
+            echo "release_name=TimeFolio Study Tracker v$VERSION"
+          } >> "$GITHUB_OUTPUT"
+
+  publish-macos:
+    needs: prepare-release
     runs-on: macos-14
+    env:
+      APP_VERSION: ${{ needs.prepare-release.outputs.app_version }}
+      RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
+      RELEASE_NAME: ${{ needs.prepare-release.outputs.release_name }}
+      MAC_STABLE_ASSET: TimeFolio-Study-Tracker-macOS-Apple-Silicon.app.tar.gz
+      VITE_FF_TIMEFOLIO: "true"
+      VITE_FF_AUTOTRACKER_V2_USER_MODE: "true"
+      VITE_FF_NOTEBOOK: "true"
+      VITE_FF_TIPTAP_EDITOR: "true"
 
     steps:
       - uses: actions/checkout@v4
@@ -31,16 +74,14 @@ jobs:
 
       - name: Verify release feature flags
         run: npm run verify:release-env
-        env:
-          VITE_FF_TIMEFOLIO: "true"
-          VITE_FF_AUTOTRACKER_V2_USER_MODE: "true"
 
       - name: Stamp CI release version
         shell: bash
         run: |
-          VERSION="$(node <<'NODE'
+          node <<'NODE'
           const fs = require('fs');
 
+          const version = process.env.APP_VERSION;
           const pkgPath = 'package.json';
           const tauriPath = 'src-tauri/tauri.conf.json';
           const cargoPath = 'src-tauri/Cargo.toml';
@@ -48,10 +89,6 @@ jobs:
           const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
           const tauri = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));
           const cargo = fs.readFileSync(cargoPath, 'utf8');
-
-          const [major = '0', minor = '0'] = String(pkg.version || tauri.version || '0.0.0').split('.');
-          const runNumber = process.env.GITHUB_RUN_NUMBER || '0';
-          const version = `${major}.${minor}.${runNumber}`;
 
           pkg.version = version;
           tauri.version = version;
@@ -64,12 +101,9 @@ jobs:
           fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
           fs.writeFileSync(tauriPath, `${JSON.stringify(tauri, null, 2)}\n`);
           fs.writeFileSync(cargoPath, nextCargo);
-
-          process.stdout.write(version);
           NODE
-          )"
-          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "Stamped release version: $VERSION"
+
+          echo "Stamped release version: $APP_VERSION"
 
       - name: Build and publish Tauri release
         uses: tauri-apps/tauri-action@v0
@@ -77,17 +111,126 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          VITE_FF_TIMEFOLIO: "true"
-          VITE_FF_AUTOTRACKER_V2_USER_MODE: "true"
-          VITE_FF_NOTEBOOK: "true"
-          VITE_FF_TIPTAP_EDITOR: "true"
         with:
-          tagName: app-v__VERSION__
-          releaseName: TimeFolio Study Tracker v__VERSION__
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: ${{ env.RELEASE_NAME }}
           releaseBody: |
-            Automated Apple Silicon macOS desktop release for commit ${{ github.sha }}.
-            Signed updater artifacts and latest.json are attached below.
+            Automated desktop release for commit ${{ github.sha }}.
+            Apple Silicon macOS updater artifacts and latest.json are attached below.
+            A stable direct-download asset name for macOS is uploaded after bundling.
           releaseDraft: false
           prerelease: false
           args: --target aarch64-apple-darwin
           includeUpdaterJson: true
+
+      - name: Copy stable macOS direct-download asset
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BUNDLE_ROOT="src-tauri/target/aarch64-apple-darwin/release/bundle/macos"
+          MAC_ARCHIVE="$(find "$BUNDLE_ROOT" -maxdepth 1 -type f -name '*.app.tar.gz' | head -n 1)"
+
+          if [ -z "$MAC_ARCHIVE" ]; then
+            echo "::error::No macOS updater archive found in $BUNDLE_ROOT"
+            exit 1
+          fi
+
+          cp "$MAC_ARCHIVE" "$MAC_STABLE_ASSET"
+
+      - name: Upload stable macOS release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: ${{ env.MAC_STABLE_ASSET }}
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-windows:
+    needs:
+      - prepare-release
+      - publish-macos
+    runs-on: windows-latest
+    env:
+      APP_VERSION: ${{ needs.prepare-release.outputs.app_version }}
+      RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
+      WINDOWS_STABLE_ASSET: TimeFolio-Study-Tracker-Windows-x64-Setup.exe
+      VITE_FF_TIMEFOLIO: "true"
+      VITE_FF_AUTOTRACKER_V2_USER_MODE: "true"
+      VITE_FF_NOTEBOOK: "true"
+      VITE_FF_TIPTAP_EDITOR: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Verify release feature flags
+        run: npm run verify:release-env
+
+      - name: Stamp CI release version
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          const version = process.env.APP_VERSION;
+          const pkgPath = 'package.json';
+          const tauriPath = 'src-tauri/tauri.conf.json';
+          const cargoPath = 'src-tauri/Cargo.toml';
+
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          const tauri = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));
+          const cargo = fs.readFileSync(cargoPath, 'utf8');
+
+          pkg.version = version;
+          tauri.version = version;
+
+          const nextCargo = cargo.replace(
+            /^version = ".*?"$/m,
+            `version = "${version}"`
+          );
+
+          fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+          fs.writeFileSync(tauriPath, `${JSON.stringify(tauri, null, 2)}\n`);
+          fs.writeFileSync(cargoPath, nextCargo);
+          NODE
+
+          echo "Stamped release version: $APP_VERSION"
+
+      - name: Build Windows NSIS installer
+        run: npm run tauri:build -- --bundles nsis
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Copy stable Windows direct-download asset
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path "src-tauri/target/release/bundle/nsis" -Filter "*setup.exe" -File -Recurse | Select-Object -First 1
+
+          if (-not $installer) {
+            throw "No NSIS setup executable found under src-tauri/target/release/bundle/nsis"
+          }
+
+          Copy-Item $installer.FullName $env:WINDOWS_STABLE_ASSET -Force
+
+      - name: Upload stable Windows release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: ${{ env.WINDOWS_STABLE_ASSET }}
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
