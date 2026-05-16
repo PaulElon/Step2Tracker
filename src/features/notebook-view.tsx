@@ -1605,16 +1605,16 @@ export function NotebookView() {
   const hasLibraryResults = visibleFolders.length > 0 || visibleDocuments.length > 0;
   const saveIndicatorClass =
     saveStatus === "error"
-      ? "border-rose-300/30 bg-rose-50 text-rose-600"
+      ? "border-rose-400/20 bg-rose-500/10 text-rose-100 backdrop-blur"
       : saveStatus === "saved"
-        ? "border-emerald-300/30 bg-emerald-50 text-emerald-700"
-        : "border-sky-200/70 bg-sky-50 text-sky-700";
+        ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-100 backdrop-blur"
+        : "border-sky-400/20 bg-sky-500/10 text-sky-100 backdrop-blur";
   const saveIndicatorLabel =
     saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved ✓" : saveStatus === "error" ? "Save failed" : null;
   const statusClass =
     status?.kind === "error"
-      ? "border-rose-300/30 bg-rose-50 text-rose-700"
-      : "border-sky-200/70 bg-sky-50 text-sky-700";
+      ? "border-rose-400/20 bg-rose-500/10 text-rose-100 backdrop-blur"
+      : "border-sky-400/20 bg-sky-500/10 text-sky-100 backdrop-blur";
   const compactStatusClass = "inline-flex max-w-full rounded-lg border px-2.5 py-1 text-xs font-medium leading-4";
   const libraryToolbarButtonClass =
     "inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-xl border border-white/10 bg-white/[0.02] px-4 text-sm text-slate-200 transition hover:border-white/15 hover:bg-white/[0.05]";
@@ -1636,7 +1636,7 @@ export function NotebookView() {
   const libraryEmptyStateClass =
     "max-w-[20rem] rounded-[20px] border border-dashed border-white/10 bg-slate-950/18 px-5 py-6 text-left";
   const editorFieldClass =
-    "notebook-editor-input h-8 w-full rounded-[14px] border px-3 text-sm outline-none transition placeholder:text-slate-400 focus:ring-2 focus:ring-sky-300/20";
+    "notebook-editor-input h-8 w-full rounded-[14px] border px-3 text-sm outline-none transition placeholder:text-slate-400 focus:ring-2 focus:ring-cyan-400/25";
   const editorTitleFieldClass = `${editorFieldClass} notebook-editor-input--title min-w-0 font-semibold tracking-[-0.03em]`;
   const editorActionButtonClass =
     "notebook-editor-action-button inline-flex h-8 items-center justify-center rounded-[14px] border px-3 text-sm font-medium transition";
@@ -1657,7 +1657,7 @@ export function NotebookView() {
   const editorTabButtonClass =
     "inline-flex h-8 max-w-[14rem] shrink-0 items-center overflow-hidden rounded-[14px] border px-3 text-sm font-medium transition whitespace-nowrap text-ellipsis";
   const editorTabInputClass =
-    "inline-flex h-8 min-w-[8rem] max-w-[14rem] shrink-0 items-center rounded-[14px] border px-3 text-sm font-medium outline-none transition placeholder:text-slate-400 focus:ring-2 focus:ring-sky-300/20";
+    "inline-flex h-8 min-w-[8rem] max-w-[14rem] shrink-0 items-center rounded-[14px] border px-3 text-sm font-medium outline-none transition placeholder:text-slate-400 focus:ring-2 focus:ring-cyan-400/25";
   const editorTabCompactActionClass =
     "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[14px] border bg-[color:var(--field-bg)] text-sm font-medium transition";
   const notebookEditorShellClass = "notebook-editor-shell min-h-0 flex-1 overflow-hidden";
@@ -2343,7 +2343,7 @@ export function NotebookView() {
                                 setStatus(null);
                                 void exportActivePageAsPdf();
                               }}
-                              className={`${editorActionButtonClass} border-[color:var(--panel-border)] bg-white/70 text-slate-600`}
+                              className={editorActionButtonClass}
                             >
                               Export PDF
                             </button>
@@ -2362,7 +2362,7 @@ export function NotebookView() {
                               }}
                               aria-label="More notebook actions"
                               title="More notebook actions"
-                              className={`${editorActionButtonClass} border-[color:var(--panel-border)] bg-white/70 text-slate-600`}
+                              className={editorActionButtonClass}
                             >
                               …
                             </button>
@@ -2373,7 +2373,7 @@ export function NotebookView() {
                             aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
                             aria-pressed={isFullscreen}
                             title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-                            className={`${editorIconButtonClass} border-[color:var(--panel-border)] bg-white/70 text-slate-600`}
+                            className={editorIconButtonClass}
                           >
                             {isFullscreen ? (
                               <Minimize2 className="h-4 w-4" aria-hidden="true" />
@@ -2424,7 +2424,7 @@ export function NotebookView() {
                                           type="button"
                                           onClick={() => setActivePageId(page.id)}
                                           onDoubleClick={() => beginEditingPageTitle(page)}
-                                          className={`${editorTabButtonClass} ${isActive ? "notebook-editor-tab--active" : "border-transparent bg-transparent text-slate-500 hover:border-white/10 hover:bg-white/60 hover:text-slate-700"}`}
+                                          className={`${editorTabButtonClass} ${isActive ? "notebook-editor-tab--active" : "border-transparent bg-transparent text-slate-500 hover:border-white/10 hover:bg-[color:var(--field-bg)] hover:text-slate-200"}`}
                                         >
                                           <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{displayTitle}</span>
                                         </button>
@@ -2445,7 +2445,7 @@ export function NotebookView() {
                             onClick={() => {
                               void addPageToDocument(activeDocument);
                             }}
-                            className={`${editorTabCompactActionClass} border-dashed border-sky-200/70 bg-[color:var(--surface-muted)] text-slate-500 hover:border-sky-200/80 hover:bg-[color:var(--field-bg)] hover:text-slate-700`}
+                            className={`${editorTabCompactActionClass} border-dashed border-cyan-300/25 bg-[color:var(--surface-muted)] text-slate-300 hover:border-cyan-300/35 hover:bg-[color:var(--field-bg)] hover:text-slate-100`}
                             aria-label="Add page"
                             title="Add page"
                           >
@@ -2455,7 +2455,7 @@ export function NotebookView() {
                             <button
                               type="button"
                               onClick={() => void deleteActivePage()}
-                              className={`${editorTabCompactActionClass} border-rose-200/60 bg-[color:var(--surface-muted)] text-rose-600 hover:border-rose-300/70 hover:bg-[color:var(--field-bg)] hover:text-rose-700`}
+                              className={`${editorTabCompactActionClass} border-rose-400/20 bg-[color:var(--surface-muted)] text-rose-300 hover:border-rose-300/35 hover:bg-[color:var(--field-bg)] hover:text-rose-100`}
                               aria-label="Delete current page"
                               title="Delete current page"
                             >
