@@ -12,6 +12,7 @@ const DAY_CELL_GAP = 4;
 type MethodBreakdown = {
   method: string;
   minutes: number;
+  sessionCount: number;
 };
 
 type DayActivity = {
@@ -123,8 +124,9 @@ function buildActivityByDate(sessionLogs: TfSessionLog[]): Map<string, DayActivi
       const breakdownMatch = existing.methodBreakdown.find((entry) => entry.method === session.method);
       if (breakdownMatch) {
         breakdownMatch.minutes += minutes;
+        breakdownMatch.sessionCount += 1;
       } else {
-        existing.methodBreakdown.push({ method: session.method, minutes });
+        existing.methodBreakdown.push({ method: session.method, minutes, sessionCount: 1 });
       }
     }
 
@@ -239,6 +241,7 @@ function OverviewActivityHeatmapBody() {
   const selectedStats = computeDayDetailStats(selectedActivity);
   const tooltipTopMethod = tooltipActivity?.topMethod ? getDisplayMethod(tooltipActivity.topMethod) : null;
   const selectedTopMethod = selectedActivity?.topMethod ? getDisplayMethod(selectedActivity.topMethod) : null;
+  const selectedStudyTotalMinutes = selectedActivity?.studyMinutes ?? 0;
 
   useEffect(() => {
     if (!selectedDate) {
@@ -536,26 +539,40 @@ function OverviewActivityHeatmapBody() {
               <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4">
                 <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Method breakdown</p>
                 {selectedActivity?.methodBreakdown.length ? (
-                  <ol className="mt-3 space-y-2">
-                    {selectedActivity.methodBreakdown.slice(0, 6).map((entry, index) => {
+                  <ol className="mt-2 divide-y divide-white/10">
+                    {selectedActivity.methodBreakdown.slice(0, 6).map((entry) => {
                       const display = getDisplayMethod(entry.method);
+                      const percent =
+                        selectedStudyTotalMinutes > 0 ? (entry.minutes / selectedStudyTotalMinutes) * 100 : 0;
                       return (
-                        <li
-                          key={entry.method}
-                          className="flex items-center justify-between gap-3 rounded-[12px] border border-white/[0.08] bg-slate-950/35 px-3 py-2"
-                        >
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="text-[11px] tabular-nums text-slate-500">{String(index + 1).padStart(2, "0")}</span>
-                            <span className="truncate text-sm text-slate-100">{display.label}</span>
-                            {display.isAuto ? (
-                              <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
-                                auto
-                              </span>
-                            ) : null}
+                        <li key={entry.method} className="py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className="truncate text-sm font-medium text-slate-200">{display.label}</span>
+                                {display.isAuto ? (
+                                  <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
+                                    auto
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="mt-0.5 text-xs text-slate-500">
+                                {entry.sessionCount} session{entry.sessionCount === 1 ? "" : "s"}
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <div className="text-sm font-semibold tabular-nums text-slate-100">
+                                {formatMinutes(entry.minutes)}
+                              </div>
+                              <div className="text-xs tabular-nums text-slate-400">{percent.toFixed(0)}%</div>
+                            </div>
                           </div>
-                          <span className="shrink-0 text-sm tabular-nums text-slate-300">
-                            {formatMinutes(entry.minutes)}
-                          </span>
+                          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-sky-500 to-cyan-400"
+                              style={{ width: `${Math.max(percent, entry.minutes > 0 ? 6 : 0)}%` }}
+                            />
+                          </div>
                         </li>
                       );
                     })}
