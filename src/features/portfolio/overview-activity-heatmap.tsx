@@ -210,6 +210,8 @@ function OverviewActivityHeatmapBody() {
   const { state, isLoading, error } = useTimeFolioStore();
   const today = getTodayKey();
   const year = Number(today.slice(0, 4));
+  const themeId = document.documentElement.dataset.theme;
+  const isLightTheme = themeId === "light" || themeId === "maggiepink";
 
   const { yearStart, yearEnd, weeks } = useMemo(() => buildYearWeeks(year), [year]);
   const activityByDate = useMemo(() => buildActivityByDate(state.sessionLogs), [state.sessionLogs]);
@@ -390,7 +392,10 @@ function OverviewActivityHeatmapBody() {
                             ? "cursor-pointer border-white/[0.08] hover:border-cyan-300/70 hover:brightness-110"
                             : "cursor-default border-transparent opacity-25",
                           LEVEL_CLASS[level],
-                          isToday && "ring-1 ring-cyan-200/80",
+                          isToday &&
+                            (isLightTheme
+                              ? "ring-2 ring-cyan-500 shadow-[0_0_0_1px_rgba(15,23,42,0.26)]"
+                              : "ring-1 ring-cyan-200/80"),
                           isSelected && "ring-2 ring-white/80",
                         )}
                         style={{
