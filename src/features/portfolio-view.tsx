@@ -1,9 +1,10 @@
 import type { JSX } from "react";
 import { ErrorLogView } from "./error-log-view";
-import { PortfolioOverview } from "./portfolio/portfolio-overview";
+import { PortfolioOverview, type PortfolioOverviewSectionTarget } from "./portfolio/portfolio-overview";
 import type { PortfolioSectionId } from "./portfolio-section";
 import { PracticeTestsView } from "./practice-tests-view";
-import { TimeFolioView } from "./timefolio-view";
+import { TimeFolioAnalyticsView } from "./timefolio-analytics-view";
+import { TimeFolioHeatmapView } from "./timefolio-heatmap-view";
 import { WeakTopicsView } from "./weak-topics-view";
 
 export function PortfolioView({
@@ -13,7 +14,7 @@ export function PortfolioView({
 }: {
   activeSection: PortfolioSectionId;
   showOverview?: boolean;
-  onSelectSection: (section: PortfolioSectionId) => void;
+  onSelectSection: (section: PortfolioOverviewSectionTarget) => void;
 }) {
   if (showOverview) {
     return (
@@ -34,8 +35,11 @@ export function PortfolioView({
     case "errorLog":
       content = <ErrorLogView />;
       break;
-    case "timefolio":
-      content = <TimeFolioView />;
+    case "analytics":
+      content = <TimeFolioAnalyticsView />;
+      break;
+    case "heatmap":
+      content = <TimeFolioHeatmapView />;
       break;
   }
 

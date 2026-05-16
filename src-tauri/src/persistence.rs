@@ -582,6 +582,8 @@ pub enum SectionId {
     Dashboard,
     #[serde(rename = "planner")]
     Planner,
+    #[serde(rename = "sessionLog")]
+    SessionLog,
     #[serde(rename = "weakTopics")]
     WeakTopics,
     #[serde(rename = "tests")]
@@ -592,6 +594,8 @@ pub enum SectionId {
     Settings,
     #[serde(rename = "errorLog")]
     ErrorLog,
+    #[serde(rename = "heatmap")]
+    Heatmap,
     #[serde(rename = "timefolio")]
     Timefolio,
     #[serde(rename = "notebook")]
@@ -4133,11 +4137,13 @@ fn parse_section_id(value: &str) -> rusqlite::Result<SectionId> {
     match value {
         "dashboard" => Ok(SectionId::Dashboard),
         "planner" => Ok(SectionId::Planner),
+        "sessionLog" => Ok(SectionId::SessionLog),
         "weakTopics" => Ok(SectionId::WeakTopics),
         "tests" => Ok(SectionId::Tests),
         "analytics" => Ok(SectionId::Analytics),
         "settings" => Ok(SectionId::Settings),
         "errorLog" => Ok(SectionId::ErrorLog),
+        "heatmap" => Ok(SectionId::Heatmap),
         "timefolio" => Ok(SectionId::Timefolio),
         "notebook" => Ok(SectionId::Notebook),
         _ => Err(enum_error("SectionId", value)),
@@ -4244,11 +4250,13 @@ fn serialize_section_id(value: SectionId) -> &'static str {
     match value {
         SectionId::Dashboard => "dashboard",
         SectionId::Planner => "planner",
+        SectionId::SessionLog => "sessionLog",
         SectionId::WeakTopics => "weakTopics",
         SectionId::Tests => "tests",
         SectionId::Analytics => "analytics",
         SectionId::Settings => "settings",
         SectionId::ErrorLog => "errorLog",
+        SectionId::Heatmap => "heatmap",
         SectionId::Timefolio => "timefolio",
         SectionId::Notebook => "notebook",
     }

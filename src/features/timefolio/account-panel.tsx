@@ -119,121 +119,120 @@ function getIdentitySubtext(account: {
   return "No local account snapshot is present.";
 }
 
-export function AccountPanel() {
+function AccountContent() {
   const { state, isLoading, error } = useTimeFolioStore();
   const account = state.account;
 
   if (isLoading) {
     return (
-      <PanelShell
-        title="Account"
-        subtitle="Local-only, read-only account snapshot for this app. No network account connection is active."
-      >
-        <StatusBanner
-          tone="loading"
-          title="Loading local TimeFolio account state"
-          message="Showing the current read-only account snapshot from local state."
-        />
-      </PanelShell>
+      <StatusBanner
+        tone="loading"
+        title="Loading local TimeFolio account state"
+        message="Showing the current read-only account snapshot from local state."
+      />
     );
   }
 
   if (error) {
     return (
-      <PanelShell
-        title="Account"
-        subtitle="Local-only, read-only account snapshot for this app. No network account connection is active."
-      >
-        <StatusBanner
-          tone="error"
-          title="Unable to load account state"
-          message={error}
-        />
-      </PanelShell>
+      <StatusBanner
+        tone="error"
+        title="Unable to load account state"
+        message={error}
+      />
     );
   }
 
   return (
-    <PanelShell
-      title="Account"
-      subtitle="Local-only, read-only account snapshot for this app. No network account connection is active."
-    >
-      <div className="flex flex-col gap-5">
-        {account === null ? (
-          <StatusBanner
-            tone="info"
-            title="Not connected yet"
-            message="This is a local-only, read-only account snapshot. TimeFolio local data continues to work offline."
-          />
-        ) : (
-          <StatusBanner
-            tone="info"
-            title="Connected locally"
-            message="This panel shows the local account snapshot only. No network account connection is active."
-          />
-        )}
+    <div className="flex flex-col gap-5">
+      {account === null ? (
+        <StatusBanner
+          tone="info"
+          title="Not connected yet"
+          message="This is a local-only, read-only account snapshot. TimeFolio local data continues to work offline."
+        />
+      ) : (
+        <StatusBanner
+          tone="info"
+          title="Connected locally"
+          message="This panel shows the local account snapshot only. No network account connection is active."
+        />
+      )}
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <DetailCard
-            label="Current local account state"
-            value={account === null ? "No local account snapshot is present." : "Connected locally"}
-            subtext="This is a read-only snapshot from the local TimeFolio store."
-          />
-          <DetailCard
-            label="Identity"
-            value={account ? getIdentityValue(account) : "No local identity available"}
-            subtext={account ? getIdentitySubtext(account) : "No local account snapshot is present."}
-          />
-          <DetailCard
-            label="Email verified"
-            value={account ? (account.emailVerified ? "Verified" : "Not verified") : "Not available"}
-            subtext="Verification status is shown only when an account snapshot exists."
-          />
-          <DetailCard
-            label="Access tier"
-            value={account ? (account.planTier === "pro" ? "Pro" : "Free") : "Not available"}
-            subtext="Plan state is shown only as part of the local snapshot."
-          />
-          <DetailCard
-            label="Sync ID"
-            value={account?.syncId ?? "Not set"}
-            subtext={account?.syncId ? "Local sync reference." : "No sync identifier is available yet."}
-          />
-          <DetailCard
-            label="Customer reference"
-            value={account?.billingCustomerId ?? "Not set"}
-            subtext={
-              account?.billingCustomerId
-                ? "Stored as a local placeholder reference only."
-                : "No customer reference is set yet."
-            }
-          />
-        </div>
-
-        {account === null ? (
-          <SectionCard
-            title="Deferred"
-            description="These surfaces are intentionally paused while the merge is in progress."
-          >
-            <ul className="space-y-2 text-sm leading-6 text-slate-300">
-              <li>account snapshot sync</li>
-              <li>access tier status</li>
-              <li>Auto-Tracker availability checks</li>
-            </ul>
-          </SectionCard>
-        ) : (
-          <SectionCard
-            title="Deferred"
-            description="These surfaces remain paused even when a local account snapshot is present."
-          >
-            <ul className="space-y-2 text-sm leading-6 text-slate-300">
-              <li>account snapshot sync</li>
-              <li>access tier status</li>
-              <li>Auto-Tracker availability checks</li>
-            </ul>
-          </SectionCard>
-        )}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <DetailCard
+          label="Current local account state"
+          value={account === null ? "No local account snapshot is present." : "Connected locally"}
+          subtext="This is a read-only snapshot from the local TimeFolio store."
+        />
+        <DetailCard
+          label="Identity"
+          value={account ? getIdentityValue(account) : "No local identity available"}
+          subtext={account ? getIdentitySubtext(account) : "No local account snapshot is present."}
+        />
+        <DetailCard
+          label="Email verified"
+          value={account ? (account.emailVerified ? "Verified" : "Not verified") : "Not available"}
+          subtext="Verification status is shown only when an account snapshot exists."
+        />
+        <DetailCard
+          label="Access tier"
+          value={account ? (account.planTier === "pro" ? "Pro" : "Free") : "Not available"}
+          subtext="Plan state is shown only as part of the local snapshot."
+        />
+        <DetailCard
+          label="Sync ID"
+          value={account?.syncId ?? "Not set"}
+          subtext={account?.syncId ? "Local sync reference." : "No sync identifier is available yet."}
+        />
+        <DetailCard
+          label="Customer reference"
+          value={account?.billingCustomerId ?? "Not set"}
+          subtext={
+            account?.billingCustomerId
+              ? "Stored as a local placeholder reference only."
+              : "No customer reference is set yet."
+          }
+        />
       </div>
+
+      <SectionCard
+        title="Deferred"
+        description={
+          account === null
+            ? "These surfaces are intentionally paused while the merge is in progress."
+            : "These surfaces remain paused even when a local account snapshot is present."
+        }
+      >
+        <ul className="space-y-2 text-sm leading-6 text-slate-300">
+          <li>account snapshot sync</li>
+          <li>access tier status</li>
+          <li>Auto-Tracker availability checks</li>
+        </ul>
+      </SectionCard>
+    </div>
+  );
+}
+
+export function AccountPanel({ embedded = false }: { embedded?: boolean }) {
+  const title = "Account";
+  const subtitle = "Local-only, read-only account snapshot for this app. No network account connection is active.";
+
+  if (embedded) {
+    return (
+      <section className="rounded-[24px] border border-white/10 bg-slate-900/70 p-5 shadow-lg shadow-black/15">
+        <div className="mb-5">
+          <h3 className="text-base font-semibold text-white">{title}</h3>
+          <p className="mt-1 text-sm text-slate-400">{subtitle}</p>
+        </div>
+        <AccountContent />
+      </section>
+    );
+  }
+
+  return (
+    <PanelShell title={title} subtitle={subtitle}>
+      <AccountContent />
     </PanelShell>
   );
 }

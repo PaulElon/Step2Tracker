@@ -27,10 +27,12 @@ import { useAppStore } from "../../state/app-store";
 import type { PracticeTest, WeakTopicPriority } from "../../types/models";
 
 export type PortfolioOverviewSectionTarget =
+  | "sessionLog"
   | "tests"
   | "weakTopics"
   | "errorLog"
-  | "timefolio";
+  | "analytics"
+  | "heatmap";
 
 interface PortfolioOverviewProps {
   onNavigate: (section: PortfolioOverviewSectionTarget) => void;
@@ -756,10 +758,10 @@ function QuickActions({
   ];
   if (FF.timefolio) {
     actions.push({
-      key: "timefolio",
+      key: "sessionLog",
       icon: Clock,
-      label: "View Study Time",
-      target: "timefolio",
+      label: "Open Session Log",
+      target: "sessionLog",
     });
   }
 
@@ -847,7 +849,7 @@ function RecommendedNextActions({
       icon: Clock,
       title: `Study ${weeklyHours}h this week`,
       description: "Stay on track with your plan",
-      target: "timefolio",
+      target: "sessionLog",
     });
   } else {
     actions.push({

@@ -205,7 +205,7 @@ function SelectedDaySessionLog({
   );
 }
 
-export function HeatmapPanel() {
+export function HeatmapPanel({ showHeader = true }: { showHeader?: boolean }) {
   const { state, isLoading, error } = useTimeFolioStore();
   const [selectedDate, setSelectedDate] = useState<string | undefined>();
 
@@ -238,9 +238,11 @@ export function HeatmapPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-6 p-8">
-      <div className="shrink-0 space-y-1">
-        <h2 className="text-lg font-semibold text-slate-100">Heatmap</h2>
-      </div>
+      {showHeader ? (
+        <div className="shrink-0 space-y-1">
+          <h2 className="text-lg font-semibold text-slate-100">Heatmap</h2>
+        </div>
+      ) : null}
 
       <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-800/50 p-5">
         <div className="grid min-h-0 flex-1 gap-6 overflow-hidden lg:grid-cols-[minmax(0,3fr)_minmax(18rem,1fr)] lg:items-stretch">

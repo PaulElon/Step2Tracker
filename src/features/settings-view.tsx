@@ -27,6 +27,8 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { NavigationButton, Panel } from "../components/ui";
+import { TimeFolioSettingsSections } from "./timefolio-settings-sections";
+import { FF } from "../lib/feature-flags";
 import { themeList } from "../lib/themes";
 import { cn, fieldClassName, secondaryButtonClassName } from "../lib/ui";
 import type { BackupArtifactPreview, PersistenceSummary, ResourceLink, ThemeId } from "../types/models";
@@ -1243,6 +1245,8 @@ export function SettingsView({
                   </div>
                 </Panel>
               </div>
+
+              {FF.timefolio ? <TimeFolioSettingsSections /> : null}
             </div>
           ) : null}
 

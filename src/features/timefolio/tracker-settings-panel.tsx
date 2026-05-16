@@ -807,7 +807,7 @@ function TrackerGroupCard({
   );
 }
 
-export function TrackerSettingsPanel() {
+export function TrackerSettingsPanel({ embedded = false }: { embedded?: boolean }) {
   const store = useTimeFolioStore();
   const { state, isLoading, error } = store;
   const reload = (...args: Parameters<typeof store.reload>) => store.reload(...args);
@@ -2095,25 +2095,41 @@ export function TrackerSettingsPanel() {
   const canConfirmReset = resetConfirmationToken === RESET_CONFIRMATION_TOKEN;
 
   return (
-    <div className="p-8 flex flex-col gap-6">
-      <div className="rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-6 shadow-lg shadow-black/20">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-col gap-2">
-            <div className="inline-flex w-fit rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-emerald-300">
-              Local only
+    <div className={embedded ? "flex flex-col gap-6" : "p-8 flex flex-col gap-6"}>
+      {!embedded ? (
+        <div className="rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-6 shadow-lg shadow-black/20">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex flex-col gap-2">
+              <div className="inline-flex w-fit rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-emerald-300">
+                Local only
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-100">Tracker Settings</h2>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
+                  Manage which apps and websites count as study time on this device.
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-lg font-semibold text-slate-100">Tracker Settings</h2>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-                Manage which apps and websites count as study time on this device.
-              </p>
+            <div className="rounded-xl border border-slate-700 bg-slate-800/70 px-4 py-3 text-xs leading-5 text-slate-400">
+              Changes stay on this device.
             </div>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-800/70 px-4 py-3 text-xs leading-5 text-slate-400">
-            Changes stay on this device.
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="rounded-[24px] border border-white/10 bg-slate-900/70 p-5 shadow-lg shadow-black/15">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h3 className="text-base font-semibold text-white">Tracker Rules</h3>
+              <p className="mt-1 text-sm text-slate-400">
+                Manage which apps and websites count as study time or distractions on this device.
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-700 bg-slate-800/70 px-4 py-3 text-xs leading-5 text-slate-400">
+              Changes stay on this device.
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-2">
         {TRACKER_GROUPS.map((config) => {
@@ -2172,155 +2188,157 @@ export function TrackerSettingsPanel() {
         </section>
       ) : null}
 
-      <section className="flex flex-col gap-5 rounded-2xl border border-slate-700 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-col gap-2">
-            <div className="inline-flex w-fit rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-cyan-300">
-              TimeFolio data
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-slate-100">Back up, import, or reset TimeFolio data</h3>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-                Use these controls only if you need to move data between devices or restore a copy.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {dataMessage ? (
-          <div
-            className={`rounded-xl border px-4 py-3 text-sm ${
-              dataMessage.tone === "error"
-                ? "border-rose-500/20 bg-rose-500/10 text-rose-100"
-                : "border-emerald-500/20 bg-emerald-500/10 text-emerald-100"
-            }`}
-          >
-            {dataMessage.text}
-          </div>
-        ) : null}
-
-        {rollbackSnapshot ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-            <div>A rollback snapshot is available for this session.</div>
-            <button
-              type="button"
-              onClick={() => {
-                void handleRestorePreviousState();
-              }}
-              disabled={isDataBusy}
-              className="rounded-lg border border-amber-400/30 bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-100 transition-colors hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Restore previous TimeFolio state
-            </button>
-          </div>
-        ) : null}
-
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
-          <div className="flex flex-col gap-3 rounded-xl border border-slate-700 bg-slate-950/50 p-4">
-            <div className="text-sm font-medium text-slate-100">Import JSON</div>
-            <p className="text-xs leading-5 text-slate-400">
-              Select a `.json` backup to replace only the TimeFolio store state. Existing study storage is untouched.
-            </p>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".json,application/json"
-              onChange={(event) => {
-                void handleImportFileChange(event);
-              }}
-              disabled={isDataBusy}
-              className="block w-full rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-200 file:mr-4 file:rounded-md file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-100 hover:file:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
-            />
-            {pendingImportPreview ? (
-              <div className="rounded-xl border border-slate-700 bg-slate-900/80 p-3 text-xs text-slate-300">
-                <div className="font-medium text-slate-100">Ready to import: {pendingImportPreview.fileName}</div>
-                <div className="mt-2 grid gap-1 sm:grid-cols-2">
-                  <div>Session count: {pendingImportPreview.sessionCount}</div>
-                  <div>Summary count: {pendingImportPreview.summaryCount}</div>
-                  <div>Tracker rule count: {pendingImportPreview.trackerRuleCount}</div>
-                  <div>Account: {pendingImportPreview.hasAccount ? "present" : "absent"}</div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handleConfirmImportData();
-                    }}
-                    disabled={isDataBusy}
-                    className="rounded-lg border border-cyan-500/30 bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Confirm import
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCancelImportData}
-                    disabled={isDataBusy}
-                    className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Cancel
-                  </button>
-                </div>
+      {!embedded ? (
+        <section className="flex flex-col gap-5 rounded-2xl border border-slate-700 bg-slate-900/80 p-6 shadow-lg shadow-black/15">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex flex-col gap-2">
+              <div className="inline-flex w-fit rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-cyan-300">
+                TimeFolio data
               </div>
-            ) : null}
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <button
-              type="button"
-              onClick={handleExportData}
-              disabled={isDataBusy}
-              className="rounded-lg border border-cyan-500/30 bg-cyan-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Export JSON
-            </button>
-            <button
-              type="button"
-              onClick={handleResetData}
-              disabled={isDataBusy}
-              className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Reset TimeFolio Data
-            </button>
-            {isConfirmingReset ? (
-              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-100">
-                <p className="font-medium">This clears only TimeFolio data. Legacy data is untouched.</p>
-                <p className="mt-2 text-xs text-rose-100/90">
-                  This action is irreversible once confirmed. Type {RESET_CONFIRMATION_TOKEN} to continue.
+              <div>
+                <h3 className="text-base font-semibold text-slate-100">Back up, import, or reset TimeFolio data</h3>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
+                  Use these controls only if you need to move data between devices or restore a copy.
                 </p>
-                <input
-                  type="text"
-                  value={resetConfirmationToken}
-                  onChange={(event) => setResetConfirmationToken(event.target.value)}
-                  onKeyDown={handleResetConfirmationKeyDown}
-                  disabled={isDataBusy}
-                  placeholder={`Type ${RESET_CONFIRMATION_TOKEN}`}
-                  className="mt-3 block w-full rounded-lg border border-rose-400/40 bg-rose-950/20 px-3 py-2 text-sm text-rose-100 placeholder:text-rose-200/70 outline-none transition-colors focus:border-rose-300 focus:ring-2 focus:ring-rose-400/30 disabled:cursor-not-allowed disabled:opacity-60"
-                />
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handleConfirmResetData();
-                    }}
-                    disabled={isDataBusy || !canConfirmReset}
-                    className="rounded-lg border border-rose-400/40 bg-rose-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Confirm reset
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCancelResetData}
-                    disabled={isDataBusy}
-                    className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Cancel
-                  </button>
-                </div>
               </div>
-            ) : null}
+            </div>
           </div>
-        </div>
-      </section>
+
+          {dataMessage ? (
+            <div
+              className={`rounded-xl border px-4 py-3 text-sm ${
+                dataMessage.tone === "error"
+                  ? "border-rose-500/20 bg-rose-500/10 text-rose-100"
+                  : "border-emerald-500/20 bg-emerald-500/10 text-emerald-100"
+              }`}
+            >
+              {dataMessage.text}
+            </div>
+          ) : null}
+
+          {rollbackSnapshot ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              <div>A rollback snapshot is available for this session.</div>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleRestorePreviousState();
+                }}
+                disabled={isDataBusy}
+                className="rounded-lg border border-amber-400/30 bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-100 transition-colors hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Restore previous TimeFolio state
+              </button>
+            </div>
+          ) : null}
+
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="flex flex-col gap-3 rounded-xl border border-slate-700 bg-slate-950/50 p-4">
+              <div className="text-sm font-medium text-slate-100">Import JSON</div>
+              <p className="text-xs leading-5 text-slate-400">
+                Select a `.json` backup to replace only the TimeFolio store state. Existing study storage is untouched.
+              </p>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={(event) => {
+                  void handleImportFileChange(event);
+                }}
+                disabled={isDataBusy}
+                className="block w-full rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-200 file:mr-4 file:rounded-md file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-100 hover:file:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              {pendingImportPreview ? (
+                <div className="rounded-xl border border-slate-700 bg-slate-900/80 p-3 text-xs text-slate-300">
+                  <div className="font-medium text-slate-100">Ready to import: {pendingImportPreview.fileName}</div>
+                  <div className="mt-2 grid gap-1 sm:grid-cols-2">
+                    <div>Session count: {pendingImportPreview.sessionCount}</div>
+                    <div>Summary count: {pendingImportPreview.summaryCount}</div>
+                    <div>Tracker rule count: {pendingImportPreview.trackerRuleCount}</div>
+                    <div>Account: {pendingImportPreview.hasAccount ? "present" : "absent"}</div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleConfirmImportData();
+                      }}
+                      disabled={isDataBusy}
+                      className="rounded-lg border border-cyan-500/30 bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Confirm import
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelImportData}
+                      disabled={isDataBusy}
+                      className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={handleExportData}
+                disabled={isDataBusy}
+                className="rounded-lg border border-cyan-500/30 bg-cyan-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Export JSON
+              </button>
+              <button
+                type="button"
+                onClick={handleResetData}
+                disabled={isDataBusy}
+                className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Reset TimeFolio Data
+              </button>
+              {isConfirmingReset ? (
+                <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-100">
+                  <p className="font-medium">This clears only TimeFolio data. Legacy data is untouched.</p>
+                  <p className="mt-2 text-xs text-rose-100/90">
+                    This action is irreversible once confirmed. Type {RESET_CONFIRMATION_TOKEN} to continue.
+                  </p>
+                  <input
+                    type="text"
+                    value={resetConfirmationToken}
+                    onChange={(event) => setResetConfirmationToken(event.target.value)}
+                    onKeyDown={handleResetConfirmationKeyDown}
+                    disabled={isDataBusy}
+                    placeholder={`Type ${RESET_CONFIRMATION_TOKEN}`}
+                    className="mt-3 block w-full rounded-lg border border-rose-400/40 bg-rose-950/20 px-3 py-2 text-sm text-rose-100 placeholder:text-rose-200/70 outline-none transition-colors focus:border-rose-300 focus:ring-2 focus:ring-rose-400/30 disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleConfirmResetData();
+                      }}
+                      disabled={isDataBusy || !canConfirmReset}
+                      className="rounded-lg border border-rose-400/40 bg-rose-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Confirm reset
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelResetData}
+                      disabled={isDataBusy}
+                      className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {!FF.autotrackerV2UserMode ? (
         <section className="flex flex-col gap-5 rounded-2xl border border-slate-700 bg-slate-900/80 p-6 shadow-lg shadow-black/15">

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { FF } from "../../lib/feature-flags";
 import { useTimeFolioStore } from "../../state/tf-store";
-import { formatLongDate, formatShortMinutes } from "../../lib/datetime";
+import { formatLongDate, formatMinutes, formatShortMinutes } from "../../lib/datetime";
 import { cn, fieldClassName, primaryButtonClassName, secondaryButtonClassName } from "../../lib/ui";
 import { splitAutoSessionMethodLabel } from "../../lib/tf-session-adapters";
 import type { TfSessionLog } from "../../types/models";
@@ -21,6 +21,24 @@ type FeedbackState = {
   kind: "success" | "error";
   text: string;
 };
+
+function OverviewStat({
+  label,
+  value,
+  meta,
+}: {
+  label: string;
+  value: string;
+  meta: string;
+}) {
+  return (
+    <div className="rounded-[20px] border border-white/10 bg-slate-950/35 p-4">
+      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-white">{value}</p>
+      <p className="mt-1 text-xs text-slate-400">{meta}</p>
+    </div>
+  );
+}
 
 function toMethodKey(method: string): string {
   return method.trim().toLowerCase().replace(/\s+/g, "-");
@@ -403,7 +421,15 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
   );
 }
 
-export function SessionLogPanel() {
+export function SessionLogPanel({
+  pageDescription,
+  pageTitle,
+  showOverviewMetrics = false,
+}: {
+  pageDescription?: string;
+  pageTitle?: string;
+  showOverviewMetrics?: boolean;
+}) {
   const store = useTimeFolioStore();
   const { state, isLoading, error } = store;
   const autoTracker = useAutoTrackerV2SessionControl();
@@ -425,6 +451,8 @@ export function SessionLogPanel() {
   const sessions = [...state.sessionLogs].sort(
     (a, b) => new Date(b.startISO).getTime() - new Date(a.startISO).getTime()
   );
+  const totalHours = sessions.reduce((sum, session) => sum + session.hours, 0);
+  const latestSessionDate = sessions[0]?.date ?? null;
 
   async function persistSession(session: TfSessionLog, successText: string) {
     try {
@@ -471,6 +499,13 @@ export function SessionLogPanel() {
 
   return (
     <div className="p-4 flex flex-col gap-4">
+      {pageTitle ? (
+        <div className="space-y-1 px-1">
+          <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">{pageTitle}</h2>
+          {pageDescription ? <p className="text-sm text-slate-400">{pageDescription}</p> : null}
+        </div>
+      ) : null}
+
       <section className="rounded-3xl border border-slate-700 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-5 shadow-lg shadow-black/20">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
@@ -524,6 +559,31 @@ export function SessionLogPanel() {
           </div>
         ) : null}
       </section>
+
+      {showOverviewMetrics ? (
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <OverviewStat
+            label="Total Hours"
+            value={formatMinutes(Math.round(totalHours * 60))}
+            meta="All recorded TimeFolio session time."
+          />
+          <OverviewStat
+            label="Sessions"
+            value={String(sessions.length)}
+            meta="Manual, timer, and Auto-Tracking entries."
+          />
+          <OverviewStat
+            label="Latest Session"
+            value={latestSessionDate ? formatLongDate(latestSessionDate) : "No sessions yet"}
+            meta="Most recent recorded study activity."
+          />
+          <OverviewStat
+            label="Summaries"
+            value={String(state.summaries.length)}
+            meta="Saved TimeFolio summary snapshots."
+          />
+        </section>
+      ) : null}
 
       {feedback && (
         <div

@@ -1,16 +1,7 @@
 import {
-  AlertCircle,
-  BookOpen,
-  CalendarDays,
-  ClipboardCheck,
-  Clock,
   Database,
-  Flame,
-  House,
-  LayoutDashboard,
   Plus,
   RotateCcw,
-  Settings2,
   ShieldPlus,
   Trash2,
   Upload,
@@ -21,12 +12,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ModalShell } from "./components/modal-shell";
 import { MobileNav, NavigationButton } from "./components/ui";
+import { getDesktopNavigationGroups, getMobileNavigationItems, resolveAppSection } from "./features/app-navigation";
 import { DashboardView } from "./features/dashboard-view";
 import { NotebookView } from "./features/notebook-view";
 import { PlannerView } from "./features/planner-view";
 import { PortfolioView } from "./features/portfolio-view";
 import { isPortfolioSection } from "./features/portfolio-section";
 import { SettingsView } from "./features/settings-view";
+import { TimeFolioSessionLogView } from "./features/timefolio-session-log-view";
 import { getDateRange, sumStudyMinutes } from "./lib/analytics";
 import { daysBetween, formatHoursValue, formatLongDate, formatSavedAt } from "./lib/datetime";
 import {
@@ -48,21 +41,6 @@ import type {
   PersistenceSummary,
   TrashItem,
 } from "./types/models";
-
-const mobileNavigationItems = [
-  { id: "dashboard" as const, label: "Today", icon: House },
-  { id: "planner" as const, label: "Plan", icon: CalendarDays },
-  { id: "tests" as const, label: "Practice Tests", icon: ClipboardCheck },
-  { id: "weakTopics" as const, label: "Weak Topics", icon: Flame },
-  { id: "errorLog" as const, label: "Error Log", icon: AlertCircle },
-  ...(FF.timefolio
-    ? [{ id: "timefolio" as const, label: "Study Time", icon: Clock }]
-    : []),
-  ...(FF.notebook
-    ? [{ id: "notebook" as const, label: "Notebook", icon: BookOpen }]
-    : []),
-  { id: "settings" as const, label: "Settings", icon: Settings2 },
-];
 
 function formatCountsLine(counts: BackupMetadata["counts"]) {
   return `${counts.studyBlocks} tasks · ${counts.practiceTests} tests · ${counts.weakTopicEntries} topics`;
@@ -486,13 +464,19 @@ export default function App() {
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
   const reminderDispatchRef = useRef(new Set<string>());
   const activeSection = state.preferences.activeSection;
-  const resolvedSection =
-    !FF.timefolio && activeSection === "timefolio"
-      ? "dashboard"
-      : !FF.notebook && activeSection === "notebook"
-        ? "dashboard"
-        : activeSection;
+  const resolvedSection = resolveAppSection(activeSection, {
+    notebookEnabled: FF.notebook,
+    timefolioEnabled: FF.timefolio,
+  });
   const portfolioActive = isPortfolioSection(resolvedSection);
+  const mobileNavigationItems = getMobileNavigationItems({
+    notebookEnabled: FF.notebook,
+    timefolioEnabled: FF.timefolio,
+  });
+  const desktopNavigationGroups = getDesktopNavigationGroups({
+    notebookEnabled: FF.notebook,
+    timefolioEnabled: FF.timefolio,
+  });
   const totalMinutes = sumStudyMinutes(state.studyBlocks);
   const dateRange = getDateRange(state.studyBlocks);
   const persistenceCopy =
@@ -522,7 +506,16 @@ export default function App() {
   }, [state.preferences.themeId, state.preferences.enhancedThemeIds]);
 
   useEffect(() => {
-    if (!FF.timefolio && activeSection === "timefolio") {
+    if (activeSection === "timefolio") {
+      void setActiveSection(FF.timefolio ? "sessionLog" : "dashboard");
+    }
+  }, [activeSection, setActiveSection]);
+
+  useEffect(() => {
+    if (
+      !FF.timefolio &&
+      (activeSection === "sessionLog" || activeSection === "analytics" || activeSection === "heatmap")
+    ) {
       void setActiveSection("dashboard");
     }
   }, [activeSection, setActiveSection]);
@@ -771,6 +764,9 @@ export default function App() {
     case "planner":
       sectionContent = <PlannerView />;
       break;
+    case "sessionLog":
+      sectionContent = <TimeFolioSessionLogView />;
+      break;
     case "settings":
       sectionContent = (
         <SettingsView
@@ -878,123 +874,37 @@ export default function App() {
             </div>
 
             <nav className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1 scrollbar-subtle">
-              <div className="space-y-0.5">
-                <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">Core</p>
-                <NavigationButton
-                  icon={House}
-                  label="Today"
-                  active={resolvedSection === "dashboard"}
-                  onClick={() => {
-                    startTransition(() => {
-                      setPortfolioOverviewActive(false);
-                      void setActiveSection("dashboard");
-                    });
-                  }}
-                />
-                <NavigationButton
-                  icon={CalendarDays}
-                  label="Plan"
-                  active={resolvedSection === "planner"}
-                  onClick={() => {
-                    startTransition(() => {
-                      setPortfolioOverviewActive(false);
-                      void setActiveSection("planner");
-                    });
-                  }}
-                />
-              </div>
+              {desktopNavigationGroups.map((group) => (
+                <div key={group.id} className="space-y-0.5">
+                  <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">{group.label}</p>
+                  {group.items.map((item) => {
+                    const isOverview = item.id === "portfolioOverview";
+                    const isActive = isOverview
+                      ? portfolioOverviewActive
+                      : !portfolioOverviewActive && resolvedSection === item.id;
 
-              <div className="space-y-0.5">
-                <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">Portfolio</p>
-                <NavigationButton
-                  icon={LayoutDashboard}
-                  label="Overview"
-                  active={portfolioOverviewActive}
-                  onClick={() => {
-                    startTransition(() => {
-                      setPortfolioOverviewActive(true);
-                    });
-                  }}
-                />
-                <NavigationButton
-                  icon={ClipboardCheck}
-                  label="Practice Tests"
-                  active={!portfolioOverviewActive && resolvedSection === "tests"}
-                  onClick={() => {
-                    startTransition(() => {
-                      setPortfolioOverviewActive(false);
-                      void setActiveSection("tests");
-                    });
-                  }}
-                />
-                <NavigationButton
-                  icon={Flame}
-                  label="Weak Topics"
-                  active={!portfolioOverviewActive && resolvedSection === "weakTopics"}
-                  onClick={() => {
-                    startTransition(() => {
-                      setPortfolioOverviewActive(false);
-                      void setActiveSection("weakTopics");
-                    });
-                  }}
-                />
-                <NavigationButton
-                  icon={AlertCircle}
-                  label="Error Log"
-                  active={!portfolioOverviewActive && resolvedSection === "errorLog"}
-                  onClick={() => {
-                    startTransition(() => {
-                      setPortfolioOverviewActive(false);
-                      void setActiveSection("errorLog");
-                    });
-                  }}
-                />
-                {FF.timefolio ? (
-                  <NavigationButton
-                    icon={Clock}
-                    label="Study Time"
-                    active={!portfolioOverviewActive && resolvedSection === "timefolio"}
-                    onClick={() => {
-                      startTransition(() => {
-                        setPortfolioOverviewActive(false);
-                        void setActiveSection("timefolio");
-                      });
-                    }}
-                  />
-                ) : null}
-              </div>
-
-              {FF.notebook ? (
-                <div className="space-y-0.5">
-                  <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">Workspace</p>
-                  <NavigationButton
-                    icon={BookOpen}
-                    label="Notebook"
-                    active={resolvedSection === "notebook"}
-                    onClick={() => {
-                      startTransition(() => {
-                        setPortfolioOverviewActive(false);
-                        void setActiveSection("notebook");
-                      });
-                    }}
-                  />
+                    return (
+                      <NavigationButton
+                        key={item.id}
+                        active={isActive}
+                        icon={item.icon}
+                        label={item.label}
+                        onClick={() => {
+                          startTransition(() => {
+                            if (isOverview) {
+                              setPortfolioOverviewActive(true);
+                              return;
+                            }
+                            const sectionId = item.id as Exclude<typeof item.id, "portfolioOverview">;
+                            setPortfolioOverviewActive(false);
+                            void setActiveSection(sectionId);
+                          });
+                        }}
+                      />
+                    );
+                  })}
                 </div>
-              ) : null}
-
-              <div className="space-y-0.5">
-                <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">System</p>
-                <NavigationButton
-                  icon={Settings2}
-                  label="Settings"
-                  active={resolvedSection === "settings"}
-                  onClick={() => {
-                    startTransition(() => {
-                      setPortfolioOverviewActive(false);
-                      void setActiveSection("settings");
-                    });
-                  }}
-                />
-              </div>
+              ))}
             </nav>
 
             <div className="space-y-3 border-t border-white/5 pt-3">
@@ -1017,6 +927,7 @@ export default function App() {
             activeSection={resolvedSection}
             onSelect={(section) => {
               startTransition(() => {
+                setPortfolioOverviewActive(false);
                 void setActiveSection(section);
               });
             }}

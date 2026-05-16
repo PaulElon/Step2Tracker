@@ -3,10 +3,13 @@ export type StudyStatusFilter = StudyStatus | "All";
 export type SectionId =
   | "dashboard"
   | "planner"
+  | "sessionLog"
   | "weakTopics"
   | "tests"
+  | "analytics"
   | "settings"
   | "errorLog"
+  | "heatmap"
   | "timefolio"
   | "notebook";
 export type PlannerSortField = "date" | "order" | "category" | "task";
