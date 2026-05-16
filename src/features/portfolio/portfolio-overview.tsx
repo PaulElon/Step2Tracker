@@ -160,7 +160,10 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
       const [label, count] = [...topicCounts.entries()].sort(
         (left, right) => right[1] - left[1],
       )[0];
-      return { kind: "topic", label, count };
+      if (count >= 2) {
+        return { kind: "topic", label, count };
+      }
+      return null;
     }
     const errorTypeCounts = new Map<string, number>();
     for (const entry of errorLogEntries) {
@@ -480,17 +483,18 @@ function PerformanceTrendPanel({
   trend: TrendPoint[];
   onNavigate: (section: PortfolioOverviewSectionTarget) => void;
 }) {
+  const hasEnoughTrendData = trend.length >= 3;
   return (
     <SectionPanel
       title="Performance Trend"
       subtitle="Average score over time"
       icon={TrendingUp}
     >
-      {trend.length ? (
+      {hasEnoughTrendData ? (
         <TrendSparkline trend={trend} />
       ) : (
         <EmptyHint
-          text="Log a practice test to see your trend."
+          text="Log at least 3 tests to see a performance trend."
           cta="Open Practice Tests"
           onClick={() => onNavigate("tests")}
         />
@@ -653,7 +657,7 @@ function InsightsRail({
           meta={
             topErrorPattern
               ? `${topErrorPattern.count} miss${topErrorPattern.count === 1 ? "" : "es"} logged`
-              : "Log an error to start tracking patterns."
+              : "Log more missed topics to identify a pattern."
           }
           valueTone="violet"
         />
@@ -848,8 +852,8 @@ function RecommendedNextActions({
     actions.push({
       key: "study-time",
       icon: Clock,
-      title: `Study ${weeklyHours}h this week`,
-      description: "Stay on track with your plan",
+      title: `Target ${weeklyHours}h this week`,
+      description: "Based on your daily goal",
       target: "sessionLog",
     });
   } else {

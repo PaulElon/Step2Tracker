@@ -30,6 +30,13 @@ type HoverState = {
   top: number;
 };
 
+type DayDetailStats = {
+  totalSessions: number;
+  totalStudySessions: number;
+  distractionSessions: number;
+  distractionMinutes: number;
+};
+
 function dayIntensityLevel(minutes: number): 0 | 1 | 2 | 3 | 4 {
   if (minutes >= 240) return 4;
   if (minutes >= 120) return 3;
@@ -39,12 +46,47 @@ function dayIntensityLevel(minutes: number): 0 | 1 | 2 | 3 | 4 {
 }
 
 const LEVEL_CLASS: Record<0 | 1 | 2 | 3 | 4, string> = {
-  0: "bg-slate-700/65",
-  1: "bg-sky-900/95",
-  2: "bg-blue-700/90",
-  3: "bg-blue-500/90",
+  0: "bg-slate-500/15",
+  1: "bg-sky-500/35",
+  2: "bg-blue-500/55",
+  3: "bg-blue-500/80",
   4: "bg-cyan-300/95",
 };
+
+function getDisplayMethod(method: string): { label: string; isAuto: boolean } {
+  return splitAutoSessionMethodLabel(method);
+}
+
+function computeDayDetailStats(activity: DayActivity | null | undefined): DayDetailStats {
+  if (!activity) {
+    return {
+      totalSessions: 0,
+      totalStudySessions: 0,
+      distractionSessions: 0,
+      distractionMinutes: 0,
+    };
+  }
+
+  let totalStudySessions = 0;
+  let distractionSessions = 0;
+  let distractionMinutes = 0;
+
+  for (const session of activity.allSessions) {
+    if (session.isDistraction) {
+      distractionSessions += 1;
+      distractionMinutes += Math.max(0, Math.round(session.hours * 60));
+      continue;
+    }
+    totalStudySessions += 1;
+  }
+
+  return {
+    totalSessions: activity.allSessions.length,
+    totalStudySessions,
+    distractionSessions,
+    distractionMinutes,
+  };
+}
 
 function buildYearWeeks(year: number): { yearStart: string; yearEnd: string; weeks: string[][] } {
   const yearStart = `${year}-01-01`;
@@ -194,6 +236,9 @@ function OverviewActivityHeatmapBody() {
 
   const selectedActivity = selectedDate ? activityByDate.get(selectedDate) : null;
   const tooltipActivity = hovered ? activityByDate.get(hovered.date) : null;
+  const selectedStats = computeDayDetailStats(selectedActivity);
+  const tooltipTopMethod = tooltipActivity?.topMethod ? getDisplayMethod(tooltipActivity.topMethod) : null;
+  const selectedTopMethod = selectedActivity?.topMethod ? getDisplayMethod(selectedActivity.topMethod) : null;
 
   if (isLoading) {
     return (
@@ -284,7 +329,6 @@ function OverviewActivityHeatmapBody() {
                   week.map((date, dayIndex) => {
                     const inYear = date >= yearStart && date <= yearEnd;
                     const minutes = inYear ? (activityByDate.get(date)?.studyMinutes ?? 0) : 0;
-                    const activity = activityByDate.get(date);
                     const level = dayIntensityLevel(minutes);
                     const isToday = date === today;
                     const isSelected = selectedDate === date;
@@ -309,7 +353,7 @@ function OverviewActivityHeatmapBody() {
                         className={cn(
                           "rounded-[3px] border transition",
                           inYear
-                            ? "cursor-pointer border-white/[0.06] hover:border-cyan-200/45 hover:brightness-110"
+                            ? "cursor-pointer border-white/[0.08] hover:border-cyan-300/70 hover:brightness-110"
                             : "cursor-default border-transparent opacity-25",
                           LEVEL_CLASS[level],
                           isToday && "ring-1 ring-cyan-200/80",
@@ -326,11 +370,6 @@ function OverviewActivityHeatmapBody() {
                             ? `${formatLongDate(date)}: ${minutes > 0 ? formatMinutes(minutes) : "No study activity"}`
                             : "Outside current year"
                         }
-                        title={
-                          inYear
-                            ? `${formatLongDate(date)} • ${minutes > 0 ? formatMinutes(minutes) : "No study"}${activity ? ` • ${activity.studySessionCount} session${activity.studySessionCount === 1 ? "" : "s"}` : ""}`
-                            : undefined
-                        }
                       />
                     );
                   }),
@@ -338,23 +377,46 @@ function OverviewActivityHeatmapBody() {
 
                 {hovered ? (
                   <div
-                    className="pointer-events-none absolute z-20 w-[220px] -translate-x-1/2 -translate-y-full rounded-xl border border-white/10 bg-[#070e18]/95 px-3 py-2.5 text-xs shadow-2xl shadow-black/40"
+                    className="pointer-events-none absolute z-20 w-[230px] -translate-x-1/2 -translate-y-full rounded-xl border px-3 py-2.5 text-xs shadow-2xl"
                     style={{
                       left: `${Math.min(Math.max(hovered.left, 112), Math.max(gridWidth - 112, 112))}px`,
                       top: `${Math.max(hovered.top - 8, 8)}px`,
+                      borderColor: "var(--panel-border)",
+                      background: "var(--panel-support-bg)",
+                      boxShadow: "0 14px 36px var(--panel-shadow)",
                     }}
                   >
-                    <p className="font-semibold text-slate-100">{formatLongDate(hovered.date)}</p>
-                    <p className="mt-1 text-slate-300">
+                    <p className="font-semibold text-slate-100 [color:var(--rich-text,#e2e8f0)]">
+                      {formatLongDate(hovered.date)}
+                    </p>
+                    <p className="mt-1 text-slate-200 [color:var(--rich-text,#e2e8f0)]">
                       Study: {formatMinutes(tooltipActivity?.studyMinutes ?? 0)}
                     </p>
-                    <p className="text-slate-400">
+                    <p className="text-slate-400 [color:var(--rich-text-muted,#94a3b8)]">
                       Sessions: {tooltipActivity?.studySessionCount ?? 0}
                     </p>
-                    <p className="truncate text-slate-400">
-                      Top method: {tooltipActivity?.topMethod ?? "—"}
+                    <p className="mt-0.5 flex items-center gap-1.5 text-slate-400 [color:var(--rich-text-muted,#94a3b8)]">
+                      <span className="shrink-0">Top method:</span>
+                      {tooltipTopMethod ? (
+                        <>
+                          <span className="truncate [color:var(--rich-text,#e2e8f0)]">{tooltipTopMethod.label}</span>
+                          {tooltipTopMethod.isAuto ? (
+                            <span className="rounded-full border border-cyan-400/30 bg-cyan-500/15 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
+                              auto
+                            </span>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="[color:var(--rich-text,#e2e8f0)]">—</span>
+                      )}
                     </p>
-                    <span className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r border-white/10 bg-[#070e18]/95" />
+                    <span
+                      className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r"
+                      style={{
+                        borderColor: "var(--panel-border)",
+                        background: "var(--panel-support-bg)",
+                      }}
+                    />
                   </div>
                 ) : null}
               </div>
@@ -368,10 +430,10 @@ function OverviewActivityHeatmapBody() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-3">
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
           <span>Less</span>
-          <span className="h-2.5 w-2.5 rounded-[3px] border border-white/[0.08] bg-slate-700/65" />
-          <span className="h-2.5 w-2.5 rounded-[3px] border border-white/[0.08] bg-sky-900/95" />
-          <span className="h-2.5 w-2.5 rounded-[3px] border border-white/[0.08] bg-blue-700/90" />
-          <span className="h-2.5 w-2.5 rounded-[3px] border border-white/[0.08] bg-blue-500/90" />
+          <span className="h-2.5 w-2.5 rounded-[3px] border border-white/[0.08] bg-slate-500/15" />
+          <span className="h-2.5 w-2.5 rounded-[3px] border border-white/[0.08] bg-sky-500/35" />
+          <span className="h-2.5 w-2.5 rounded-[3px] border border-white/[0.08] bg-blue-500/55" />
+          <span className="h-2.5 w-2.5 rounded-[3px] border border-white/[0.08] bg-blue-500/80" />
           <span className="h-2.5 w-2.5 rounded-[3px] border border-white/[0.08] bg-cyan-300/95" />
           <span>More</span>
         </div>
@@ -390,7 +452,7 @@ function OverviewActivityHeatmapBody() {
           onClose={() => setSelectedDate(null)}
           position="center"
           titleId="overview-heatmap-day-title"
-          contentClassName="max-w-[860px]"
+          contentClassName="max-w-[920px]"
         >
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -399,10 +461,7 @@ function OverviewActivityHeatmapBody() {
                 {formatLongDate(selectedDate)}
               </h4>
               <p className="mt-2 text-sm text-slate-300">
-                {formatMinutes(selectedActivity?.studyMinutes ?? 0)} study time · {selectedActivity?.studySessionCount ?? 0} study session{(selectedActivity?.studySessionCount ?? 0) === 1 ? "" : "s"}
-              </p>
-              <p className="mt-1 text-xs text-slate-400">
-                Top method: {selectedActivity?.topMethod ?? "—"}
+                Review study and session details for the selected day.
               </p>
             </div>
             <button
@@ -414,29 +473,73 @@ function OverviewActivityHeatmapBody() {
             </button>
           </div>
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-            <div className="space-y-3">
-              <div className="rounded-[14px] border border-white/10 bg-white/[0.025] p-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Method breakdown</p>
-                {selectedActivity?.methodBreakdown.length ? (
-                  <ul className="mt-2 space-y-1.5">
-                    {selectedActivity.methodBreakdown.slice(0, 5).map((entry) => (
-                      <li key={entry.method} className="flex items-center justify-between gap-3 text-sm text-slate-200">
-                        <span className="truncate">{entry.method}</span>
-                        <span className="shrink-0 tabular-nums text-slate-300">{formatMinutes(entry.minutes)}</span>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <StatTile label="Study Time" value={formatMinutes(selectedActivity?.studyMinutes ?? 0)} />
+            <StatTile
+              label="Sessions"
+              value={`${selectedStats.totalStudySessions}`}
+              meta={`${selectedStats.totalSessions} total logged`}
+            />
+            <StatTile
+              label="Top Method"
+              value={selectedTopMethod?.label ?? "—"}
+              meta={selectedTopMethod?.isAuto ? "Auto-tracked method" : "Most-used method"}
+              badge={selectedTopMethod?.isAuto ? "Auto" : undefined}
+              tone={selectedTopMethod?.isAuto ? "info" : "default"}
+            />
+            <StatTile
+              label="Distraction"
+              value={
+                selectedStats.distractionSessions > 0
+                  ? `${selectedStats.distractionSessions} session${selectedStats.distractionSessions === 1 ? "" : "s"}`
+                  : "None"
+              }
+              meta={
+                selectedStats.distractionMinutes > 0
+                  ? `${formatMinutes(selectedStats.distractionMinutes)} logged`
+                  : "No distraction time logged"
+              }
+              tone={selectedStats.distractionSessions > 0 ? "warn" : "default"}
+            />
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)]">
+            <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Method breakdown</p>
+              {selectedActivity?.methodBreakdown.length ? (
+                <ol className="mt-3 space-y-2">
+                  {selectedActivity.methodBreakdown.slice(0, 6).map((entry, index) => {
+                    const display = getDisplayMethod(entry.method);
+                    return (
+                      <li
+                        key={entry.method}
+                        className="flex items-center justify-between gap-3 rounded-[12px] border border-white/[0.08] bg-slate-950/35 px-3 py-2"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="text-[11px] tabular-nums text-slate-500">{String(index + 1).padStart(2, "0")}</span>
+                          <span className="truncate text-sm text-slate-100">{display.label}</span>
+                          {display.isAuto ? (
+                            <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
+                              auto
+                            </span>
+                          ) : null}
+                        </div>
+                        <span className="shrink-0 text-sm tabular-nums text-slate-300">
+                          {formatMinutes(entry.minutes)}
+                        </span>
                       </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-2 text-sm text-slate-400">No study sessions on this day.</p>
-                )}
-              </div>
+                    );
+                  })}
+                </ol>
+              ) : (
+                <p className="mt-2 text-sm text-slate-400">No study sessions on this day.</p>
+              )}
             </div>
 
-            <div className="rounded-[14px] border border-white/10 bg-white/[0.02] p-3">
+            <div className="rounded-[16px] border border-white/10 bg-white/[0.02] p-4">
               <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Session log</p>
               {selectedActivity?.allSessions.length ? (
-                <div className="mt-2 max-h-[340px] space-y-2 overflow-y-auto pr-1">
+                <div className="mt-3 max-h-[340px] space-y-2 overflow-y-auto pr-1">
                   {selectedActivity.allSessions.map((session) => {
                     const { label, isAuto } = splitAutoSessionMethodLabel(session.method);
                     const minutes = Math.max(0, Math.round(session.hours * 60));
@@ -490,6 +593,37 @@ function StatPill({ label, value, meta }: { label: string; value: string; meta?:
       <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
       <p className="mt-0.5 text-sm font-semibold tabular-nums text-cyan-100">{value}</p>
       {meta ? <p className="mt-0.5 text-[10px] text-slate-500">{meta}</p> : null}
+    </div>
+  );
+}
+
+function StatTile({
+  label,
+  value,
+  meta,
+  badge,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  meta?: string;
+  badge?: string;
+  tone?: "default" | "info" | "warn";
+}) {
+  const toneValueClass =
+    tone === "warn" ? "text-rose-200" : tone === "info" ? "text-cyan-100" : "text-slate-100";
+  return (
+    <div className="rounded-[14px] border border-white/10 bg-white/[0.03] px-3.5 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
+        {badge ? (
+          <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
+            {badge}
+          </span>
+        ) : null}
+      </div>
+      <p className={cn("mt-1 text-[1.05rem] font-semibold tabular-nums", toneValueClass)}>{value}</p>
+      {meta ? <p className="mt-1 text-[11px] text-slate-400">{meta}</p> : null}
     </div>
   );
 }
