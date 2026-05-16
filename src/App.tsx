@@ -21,7 +21,7 @@ import { isPortfolioSection } from "./features/portfolio-section";
 import { SettingsView } from "./features/settings-view";
 import { TimeFolioSessionLogView } from "./features/timefolio-session-log-view";
 import { getDateRange, sumStudyMinutes } from "./lib/analytics";
-import { daysBetween, formatHoursValue, formatLongDate, formatSavedAt } from "./lib/datetime";
+import { daysBetween, daysUntilDateKey, formatHoursValue, formatLongDate, formatSavedAt } from "./lib/datetime";
 import {
   formatReminderBody,
   getDueStudyBlockReminders,
@@ -244,7 +244,7 @@ function computeCountdown(timer: ExamTimer): string {
   const minutes = totalMinutes % 60;
   const totalHours = Math.floor(totalMinutes / 60);
   const hours = totalHours % 24;
-  const totalDays = Math.floor(totalHours / 24);
+  const totalDays = daysUntilDateKey(timer.examDate);
   const mode = timer.displayMode ?? "days";
   const hrMin = timer.showHrMin ? ` ${hours}h ${minutes}m` : "";
   if (mode === "days") {

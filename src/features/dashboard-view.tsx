@@ -23,15 +23,16 @@ import {
   getStudyBlockMinutes,
   getTodayBlocks,
 } from "../lib/analytics";
-import { formatLongDate, formatMinutes, getTodayKey } from "../lib/datetime";
+import { daysUntilDateKey, formatLongDate, formatMinutes, getTodayKey } from "../lib/datetime";
 import { FF } from "../lib/feature-flags";
+import { launchResource } from "../lib/launcher";
 import { cn, primaryButtonClassName, secondaryButtonClassName } from "../lib/ui";
 import { useAppStore } from "../state/app-store";
 import { StudyTaskCard } from "../components/study-task-card";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { TaskLaunchButton } from "../components/task-launch-button";
 import { CategoryBadge, EmptyState } from "../components/ui";
-import type { ExamTimer, SectionId } from "../types/models";
+import type { ExamTimer, ResourceLink, SectionId, StudyBlock } from "../types/models";
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -54,8 +55,7 @@ function getSoonestUpcomingTimer(timers: ExamTimer[]): ExamTimer | null {
 }
 
 function daysUntilTimer(timer: ExamTimer): number {
-  const target = new Date(`${timer.examDate}T${timer.examTime ?? "23:59"}`).getTime();
-  return Math.max(0, Math.ceil((target - Date.now()) / 86_400_000));
+  return daysUntilDateKey(timer.examDate);
 }
 
 function ProgressRing({ percent, size = 132, stroke = 12 }: { percent: number; size?: number; stroke?: number }) {
@@ -116,6 +116,19 @@ function categoryTileStyle(category: string) {
 function categoryShortLabel(category: string) {
   const first = category.split(/[\s_-]/)[0] ?? category;
   return first.length > 6 ? first.slice(0, 5) : first;
+}
+
+function findMatchingResource(taskName: string, category: string, resourceLinks: ResourceLink[]): ResourceLink | null {
+  const haystack = `${taskName} ${category}`.toLowerCase();
+  let best: ResourceLink | null = null;
+  for (const link of resourceLinks) {
+    if (haystack.includes(link.label.toLowerCase())) {
+      if (!best || link.label.length > best.label.length) {
+        best = link;
+      }
+    }
+  }
+  return best;
 }
 
 function looksLikeImportedTaskNotes(notes: string) {
@@ -183,6 +196,7 @@ function SnapshotRow({
 export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void }) {
   const { state, upsertStudyBlock, setDailyGoalMinutes, setActiveSection } = useAppStore();
   const [showTaskEditor, setShowTaskEditor] = useState(false);
+  const [editingTask, setEditingTask] = useState<StudyBlock | null>(null);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInputValue, setGoalInputValue] = useState("");
 
@@ -204,9 +218,11 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
   const remediationLinks = getRemediationLinks(state.practiceTests, state.studyBlocks);
   const uncoveredTopicNames = [...new Set(remediationLinks.flatMap((l) => l.uncoveredTopics))];
   const upcomingTimer = getSoonestUpcomingTimer(state.preferences.examTimers);
+  const countdownDays = upcomingTimer ? daysUntilTimer(upcomingTimer) : 0;
   const greeting = getGreeting();
   const heroTile = nextTask ? categoryTileStyle(nextTask.category) : null;
   const heroNextTaskMinutes = nextTask ? getStudyBlockMinutes(nextTask) : 0;
+  const resourceLinks = state.preferences.resourceLinks;
 
   const commitGoalMinutes = () => {
     const parsedMinutes = Number(goalInputValue);
@@ -219,6 +235,27 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
   const goToSection = (section: SectionId) => {
     void setActiveSection(section);
   };
+
+  const openNewTaskEditor = () => {
+    setEditingTask(null);
+    setShowTaskEditor(true);
+  };
+
+  async function startNextTask(task: StudyBlock) {
+    setShowTaskEditor(false);
+    setEditingTask(null);
+    const resource = findMatchingResource(task.task, task.category, resourceLinks);
+    if (resource) {
+      try {
+        await launchResource(resource.url);
+        return;
+      } catch {
+        // Fall back to the task editor if the resource cannot launch.
+      }
+    }
+
+    setEditingTask(task);
+  }
 
   type BestMove = {
     icon: typeof AlertCircle;
@@ -238,7 +275,9 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
       iconColorClass: "text-violet-300",
       title: "Start your next task",
       subtitle: nextTask.task,
-      action: () => {},
+      action: () => {
+        void startNextTask(nextTask);
+      },
     });
   } else if (todayTasks.length === 0) {
     bestMoves.push({
@@ -247,7 +286,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
       iconColorClass: "text-slate-300",
       title: "Plan your day",
       subtitle: "Add tasks to get started",
-      action: () => setShowTaskEditor(true),
+      action: openNewTaskEditor,
     });
   }
 
@@ -395,7 +434,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                     <button
                       type="button"
                       className={primaryButtonClassName}
-                      onClick={() => setShowTaskEditor(true)}
+                      onClick={openNewTaskEditor}
                     >
                       <Plus className="h-4 w-4" />
                       Add task
@@ -427,7 +466,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                   <button
                     type="button"
                     className={secondaryButtonClassName}
-                    onClick={() => setShowTaskEditor(true)}
+                    onClick={openNewTaskEditor}
                   >
                     <Plus className="h-4 w-4" />
                     Add
@@ -464,7 +503,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                         <button
                           type="button"
                           className={secondaryButtonClassName}
-                          onClick={() => setShowTaskEditor(true)}
+                          onClick={openNewTaskEditor}
                         >
                           Add task
                         </button>
@@ -670,7 +709,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                   <div>
                     <p className="text-sm font-semibold text-white">{upcomingTimer.label}</p>
                     <p className="mt-0.5 text-xs text-slate-400">
-                      {daysUntilTimer(upcomingTimer)} day{daysUntilTimer(upcomingTimer) === 1 ? "" : "s"} until test
+                      {countdownDays} day{countdownDays === 1 ? "" : "s"} until test
                     </p>
                   </div>
                   <div className="border-t border-white/[0.06] pt-3">
@@ -722,7 +761,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                 {FF.notebook && onOpenNotebook ? (
                   <QuickAction icon={BookOpen} label="Notebook" onClick={onOpenNotebook} />
                 ) : null}
-                <QuickAction icon={Plus} label="Add Task" onClick={() => setShowTaskEditor(true)} />
+                <QuickAction icon={Plus} label="Add Task" onClick={openNewTaskEditor} />
               </div>
             </section>
 
@@ -757,6 +796,21 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
               });
               if (saved) {
                 setShowTaskEditor(false);
+              }
+            })();
+          }}
+        />
+      ) : null}
+      {editingTask ? (
+        <StudyTaskEditorSheet
+          key={editingTask.id}
+          task={editingTask}
+          onClose={() => setEditingTask(null)}
+          onSave={(draft) => {
+            void (async () => {
+              const saved = await upsertStudyBlock(draft);
+              if (saved) {
+                setEditingTask(null);
               }
             })();
           }}
