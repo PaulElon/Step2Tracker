@@ -265,6 +265,7 @@ function computeCountdown(timer: ExamTimer): string {
 
 interface UpdateBannerCheckResult {
   available: boolean;
+  current_version: string;
   latest_version?: string;
 }
 
@@ -498,6 +499,20 @@ export default function App() {
       ? `${daysBetween(dateRange.startDate, dateRange.endDate) + 1} days`
       : "Add or import tasks.";
 
+  function resolveUpdateBannerVersion(result: UpdateBannerCheckResult): string | null {
+    const latestVersion = result.latest_version?.trim();
+    if (!result.available || !latestVersion) {
+      return null;
+    }
+
+    const currentVersion = result.current_version.trim();
+    if (currentVersion && currentVersion === latestVersion) {
+      return null;
+    }
+
+    return latestVersion;
+  }
+
   useEffect(() => {
     document.documentElement.dataset.theme = state.preferences.themeId;
     document.documentElement.classList.toggle(
@@ -627,6 +642,7 @@ export default function App() {
   useEffect(() => {
     const requestUpdateCheck = () => {
       void invoke("check_for_updates").catch(() => {});
+      void refreshUpdateBannerState();
     };
 
     requestUpdateCheck();
@@ -651,8 +667,8 @@ export default function App() {
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    listen<string>("update-available", (event) => {
-      setUpdateAvailable(event.payload);
+    listen<string>("update-available", () => {
+      void refreshUpdateBannerState();
     })
       .then((fn) => {
         unlisten = fn;
@@ -666,7 +682,7 @@ export default function App() {
   async function refreshUpdateBannerState() {
     try {
       const result = await invoke<UpdateBannerCheckResult>("check_for_update");
-      setUpdateAvailable(result.available && result.latest_version ? result.latest_version : null);
+      setUpdateAvailable(resolveUpdateBannerVersion(result));
     } catch {
       setUpdateAvailable(null);
     }
