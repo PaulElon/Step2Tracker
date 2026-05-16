@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTimeFolioStore } from "../../state/tf-store";
-import { totalsByDay } from "../../lib/tf-session-adapters";
+import { allocationByMethod, totalsByDay } from "../../lib/tf-session-adapters";
 import { formatLongDate, formatMinutes } from "../../lib/datetime";
 import { TimeFolioHeatmap } from "../../components/timefolio-heatmap";
 import type { TfSessionLog } from "../../types/models";
@@ -138,10 +138,12 @@ function SelectedDaySessionLog({
   selectedDate,
   selectedHours,
   selectedSessions,
+  summaryStats,
 }: {
   selectedDate?: string;
   selectedHours: number;
   selectedSessions: TfSessionLog[];
+  summaryStats?: { activeDays: number; totalHours: number; topMethod: string | null };
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const hasSelection = Boolean(selectedDate);
@@ -181,9 +183,29 @@ function SelectedDaySessionLog({
         </div>
 
         {!hasSelection ? (
-          <p className="text-sm leading-6 text-slate-500">
-            Select a day to inspect sessions.
-          </p>
+          summaryStats && summaryStats.activeDays > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs leading-5 text-slate-500">Select a day to inspect sessions.</p>
+              <div className="grid gap-2">
+                <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-3">
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Active Days</div>
+                  <div className="mt-1 text-xl font-semibold tabular-nums text-slate-100">{summaryStats.activeDays}</div>
+                </div>
+                <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-3">
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">All-Time Logged</div>
+                  <div className="mt-1 text-xl font-semibold tabular-nums text-slate-100">{formatMinutes(Math.round(summaryStats.totalHours * 60))}</div>
+                </div>
+                {summaryStats.topMethod ? (
+                  <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-3">
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Top Method</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-100 truncate">{summaryStats.topMethod}</div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm leading-6 text-slate-500">Select a day to inspect sessions.</p>
+          )
         ) : selectedSessions.length === 0 ? (
           <p className="text-sm leading-6 text-slate-500">
             No sessions recorded for this day.
@@ -231,6 +253,10 @@ export function HeatmapPanel({ showHeader = true }: { showHeader?: boolean }) {
   const { sessionLogs } = state;
   const dailyHours = totalsByDay(sessionLogs);
 
+  const activeDayCount = Object.keys(dailyHours).length;
+  const totalHours = sessionLogs.reduce((s, log) => s + log.hours, 0);
+  const topMethod = sessionLogs.length > 0 ? (allocationByMethod(sessionLogs)[0]?.method ?? null) : null;
+
   const selectedSessions = selectedDate
     ? sessionLogs.filter((s) => s.date === selectedDate)
     : [];
@@ -248,9 +274,14 @@ export function HeatmapPanel({ showHeader = true }: { showHeader?: boolean }) {
         <div className="grid min-h-0 flex-1 gap-6 overflow-hidden lg:grid-cols-[minmax(0,3fr)_minmax(18rem,1fr)] lg:items-stretch">
           <div className="h-full min-h-0 min-w-0 overflow-hidden">
             {sessionLogs.length === 0 ? (
-              <p className="text-sm leading-6 text-slate-500">
-                No sessions yet. Log a TimeFolio session to fill the calendar.
-              </p>
+              <div className="flex h-full flex-col items-center justify-center px-2 py-8">
+                <div className="w-full max-w-xs rounded-2xl border border-slate-700/60 bg-slate-900/60 p-6 text-center">
+                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">No Activity Yet</div>
+                  <p className="mt-3 text-sm leading-6 text-slate-400">
+                    Log your first study session to start filling the calendar. Each cell shades by hours — darker means more time logged that day.
+                  </p>
+                </div>
+              </div>
             ) : (
               <TimeFolioHeatmap
                 dailyHours={dailyHours}
@@ -264,6 +295,7 @@ export function HeatmapPanel({ showHeader = true }: { showHeader?: boolean }) {
             selectedDate={selectedDate}
             selectedHours={selectedHours}
             selectedSessions={selectedSessions}
+            summaryStats={{ activeDays: activeDayCount, totalHours, topMethod }}
           />
         </div>
       </div>

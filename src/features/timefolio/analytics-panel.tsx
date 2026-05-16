@@ -315,17 +315,23 @@ export function AnalyticsPanel() {
             </div>
           </div>
 
-          <div className="mt-5 flex items-end gap-2">
-            {analytics.trend.map((point, index) => (
-              <TrendBar
-                key={point.dateKey}
-                label={point.label}
-                hours={point.hours}
-                maxHours={trendPeakHours}
-                isLatest={index === analytics.trend.length - 1}
-              />
-            ))}
-          </div>
+          {trendPeakHours === 0 ? (
+            <div className="mt-5 flex h-28 items-center justify-center rounded-xl border border-slate-700/60 bg-slate-950/35 text-sm text-slate-500">
+              Log more sessions to see a trend.
+            </div>
+          ) : (
+            <div className="mt-5 flex items-end gap-2">
+              {analytics.trend.map((point, index) => (
+                <TrendBar
+                  key={point.dateKey}
+                  label={point.label}
+                  hours={point.hours}
+                  maxHours={trendPeakHours}
+                  isLatest={index === analytics.trend.length - 1}
+                />
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-5 shadow-[0_20px_50px_-35px_rgba(15,23,42,0.9)] xl:col-span-2">

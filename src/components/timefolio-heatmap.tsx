@@ -22,7 +22,7 @@ function intensityClass(hours: number): string {
   if (hours >= 6) return "bg-violet-400/90";
   if (hours >= 3) return "bg-violet-400/60";
   if (hours >= 1) return "bg-violet-400/35";
-  if (hours > 0) return "bg-violet-400/20";
+  if (hours > 0) return "bg-violet-400/25";
   return "bg-white/[0.04]";
 }
 
@@ -125,10 +125,10 @@ export function TimeFolioHeatmap({
 
       <div className="flex items-center justify-end gap-0.5 text-[9px] text-slate-500">
         <span>Less</span>
-        <span className="h-2 w-2 rounded-sm bg-violet-400/20" />
-        <span className="h-2 w-2 rounded-sm bg-violet-400/35" />
-        <span className="h-2 w-2 rounded-sm bg-violet-400/60" />
-        <span className="h-2 w-2 rounded-sm bg-violet-400/90" />
+        <span className="h-2 w-2 rounded-sm bg-violet-400/25" title="Under 1h" />
+        <span className="h-2 w-2 rounded-sm bg-violet-400/35" title="1–3h" />
+        <span className="h-2 w-2 rounded-sm bg-violet-400/60" title="3–6h" />
+        <span className="h-2 w-2 rounded-sm bg-violet-400/90" title="6h+" />
         <span>More</span>
       </div>
     </div>
