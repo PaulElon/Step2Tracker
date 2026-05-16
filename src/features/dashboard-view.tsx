@@ -28,6 +28,8 @@ import { FF } from "../lib/feature-flags";
 import { launchResource } from "../lib/launcher";
 import { cn, primaryButtonClassName, secondaryButtonClassName } from "../lib/ui";
 import { useAppStore } from "../state/app-store";
+import { useTimeFolioStore } from "../state/tf-store";
+import { getTrackedStudyMinutesForDate } from "../lib/tf-session-metrics";
 import { StudyTaskCard } from "../components/study-task-card";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { TaskLaunchButton } from "../components/task-launch-button";
@@ -195,12 +197,16 @@ function SnapshotRow({
 
 export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void }) {
   const { state, upsertStudyBlock, setDailyGoalMinutes, setActiveSection } = useAppStore();
+  const { state: tfState } = useTimeFolioStore();
   const [showTaskEditor, setShowTaskEditor] = useState(false);
   const [editingTask, setEditingTask] = useState<StudyBlock | null>(null);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInputValue, setGoalInputValue] = useState("");
 
   const todayKey = getTodayKey();
+  const trackedStudyMinutes = FF.timefolio
+    ? getTrackedStudyMinutesForDate(tfState.sessionLogs, todayKey)
+    : 0;
   const todayTasks = getTodayBlocks(state.studyBlocks, todayKey);
   const plannedMinutes = todayTasks.reduce((total, task) => total + getStudyBlockMinutes(task), 0);
   const completedMinutes = todayTasks
@@ -524,6 +530,9 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                   <ProgressRing percent={dailyGoalProgress} size={88} stroke={8} />
                   <div className="min-w-0 flex-1 space-y-1.5 text-sm">
                     <SnapshotRow icon={Clock3} label="Done time" value={formatMinutes(completedMinutes)} />
+                    {FF.timefolio ? (
+                      <SnapshotRow icon={Timer} label="Tracked study" value={formatMinutes(trackedStudyMinutes)} />
+                    ) : null}
                     <SnapshotRow
                       icon={ListTodo}
                       label="Tasks done"

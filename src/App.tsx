@@ -14,6 +14,7 @@ import { ModalShell } from "./components/modal-shell";
 import { MobileNav, NavigationButton } from "./components/ui";
 import { getDesktopNavigationGroups, getMobileNavigationItems, resolveAppSection } from "./features/app-navigation";
 import { DashboardView } from "./features/dashboard-view";
+import { TimeFolioStoreProvider } from "./state/tf-store";
 import { NotebookView } from "./features/notebook-view";
 import { PlannerView } from "./features/planner-view";
 import { PortfolioView } from "./features/portfolio-view";
@@ -759,7 +760,11 @@ export default function App() {
     );
   } else switch (resolvedSection) {
     case "dashboard":
-      sectionContent = <DashboardView onOpenNotebook={() => void setActiveSection("notebook")} />;
+      sectionContent = (
+        <TimeFolioStoreProvider>
+          <DashboardView onOpenNotebook={() => void setActiveSection("notebook")} />
+        </TimeFolioStoreProvider>
+      );
       break;
     case "planner":
       sectionContent = <PlannerView />;
