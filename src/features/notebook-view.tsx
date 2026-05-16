@@ -1630,9 +1630,9 @@ export function NotebookView() {
   const libraryTileButtonClass =
     "relative z-0 flex w-full flex-col items-center gap-2 rounded-[20px] border border-transparent bg-transparent px-2.5 py-2.5 text-center shadow-none transition duration-200 ease-out hover:border-white/10 hover:bg-white/[0.025] hover:shadow-[0_8px_20px_rgba(15,23,42,0.1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/25";
   const libraryFolderIconClass =
-    "flex h-16 w-16 items-center justify-center rounded-[18px] border border-slate-200/30 bg-gradient-to-br from-slate-100/90 via-sky-50/60 to-slate-200/70 shadow-[0_10px_24px_rgba(148,163,184,0.1)]";
+    "h-16 w-16 shrink-0 text-slate-400/90";
   const libraryDocumentIconClass =
-    "relative flex h-16 w-16 items-center justify-center rounded-[18px] border border-slate-200/35 bg-gradient-to-br from-slate-100/92 via-slate-200/86 to-slate-300/72 shadow-[0_10px_24px_rgba(148,163,184,0.1)]";
+    "h-16 w-16 shrink-0 text-slate-500/80";
   const libraryEmptyStateClass =
     "max-w-[20rem] rounded-[20px] border border-dashed border-white/10 bg-slate-950/18 px-5 py-6 text-left";
   const editorFieldClass =
@@ -1859,9 +1859,7 @@ export function NotebookView() {
                         className={libraryTileButtonClass}
                         title={folder.name.trim() || "Untitled Folder"}
                       >
-                        <div className={libraryFolderIconClass}>
-                          <Folder className="h-8 w-8 text-slate-400/90" aria-hidden="true" />
-                        </div>
+                        <Folder className={libraryFolderIconClass} aria-hidden="true" />
                         <div className="flex w-full min-w-0 flex-col items-center gap-0.5 overflow-hidden">
                           <div className="flex w-full min-w-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap">
                             <span className="min-w-0 truncate text-[13px] font-medium leading-5 tracking-[0.01em] text-slate-100">
@@ -1962,9 +1960,7 @@ export function NotebookView() {
                         className={libraryTileButtonClass}
                         title={document.title.trim() || "Untitled Document"}
                       >
-                        <div className={libraryDocumentIconClass}>
-                          <FileText className="h-8 w-8 text-slate-500/80" aria-hidden="true" />
-                        </div>
+                        <FileText className={libraryDocumentIconClass} aria-hidden="true" />
                         <div className="flex w-full min-w-0 flex-col items-center gap-0.5 overflow-hidden">
                           <div className="flex w-full min-w-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap">
                             <span className="min-w-0 truncate text-[13px] font-medium leading-5 tracking-[0.01em] text-slate-100">
