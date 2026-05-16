@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { addDays, daysBetween, formatLongDate, formatMinutes, getTodayKey, startOfWeek } from "../../lib/datetime";
 import { splitAutoSessionMethodLabel } from "../../lib/tf-session-adapters";
 import { cn } from "../../lib/ui";
@@ -232,6 +232,7 @@ function OverviewActivityHeatmapBody() {
 
   const [hovered, setHovered] = useState<HoverState | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const dayDetailsRef = useRef<HTMLDivElement | null>(null);
 
   const selectedActivity = selectedDate ? activityByDate.get(selectedDate) : null;
   const tooltipActivity = hovered ? activityByDate.get(hovered.date) : null;
@@ -251,6 +252,24 @@ function OverviewActivityHeatmapBody() {
     window.addEventListener("keydown", handleEscape);
     return () => {
       window.removeEventListener("keydown", handleEscape);
+    };
+  }, [selectedDate]);
+
+  useEffect(() => {
+    if (!selectedDate) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      dayDetailsRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "end",
+        inline: "nearest",
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
     };
   }, [selectedDate]);
 
@@ -279,22 +298,19 @@ function OverviewActivityHeatmapBody() {
   const gridWidth = weeks.length * DAY_CELL_SIZE + (weeks.length - 1) * DAY_CELL_GAP;
 
   return (
-    <section className="glass-panel flex flex-col gap-4 p-5 xl:p-6">
+    <section className="glass-panel flex flex-col gap-3 p-4 xl:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-white">Study Activity Heatmap</h3>
-          <p className="mt-1 text-sm text-slate-400">
-            Daily study intensity from session logs. Study totals exclude distraction sessions.
-          </p>
         </div>
         <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-slate-400">
           {year}
         </div>
       </div>
 
-      <div className="overflow-x-auto pb-1">
+      <div className="overflow-x-auto">
         <div className="min-w-fit">
-          <div className="mb-1.5 pl-8">
+          <div className="mb-1 pl-8">
             <div
               className="grid"
               style={{
@@ -438,11 +454,10 @@ function OverviewActivityHeatmapBody() {
             </div>
           </div>
 
-          <p className="mt-3 text-center text-sm font-semibold text-slate-300">{year}</p>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-2">
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
           <span>Less</span>
           <span className="h-2.5 w-2.5 rounded-[3px] border border-white/[0.08] bg-slate-500/15" />
@@ -463,7 +478,10 @@ function OverviewActivityHeatmapBody() {
       </div>
 
       {selectedDate ? (
-        <div className="relative mt-2 overflow-hidden rounded-[22px] border border-white/10 bg-white/[0.02] shadow-[0_20px_60px_-32px_rgba(2,8,23,0.9)]">
+        <div
+          ref={dayDetailsRef}
+          className="relative mt-1 overflow-hidden rounded-[22px] border border-white/10 bg-white/[0.02] shadow-[0_20px_60px_-32px_rgba(2,8,23,0.9)]"
+        >
           <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-white/[0.02] px-4 py-3.5">
             <div>
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Day details</p>
