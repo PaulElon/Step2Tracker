@@ -26,7 +26,7 @@ import {
 import { daysUntilDateKey, formatLongDate, formatMinutes, getTodayKey } from "../lib/datetime";
 import { FF } from "../lib/feature-flags";
 import { launchResource } from "../lib/launcher";
-import { cn, primaryButtonClassName, secondaryButtonClassName } from "../lib/ui";
+import { cn, primaryButtonClassName, secondaryButtonClassName, themeAwareWarmAccent } from "../lib/ui";
 import { useAppStore } from "../state/app-store";
 import { useTimeFolioStore } from "../state/tf-store";
 import { getTrackedStudyMinutesForDate } from "../lib/tf-session-metrics";
@@ -213,6 +213,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
     .filter((task) => task.completed)
     .reduce((total, task) => total + getStudyBlockMinutes(task), 0);
   const todayGoalMinutes = state.preferences.dailyGoalMinutes;
+  const themeId = state.preferences.themeId;
   const dailyGoalProgress = todayGoalMinutes ? Math.min((completedMinutes / todayGoalMinutes) * 100, 100) : 0;
   const alerts = getGoalAlerts(state.studyBlocks, state.practiceTests, todayGoalMinutes).slice(0, 3);
   const activeWeakTopics = state.weakTopicEntries.filter((entry) => entry.status !== "Resolved");
@@ -622,7 +623,9 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
             <section className="glass-panel min-w-0 p-5">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-amber-300/80" />
+                  <AlertCircle
+                    className={themeAwareWarmAccent(themeId, "h-4 w-4 text-orange-300/80", "h-4 w-4 text-amber-300/80")}
+                  />
                   <h3 className="text-base font-semibold text-white">Needs Attention</h3>
                 </div>
                 {activeWeakTopics.length ? (
@@ -777,7 +780,9 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
             {/* Focus Tip */}
             <section className="glass-panel min-w-0 p-5">
               <div className="flex items-center gap-2">
-                <Lightbulb className="h-4 w-4 text-amber-300/80" />
+                <Lightbulb
+                  className={themeAwareWarmAccent(themeId, "h-4 w-4 text-orange-300/80", "h-4 w-4 text-amber-300/80")}
+                />
                 <h3 className="text-base font-semibold text-white">Focus Tip</h3>
               </div>
               <p className="mt-3 text-sm leading-6 text-slate-300">{getDailyFocusTip(todayKey)}</p>

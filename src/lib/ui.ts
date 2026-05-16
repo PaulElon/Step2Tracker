@@ -2,6 +2,14 @@ export function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+export function themeAwareWarmAccent(
+  themeId: string | undefined,
+  lightClass: string,
+  darkClass: string,
+) {
+  return themeId === "light" || themeId === "maggiepink" ? lightClass : darkClass;
+}
+
 export const fieldClassName = "field";
 export const primaryButtonClassName = "primary-button";
 export const secondaryButtonClassName = "secondary-button";

@@ -28,6 +28,7 @@ import {
   buildAutoTrackerV2PreviewSpans,
   type TfAutotrackerV2ClassificationSettings,
 } from "../../lib/tf-autotracker-v2-preview-spans";
+import { themeAwareWarmAccent } from "../../lib/ui";
 import {
   assessAutoTrackerV2RecoveredPreviewSession,
   buildAutoTrackerV2ReducerPreview,
@@ -60,6 +61,7 @@ import type {
   TfTrackerPrefs,
   TfTrackerRule,
   TfTrackerRuleKind,
+  ThemeId,
 } from "../../types/models";
 
 type TrackerListKey = keyof TfTrackerPrefs;
@@ -807,7 +809,13 @@ function TrackerGroupCard({
   );
 }
 
-export function TrackerSettingsPanel({ embedded = false }: { embedded?: boolean }) {
+export function TrackerSettingsPanel({
+  embedded = false,
+  themeId,
+}: {
+  embedded?: boolean;
+  themeId?: ThemeId;
+}) {
   const store = useTimeFolioStore();
   const { state, isLoading, error } = store;
   const reload = (...args: Parameters<typeof store.reload>) => store.reload(...args);
@@ -3295,10 +3303,22 @@ export function TrackerSettingsPanel({ embedded = false }: { embedded?: boolean 
                 {FF.autotrackerV2ManualWrite ? (
                   <div className="flex flex-col gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
                     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">
+                      <div
+                        className={themeAwareWarmAccent(
+                          themeId,
+                          "text-xs font-medium uppercase tracking-[0.18em] text-orange-200",
+                          "text-xs font-medium uppercase tracking-[0.18em] text-amber-200",
+                        )}
+                      >
                         Manual writer
                       </div>
-                      <span className="text-[10px] text-amber-100/80">
+                      <span
+                        className={themeAwareWarmAccent(
+                          themeId,
+                          "text-[10px] text-orange-100/80",
+                          "text-[10px] text-amber-100/80",
+                        )}
+                      >
                         Dev manual write — writes one finalized tracked or distraction preview session to Session Log.
                       </span>
                     </div>

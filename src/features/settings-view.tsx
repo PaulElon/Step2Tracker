@@ -29,6 +29,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { NavigationButton, Panel } from "../components/ui";
 import { FF } from "../lib/feature-flags";
+import { themeAwareWarmAccent } from "../lib/ui";
 import { TimeFolioStoreProvider } from "../state/tf-store";
 import { AccountPanel } from "./timefolio/account-panel";
 import { TrackerSettingsPanel } from "./timefolio/tracker-settings-panel";
@@ -1018,22 +1019,31 @@ export function SettingsView({
                             }}
                             className={`rounded-full border p-1.5 transition ${
                               isEnhanced
-                                ? "border-yellow-300/50 bg-yellow-300/15 text-yellow-300"
+                                ? themeAwareWarmAccent(
+                                    themeId,
+                                    "border-orange-300/50 bg-orange-300/15 text-orange-300",
+                                    "border-yellow-300/50 bg-yellow-300/15 text-yellow-300",
+                                  )
                                 : "border-white/10 text-slate-400 hover:text-white"
                             }`}
                           >
-                            <Zap className={`h-3.5 w-3.5 ${isEnhanced ? "fill-yellow-300" : ""}`} />
+                            <Zap
+                              className={`h-3.5 w-3.5 ${
+                                isEnhanced
+                                  ? themeAwareWarmAccent(themeId, "fill-orange-300", "fill-yellow-300")
+                                  : ""
+                              }`}
+                            />
                           </button>
                         </div>
                       </div>
                     );
                   })}
-                </div>
-              </div>
-            </Panel>
-          ) : null}
-
-          {activeSection === "defaults" ? (
+	                </div>
+	              </div>
+	            </Panel>
+	          ) : null}
+	          {activeSection === "defaults" ? (
             <Panel
               title="Study Defaults"
               subtitle="Targets used across Today, Plan, and progress views."
@@ -1310,7 +1320,7 @@ export function SettingsView({
 
           {activeSection === "tracker" && FF.timefolio ? (
             <TimeFolioStoreProvider>
-              <TrackerSettingsPanel embedded />
+              <TrackerSettingsPanel embedded themeId={themeId} />
             </TimeFolioStoreProvider>
           ) : null}
 
