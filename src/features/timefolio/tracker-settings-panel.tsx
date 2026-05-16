@@ -743,8 +743,8 @@ function TrackerGroupCard({
       </div>
 
       <div className="flex items-center justify-between gap-3 pt-1">
-        <span className="text-xs text-slate-500">
-          {isDirty ? "Unsaved local edits" : "Up to date with TimeFolio store"}
+        <span className="text-xs font-medium text-slate-300">
+          {isDirty ? "Unsaved local edits" : "Tracker rules are saved locally"}
         </span>
         <button
           type="button"
@@ -2182,7 +2182,7 @@ export function TrackerSettingsPanel({ embedded = false }: { embedded?: boolean 
             Add the apps and websites you want counted as study time in Allowed. Put distracting
             apps and sites in Distractions.
           </p>
-          <p className="text-xs leading-5 text-cyan-50/85">
+          <p className="text-sm font-medium leading-6 text-cyan-50">
             Use Session Log to start or stop Auto-Tracking.
           </p>
         </section>

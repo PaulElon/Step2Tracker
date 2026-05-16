@@ -286,8 +286,8 @@ button {
 :where(button, a, input, select, textarea, [role="button"], [role="tab"], [tabindex]:not([tabindex="-1"])):focus-visible {
   outline: none;
   box-shadow:
-    0 0 0 1px var(--focus-ring-outer),
-    0 0 0 4px var(--focus-ring-inner);
+    0 0 0 2px var(--focus-ring-outer),
+    0 0 0 5px var(--focus-ring-inner);
 }
 
 @layer base {
