@@ -17,7 +17,10 @@ import {
 } from "../lib/datetime";
 import { parseIcsImport } from "../lib/ics-import";
 import { parseStudyWorkbook } from "../lib/excel";
+import { FF } from "../lib/feature-flags";
+import { getTrackedStudyMinutesForDate } from "../lib/tf-session-metrics";
 import { useAppStore } from "../state/app-store";
+import { TimeFolioStoreProvider, useTimeFolioStore } from "../state/tf-store";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { ModalShell } from "../components/modal-shell";
 import { CategoryBadge, EmptyState, Panel } from "../components/ui";
@@ -541,6 +544,20 @@ function getWorkloadIntensity(minutes: number): WorkloadIntensity {
 
 function getDayMonth(dateKey: string) {
   return dateKey.slice(0, 7);
+}
+
+function PlannerTrackedStudyStat({ selectedDateKey }: { selectedDateKey: string }) {
+  const { state: tfState } = useTimeFolioStore();
+  const trackedStudyMinutes = getTrackedStudyMinutesForDate(tfState.sessionLogs, selectedDateKey);
+
+  return (
+    <div className="px-2.5 py-2">
+      <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Tracked study</p>
+      <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">
+        {formatMinutes(trackedStudyMinutes)}
+      </p>
+    </div>
+  );
 }
 
 export function PlannerView() {
@@ -1259,7 +1276,9 @@ export function PlannerView() {
             </div>
           </div>
 
-          <div className="mb-3 grid grid-cols-4 divide-x divide-white/8 overflow-hidden rounded-[12px] border border-white/8 bg-slate-950/45">
+          <div
+            className={`mb-3 grid ${FF.timefolio ? "grid-cols-5" : "grid-cols-4"} divide-x divide-white/8 overflow-hidden rounded-[12px] border border-white/8 bg-slate-950/45`}
+          >
             <div className="px-2.5 py-2">
               <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Tasks</p>
               <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">{allSelectedDateTasks.length}</p>
@@ -1276,6 +1295,11 @@ export function PlannerView() {
               <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Done time</p>
               <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">{formatMinutes(studiedMinutes)}</p>
             </div>
+            {FF.timefolio ? (
+              <TimeFolioStoreProvider>
+                <PlannerTrackedStudyStat selectedDateKey={selectedDate} />
+              </TimeFolioStoreProvider>
+            ) : null}
           </div>
 
           {isSelectionMode ? (
