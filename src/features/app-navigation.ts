@@ -45,9 +45,13 @@ export function resolveAppSection(
     return timefolioEnabled ? "sessionLog" : "dashboard";
   }
 
+  if (activeSection === "heatmap") {
+    return timefolioEnabled ? "analytics" : "dashboard";
+  }
+
   if (
     !timefolioEnabled &&
-    (activeSection === "sessionLog" || activeSection === "analytics" || activeSection === "heatmap")
+    (activeSection === "sessionLog" || activeSection === "analytics")
   ) {
     return "dashboard";
   }
@@ -96,10 +100,7 @@ export function getDesktopNavigationGroups({
 
   if (timefolioEnabled) {
     groups[0].items.push({ id: "sessionLog", label: "Session Log", icon: Clock });
-    groups[1].items.push(
-      { id: "analytics", label: "Analytics", icon: PieChart },
-      { id: "heatmap", label: "Heatmap", icon: CalendarDays },
-    );
+    groups[1].items.push({ id: "analytics", label: "Analytics", icon: PieChart });
   }
 
   return groups.filter((group) => group.items.length > 0);
@@ -125,10 +126,7 @@ export function getMobileNavigationItems({
   );
 
   if (timefolioEnabled) {
-    items.push(
-      { id: "analytics", label: "Analytics", icon: PieChart },
-      { id: "heatmap", label: "Heatmap", icon: CalendarDays },
-    );
+    items.push({ id: "analytics", label: "Analytics", icon: PieChart });
   }
 
   if (notebookEnabled) {

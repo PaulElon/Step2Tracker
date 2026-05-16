@@ -25,14 +25,14 @@ import { formatHoursValue, formatLongDate } from "../../lib/datetime";
 import { cn } from "../../lib/ui";
 import { useAppStore } from "../../state/app-store";
 import type { PracticeTest, WeakTopicPriority } from "../../types/models";
+import { OverviewActivityHeatmap } from "./overview-activity-heatmap";
 
 export type PortfolioOverviewSectionTarget =
   | "sessionLog"
   | "tests"
   | "weakTopics"
   | "errorLog"
-  | "analytics"
-  | "heatmap";
+  | "analytics";
 
 interface PortfolioOverviewProps {
   onNavigate: (section: PortfolioOverviewSectionTarget) => void;
@@ -276,6 +276,7 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
           <QuickActions onNavigate={onNavigate} />
         </div>
       </div>
+      {FF.timefolio ? <OverviewActivityHeatmap /> : null}
     </div>
   );
 }
