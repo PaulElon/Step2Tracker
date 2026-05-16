@@ -268,7 +268,7 @@ function OverviewActivityHeatmapBody() {
     const frame = window.requestAnimationFrame(() => {
       dayDetailsRef.current?.scrollIntoView({
         behavior: "smooth",
-        block: "end",
+        block: "nearest",
         inline: "nearest",
       });
     });
@@ -488,7 +488,7 @@ function OverviewActivityHeatmapBody() {
       {selectedDate ? (
         <div
           ref={dayDetailsRef}
-          className="relative mt-1 overflow-hidden rounded-[22px] border border-white/10 bg-white/[0.02] shadow-[0_20px_60px_-32px_rgba(2,8,23,0.9)]"
+          className="relative mt-1 overflow-hidden rounded-[22px] border border-white/10 bg-white/[0.02] shadow-[0_20px_60px_-32px_rgba(2,8,23,0.9)] scroll-mt-6 scroll-mb-6"
         >
           <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-white/[0.02] px-4 py-3.5">
             <div>

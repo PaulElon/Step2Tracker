@@ -564,6 +564,12 @@ button {
   color: #6d28d9 !important; /* violet-700 — readable on white/pink */
 }
 
+/* Amber opacity variant used by readiness meta labels. */
+:root[data-theme="light"] .text-amber-200\/85,
+:root[data-theme="maggiepink"] .text-amber-200\/85 {
+  color: #b45309 !important;
+}
+
 /* Rich text editor list styling */
 .rich-text-editor ul {
   list-style-type: disc;

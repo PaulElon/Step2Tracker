@@ -1068,7 +1068,7 @@ export function PlannerView() {
                             <div
                               key={task.id}
                               className={cn(
-                                "relative flex min-w-0 items-center gap-1.5 overflow-hidden rounded-[9px] border border-white/8 bg-slate-900/55 pl-2 pr-2 py-1.5",
+                                "relative flex min-w-0 items-center gap-1.5 overflow-hidden rounded-[9px] border border-white/8 bg-[color:var(--surface-muted)] pl-2 pr-2 py-1.5",
                                 task.completed ? "opacity-60" : "",
                               )}
                             >
@@ -1111,7 +1111,7 @@ export function PlannerView() {
                   </div>
                 ))}
               </div>
-              <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px overflow-hidden rounded-[16px] border border-white/10 bg-white/[0.06]">
+              <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px overflow-hidden rounded-[16px] border border-white/10 bg-[color:var(--panel-bg)]">
                 {monthDates.map((date) => {
                   const dayTasks = tasksByDate.get(date) ?? [];
                   const dayMinutes = dayTasks.reduce((sum, task) => sum + getStudyBlockMinutes(task), 0);
@@ -1131,14 +1131,14 @@ export function PlannerView() {
                       type="button"
                       onClick={() => handlePlannerFocusDate(date)}
                       className={cn(
-                        "flex min-h-0 flex-col gap-1 bg-slate-950/65 px-2 py-2 text-left transition-colors",
+                        "flex min-h-0 flex-col gap-1 bg-[color:var(--panel-bg)] px-2 py-2 text-left transition-colors",
                         isSelected
                           ? "bg-cyan-300/12 ring-1 ring-inset ring-cyan-300/45"
                           : isTodayDate
-                          ? "bg-white/[0.07] ring-1 ring-inset ring-cyan-300/25"
+                          ? "bg-[color:var(--surface-muted)] ring-1 ring-inset ring-cyan-300/25"
                           : isOverdue
                           ? "bg-rose-500/10 hover:bg-rose-500/14"
-                          : "hover:bg-white/[0.05]",
+                          : "hover:bg-[color:var(--surface-muted)]",
                       )}
                     >
                       <div className="flex items-center justify-between gap-1">
@@ -1191,7 +1191,7 @@ export function PlannerView() {
                         ) : (
                           <div className="h-[12px]" aria-hidden="true" />
                         )}
-                        <div className="h-[3px] w-full overflow-hidden rounded-full bg-white/[0.07]">
+                        <div className="h-[3px] w-full overflow-hidden rounded-full bg-[color:var(--surface-muted)]">
                           <div
                             className={cn("h-full rounded-full", intensity.barClassName)}
                             style={{ width: `${widthPercent}%` }}
