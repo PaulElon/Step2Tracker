@@ -263,6 +263,11 @@ function computeCountdown(timer: ExamTimer): string {
   return `${months}mo ${weeks}w ${days}d${hrMin}`;
 }
 
+interface UpdateBannerCheckResult {
+  available: boolean;
+  latest_version?: string;
+}
+
 function SidebarCountdown() {
   const { state, setExamTimers } = useAppStore();
   const [showModal, setShowModal] = useState(false);
@@ -658,8 +663,22 @@ export default function App() {
     };
   }, []);
 
+  async function refreshUpdateBannerState() {
+    try {
+      const result = await invoke<UpdateBannerCheckResult>("check_for_update");
+      setUpdateAvailable(result.available && result.latest_version ? result.latest_version : null);
+    } catch {
+      setUpdateAvailable(null);
+    }
+  }
+
   async function handleInstallUpdate() {
-    await invoke("install_update");
+    try {
+      await invoke("install_update");
+    } catch {
+      setUpdateAvailable(null);
+      await refreshUpdateBannerState();
+    }
   }
 
   function handleSendTestAlert() {

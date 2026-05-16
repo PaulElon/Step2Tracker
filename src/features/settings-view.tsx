@@ -536,20 +536,26 @@ function readCachedStatus(): UpdateStatus {
   }
 }
 
+function clearCachedStatus() {
+  localStorage.removeItem(LAST_CHECK_KEY);
+  localStorage.removeItem(LAST_RESULT_KEY);
+}
+
 function AboutPanel() {
   const [status, setStatus] = useState<UpdateStatus>(readCachedStatus);
   const [appVersion, setAppVersion] = useState<string>("");
   const hasAutoCheckedRef = useRef(false);
 
-  useEffect(() => {
-    getVersion()
-      .then(setAppVersion)
-      .catch(() => {});
-  }, []);
-
   const runCheck = useCallback(async (force: boolean) => {
-    if (!force && status.kind === "checking") return;
-    setStatus({ kind: "checking" });
+    let shouldRun = true;
+    setStatus((previous) => {
+      if (!force && previous.kind === "checking") {
+        shouldRun = false;
+        return previous;
+      }
+      return { kind: "checking" };
+    });
+    if (!shouldRun) return;
 
     const now = new Date().toISOString();
     localStorage.setItem(LAST_CHECK_KEY, now);
@@ -587,7 +593,30 @@ function AboutPanel() {
       const message = err instanceof Error ? err.message : String(err);
       setStatus({ kind: "error", message, checkedAt: now });
     }
-  }, [status.kind]);
+  }, []);
+
+  useEffect(() => {
+    getVersion()
+      .then((version) => {
+        setAppVersion(version);
+        const cached = readCachedStatus();
+        const cachedVersion =
+          cached.kind === "available" || cached.kind === "up-to-date"
+            ? cached.currentVersion
+            : "";
+
+        if (cachedVersion && cachedVersion !== version) {
+          clearCachedStatus();
+          setStatus({ kind: "idle" });
+          hasAutoCheckedRef.current = true;
+          void runCheck(true);
+          return;
+        }
+
+        setStatus(cached);
+      })
+      .catch(() => {});
+  }, [runCheck]);
 
   useEffect(() => {
     if (hasAutoCheckedRef.current) return;
@@ -612,7 +641,10 @@ function AboutPanel() {
       await invoke("install_update");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      clearCachedStatus();
       setStatus({ kind: "error", message, checkedAt: new Date().toISOString() });
+      hasAutoCheckedRef.current = true;
+      void runCheck(true);
     }
   }
 

@@ -3,7 +3,7 @@
 - Confirm the latest GitHub release via `latest.json` and the release list.
 - Verify the updater metadata still points at the latest published release.
 - Run `npm run smoke:release` from a clean shell to verify the release env is injected internally.
-- Run `npm run verify:tauri-bundle-version` after a fresh release bundle build; if it fails, assume a stale local bundle artifact before assuming source version drift.
+- Run `export APP_VERSION=<release-version>` then `npm run verify:tauri-bundle-version -- --target aarch64-apple-darwin --expected-version "$APP_VERSION"` after a fresh release bundle build; if it fails, assume a stale local bundle artifact before assuming source version drift.
 
 ## Coverage Map
 

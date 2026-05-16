@@ -62,6 +62,13 @@ For a quick release-style smoke check, run:
 npm run smoke:release
 ```
 
+After a macOS release bundle build, verify the canonical app bundle version against the expected release version:
+
+```bash
+export APP_VERSION=<release-version>
+npm run verify:tauri-bundle-version -- --target aarch64-apple-darwin --expected-version "$APP_VERSION"
+```
+
 ## Current Product Notes
 
 - TimeFolio is local-first.
