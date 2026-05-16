@@ -19,6 +19,7 @@ import {
   Tag,
   Trash2,
   Upload,
+  User,
   X,
   Zap,
 } from "lucide-react";
@@ -27,8 +28,10 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { NavigationButton, Panel } from "../components/ui";
-import { TimeFolioSettingsSections } from "./timefolio-settings-sections";
 import { FF } from "../lib/feature-flags";
+import { TimeFolioStoreProvider } from "../state/tf-store";
+import { AccountPanel } from "./timefolio/account-panel";
+import { TrackerSettingsPanel } from "./timefolio/tracker-settings-panel";
 import { themeList } from "../lib/themes";
 import { cn, fieldClassName, secondaryButtonClassName } from "../lib/ui";
 import type { BackupArtifactPreview, PersistenceSummary, ResourceLink, ThemeId } from "../types/models";
@@ -714,6 +717,8 @@ type SettingsSection =
   | "defaults"
   | "categories"
   | "resources"
+  | "tracker"
+  | "account"
   | "reminders"
   | "data"
   | "about";
@@ -722,13 +727,16 @@ const SETTINGS_NAV: Array<{
   id: SettingsSection;
   label: string;
   icon: typeof Palette;
-  group: "preferences" | "content" | "system";
+  group: "preferences" | "content" | "tracking" | "account" | "system";
+  requireTimefolio?: true;
 }> = [
   { id: "appearance", label: "Appearance", icon: Palette, group: "preferences" },
   { id: "defaults", label: "Study Defaults", icon: SlidersHorizontal, group: "preferences" },
   { id: "categories", label: "Categories", icon: Tag, group: "content" },
   { id: "resources", label: "Resources", icon: BookmarkPlus, group: "content" },
-  { id: "reminders", label: "Reminders", icon: Bell, group: "system" },
+  { id: "tracker", label: "Tracker Rules", icon: Zap, group: "tracking", requireTimefolio: true },
+  { id: "reminders", label: "Reminders", icon: Bell, group: "tracking" },
+  { id: "account", label: "Account", icon: User, group: "account", requireTimefolio: true },
   { id: "data", label: "Data & Safety", icon: Database, group: "system" },
   { id: "about", label: "About", icon: Info, group: "system" },
 ];
@@ -894,9 +902,13 @@ export function SettingsView({
     }
   }
 
-  const groupOrder: Array<{ id: "preferences" | "content" | "system"; label: string }> = [
+  const visibleNav = SETTINGS_NAV.filter((item) => !item.requireTimefolio || FF.timefolio);
+
+  const groupOrder: Array<{ id: "preferences" | "content" | "tracking" | "account" | "system"; label: string }> = [
     { id: "preferences", label: "Preferences" },
     { id: "content", label: "Content" },
+    { id: "tracking", label: "Tracking" },
+    { id: "account", label: "Account" },
     { id: "system", label: "System" },
   ];
 
@@ -906,12 +918,15 @@ export function SettingsView({
       <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="glass-panel h-fit p-3 xl:sticky xl:top-4">
           <nav className="space-y-4">
-            {groupOrder.map((group) => (
+            {groupOrder.map((group) => {
+              const groupItems = visibleNav.filter((item) => item.group === group.id);
+              if (groupItems.length === 0) return null;
+              return (
               <div key={group.id} className="space-y-0.5">
                 <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">
                   {group.label}
                 </p>
-                {SETTINGS_NAV.filter((item) => item.group === group.id).map((item) => (
+                {groupItems.map((item) => (
                   <NavigationButton
                     key={item.id}
                     icon={item.icon}
@@ -921,7 +936,8 @@ export function SettingsView({
                   />
                 ))}
               </div>
-            ))}
+              );
+            })}
           </nav>
         </aside>
 
@@ -1252,8 +1268,19 @@ export function SettingsView({
                 </Panel>
               </div>
 
-              {FF.timefolio ? <TimeFolioSettingsSections /> : null}
             </div>
+          ) : null}
+
+          {activeSection === "tracker" && FF.timefolio ? (
+            <TimeFolioStoreProvider>
+              <TrackerSettingsPanel embedded />
+            </TimeFolioStoreProvider>
+          ) : null}
+
+          {activeSection === "account" && FF.timefolio ? (
+            <TimeFolioStoreProvider>
+              <AccountPanel embedded />
+            </TimeFolioStoreProvider>
           ) : null}
 
           {activeSection === "about" ? <AboutPanel /> : null}
