@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { FileText, Folder, Maximize2, Minimize2, PanelLeftOpen } from "lucide-react";
 import { ModalShell } from "../components/modal-shell";
@@ -330,12 +330,14 @@ export function NotebookView() {
   const [isEditorOverflowMenuOpen, setIsEditorOverflowMenuOpen] = useState(false);
   const [editorOverflowMenuPosition, setEditorOverflowMenuPosition] = useState<NotebookFloatingMenuPosition | null>(null);
   const [tileActionMenu, setTileActionMenu] = useState<TileActionMenuState | null>(null);
+  const [tileActionMenuPosition, setTileActionMenuPosition] = useState<NotebookFloatingMenuPosition | null>(null);
   const [promptState, setPromptState] = useState<PromptState | null>(null);
   const [isNotebookRailExpanded, setIsNotebookRailExpanded] = useState(false);
   const [notebookRailTargetSection, setNotebookRailTargetSection] = useState<NotebookRailSection>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const tileActionMenuRef = useRef<HTMLDivElement>(null);
+  const tileActionMenuButtonRef = useRef<HTMLButtonElement>(null);
   const promptInputRef = useRef<HTMLInputElement>(null);
   const pageTitleInputRef = useRef<HTMLInputElement>(null);
   const notebookRailPinnedRef = useRef<HTMLDivElement>(null);
@@ -632,6 +634,15 @@ export function NotebookView() {
           ),
         );
       }
+      if (tileActionMenu && tileActionMenuButtonRef.current) {
+        setTileActionMenuPosition(
+          getNotebookFloatingMenuPosition(
+            tileActionMenuButtonRef.current,
+            NOTEBOOK_OVERFLOW_MENU_WIDTH,
+            NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT,
+          ),
+        );
+      }
     }
 
     if (isEditorOverflowMenuOpen || tileActionMenu) {
@@ -672,6 +683,35 @@ export function NotebookView() {
 
   function closeTileActionMenu() {
     setTileActionMenu(null);
+    setTileActionMenuPosition(null);
+    tileActionMenuButtonRef.current = null;
+  }
+
+  function openTileActionMenu(
+    event: ReactMouseEvent<HTMLButtonElement>,
+    nextMenu: TileActionMenuState,
+  ) {
+    event.stopPropagation();
+    tileActionMenuButtonRef.current = event.currentTarget;
+    setTileActionMenuPosition(
+      getNotebookFloatingMenuPosition(
+        event.currentTarget,
+        NOTEBOOK_OVERFLOW_MENU_WIDTH,
+        NOTEBOOK_OVERFLOW_MENU_ESTIMATED_HEIGHT,
+      ),
+    );
+    setTileActionMenu((current) => {
+      if (!current || current.kind !== nextMenu.kind) {
+        return nextMenu;
+      }
+      if (current.kind === "folder" && nextMenu.kind === "folder" && current.folderId === nextMenu.folderId) {
+        return null;
+      }
+      if (current.kind === "document" && nextMenu.kind === "document" && current.documentId === nextMenu.documentId) {
+        return null;
+      }
+      return nextMenu;
+    });
   }
 
   function collapseNotebookRail() {
@@ -1646,12 +1686,6 @@ export function NotebookView() {
     "inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:ring-offset-0";
   const modalPrimaryActionButtonClass =
     "inline-flex h-10 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:ring-offset-0";
-  const compactMenuClass =
-    "absolute right-0 top-1.5 z-20 w-36 origin-bottom-right -translate-y-[calc(100%+0.5rem)] rounded-2xl border border-white/10 bg-slate-950/96 p-1.5 shadow-[0_18px_40px_rgba(2,6,23,0.45)] backdrop-blur";
-  const compactMenuItemClass =
-    "flex min-h-8 w-full items-center rounded-lg px-2.5 py-1.5 text-left text-sm font-medium leading-5 text-slate-100 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:ring-offset-0";
-  const compactMenuDangerItemClass =
-    "flex min-h-8 w-full items-center rounded-lg px-2.5 py-1.5 text-left text-sm font-medium leading-5 text-rose-100 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:ring-offset-0";
   const editorTabStripClass =
     "flex min-w-0 items-center gap-1 overflow-x-auto rounded-[18px] border border-[color:var(--panel-border)] bg-[color:var(--surface-muted)] p-0.5 scrollbar-subtle";
   const editorTabButtonClass =
@@ -1754,6 +1788,111 @@ export function NotebookView() {
           notebookFloatingMenuPortalTarget,
         )
       : null;
+  const tileActionMenuPortal =
+    tileActionMenu && notebookFloatingMenuPortalTarget && tileActionMenuPosition
+      ? createPortal(
+          <div
+            ref={tileActionMenuRef}
+            className="notebook-floating-menu"
+            style={{
+              position: "fixed",
+              top: `${tileActionMenuPosition.top}px`,
+              left: `${tileActionMenuPosition.left}px`,
+              width: `${NOTEBOOK_OVERFLOW_MENU_WIDTH}px`,
+              zIndex: 9999,
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (tileActionMenu.kind === "folder") {
+                  const folder = sortedFolders.find((entry) => entry.id === tileActionMenu.folderId);
+                  if (folder) {
+                    closeTileActionMenu();
+                    handleRenameFolder(folder);
+                  }
+                } else {
+                  const document = sortedDocuments.find((entry) => entry.id === tileActionMenu.documentId);
+                  if (document) {
+                    closeTileActionMenu();
+                    handleRenameDocument(document);
+                  }
+                }
+              }}
+              className="notebook-floating-menu__item"
+            >
+              Rename
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (tileActionMenu.kind === "folder") {
+                  void handleToggleFolderFavorite(tileActionMenu.folderId);
+                } else {
+                  void handleToggleDocumentFavorite(tileActionMenu.documentId);
+                }
+                closeTileActionMenu();
+              }}
+              className="notebook-floating-menu__item"
+            >
+              {tileActionMenu.kind === "folder"
+                ? sortedFolders.find((entry) => entry.id === tileActionMenu.folderId)?.favorited === true
+                  ? "Unfavorite"
+                  : "Favorite"
+                : sortedDocuments.find((entry) => entry.id === tileActionMenu.documentId)?.favorited
+                  ? "Unfavorite"
+                  : "Favorite"}
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (tileActionMenu.kind === "folder") {
+                  const folder = sortedFolders.find((entry) => entry.id === tileActionMenu.folderId);
+                  if (folder) {
+                    void handleExportFolder(folder);
+                  }
+                } else {
+                  const document = sortedDocuments.find((entry) => entry.id === tileActionMenu.documentId);
+                  if (document) {
+                    void handleExportDocument(document);
+                  }
+                }
+                closeTileActionMenu();
+              }}
+              className="notebook-floating-menu__item"
+            >
+              Export
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (tileActionMenu.kind === "folder") {
+                  const folder = sortedFolders.find((entry) => entry.id === tileActionMenu.folderId);
+                  if (folder) {
+                    closeTileActionMenu();
+                    handleDeleteFolder(folder);
+                  }
+                } else {
+                  const document = sortedDocuments.find((entry) => entry.id === tileActionMenu.documentId);
+                  if (document) {
+                    closeTileActionMenu();
+                    void handleDeleteDocument(document);
+                  }
+                }
+              }}
+              className="notebook-floating-menu__item notebook-floating-menu__item--danger"
+            >
+              Delete
+            </button>
+          </div>,
+          notebookFloatingMenuPortalTarget,
+        )
+      : null;
 
   const isEditorFullscreen = isFullscreen && !isLibraryMode;
   const notebookRootClass = isEditorFullscreen
@@ -1846,7 +1985,6 @@ export function NotebookView() {
                   {visibleFolders.map((folder) => (
                     <div
                       key={folder.id}
-                      ref={tileActionMenu?.kind === "folder" && tileActionMenu.folderId === folder.id ? tileActionMenuRef : null}
                       className="group relative overflow-visible"
                     >
                       <button
@@ -1881,75 +2019,17 @@ export function NotebookView() {
                         aria-label={`Folder actions for ${folder.name.trim() || "Untitled Folder"}`}
                         aria-haspopup="menu"
                         aria-expanded={tileActionMenu?.kind === "folder" && tileActionMenu.folderId === folder.id}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setTileActionMenu((current) =>
-                            current?.kind === "folder" && current.folderId === folder.id ? null : { kind: "folder", folderId: folder.id },
-                          );
-                        }}
+                        onClick={(event) => openTileActionMenu(event, { kind: "folder", folderId: folder.id })}
                         className="absolute right-1.5 top-1.5 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full border border-transparent bg-slate-950/35 p-0 text-base leading-none text-slate-400 opacity-80 shadow-none transition hover:bg-white/[0.08] hover:text-slate-100 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30"
                       >
                         ⋯
                       </button>
-                      {tileActionMenu?.kind === "folder" && tileActionMenu.folderId === folder.id ? (
-                        <div
-                          className={compactMenuClass}
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              closeTileActionMenu();
-                              handleRenameFolder(folder);
-                            }}
-                            className={compactMenuItemClass}
-                          >
-                            Rename
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              closeTileActionMenu();
-                              void handleToggleFolderFavorite(folder.id);
-                            }}
-                            className={`${compactMenuItemClass} ${
-                              folder.favorited === true ? "text-rose-100 hover:bg-rose-500/10" : "text-slate-100 hover:bg-white/10"
-                            }`}
-                          >
-                            {folder.favorited === true ? "Unfavorite" : "Favorite"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleExportFolder(folder);
-                            }}
-                            className={compactMenuItemClass}
-                          >
-                            Export
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              closeTileActionMenu();
-                              handleDeleteFolder(folder);
-                            }}
-                            className={`${compactMenuDangerItemClass} hover:bg-rose-500/10`}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      ) : null}
                     </div>
                   ))}
 
                   {visibleDocuments.map((document) => (
                     <div
                       key={document.id}
-                      ref={tileActionMenu?.kind === "document" && tileActionMenu.documentId === document.id ? tileActionMenuRef : null}
                       className="group relative overflow-visible"
                     >
                       <button
@@ -1982,70 +2062,11 @@ export function NotebookView() {
                         aria-label={`Document actions for ${document.title.trim() || "Untitled Document"}`}
                         aria-haspopup="menu"
                         aria-expanded={tileActionMenu?.kind === "document" && tileActionMenu.documentId === document.id}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setTileActionMenu((current) =>
-                            current?.kind === "document" && current.documentId === document.id
-                              ? null
-                              : { kind: "document", documentId: document.id },
-                          );
-                        }}
+                        onClick={(event) => openTileActionMenu(event, { kind: "document", documentId: document.id })}
                         className="absolute right-1.5 top-1.5 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full border border-transparent bg-slate-950/35 p-0 text-base leading-none text-slate-400 opacity-80 shadow-none transition hover:bg-white/[0.08] hover:text-slate-100 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30"
                       >
                         ⋯
                       </button>
-                      {tileActionMenu?.kind === "document" && tileActionMenu.documentId === document.id ? (
-                        <div
-                          className={compactMenuClass}
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              closeTileActionMenu();
-                              handleRenameDocument(document);
-                            }}
-                            className={compactMenuItemClass}
-                          >
-                            Rename
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              closeTileActionMenu();
-                              void handleToggleDocumentFavorite(document.id);
-                            }}
-                            className={`${compactMenuItemClass} ${
-                              document.favorited ? "text-rose-100 hover:bg-rose-500/10" : "text-slate-100 hover:bg-white/10"
-                            }`}
-                          >
-                            {document.favorited ? "Unfavorite" : "Favorite"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleExportDocument(document);
-                            }}
-                            className={compactMenuItemClass}
-                          >
-                            Export
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              closeTileActionMenu();
-                              void handleDeleteDocument(document);
-                            }}
-                            className={`${compactMenuDangerItemClass} hover:bg-rose-500/10`}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      ) : null}
                     </div>
                   ))}
                   </div>
@@ -2597,6 +2618,7 @@ export function NotebookView() {
         </section>
       </div>
       {editorOverflowMenuPortal}
+      {tileActionMenuPortal}
 
       {promptState && promptCopy ? (
         <ModalShell
