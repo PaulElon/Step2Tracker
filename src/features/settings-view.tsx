@@ -38,7 +38,7 @@ function generateId(prefix: string) {
 }
 
 function getBackupFileName(date = new Date()) {
-  return `step2-command-center-backup-${date.toISOString().slice(0, 10)}.json`;
+  return `timefolio-backup-${date.toISOString().slice(0, 10)}.json`;
 }
 
 function formatCountsLine(counts: BackupArtifactPreview["counts"]) {
@@ -935,18 +935,24 @@ export function SettingsView({
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                   {themeList.map((theme) => {
                     const isEnhanced = enhancedThemeIds.includes(theme.id);
+                    const isSelected = themeId === theme.id;
                     return (
                       <div
                         key={theme.id}
                         role="button"
                         tabIndex={0}
-                        aria-pressed={themeId === theme.id}
-                        className={`theme-option cursor-pointer ${themeId === theme.id ? "border-white/20 bg-white/[0.07]" : ""}`}
+                        aria-pressed={isSelected}
+                        className={`theme-option relative cursor-pointer ${isSelected ? "border-cyan-300/30 bg-cyan-300/[0.08] shadow-[0_0_0_1px_rgba(103,232,249,0.18)]" : "border-white/10 bg-slate-950/45"}`}
                         onClick={() => onThemeChange(theme.id)}
                         onKeyDown={(event) => {
                           if (event.key === "Enter" || event.key === " ") onThemeChange(theme.id);
                         }}
                       >
+                        {isSelected ? (
+                          <span className="absolute right-3 top-3 inline-flex h-6 w-6 items-center justify-center rounded-full border border-cyan-300/30 bg-cyan-300/15 text-cyan-200">
+                            <Check className="h-3.5 w-3.5" />
+                          </span>
+                        ) : null}
                         <p className="text-sm font-semibold text-white">{theme.label}</p>
                         <div className="mt-2 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1">
@@ -1169,7 +1175,7 @@ export function SettingsView({
                         <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-rose-300" />
                         <div className="space-y-1">
                           <p className="text-sm font-semibold text-rose-100">Destructive action</p>
-                          <p className="text-xs leading-5 text-rose-200/80">
+                          <p className="text-xs leading-6 text-rose-50/95">
                             Importing replaces your current TimeFolio data with the contents of the backup file.
                             TimeFolio time-tracking data is untouched. Export a backup first if you want to keep your current state.
                           </p>

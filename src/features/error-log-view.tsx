@@ -785,7 +785,7 @@ export function ErrorLogView() {
     <div className="flex h-full min-h-0 flex-col gap-4 pb-6">
       {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
 
-      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Portfolio - Error Log</h2>
+      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Error Log</h2>
 
       <HeaderBand
         search={search}

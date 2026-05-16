@@ -199,7 +199,7 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
 
   return (
     <div className="flex flex-col gap-4 pb-2">
-      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Portfolio - Overview</h2>
+      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Overview</h2>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
         <div className="flex min-w-0 flex-col gap-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">

@@ -6,7 +6,7 @@ export function TimeFolioHeatmapView() {
     <TimeFolioStoreProvider>
       <div className="flex flex-col gap-4 pb-2">
         <div className="space-y-1">
-          <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Portfolio - Heatmap</h2>
+          <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Heatmap</h2>
           <p className="text-sm text-slate-400">
             Inspect your study cadence day by day, then drill into the sessions behind each block.
           </p>

@@ -98,7 +98,7 @@ function SelectedDaySessionModal({
         <div className="flex items-start justify-between gap-4 border-b border-slate-700/70 px-5 py-4">
           <div className="space-y-1">
             <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-              SESSION LOG
+              Day details
             </div>
             <div className="text-sm font-semibold text-slate-100">
               {formatLongDate(selectedDate)}
@@ -152,7 +152,7 @@ function SelectedDaySessionLog({
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
             <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-              SESSION LOG
+              Day session log
             </div>
             <div className="text-sm font-semibold text-slate-100">
               {selectedDate ? formatLongDate(selectedDate) : "No day selected"}

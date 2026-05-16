@@ -118,6 +118,48 @@ function categoryShortLabel(category: string) {
   return first.length > 6 ? first.slice(0, 5) : first;
 }
 
+function looksLikeImportedTaskNotes(notes: string) {
+  const normalized = notes.trim().toLowerCase();
+  return (
+    normalized.startsWith("study schedule task for") ||
+    normalized.includes("all-day event") ||
+    normalized.includes("no alert") ||
+    normalized.includes("calendar metadata")
+  );
+}
+
+function getHeroSubtitle(task: { notes?: string | null; reminderAt?: string | null }, openCount: number) {
+  const notes = task.notes?.trim();
+  if (notes && !looksLikeImportedTaskNotes(notes)) {
+    return notes;
+  }
+
+  if (task.reminderAt) {
+    return "Reminder set. Open this task when you are ready to begin.";
+  }
+
+  if (openCount > 1) {
+    return `${openCount - 1} more task${openCount - 1 === 1 ? "" : "s"} are queued. Start here first.`;
+  }
+
+  return "Open the task and get the first block done.";
+}
+
+const FOCUS_TIPS = [
+  "Start with a 10-minute opening sprint. Momentum matters more than perfect conditions.",
+  "Reduce switching costs: finish one task before opening the next tab.",
+  "Capture distractions once, then return to the current block immediately.",
+  "A clean first step beats a complicated plan. Make the next action obvious.",
+];
+
+function getDailyFocusTip(seed: string) {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+  return FOCUS_TIPS[hash % FOCUS_TIPS.length];
+}
+
 function SnapshotRow({
   icon: Icon,
   label,
@@ -315,9 +357,9 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                       ) : null}
                       {openCount > 1 ? <span className="text-slate-500">{openCount - 1} more queued</span> : null}
                     </div>
-                    {nextTask.notes ? (
-                      <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">{nextTask.notes}</p>
-                    ) : null}
+                    <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
+                      {getHeroSubtitle(nextTask, openCount)}
+                    </p>
                   </div>
 
                   <div className="flex shrink-0 flex-col gap-2.5">
@@ -679,13 +721,8 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                 />
                 {FF.notebook && onOpenNotebook ? (
                   <QuickAction icon={BookOpen} label="Notebook" onClick={onOpenNotebook} />
-                ) : (
-                  <QuickAction
-                    icon={Plus}
-                    label="Add Task"
-                    onClick={() => setShowTaskEditor(true)}
-                  />
-                )}
+                ) : null}
+                <QuickAction icon={Plus} label="Add Task" onClick={() => setShowTaskEditor(true)} />
               </div>
             </section>
 
@@ -695,9 +732,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                 <Lightbulb className="h-4 w-4 text-amber-300/80" />
                 <h3 className="text-base font-semibold text-white">Focus Tip</h3>
               </div>
-              <p className="mt-3 text-sm leading-6 text-slate-300">
-                Small, consistent actions create massive results over time. Stay consistent.
-              </p>
+              <p className="mt-3 text-sm leading-6 text-slate-300">{getDailyFocusTip(todayKey)}</p>
             </section>
           </div>
         </div>

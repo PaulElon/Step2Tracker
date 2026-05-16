@@ -241,7 +241,7 @@ function TimeFolioAnalyticsContent() {
     return (
       <div className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Portfolio - Analytics</h2>
+          <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Analytics</h2>
           <p className="text-sm text-slate-400">
             Combined study-time insights across method mix, focus quality, and recent activity.
           </p>
@@ -264,7 +264,7 @@ function TimeFolioAnalyticsContent() {
   return (
     <div className="space-y-4 pb-2">
       <div className="space-y-1">
-        <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Portfolio - Analytics</h2>
+        <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Analytics</h2>
         <p className="text-sm text-slate-400">
           Combined study-time insights across method mix, focus quality, and recent activity.
         </p>
@@ -283,7 +283,7 @@ function TimeFolioAnalyticsContent() {
       </Panel>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total Hours" value={formatMinutes(Math.round(analytics.totalHours * 60))} meta="Across all recorded study sessions." />
+        <MetricCard label="Total Time" value={formatMinutes(Math.round(analytics.totalHours * 60))} meta="Across all recorded study sessions." />
         <MetricCard label="Sessions" value={String(sessions.length)} meta={`${analytics.activeDays} active day${analytics.activeDays === 1 ? "" : "s"} captured.`} />
         <MetricCard label="Top Method" value={analytics.methodRows[0]?.method ?? "—"} meta={analytics.methodRows[0] ? `${formatMinutes(Math.round(analytics.methodRows[0].hours * 60))} logged` : "Waiting for session data."} />
         <MetricCard label="Focus Rate" value={`${analytics.focusRate.toFixed(0)}%`} meta={`${formatMinutes(Math.round(analytics.distractionHours * 60))} marked as distraction.`} />
@@ -323,9 +323,6 @@ function TimeFolioAnalyticsContent() {
 
         <Panel title="Summary" subtitle="A quick narrative plus the biggest operating signals.">
           <div className="space-y-4">
-            <div className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
-              <p className="text-sm leading-7 text-slate-300">{analytics.narrative}</p>
-            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
                 <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Focus Time</div>

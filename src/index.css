@@ -2017,7 +2017,7 @@ button {
   background: rgba(0, 0, 0, 0.14);
 }
 
-/* Maggie Pink: neutralize hardcoded dark Tailwind surfaces */
+/* Light rose theme: neutralize hardcoded dark Tailwind surfaces */
 :root[data-theme="maggiepink"] .bg-slate-950\/45,
 :root[data-theme="maggiepink"] .bg-slate-950\/35,
 :root[data-theme="maggiepink"] .bg-slate-950\/20,
@@ -2048,7 +2048,7 @@ button {
 }
 
 /* ----------------------------------------------------------------- */
-/* Maggie Pink: phase-2 contrast patch                               */
+/* Light rose theme: phase-2 contrast patch                          */
 /* Targeted overrides for surfaces/text missed by phase-1            */
 /* ----------------------------------------------------------------- */
 
@@ -2143,7 +2143,7 @@ button {
 }
 
 /* ----------------------------------------------------------------- */
-/* Maggie Pink final contrast/surface cleanup                         */
+/* Light rose theme final contrast/surface cleanup                   */
 /* Covers all remaining dark-slate surfaces, file-input buttons,     */
 /* destructive ghost buttons, and dark-red session-log panels.       */
 /* SCOPE: :root[data-theme="maggiepink"] only — no other themes      */
@@ -2223,7 +2223,7 @@ button {
 }
 
 /* Destructive ghost buttons designed for dark themes (rose-300/15, rose-500/10) */
-/* On Maggie Pink these are nearly invisible against the pink app background.    */
+/* On the light rose theme these are nearly invisible against the pink app background. */
 :root[data-theme="maggiepink"] .bg-rose-300\/15,
 :root[data-theme="maggiepink"] .bg-rose-500\/10,
 :root[data-theme="maggiepink"] .bg-rose-950\/20 {
@@ -2310,7 +2310,7 @@ button {
 
 /* ================================================================= */
 /* LIGHT THEME: final surface + contrast cleanup                      */
-/* Mirrors the Maggie Pink pattern. SCOPE: data-theme="light" only.  */
+/* Mirrors the light rose theme pattern. SCOPE: data-theme="light" only. */
 /* ================================================================= */
 
 /* — bg-slate-950 variants — */
@@ -2749,7 +2749,7 @@ button {
   background-color: rgba(8, 28, 72, 0.98) !important;
 }
 
-/* — Tiptap toolbar: keep dark navy on Paul Blue — */
+/* — Tiptap toolbar: keep dark navy on the blue theme — */
 :root[data-theme="paulblue"] .tiptap-editor--pageless,
 :root[data-theme="paulblue"] .tiptap-editor--page {
   background: var(--panel-bg);
@@ -2763,7 +2763,7 @@ button {
   border-color: rgba(96, 165, 250, 0.18);
 }
 
-/* — Scrollbar thumb on Paul Blue — */
+/* — Scrollbar thumb on the blue theme — */
 :root[data-theme="paulblue"] .scrollbar-subtle::-webkit-scrollbar-thumb {
   background: rgba(96, 165, 250, 0.18);
 }

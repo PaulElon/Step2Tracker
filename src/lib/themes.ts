@@ -76,7 +76,7 @@ export const themes: Record<ThemeId, ThemeDefinition> = {
   },
   paulblue: {
     id: "paulblue",
-    label: "Paul Blue",
+    label: "Royal Blue",
     description: "Bold royal blue with vivid electric-blue accents and crisp white text.",
     chart: {
       text: "#dbeafe",
@@ -100,7 +100,7 @@ export const themes: Record<ThemeId, ThemeDefinition> = {
   },
   maggiepink: {
     id: "maggiepink",
-    label: "Maggie Pink",
+    label: "Coral",
     description: "Bright rose light-mode palette with deep charcoal text and high contrast.",
     chart: {
       text: "#1a0a10",

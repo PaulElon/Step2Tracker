@@ -503,7 +503,7 @@ export function WeakTopicsView() {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Portfolio - Weak Topics</h2>
+      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Weak Topics</h2>
       {/* Metric cards */}
       <div className="grid shrink-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard

@@ -868,7 +868,6 @@ export default function App() {
                 <ShieldPlus className="h-4 w-4 text-cyan-200" />
               </div>
               <div className="min-w-0">
-                <p className="text-[0.6rem] uppercase tracking-[0.2em] text-slate-500">TimeFolio</p>
                 <h1 className="truncate text-[13px] font-semibold text-white">TimeFolio</h1>
               </div>
             </div>
