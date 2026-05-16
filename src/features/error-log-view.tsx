@@ -1261,12 +1261,12 @@ function EntryListRow({
           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
             <span className="truncate">{entry.system}</span>
             {entry.isRepeatMiss ? (
-              <span className="inline-flex items-center gap-1 text-amber-300/90">
+              <span className="inline-flex items-center gap-1 text-amber-300/90" title="Repeat miss">
                 <Repeat className="h-3 w-3" />
                 Repeat
               </span>
             ) : null}
-            {entry.addToFinalSheet ? <span className="text-slate-400">Final sheet</span> : null}
+            {entry.addToFinalSheet ? <span className="text-slate-400" title="Added to final sheet">Final sheet</span> : null}
           </div>
         </div>
       </button>
@@ -1538,7 +1538,11 @@ function InsightsRail({
                       </p>
                       <p className="mt-0.5 text-[10px] text-slate-500">
                         Priority: <span className="text-slate-300">{PRIORITY_LABEL[priority]}</span>
-                        {entry.isRepeatMiss ? <span className="ml-1 text-amber-300/90">· Repeat</span> : null}
+                        {entry.isRepeatMiss ? (
+                          <span className="ml-1 text-amber-300/90" title="Repeat miss">
+                            · Repeat
+                          </span>
+                        ) : null}
                       </p>
                       <p className="mt-0.5 truncate text-[10px] text-slate-500">{describeNextReview(entry)}</p>
                     </div>

@@ -534,7 +534,15 @@ export function SessionLogPanel({
         </div>
 
         {FF.autotrackerV2UserMode ? (
-          <AutoTrackerV2UserControlStrip control={autoTracker} />
+          <div className="mt-4 space-y-3">
+            <div className="rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-3 text-xs text-slate-300">
+              <p className="font-medium text-slate-100">Configured Auto-Tracking rules</p>
+              <p className="mt-1 text-slate-400">
+                Allowed: {autoTracker.trackedRuleCount} · Distractions: {autoTracker.distractionRuleCount}
+              </p>
+            </div>
+            <AutoTrackerV2UserControlStrip control={autoTracker} />
+          </div>
         ) : null}
 
         {showTimer ? (

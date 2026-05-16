@@ -519,6 +519,7 @@ export function PracticeTestsView() {
                 type="button"
                 className={cn(iconButtonClassName, "h-9 w-9")}
                 aria-label="Open score trend chart settings"
+                title="Open score trend chart settings"
                 aria-haspopup="dialog"
                 aria-expanded={showChartSettings}
                 onClick={() => setShowChartSettings((current) => !current)}
@@ -799,7 +800,7 @@ export function PracticeTestsView() {
                         <p className="max-w-[240px] whitespace-pre-wrap">{test.weakTopics.join(", ") || "—"}</p>
                       </td>
                       <td className="px-4 py-4 text-slate-400">
-                        <p className="max-w-[280px] whitespace-pre-wrap">{test.actionPlan || "No follow-up noted"}</p>
+                        <p className="max-w-[280px] whitespace-pre-wrap">{test.actionPlan || "No action plan noted"}</p>
                       </td>
                       <td className="px-4 py-4">
                         <button

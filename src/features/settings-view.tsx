@@ -1082,9 +1082,14 @@ export function SettingsView({
                     {reminderButtonLabel}
                   </button>
                 </div>
-                <p className="text-xs text-slate-500">
-                  Reminders only run while the app is open. Nothing is sent off your device.
-                </p>
+                <div className="rounded-[14px] border border-cyan-300/15 bg-cyan-300/[0.08] px-3 py-2">
+                  <p className="text-xs font-semibold text-cyan-100">
+                    Reminders only run while the app is open.
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-cyan-50/85">
+                    Nothing is sent off your device.
+                  </p>
+                </div>
               </div>
             </Panel>
           ) : null}
@@ -1100,7 +1105,7 @@ export function SettingsView({
                     <Database className="mt-0.5 h-5 w-5 shrink-0 text-cyan-200" />
                     <div className="space-y-1">
                       <p className="text-sm font-semibold text-white">Local-first storage</p>
-                      <p className="text-xs leading-5 text-slate-400">{persistenceCopy}</p>
+                      <p className="text-xs leading-5 text-slate-300">{persistenceCopy}</p>
                     </div>
                   </div>
 
@@ -1191,7 +1196,7 @@ export function SettingsView({
                         <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-rose-300" />
                         <div className="space-y-1">
                           <p className="text-sm font-semibold text-rose-100">Destructive action</p>
-                          <p className="text-xs leading-6 text-rose-50/95">
+                          <p className="text-xs leading-6 font-medium text-rose-50">
                             Importing replaces your current TimeFolio data with the contents of the backup file.
                             TimeFolio time-tracking data is untouched. Export a backup first if you want to keep your current state.
                           </p>

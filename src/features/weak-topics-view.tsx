@@ -374,6 +374,7 @@ function HistoryModal({
           onClick={onClose}
           className={`${iconButtonClassName} !p-1.5`}
           aria-label="Close history"
+          title="Close history"
         >
           <X className="h-4 w-4" />
         </button>
@@ -555,6 +556,7 @@ export function WeakTopicsView() {
               type="button"
               className={secondaryButtonClassName}
               onClick={() => setShowHistory(true)}
+              title="Open resolved weak-topic history"
             >
               <History className="h-4 w-4" />
               History
@@ -614,7 +616,9 @@ export function WeakTopicsView() {
                             <button
                               type="button"
                               className={iconButtonClassName}
-                              onClick={() => setTaskSeed({ taskName: entry.topic, category: "Review", entryTopic: entry.topic })}
+                              onClick={() =>
+                                setTaskSeed({ taskName: entry.topic, category: "Review", entryTopic: entry.topic })
+                              }
                               aria-label={`Add task for ${entry.topic}`}
                               title="Add to tasks"
                             >
@@ -638,6 +642,7 @@ export function WeakTopicsView() {
                                 setShowEditor(true);
                               }}
                               aria-label={`Edit ${entry.topic}`}
+                              title="Edit topic"
                             >
                               <Edit3 className="h-3.5 w-3.5" />
                             </button>
