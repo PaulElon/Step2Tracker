@@ -58,7 +58,7 @@ export function TimeFolioView() {
   return (
     <TimeFolioStoreProvider>
       <div className="flex h-full flex-col gap-4 overflow-hidden">
-        <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Portfolio - Study Time</h2>
+        <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Study Time</h2>
         <div className="glass-panel flex shrink-0 gap-1 overflow-x-auto p-1">
           {TABS.map(({ id, label }) => (
             <button

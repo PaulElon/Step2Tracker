@@ -14,6 +14,7 @@ import { ModalShell } from "./components/modal-shell";
 import { MobileNav, NavigationButton } from "./components/ui";
 import { getDesktopNavigationGroups, getMobileNavigationItems, resolveAppSection } from "./features/app-navigation";
 import { DashboardView } from "./features/dashboard-view";
+import { TimeFolioStoreProvider } from "./state/tf-store";
 import { NotebookView } from "./features/notebook-view";
 import { PlannerView } from "./features/planner-view";
 import { PortfolioView } from "./features/portfolio-view";
@@ -21,7 +22,7 @@ import { isPortfolioSection } from "./features/portfolio-section";
 import { SettingsView } from "./features/settings-view";
 import { TimeFolioSessionLogView } from "./features/timefolio-session-log-view";
 import { getDateRange, sumStudyMinutes } from "./lib/analytics";
-import { daysBetween, formatHoursValue, formatLongDate, formatSavedAt } from "./lib/datetime";
+import { daysBetween, daysUntilDateKey, formatHoursValue, formatLongDate, formatSavedAt } from "./lib/datetime";
 import {
   formatReminderBody,
   getDueStudyBlockReminders,
@@ -244,7 +245,7 @@ function computeCountdown(timer: ExamTimer): string {
   const minutes = totalMinutes % 60;
   const totalHours = Math.floor(totalMinutes / 60);
   const hours = totalHours % 24;
-  const totalDays = Math.floor(totalHours / 24);
+  const totalDays = daysUntilDateKey(timer.examDate);
   const mode = timer.displayMode ?? "days";
   const hrMin = timer.showHrMin ? ` ${hours}h ${minutes}m` : "";
   if (mode === "days") {
@@ -260,6 +261,12 @@ function computeCountdown(timer: ExamTimer): string {
   const weeks = Math.floor(remDays / 7);
   const days = remDays % 7;
   return `${months}mo ${weeks}w ${days}d${hrMin}`;
+}
+
+interface UpdateBannerCheckResult {
+  available: boolean;
+  current_version: string;
+  latest_version?: string;
 }
 
 function SidebarCountdown() {
@@ -492,6 +499,20 @@ export default function App() {
       ? `${daysBetween(dateRange.startDate, dateRange.endDate) + 1} days`
       : "Add or import tasks.";
 
+  function resolveUpdateBannerVersion(result: UpdateBannerCheckResult): string | null {
+    const latestVersion = result.latest_version?.trim();
+    if (!result.available || !latestVersion) {
+      return null;
+    }
+
+    const currentVersion = result.current_version.trim();
+    if (currentVersion && currentVersion === latestVersion) {
+      return null;
+    }
+
+    return latestVersion;
+  }
+
   useEffect(() => {
     document.documentElement.dataset.theme = state.preferences.themeId;
     document.documentElement.classList.toggle(
@@ -621,6 +642,7 @@ export default function App() {
   useEffect(() => {
     const requestUpdateCheck = () => {
       void invoke("check_for_updates").catch(() => {});
+      void refreshUpdateBannerState();
     };
 
     requestUpdateCheck();
@@ -645,8 +667,8 @@ export default function App() {
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    listen<string>("update-available", (event) => {
-      setUpdateAvailable(event.payload);
+    listen<string>("update-available", () => {
+      void refreshUpdateBannerState();
     })
       .then((fn) => {
         unlisten = fn;
@@ -657,8 +679,22 @@ export default function App() {
     };
   }, []);
 
+  async function refreshUpdateBannerState() {
+    try {
+      const result = await invoke<UpdateBannerCheckResult>("check_for_update");
+      setUpdateAvailable(resolveUpdateBannerVersion(result));
+    } catch {
+      setUpdateAvailable(null);
+    }
+  }
+
   async function handleInstallUpdate() {
-    await invoke("install_update");
+    try {
+      await invoke("install_update");
+    } catch {
+      setUpdateAvailable(null);
+      await refreshUpdateBannerState();
+    }
   }
 
   function handleSendTestAlert() {
@@ -759,7 +795,11 @@ export default function App() {
     );
   } else switch (resolvedSection) {
     case "dashboard":
-      sectionContent = <DashboardView onOpenNotebook={() => void setActiveSection("notebook")} />;
+      sectionContent = (
+        <TimeFolioStoreProvider>
+          <DashboardView onOpenNotebook={() => void setActiveSection("notebook")} />
+        </TimeFolioStoreProvider>
+      );
       break;
     case "planner":
       sectionContent = <PlannerView />;
@@ -868,7 +908,6 @@ export default function App() {
                 <ShieldPlus className="h-4 w-4 text-cyan-200" />
               </div>
               <div className="min-w-0">
-                <p className="text-[0.6rem] uppercase tracking-[0.2em] text-slate-500">TimeFolio</p>
                 <h1 className="truncate text-[13px] font-semibold text-white">TimeFolio</h1>
               </div>
             </div>

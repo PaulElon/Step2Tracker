@@ -84,7 +84,7 @@ export function AllocationPanel() {
 
       <div className="grid grid-cols-3 gap-4">
         <StatCard
-          label="Total Hours"
+          label="Total Time"
           value={formatMinutes(Math.round(totalHours * 60))}
         />
         <StatCard label="Methods" value={String(rows.length)} />

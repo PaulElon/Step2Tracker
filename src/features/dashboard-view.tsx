@@ -23,15 +23,18 @@ import {
   getStudyBlockMinutes,
   getTodayBlocks,
 } from "../lib/analytics";
-import { formatLongDate, formatMinutes, getTodayKey } from "../lib/datetime";
+import { daysUntilDateKey, formatLongDate, formatMinutes, getTodayKey } from "../lib/datetime";
 import { FF } from "../lib/feature-flags";
-import { cn, primaryButtonClassName, secondaryButtonClassName } from "../lib/ui";
+import { launchResource } from "../lib/launcher";
+import { cn, primaryButtonClassName, secondaryButtonClassName, themeAwareWarmAccent } from "../lib/ui";
 import { useAppStore } from "../state/app-store";
+import { useTimeFolioStore } from "../state/tf-store";
+import { getTrackedStudyMinutesForDate } from "../lib/tf-session-metrics";
 import { StudyTaskCard } from "../components/study-task-card";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { TaskLaunchButton } from "../components/task-launch-button";
 import { CategoryBadge, EmptyState } from "../components/ui";
-import type { ExamTimer, SectionId } from "../types/models";
+import type { ExamTimer, ResourceLink, SectionId, StudyBlock } from "../types/models";
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -54,8 +57,7 @@ function getSoonestUpcomingTimer(timers: ExamTimer[]): ExamTimer | null {
 }
 
 function daysUntilTimer(timer: ExamTimer): number {
-  const target = new Date(`${timer.examDate}T${timer.examTime ?? "23:59"}`).getTime();
-  return Math.max(0, Math.ceil((target - Date.now()) / 86_400_000));
+  return daysUntilDateKey(timer.examDate);
 }
 
 function ProgressRing({ percent, size = 132, stroke = 12 }: { percent: number; size?: number; stroke?: number }) {
@@ -118,6 +120,61 @@ function categoryShortLabel(category: string) {
   return first.length > 6 ? first.slice(0, 5) : first;
 }
 
+function findMatchingResource(taskName: string, category: string, resourceLinks: ResourceLink[]): ResourceLink | null {
+  const haystack = `${taskName} ${category}`.toLowerCase();
+  let best: ResourceLink | null = null;
+  for (const link of resourceLinks) {
+    if (haystack.includes(link.label.toLowerCase())) {
+      if (!best || link.label.length > best.label.length) {
+        best = link;
+      }
+    }
+  }
+  return best;
+}
+
+function looksLikeImportedTaskNotes(notes: string) {
+  const normalized = notes.trim().toLowerCase();
+  return (
+    normalized.startsWith("study schedule task for") ||
+    normalized.includes("all-day event") ||
+    normalized.includes("no alert") ||
+    normalized.includes("calendar metadata")
+  );
+}
+
+function getHeroSubtitle(task: { notes?: string | null; reminderAt?: string | null }, openCount: number) {
+  const notes = task.notes?.trim();
+  if (notes && !looksLikeImportedTaskNotes(notes)) {
+    return notes;
+  }
+
+  if (task.reminderAt) {
+    return "Reminder set. Open this task when you are ready to begin.";
+  }
+
+  if (openCount > 1) {
+    return `${openCount - 1} more task${openCount - 1 === 1 ? "" : "s"} are queued. Start here first.`;
+  }
+
+  return "Open the task and get the first block done.";
+}
+
+const FOCUS_TIPS = [
+  "Start with a 10-minute opening sprint. Momentum matters more than perfect conditions.",
+  "Reduce switching costs: finish one task before opening the next tab.",
+  "Capture distractions once, then return to the current block immediately.",
+  "A clean first step beats a complicated plan. Make the next action obvious.",
+];
+
+function getDailyFocusTip(seed: string) {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+  return FOCUS_TIPS[hash % FOCUS_TIPS.length];
+}
+
 function SnapshotRow({
   icon: Icon,
   label,
@@ -140,17 +197,23 @@ function SnapshotRow({
 
 export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void }) {
   const { state, upsertStudyBlock, setDailyGoalMinutes, setActiveSection } = useAppStore();
+  const { state: tfState } = useTimeFolioStore();
   const [showTaskEditor, setShowTaskEditor] = useState(false);
+  const [editingTask, setEditingTask] = useState<StudyBlock | null>(null);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInputValue, setGoalInputValue] = useState("");
 
   const todayKey = getTodayKey();
+  const trackedStudyMinutes = FF.timefolio
+    ? getTrackedStudyMinutesForDate(tfState.sessionLogs, todayKey)
+    : 0;
   const todayTasks = getTodayBlocks(state.studyBlocks, todayKey);
   const plannedMinutes = todayTasks.reduce((total, task) => total + getStudyBlockMinutes(task), 0);
   const completedMinutes = todayTasks
     .filter((task) => task.completed)
     .reduce((total, task) => total + getStudyBlockMinutes(task), 0);
   const todayGoalMinutes = state.preferences.dailyGoalMinutes;
+  const themeId = state.preferences.themeId;
   const dailyGoalProgress = todayGoalMinutes ? Math.min((completedMinutes / todayGoalMinutes) * 100, 100) : 0;
   const alerts = getGoalAlerts(state.studyBlocks, state.practiceTests, todayGoalMinutes).slice(0, 3);
   const activeWeakTopics = state.weakTopicEntries.filter((entry) => entry.status !== "Resolved");
@@ -162,9 +225,11 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
   const remediationLinks = getRemediationLinks(state.practiceTests, state.studyBlocks);
   const uncoveredTopicNames = [...new Set(remediationLinks.flatMap((l) => l.uncoveredTopics))];
   const upcomingTimer = getSoonestUpcomingTimer(state.preferences.examTimers);
+  const countdownDays = upcomingTimer ? daysUntilTimer(upcomingTimer) : 0;
   const greeting = getGreeting();
   const heroTile = nextTask ? categoryTileStyle(nextTask.category) : null;
   const heroNextTaskMinutes = nextTask ? getStudyBlockMinutes(nextTask) : 0;
+  const resourceLinks = state.preferences.resourceLinks;
 
   const commitGoalMinutes = () => {
     const parsedMinutes = Number(goalInputValue);
@@ -177,6 +242,27 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
   const goToSection = (section: SectionId) => {
     void setActiveSection(section);
   };
+
+  const openNewTaskEditor = () => {
+    setEditingTask(null);
+    setShowTaskEditor(true);
+  };
+
+  async function startNextTask(task: StudyBlock) {
+    setShowTaskEditor(false);
+    setEditingTask(null);
+    const resource = findMatchingResource(task.task, task.category, resourceLinks);
+    if (resource) {
+      try {
+        await launchResource(resource.url);
+        return;
+      } catch {
+        // Fall back to the task editor if the resource cannot launch.
+      }
+    }
+
+    setEditingTask(task);
+  }
 
   type BestMove = {
     icon: typeof AlertCircle;
@@ -196,7 +282,9 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
       iconColorClass: "text-violet-300",
       title: "Start your next task",
       subtitle: nextTask.task,
-      action: () => {},
+      action: () => {
+        void startNextTask(nextTask);
+      },
     });
   } else if (todayTasks.length === 0) {
     bestMoves.push({
@@ -205,7 +293,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
       iconColorClass: "text-slate-300",
       title: "Plan your day",
       subtitle: "Add tasks to get started",
-      action: () => setShowTaskEditor(true),
+      action: openNewTaskEditor,
     });
   }
 
@@ -315,9 +403,9 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                       ) : null}
                       {openCount > 1 ? <span className="text-slate-500">{openCount - 1} more queued</span> : null}
                     </div>
-                    {nextTask.notes ? (
-                      <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">{nextTask.notes}</p>
-                    ) : null}
+                    <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
+                      {getHeroSubtitle(nextTask, openCount)}
+                    </p>
                   </div>
 
                   <div className="flex shrink-0 flex-col gap-2.5">
@@ -353,7 +441,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                     <button
                       type="button"
                       className={primaryButtonClassName}
-                      onClick={() => setShowTaskEditor(true)}
+                      onClick={openNewTaskEditor}
                     >
                       <Plus className="h-4 w-4" />
                       Add task
@@ -385,7 +473,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                   <button
                     type="button"
                     className={secondaryButtonClassName}
-                    onClick={() => setShowTaskEditor(true)}
+                    onClick={openNewTaskEditor}
                   >
                     <Plus className="h-4 w-4" />
                     Add
@@ -422,7 +510,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                         <button
                           type="button"
                           className={secondaryButtonClassName}
-                          onClick={() => setShowTaskEditor(true)}
+                          onClick={openNewTaskEditor}
                         >
                           Add task
                         </button>
@@ -442,7 +530,10 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                 <div className="mt-3 flex items-center gap-4">
                   <ProgressRing percent={dailyGoalProgress} size={88} stroke={8} />
                   <div className="min-w-0 flex-1 space-y-1.5 text-sm">
-                    <SnapshotRow icon={Clock3} label="Studied" value={formatMinutes(completedMinutes)} />
+                    <SnapshotRow icon={Clock3} label="Done time" value={formatMinutes(completedMinutes)} />
+                    {FF.timefolio ? (
+                      <SnapshotRow icon={Timer} label="Tracked study" value={formatMinutes(trackedStudyMinutes)} />
+                    ) : null}
                     <SnapshotRow
                       icon={ListTodo}
                       label="Tasks done"
@@ -532,7 +623,9 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
             <section className="glass-panel min-w-0 p-5">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-amber-300/80" />
+                  <AlertCircle
+                    className={themeAwareWarmAccent(themeId, "h-4 w-4 text-orange-300/80", "h-4 w-4 text-amber-300/80")}
+                  />
                   <h3 className="text-base font-semibold text-white">Needs Attention</h3>
                 </div>
                 {activeWeakTopics.length ? (
@@ -628,14 +721,14 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                   <div>
                     <p className="text-sm font-semibold text-white">{upcomingTimer.label}</p>
                     <p className="mt-0.5 text-xs text-slate-400">
-                      {daysUntilTimer(upcomingTimer)} day{daysUntilTimer(upcomingTimer) === 1 ? "" : "s"} until test
+                      {countdownDays} day{countdownDays === 1 ? "" : "s"} until test
                     </p>
                   </div>
                   <div className="border-t border-white/[0.06] pt-3">
                     <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Today</p>
                     <p className="mt-1 text-sm text-slate-200">
                       <span className="tabular-nums text-white">{formatMinutes(completedMinutes)}</span>
-                      <span className="text-slate-500"> studied · {formatMinutes(plannedMinutes)} planned</span>
+                      <span className="text-slate-500"> done · {formatMinutes(plannedMinutes)} planned</span>
                     </p>
                   </div>
                 </div>
@@ -648,7 +741,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                     <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Today</p>
                     <p className="mt-1 text-sm text-slate-200">
                       <span className="tabular-nums text-white">{formatMinutes(completedMinutes)}</span>
-                      <span className="text-slate-500"> studied · {formatMinutes(plannedMinutes)} planned</span>
+                      <span className="text-slate-500"> done · {formatMinutes(plannedMinutes)} planned</span>
                     </p>
                   </div>
                 </div>
@@ -679,25 +772,20 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                 />
                 {FF.notebook && onOpenNotebook ? (
                   <QuickAction icon={BookOpen} label="Notebook" onClick={onOpenNotebook} />
-                ) : (
-                  <QuickAction
-                    icon={Plus}
-                    label="Add Task"
-                    onClick={() => setShowTaskEditor(true)}
-                  />
-                )}
+                ) : null}
+                <QuickAction icon={Plus} label="Add Task" onClick={openNewTaskEditor} />
               </div>
             </section>
 
             {/* Focus Tip */}
             <section className="glass-panel min-w-0 p-5">
               <div className="flex items-center gap-2">
-                <Lightbulb className="h-4 w-4 text-amber-300/80" />
+                <Lightbulb
+                  className={themeAwareWarmAccent(themeId, "h-4 w-4 text-orange-300/80", "h-4 w-4 text-amber-300/80")}
+                />
                 <h3 className="text-base font-semibold text-white">Focus Tip</h3>
               </div>
-              <p className="mt-3 text-sm leading-6 text-slate-300">
-                Small, consistent actions create massive results over time. Stay consistent.
-              </p>
+              <p className="mt-3 text-sm leading-6 text-slate-300">{getDailyFocusTip(todayKey)}</p>
             </section>
           </div>
         </div>
@@ -722,6 +810,21 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
               });
               if (saved) {
                 setShowTaskEditor(false);
+              }
+            })();
+          }}
+        />
+      ) : null}
+      {editingTask ? (
+        <StudyTaskEditorSheet
+          key={editingTask.id}
+          task={editingTask}
+          onClose={() => setEditingTask(null)}
+          onSave={(draft) => {
+            void (async () => {
+              const saved = await upsertStudyBlock(draft);
+              if (saved) {
+                setEditingTask(null);
               }
             })();
           }}

@@ -98,6 +98,11 @@ export function daysBetween(startDate: string, endDate: string) {
   return Math.round(milliseconds / 86_400_000);
 }
 
+// Count calendar days in local time so countdown surfaces stay aligned.
+export function daysUntilDateKey(targetDateKey: string, referenceDateKey = getTodayKey()) {
+  return Math.max(0, daysBetween(referenceDateKey, targetDateKey));
+}
+
 export function parseTimeToMinutes(value: string) {
   const normalized = value.trim().toLowerCase();
   if (!normalized) {

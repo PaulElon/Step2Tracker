@@ -80,7 +80,11 @@ function buildNarrative(params: {
     narrative += ` ${topMethod} is your leading method so far.`;
   }
 
-  narrative += ` ${last7DaysText} landed in the last 7 days and ${last30DaysText} landed in the last 30 days.`;
+  if (last7DaysHours === last30DaysHours) {
+    narrative += ` ${last7DaysText} logged in the last 7 days.`;
+  } else {
+    narrative += ` ${last7DaysText} in the last 7 days, ${last30DaysText} in the last 30 days.`;
+  }
 
   if (focusRate >= 90) {
     narrative += ` Focus quality is excellent at ${focusRate.toFixed(0)}% distraction-free time.`;
@@ -241,7 +245,7 @@ function TimeFolioAnalyticsContent() {
     return (
       <div className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Portfolio - Analytics</h2>
+          <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Analytics</h2>
           <p className="text-sm text-slate-400">
             Combined study-time insights across method mix, focus quality, and recent activity.
           </p>
@@ -264,7 +268,7 @@ function TimeFolioAnalyticsContent() {
   return (
     <div className="space-y-4 pb-2">
       <div className="space-y-1">
-        <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Portfolio - Analytics</h2>
+        <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Analytics</h2>
         <p className="text-sm text-slate-400">
           Combined study-time insights across method mix, focus quality, and recent activity.
         </p>
@@ -283,10 +287,10 @@ function TimeFolioAnalyticsContent() {
       </Panel>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total Hours" value={formatMinutes(Math.round(analytics.totalHours * 60))} meta="Across all recorded study sessions." />
+        <MetricCard label="Total Time" value={formatMinutes(Math.round(analytics.totalHours * 60))} meta="Across all recorded study sessions." />
         <MetricCard label="Sessions" value={String(sessions.length)} meta={`${analytics.activeDays} active day${analytics.activeDays === 1 ? "" : "s"} captured.`} />
         <MetricCard label="Top Method" value={analytics.methodRows[0]?.method ?? "—"} meta={analytics.methodRows[0] ? `${formatMinutes(Math.round(analytics.methodRows[0].hours * 60))} logged` : "Waiting for session data."} />
-        <MetricCard label="Focus Rate" value={`${analytics.focusRate.toFixed(0)}%`} meta={`${formatMinutes(Math.round(analytics.distractionHours * 60))} marked as distraction.`} />
+        <MetricCard label="Focus Rate" value={`${analytics.focusRate.toFixed(0)}%`} meta={analytics.totalHours < 1 ? `Based on ${formatMinutes(Math.round(analytics.totalHours * 60))} total — log more for a reliable rate.` : `${formatMinutes(Math.round(analytics.distractionHours * 60))} marked as distraction.`} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.95fr)]">
@@ -307,25 +311,28 @@ function TimeFolioAnalyticsContent() {
               </div>
             </div>
 
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {analytics.trend.map((point, index) => (
-                <TrendBar
-                  key={point.dateKey}
-                  hours={point.hours}
-                  isLatest={index === analytics.trend.length - 1}
-                  label={point.label}
-                  maxHours={trendPeakHours}
-                />
-              ))}
-            </div>
+            {trendPeakHours === 0 ? (
+              <div className="flex h-32 items-center justify-center rounded-[18px] border border-white/10 bg-slate-950/35 text-sm text-slate-500">
+                Log more sessions to see a trend.
+              </div>
+            ) : (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {analytics.trend.map((point, index) => (
+                  <TrendBar
+                    key={point.dateKey}
+                    hours={point.hours}
+                    isLatest={index === analytics.trend.length - 1}
+                    label={point.label}
+                    maxHours={trendPeakHours}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </Panel>
 
         <Panel title="Summary" subtitle="A quick narrative plus the biggest operating signals.">
           <div className="space-y-4">
-            <div className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
-              <p className="text-sm leading-7 text-slate-300">{analytics.narrative}</p>
-            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
                 <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Focus Time</div>

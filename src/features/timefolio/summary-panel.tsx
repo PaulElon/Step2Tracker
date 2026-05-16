@@ -187,7 +187,7 @@ export function SummaryPanel() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Total Hours" value={formatMinutes(Math.round(metrics.totalHours * 60))} />
+        <StatCard label="Total Time" value={formatMinutes(Math.round(metrics.totalHours * 60))} />
         <StatCard label="Sessions" value={String(metrics.sessionCount)} />
         <StatCard
           label="Top Method"

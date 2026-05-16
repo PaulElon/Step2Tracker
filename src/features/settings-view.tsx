@@ -19,6 +19,7 @@ import {
   Tag,
   Trash2,
   Upload,
+  User,
   X,
   Zap,
 } from "lucide-react";
@@ -27,8 +28,11 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { NavigationButton, Panel } from "../components/ui";
-import { TimeFolioSettingsSections } from "./timefolio-settings-sections";
 import { FF } from "../lib/feature-flags";
+import { themeAwareWarmAccent } from "../lib/ui";
+import { TimeFolioStoreProvider } from "../state/tf-store";
+import { AccountPanel } from "./timefolio/account-panel";
+import { TrackerSettingsPanel } from "./timefolio/tracker-settings-panel";
 import { themeList } from "../lib/themes";
 import { cn, fieldClassName, secondaryButtonClassName } from "../lib/ui";
 import type { BackupArtifactPreview, PersistenceSummary, ResourceLink, ThemeId } from "../types/models";
@@ -38,7 +42,7 @@ function generateId(prefix: string) {
 }
 
 function getBackupFileName(date = new Date()) {
-  return `step2-command-center-backup-${date.toISOString().slice(0, 10)}.json`;
+  return `timefolio-backup-${date.toISOString().slice(0, 10)}.json`;
 }
 
 function formatCountsLine(counts: BackupArtifactPreview["counts"]) {
@@ -533,20 +537,26 @@ function readCachedStatus(): UpdateStatus {
   }
 }
 
+function clearCachedStatus() {
+  localStorage.removeItem(LAST_CHECK_KEY);
+  localStorage.removeItem(LAST_RESULT_KEY);
+}
+
 function AboutPanel() {
   const [status, setStatus] = useState<UpdateStatus>(readCachedStatus);
   const [appVersion, setAppVersion] = useState<string>("");
   const hasAutoCheckedRef = useRef(false);
 
-  useEffect(() => {
-    getVersion()
-      .then(setAppVersion)
-      .catch(() => {});
-  }, []);
-
   const runCheck = useCallback(async (force: boolean) => {
-    if (!force && status.kind === "checking") return;
-    setStatus({ kind: "checking" });
+    let shouldRun = true;
+    setStatus((previous) => {
+      if (!force && previous.kind === "checking") {
+        shouldRun = false;
+        return previous;
+      }
+      return { kind: "checking" };
+    });
+    if (!shouldRun) return;
 
     const now = new Date().toISOString();
     localStorage.setItem(LAST_CHECK_KEY, now);
@@ -584,7 +594,30 @@ function AboutPanel() {
       const message = err instanceof Error ? err.message : String(err);
       setStatus({ kind: "error", message, checkedAt: now });
     }
-  }, [status.kind]);
+  }, []);
+
+  useEffect(() => {
+    getVersion()
+      .then((version) => {
+        setAppVersion(version);
+        const cached = readCachedStatus();
+        const cachedVersion =
+          cached.kind === "available" || cached.kind === "up-to-date"
+            ? cached.currentVersion
+            : "";
+
+        if (cachedVersion && cachedVersion !== version) {
+          clearCachedStatus();
+          setStatus({ kind: "idle" });
+          hasAutoCheckedRef.current = true;
+          void runCheck(true);
+          return;
+        }
+
+        setStatus(cached);
+      })
+      .catch(() => {});
+  }, [runCheck]);
 
   useEffect(() => {
     if (hasAutoCheckedRef.current) return;
@@ -609,7 +642,10 @@ function AboutPanel() {
       await invoke("install_update");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      clearCachedStatus();
       setStatus({ kind: "error", message, checkedAt: new Date().toISOString() });
+      hasAutoCheckedRef.current = true;
+      void runCheck(true);
     }
   }
 
@@ -714,6 +750,8 @@ type SettingsSection =
   | "defaults"
   | "categories"
   | "resources"
+  | "tracker"
+  | "account"
   | "reminders"
   | "data"
   | "about";
@@ -722,13 +760,16 @@ const SETTINGS_NAV: Array<{
   id: SettingsSection;
   label: string;
   icon: typeof Palette;
-  group: "preferences" | "content" | "system";
+  group: "preferences" | "content" | "tracking" | "account" | "system";
+  requireTimefolio?: true;
 }> = [
   { id: "appearance", label: "Appearance", icon: Palette, group: "preferences" },
   { id: "defaults", label: "Study Defaults", icon: SlidersHorizontal, group: "preferences" },
   { id: "categories", label: "Categories", icon: Tag, group: "content" },
   { id: "resources", label: "Resources", icon: BookmarkPlus, group: "content" },
-  { id: "reminders", label: "Reminders", icon: Bell, group: "system" },
+  { id: "tracker", label: "Tracker Rules", icon: Zap, group: "tracking", requireTimefolio: true },
+  { id: "reminders", label: "Reminders", icon: Bell, group: "tracking" },
+  { id: "account", label: "Account", icon: User, group: "account", requireTimefolio: true },
   { id: "data", label: "Data & Safety", icon: Database, group: "system" },
   { id: "about", label: "About", icon: Info, group: "system" },
 ];
@@ -894,9 +935,13 @@ export function SettingsView({
     }
   }
 
-  const groupOrder: Array<{ id: "preferences" | "content" | "system"; label: string }> = [
+  const visibleNav = SETTINGS_NAV.filter((item) => !item.requireTimefolio || FF.timefolio);
+
+  const groupOrder: Array<{ id: "preferences" | "content" | "tracking" | "account" | "system"; label: string }> = [
     { id: "preferences", label: "Preferences" },
     { id: "content", label: "Content" },
+    { id: "tracking", label: "Tracking" },
+    { id: "account", label: "Account" },
     { id: "system", label: "System" },
   ];
 
@@ -906,12 +951,15 @@ export function SettingsView({
       <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="glass-panel h-fit p-3 xl:sticky xl:top-4">
           <nav className="space-y-4">
-            {groupOrder.map((group) => (
+            {groupOrder.map((group) => {
+              const groupItems = visibleNav.filter((item) => item.group === group.id);
+              if (groupItems.length === 0) return null;
+              return (
               <div key={group.id} className="space-y-0.5">
                 <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">
                   {group.label}
                 </p>
-                {SETTINGS_NAV.filter((item) => item.group === group.id).map((item) => (
+                {groupItems.map((item) => (
                   <NavigationButton
                     key={item.id}
                     icon={item.icon}
@@ -921,7 +969,8 @@ export function SettingsView({
                   />
                 ))}
               </div>
-            ))}
+              );
+            })}
           </nav>
         </aside>
 
@@ -935,18 +984,24 @@ export function SettingsView({
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                   {themeList.map((theme) => {
                     const isEnhanced = enhancedThemeIds.includes(theme.id);
+                    const isSelected = themeId === theme.id;
                     return (
                       <div
                         key={theme.id}
                         role="button"
                         tabIndex={0}
-                        aria-pressed={themeId === theme.id}
-                        className={`theme-option cursor-pointer ${themeId === theme.id ? "border-white/20 bg-white/[0.07]" : ""}`}
+                        aria-pressed={isSelected}
+                        className={`theme-option relative cursor-pointer ${isSelected ? "border-cyan-300/30 bg-cyan-300/[0.08] shadow-[0_0_0_1px_rgba(103,232,249,0.18)]" : "border-white/10 bg-slate-950/45"}`}
                         onClick={() => onThemeChange(theme.id)}
                         onKeyDown={(event) => {
                           if (event.key === "Enter" || event.key === " ") onThemeChange(theme.id);
                         }}
                       >
+                        {isSelected ? (
+                          <span className="absolute right-3 top-3 inline-flex h-6 w-6 items-center justify-center rounded-full border border-cyan-300/30 bg-cyan-300/15 text-cyan-200">
+                            <Check className="h-3.5 w-3.5" />
+                          </span>
+                        ) : null}
                         <p className="text-sm font-semibold text-white">{theme.label}</p>
                         <div className="mt-2 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1">
@@ -964,22 +1019,31 @@ export function SettingsView({
                             }}
                             className={`rounded-full border p-1.5 transition ${
                               isEnhanced
-                                ? "border-yellow-300/50 bg-yellow-300/15 text-yellow-300"
+                                ? themeAwareWarmAccent(
+                                    themeId,
+                                    "border-orange-300/50 bg-orange-300/15 text-orange-300",
+                                    "border-yellow-300/50 bg-yellow-300/15 text-yellow-300",
+                                  )
                                 : "border-white/10 text-slate-400 hover:text-white"
                             }`}
                           >
-                            <Zap className={`h-3.5 w-3.5 ${isEnhanced ? "fill-yellow-300" : ""}`} />
+                            <Zap
+                              className={`h-3.5 w-3.5 ${
+                                isEnhanced
+                                  ? themeAwareWarmAccent(themeId, "fill-orange-300", "fill-yellow-300")
+                                  : ""
+                              }`}
+                            />
                           </button>
                         </div>
                       </div>
                     );
                   })}
-                </div>
-              </div>
-            </Panel>
-          ) : null}
-
-          {activeSection === "defaults" ? (
+	                </div>
+	              </div>
+	            </Panel>
+	          ) : null}
+	          {activeSection === "defaults" ? (
             <Panel
               title="Study Defaults"
               subtitle="Targets used across Today, Plan, and progress views."
@@ -1060,9 +1124,14 @@ export function SettingsView({
                     {reminderButtonLabel}
                   </button>
                 </div>
-                <p className="text-xs text-slate-500">
-                  Reminders only run while the app is open. Nothing is sent off your device.
-                </p>
+                <div className="rounded-[14px] border border-cyan-300/15 bg-cyan-300/[0.08] px-3 py-2">
+                  <p className="text-xs font-semibold text-cyan-100">
+                    Reminders only run while the app is open.
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-cyan-50/85">
+                    Nothing is sent off your device.
+                  </p>
+                </div>
               </div>
             </Panel>
           ) : null}
@@ -1078,7 +1147,7 @@ export function SettingsView({
                     <Database className="mt-0.5 h-5 w-5 shrink-0 text-cyan-200" />
                     <div className="space-y-1">
                       <p className="text-sm font-semibold text-white">Local-first storage</p>
-                      <p className="text-xs leading-5 text-slate-400">{persistenceCopy}</p>
+                      <p className="text-xs leading-5 text-slate-300">{persistenceCopy}</p>
                     </div>
                   </div>
 
@@ -1169,7 +1238,7 @@ export function SettingsView({
                         <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-rose-300" />
                         <div className="space-y-1">
                           <p className="text-sm font-semibold text-rose-100">Destructive action</p>
-                          <p className="text-xs leading-5 text-rose-200/80">
+                          <p className="text-xs leading-6 font-medium text-rose-50">
                             Importing replaces your current TimeFolio data with the contents of the backup file.
                             TimeFolio time-tracking data is untouched. Export a backup first if you want to keep your current state.
                           </p>
@@ -1246,8 +1315,19 @@ export function SettingsView({
                 </Panel>
               </div>
 
-              {FF.timefolio ? <TimeFolioSettingsSections /> : null}
             </div>
+          ) : null}
+
+          {activeSection === "tracker" && FF.timefolio ? (
+            <TimeFolioStoreProvider>
+              <TrackerSettingsPanel embedded themeId={themeId} />
+            </TimeFolioStoreProvider>
+          ) : null}
+
+          {activeSection === "account" && FF.timefolio ? (
+            <TimeFolioStoreProvider>
+              <AccountPanel embedded />
+            </TimeFolioStoreProvider>
           ) : null}
 
           {activeSection === "about" ? <AboutPanel /> : null}

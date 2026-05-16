@@ -17,7 +17,11 @@ import {
 import { ModalShell } from "../components/modal-shell";
 import { RichTextEditor, RichTextRender } from "../components/rich-text-editor";
 import { richTextToPlain } from "../components/rich-text-utils";
-import { primaryButtonClassName, secondaryButtonClassName } from "../lib/ui";
+import {
+  primaryButtonClassName,
+  secondaryButtonClassName,
+  themeAwareWarmAccent,
+} from "../lib/ui";
 import {
   ERROR_LOG_FOLLOW_UP_ACTION_VALUES,
   ERROR_LOG_ERROR_TYPE_VALUES,
@@ -607,6 +611,7 @@ function LogEntryModal({
 
 export function ErrorLogView() {
   const { state, upsertErrorLogEntry, trashErrorLogEntry, upsertWeakTopic } = useAppStore();
+  const themeId = state.preferences.themeId;
   const entries = state.errorLogEntries;
 
   const [sortKey, setSortKey] = useState<SortKey>("newest");
@@ -785,7 +790,7 @@ export function ErrorLogView() {
     <div className="flex h-full min-h-0 flex-col gap-4 pb-6">
       {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
 
-      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Portfolio - Error Log</h2>
+      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Error Log</h2>
 
       <HeaderBand
         search={search}
@@ -831,6 +836,7 @@ export function ErrorLogView() {
           totalEntries={entries.length}
           selectedId={resolvedSelectedEntryId}
           filtersActive={filtersActive}
+          themeId={themeId}
           onSelect={setSelectedEntryId}
           onCreate={openCreate}
           onResetFilters={resetFilters}
@@ -849,6 +855,7 @@ export function ErrorLogView() {
           topMissedTopics={topMissedTopics}
           recurringPatterns={recurringPatternsCount}
           nextReview={nextReviewSuggestions}
+          themeId={themeId}
           weakTopicAdded={selectedEntry ? addedWeakTopicIds.has(selectedEntry.id) : false}
           confirmDeleteId={confirmDeleteId}
           onAddWeakTopic={(entry) => {
@@ -1153,6 +1160,7 @@ function EntryList({
   totalEntries,
   selectedId,
   filtersActive,
+  themeId,
   onSelect,
   onCreate,
   onResetFilters,
@@ -1161,6 +1169,7 @@ function EntryList({
   totalEntries: number;
   selectedId: string | null;
   filtersActive: boolean;
+  themeId: string;
   onSelect: (id: string) => void;
   onCreate: () => void;
   onResetFilters: () => void;
@@ -1211,6 +1220,7 @@ function EntryList({
                 entry={entry}
                 selected={entry.id === selectedId}
                 onSelect={() => onSelect(entry.id)}
+                themeId={themeId}
               />
             ))}
           </ul>
@@ -1224,10 +1234,12 @@ function EntryListRow({
   entry,
   selected,
   onSelect,
+  themeId,
 }: {
   entry: ErrorLogEntry;
   selected: boolean;
   onSelect: () => void;
+  themeId: string;
 }) {
   const priority = entry.priority ?? "medium";
   const dateLabel = formatEntryDate(entry.entryDate || entry.createdAt.slice(0, 10));
@@ -1261,12 +1273,19 @@ function EntryListRow({
           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
             <span className="truncate">{entry.system}</span>
             {entry.isRepeatMiss ? (
-              <span className="inline-flex items-center gap-1 text-amber-300/90">
+              <span
+                className={themeAwareWarmAccent(
+                  themeId,
+                  "inline-flex items-center gap-1 text-orange-300/90",
+                  "inline-flex items-center gap-1 text-amber-300/90",
+                )}
+                title="Repeat miss"
+              >
                 <Repeat className="h-3 w-3" />
                 Repeat
               </span>
             ) : null}
-            {entry.addToFinalSheet ? <span className="text-slate-400">Final sheet</span> : null}
+            {entry.addToFinalSheet ? <span className="text-slate-400" title="Added to final sheet">Final sheet</span> : null}
           </div>
         </div>
       </button>
@@ -1447,6 +1466,7 @@ function InsightsRail({
   topMissedTopics,
   recurringPatterns,
   nextReview,
+  themeId,
   weakTopicAdded,
   confirmDeleteId,
   onAddWeakTopic,
@@ -1462,6 +1482,7 @@ function InsightsRail({
   topMissedTopics: Array<[string, number]>;
   recurringPatterns: number;
   nextReview: ErrorLogEntry[];
+  themeId: string;
   weakTopicAdded: boolean;
   confirmDeleteId: string | null;
   onAddWeakTopic: (entry: ErrorLogEntry) => void;
@@ -1538,7 +1559,14 @@ function InsightsRail({
                       </p>
                       <p className="mt-0.5 text-[10px] text-slate-500">
                         Priority: <span className="text-slate-300">{PRIORITY_LABEL[priority]}</span>
-                        {entry.isRepeatMiss ? <span className="ml-1 text-amber-300/90">· Repeat</span> : null}
+                        {entry.isRepeatMiss ? (
+                          <span
+                            className={themeAwareWarmAccent(themeId, "ml-1 text-orange-300/90", "ml-1 text-amber-300/90")}
+                            title="Repeat miss"
+                          >
+                            · Repeat
+                          </span>
+                        ) : null}
                       </p>
                       <p className="mt-0.5 truncate text-[10px] text-slate-500">{describeNextReview(entry)}</p>
                     </div>

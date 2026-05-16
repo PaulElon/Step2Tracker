@@ -461,6 +461,7 @@ export function PracticeTestsView() {
     () => [...state.practiceTests].sort((left, right) => right.date.localeCompare(left.date)),
     [state.practiceTests],
   );
+  const hasTrendData = scoreTrend.length >= 3;
 
   useEffect(() => {
     if (!showChartSettings) {
@@ -481,12 +482,16 @@ export function PracticeTestsView() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Portfolio - Practice Tests</h2>
+      <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Practice Tests</h2>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Average"
           value={metrics.averageScore == null ? "Awaiting log" : `${metrics.averageScore.toFixed(1)}%`}
-          meta={metrics.averageScore == null ? "No tests yet" : `${state.practiceTests.length} logged`}
+          meta={
+            metrics.averageScore == null
+              ? "No tests yet"
+              : `${state.practiceTests.length} test${state.practiceTests.length === 1 ? "" : "s"} logged`
+          }
         />
         <MetricCard
           label="Best"
@@ -499,7 +504,7 @@ export function PracticeTestsView() {
           meta="Most recent result"
         />
         <MetricCard
-          label="Load"
+          label="Questions answered"
           value={metrics.totalQuestions ? `${metrics.totalQuestions} Qs` : "0 Qs"}
           meta={metrics.totalMinutes ? formatHoursValue(metrics.totalMinutes) : "No time logged"}
         />
@@ -514,6 +519,7 @@ export function PracticeTestsView() {
                 type="button"
                 className={cn(iconButtonClassName, "h-9 w-9")}
                 aria-label="Open score trend chart settings"
+                title="Open score trend chart settings"
                 aria-haspopup="dialog"
                 aria-expanded={showChartSettings}
                 onClick={() => setShowChartSettings((current) => !current)}
@@ -621,7 +627,7 @@ export function PracticeTestsView() {
             </button>
           }
         >
-          {scoreTrend.length ? (
+          {hasTrendData ? (
             <div className="relative">
               {showBestFitLine && showBestFitRSquared && trendRegression ? (
                 <div className="pointer-events-none absolute right-4 top-4 z-10 rounded-full border border-cyan-300/20 bg-slate-950/80 px-3 py-1 text-xs font-medium tracking-[0.04em] text-cyan-100">
@@ -710,7 +716,11 @@ export function PracticeTestsView() {
               />
             </div>
           ) : (
-            <EmptyState title="No tests yet" description="Log a test to start the score line." compact />
+            <EmptyState
+              title={scoreTrend.length ? "Not enough tests yet" : "No tests yet"}
+              description="Log at least 3 tests to see a trend."
+              compact
+            />
           )}
         </Panel>
 
@@ -764,7 +774,12 @@ export function PracticeTestsView() {
                     <th className="px-4 py-4 font-medium">Test</th>
                     <th className="px-4 py-4 font-medium">Score</th>
                     <th className="px-4 py-4 font-medium">Weak topics</th>
-                    <th className="px-4 py-4 font-medium">Action plan</th>
+                    <th
+                      className="px-4 py-4 font-medium"
+                      title="Optional follow-up or study plan you want to revisit after the test"
+                    >
+                      Action plan
+                    </th>
                     <th className="px-4 py-4 font-medium">Actions</th>
                   </tr>
                 </thead>
@@ -785,7 +800,7 @@ export function PracticeTestsView() {
                         <p className="max-w-[240px] whitespace-pre-wrap">{test.weakTopics.join(", ") || "—"}</p>
                       </td>
                       <td className="px-4 py-4 text-slate-400">
-                        <p className="max-w-[280px] whitespace-pre-wrap">{test.actionPlan || "—"}</p>
+                        <p className="max-w-[280px] whitespace-pre-wrap">{test.actionPlan || "No action plan noted"}</p>
                       </td>
                       <td className="px-4 py-4">
                         <button

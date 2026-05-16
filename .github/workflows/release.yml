@@ -49,6 +49,7 @@ jobs:
       APP_VERSION: ${{ needs.prepare-release.outputs.app_version }}
       RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
       RELEASE_NAME: ${{ needs.prepare-release.outputs.release_name }}
+      TAURI_TARGET: aarch64-apple-darwin
       MAC_STABLE_ASSET: TimeFolio-Study-Tracker-macOS-Apple-Silicon.app.tar.gz
       MAC_DMG_ASSET: TimeFolio-macOS-Apple-Silicon.dmg
       VITE_FF_TIMEFOLIO: "true"
@@ -120,8 +121,11 @@ jobs:
             Apple Silicon macOS updater artifacts, latest.json, and a direct-download DMG are attached below.
           releaseDraft: false
           prerelease: false
-          args: --target aarch64-apple-darwin
+          args: --target ${{ env.TAURI_TARGET }}
           includeUpdaterJson: true
+
+      - name: Verify macOS bundle version
+        run: npm run verify:tauri-bundle-version -- --target "$TAURI_TARGET" --expected-version "$APP_VERSION"
 
       - name: Copy stable macOS direct-download asset
         shell: bash

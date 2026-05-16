@@ -17,7 +17,10 @@ import {
 } from "../lib/datetime";
 import { parseIcsImport } from "../lib/ics-import";
 import { parseStudyWorkbook } from "../lib/excel";
+import { FF } from "../lib/feature-flags";
+import { getTrackedStudyMinutesForDate } from "../lib/tf-session-metrics";
 import { useAppStore } from "../state/app-store";
+import { TimeFolioStoreProvider, useTimeFolioStore } from "../state/tf-store";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { ModalShell } from "../components/modal-shell";
 import { CategoryBadge, EmptyState, Panel } from "../components/ui";
@@ -543,6 +546,20 @@ function getDayMonth(dateKey: string) {
   return dateKey.slice(0, 7);
 }
 
+function PlannerTrackedStudyStat({ selectedDateKey }: { selectedDateKey: string }) {
+  const { state: tfState } = useTimeFolioStore();
+  const trackedStudyMinutes = getTrackedStudyMinutesForDate(tfState.sessionLogs, selectedDateKey);
+
+  return (
+    <div className="px-2.5 py-2">
+      <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Tracked study</p>
+      <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">
+        {formatMinutes(trackedStudyMinutes)}
+      </p>
+    </div>
+  );
+}
+
 export function PlannerView() {
   const {
     state,
@@ -1012,7 +1029,7 @@ export function PlannerView() {
                           </span>
                         </p>
                         <p className="mt-0.5 text-[11px] tabular-nums text-slate-400">
-                          {dayMinutes ? formatMinutes(dayMinutes) : "—"}
+                          {dayTasks.length ? formatMinutes(dayMinutes) : "Quiet day"}
                         </p>
                       </div>
                     </div>
@@ -1051,7 +1068,7 @@ export function PlannerView() {
                             <div
                               key={task.id}
                               className={cn(
-                                "relative flex min-w-0 items-center gap-1.5 overflow-hidden rounded-[9px] border border-white/8 bg-slate-900/55 pl-2 pr-2 py-1.5",
+                                "relative flex min-w-0 items-center gap-1.5 overflow-hidden rounded-[9px] border border-white/8 bg-[color:var(--surface-muted)] pl-2 pr-2 py-1.5",
                                 task.completed ? "opacity-60" : "",
                               )}
                             >
@@ -1094,7 +1111,7 @@ export function PlannerView() {
                   </div>
                 ))}
               </div>
-              <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px overflow-hidden rounded-[16px] border border-white/10 bg-white/[0.06]">
+              <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px overflow-hidden rounded-[16px] border border-white/10 bg-[color:var(--panel-bg)]">
                 {monthDates.map((date) => {
                   const dayTasks = tasksByDate.get(date) ?? [];
                   const dayMinutes = dayTasks.reduce((sum, task) => sum + getStudyBlockMinutes(task), 0);
@@ -1114,14 +1131,14 @@ export function PlannerView() {
                       type="button"
                       onClick={() => handlePlannerFocusDate(date)}
                       className={cn(
-                        "flex min-h-0 flex-col gap-1 bg-slate-950/65 px-2 py-2 text-left transition-colors",
+                        "flex min-h-0 flex-col gap-1 bg-[color:var(--panel-bg)] px-2 py-2 text-left transition-colors",
                         isSelected
                           ? "bg-cyan-300/12 ring-1 ring-inset ring-cyan-300/45"
                           : isTodayDate
-                          ? "bg-white/[0.07] ring-1 ring-inset ring-cyan-300/25"
+                          ? "bg-[color:var(--surface-muted)] ring-1 ring-inset ring-cyan-300/25"
                           : isOverdue
                           ? "bg-rose-500/10 hover:bg-rose-500/14"
-                          : "hover:bg-white/[0.05]",
+                          : "hover:bg-[color:var(--surface-muted)]",
                       )}
                     >
                       <div className="flex items-center justify-between gap-1">
@@ -1138,9 +1155,12 @@ export function PlannerView() {
                           {Number(date.slice(8))}
                         </span>
                         {isOverdue ? (
-                          <span className="flex items-center gap-0.5 text-[9px] font-medium leading-none text-rose-200">
+                          <span
+                            className="flex items-center gap-0.5 rounded-full border border-rose-300/20 bg-rose-500/12 px-1.5 py-0.5 text-[9px] font-medium leading-none text-rose-100"
+                            title={`${overdueCount} overdue task${overdueCount === 1 ? "" : "s"}`}
+                          >
                             <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
-                            {overdueCount}
+                            Overdue {overdueCount}
                           </span>
                         ) : null}
                       </div>
@@ -1171,7 +1191,7 @@ export function PlannerView() {
                         ) : (
                           <div className="h-[12px]" aria-hidden="true" />
                         )}
-                        <div className="h-[3px] w-full overflow-hidden rounded-full bg-white/[0.07]">
+                        <div className="h-[3px] w-full overflow-hidden rounded-full bg-[color:var(--surface-muted)]">
                           <div
                             className={cn("h-full rounded-full", intensity.barClassName)}
                             style={{ width: `${widthPercent}%` }}
@@ -1198,6 +1218,10 @@ export function PlannerView() {
                 <span className="flex items-center gap-1.5">
                   <span className="h-1.5 w-6 rounded-full bg-rose-400/70" aria-hidden="true" />
                   Intense
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <AlertTriangle className="h-3 w-3 text-rose-300" aria-hidden="true" />
+                  Overdue
                 </span>
                 {state.preferences.examTimers.length ? (
                   <span className="flex items-center gap-1.5">
@@ -1259,7 +1283,9 @@ export function PlannerView() {
             </div>
           </div>
 
-          <div className="mb-3 grid grid-cols-4 divide-x divide-white/8 overflow-hidden rounded-[12px] border border-white/8 bg-slate-950/45">
+          <div
+            className={`mb-3 grid ${FF.timefolio ? "grid-cols-5" : "grid-cols-4"} divide-x divide-white/8 overflow-hidden rounded-[12px] border border-white/8 bg-slate-950/45`}
+          >
             <div className="px-2.5 py-2">
               <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Tasks</p>
               <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">{allSelectedDateTasks.length}</p>
@@ -1273,9 +1299,14 @@ export function PlannerView() {
               <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">{completionPercent}%</p>
             </div>
             <div className="px-2.5 py-2">
-              <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Studied</p>
+              <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Done time</p>
               <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">{formatMinutes(studiedMinutes)}</p>
             </div>
+            {FF.timefolio ? (
+              <TimeFolioStoreProvider>
+                <PlannerTrackedStudyStat selectedDateKey={selectedDate} />
+              </TimeFolioStoreProvider>
+            ) : null}
           </div>
 
           {isSelectionMode ? (

@@ -510,12 +510,12 @@ export function SessionLogPanel({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
             <div className="inline-flex w-fit rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-cyan-300">
-              Session Log
+              Capture tools
             </div>
             <div>
-              <h3 className="text-base font-semibold text-slate-100">Timer and Auto-Tracking</h3>
+              <h3 className="text-base font-semibold text-slate-100">Manual sessions and Auto-Tracking</h3>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-                Keep manual sessions, quick adds, and Auto-Tracking controls in one place.
+                Keep quick adds, the timer, and Auto-Tracking controls in one place.
               </p>
             </div>
           </div>
@@ -534,7 +534,15 @@ export function SessionLogPanel({
         </div>
 
         {FF.autotrackerV2UserMode ? (
-          <AutoTrackerV2UserControlStrip control={autoTracker} />
+          <div className="mt-4 space-y-3">
+            <div className="rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-3 text-xs text-slate-300">
+              <p className="font-medium text-slate-100">Configured Auto-Tracking rules</p>
+              <p className="mt-1 text-slate-400">
+                Allowed: {autoTracker.trackedRuleCount} · Distractions: {autoTracker.distractionRuleCount}
+              </p>
+            </div>
+            <AutoTrackerV2UserControlStrip control={autoTracker} />
+          </div>
         ) : null}
 
         {showTimer ? (
@@ -563,7 +571,7 @@ export function SessionLogPanel({
       {showOverviewMetrics ? (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <OverviewStat
-            label="Total Hours"
+            label="Total Time"
             value={formatMinutes(Math.round(totalHours * 60))}
             meta="All recorded TimeFolio session time."
           />
@@ -649,8 +657,7 @@ export function SessionLogPanel({
                       </span>
                     )}
                     <button
-                      className={secondaryButtonClassName}
-                      style={{ padding: "2px 10px", fontSize: "0.75rem" }}
+                      className="inline-flex items-center rounded-[10px] border border-white/10 bg-slate-900/60 px-2.5 py-0.5 text-xs font-medium text-slate-300 transition hover:border-white/20 hover:bg-slate-900 hover:text-white"
                       onClick={() => {
                         setDeleteConfirmId(null);
                         setEditingId(s.id);
@@ -662,7 +669,7 @@ export function SessionLogPanel({
                     {deleteConfirmId === s.id ? (
                       <>
                         <button
-                          className="text-xs rounded px-2.5 py-0.5 bg-red-900/70 text-red-100 hover:bg-red-800 transition-colors disabled:opacity-60"
+                          className="inline-flex items-center rounded-[10px] border border-rose-400/30 bg-rose-500/20 px-2.5 py-0.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/30 disabled:opacity-60"
                           onClick={() => {
                             void handleDeleteConfirm(s.id);
                           }}
@@ -671,7 +678,7 @@ export function SessionLogPanel({
                           {deletingId === s.id ? "Deleting..." : "Confirm delete"}
                         </button>
                         <button
-                          className="text-xs rounded px-2.5 py-0.5 bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors disabled:opacity-60"
+                          className="inline-flex items-center rounded-[10px] border border-slate-600/80 bg-slate-800 px-2.5 py-0.5 text-xs font-medium text-slate-200 transition hover:bg-slate-700 disabled:opacity-60"
                           onClick={() => setDeleteConfirmId(null)}
                           disabled={deletingId === s.id}
                         >
@@ -680,7 +687,7 @@ export function SessionLogPanel({
                       </>
                     ) : (
                       <button
-                        className="text-xs rounded px-2.5 py-0.5 bg-red-900/40 text-red-300 hover:bg-red-900/70 transition-colors"
+                        className="inline-flex items-center rounded-[10px] border border-rose-400/30 bg-rose-500/15 px-2.5 py-0.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/25"
                         onClick={() => setDeleteConfirmId(s.id)}
                         disabled={deletingId === s.id}
                       >
