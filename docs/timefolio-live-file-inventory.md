@@ -18,7 +18,7 @@ _Generated 2026-04-26. Source of truth: live import/script chains, not docs._
 
 ---
 
-## 1. Current App Architecture — TimeFolio Study Tracker
+## 1. Current App Architecture — TimeFolio
 
 **Repo:** `/Users/paul/Desktop/step2-ck-godtier-react`  
 **Stack:** React 19 + Vite 8 + TypeScript 6 + Tailwind v4 + Tauri v2 (Rust)

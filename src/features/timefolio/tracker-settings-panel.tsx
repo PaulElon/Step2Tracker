@@ -2283,7 +2283,7 @@ export function TrackerSettingsPanel() {
             </button>
             {isConfirmingReset ? (
               <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-100">
-                <p className="font-medium">This clears only TimeFolio data. Study Tracker data is untouched.</p>
+                <p className="font-medium">This clears only TimeFolio data. Legacy data is untouched.</p>
                 <p className="mt-2 text-xs text-rose-100/90">
                   This action is irreversible once confirmed. Type {RESET_CONFIRMATION_TOKEN} to continue.
                 </p>

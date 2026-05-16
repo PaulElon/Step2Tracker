@@ -669,7 +669,7 @@ export default function App() {
   }
 
   function handleSendTestAlert() {
-    void sendNativeReminder("TimeFolio Study Tracker", "Alerts are working.");
+    void sendNativeReminder("TimeFolio", "Alerts are working.");
   }
 
   async function handleEnableNotifications() {
@@ -685,7 +685,7 @@ export default function App() {
       try {
         await invoke("open_notification_settings");
       } catch {
-        window.alert("Open System Settings > Notifications and allow alerts for TimeFolio Study Tracker.");
+        window.alert("Open System Settings > Notifications and allow alerts for TimeFolio.");
       }
       return;
     }
@@ -873,7 +873,7 @@ export default function App() {
               </div>
               <div className="min-w-0">
                 <p className="text-[0.6rem] uppercase tracking-[0.2em] text-slate-500">TimeFolio</p>
-                <h1 className="truncate text-[13px] font-semibold text-white">Study Tracker</h1>
+                <h1 className="truncate text-[13px] font-semibold text-white">TimeFolio</h1>
               </div>
             </div>
 

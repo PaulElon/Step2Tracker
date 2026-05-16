@@ -1,7 +1,7 @@
 {
-  "name": "TimeFolio Study Tracker",
+  "name": "TimeFolio",
   "short_name": "TimeFolio",
-  "description": "TimeFolio Study Tracker for tracking study sessions and progress.",
+  "description": "TimeFolio for tracking study sessions and progress.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#07101a",

@@ -1,12 +1,12 @@
 # Distribution Guide
 
-TimeFolio Study Tracker is free and open source. It is also local-first: your data stays on the Mac unless you choose to move it.
+TimeFolio is free and open source. It is also local-first: your data stays on the Mac unless you choose to move it.
 
 Local Auto-Tracking is available in release builds. When enabled, it stores sessions locally in the Session Log.
 
 ## Current macOS Status
 
-The current macOS app bundle is unsigned and not notarized for now.
+TimeFolio is currently unsigned and not notarized.
 
 That means macOS may warn before opening the app, especially on first launch or after downloading a fresh release artifact. The warning is expected and comes from Gatekeeper because the app has not gone through Apple notarization yet.
 
@@ -18,7 +18,7 @@ That means macOS may warn before opening the app, especially on first launch or 
 4. If quarantine still blocks the app, you can remove the quarantine attribute manually:
 
 ```bash
-xattr -dr com.apple.quarantine "/Applications/TimeFolio Study Tracker.app"
+xattr -dr com.apple.quarantine "/Applications/TimeFolio.app"
 ```
 
 ## Verify A Release Or Update
@@ -30,6 +30,8 @@ For release and update verification, check the updater manifest and signature fi
 - checksum files, if they are added later
 
 If the release includes a checksum file later, verify it before installing or distributing the app bundle.
+
+The user-facing macOS direct-download artifact is the DMG when published. The updater continues to use the `.app.tar.gz` bundle and `latest.json`.
 
 ## Build From Source
 
@@ -62,7 +64,7 @@ npm run smoke:release
 
 ## Current Product Notes
 
-- TimeFolio Study Tracker is local-first.
+- TimeFolio is local-first.
 - Local Auto-Tracking is enabled in release builds and stores sessions in the Session Log.
 - Cloud/backend/auth/span-ingestion/sync remains intentionally disabled for this release.
 - Some technical identifiers still use legacy Step 2 naming for compatibility, including the repository URL, updater environment variables, and signing key path.

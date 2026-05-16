@@ -39,7 +39,7 @@ jobs:
           {
             echo "app_version=$VERSION"
             echo "release_tag=app-v$VERSION"
-            echo "release_name=TimeFolio Study Tracker v$VERSION"
+            echo "release_name=TimeFolio v$VERSION"
           } >> "$GITHUB_OUTPUT"
 
   publish-macos:
@@ -50,6 +50,7 @@ jobs:
       RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
       RELEASE_NAME: ${{ needs.prepare-release.outputs.release_name }}
       MAC_STABLE_ASSET: TimeFolio-Study-Tracker-macOS-Apple-Silicon.app.tar.gz
+      MAC_DMG_ASSET: TimeFolio-macOS-Apple-Silicon.dmg
       VITE_FF_TIMEFOLIO: "true"
       VITE_FF_AUTOTRACKER_V2_USER_MODE: "true"
       VITE_FF_NOTEBOOK: "true"
@@ -116,8 +117,7 @@ jobs:
           releaseName: ${{ env.RELEASE_NAME }}
           releaseBody: |
             Automated desktop release for commit ${{ github.sha }}.
-            Apple Silicon macOS updater artifacts and latest.json are attached below.
-            A stable direct-download asset name for macOS is uploaded after bundling.
+            Apple Silicon macOS updater artifacts, latest.json, and a direct-download DMG are attached below.
           releaseDraft: false
           prerelease: false
           args: --target aarch64-apple-darwin
@@ -128,21 +128,32 @@ jobs:
         run: |
           set -euo pipefail
 
-          BUNDLE_ROOT="src-tauri/target/aarch64-apple-darwin/release/bundle/macos"
-          MAC_ARCHIVE="$(find "$BUNDLE_ROOT" -maxdepth 1 -type f -name '*.app.tar.gz' | head -n 1)"
+          APP_BUNDLE_ROOT="src-tauri/target/aarch64-apple-darwin/release/bundle/macos"
+          DMG_BUNDLE_ROOT="src-tauri/target/aarch64-apple-darwin/release/bundle/dmg"
+          MAC_ARCHIVE="$(find "$APP_BUNDLE_ROOT" -maxdepth 1 -type f -name 'TimeFolio.app.tar.gz' | head -n 1)"
+          MAC_DMG="$(find "$DMG_BUNDLE_ROOT" -maxdepth 1 -type f -name 'TimeFolio_*.dmg' | head -n 1)"
 
           if [ -z "$MAC_ARCHIVE" ]; then
-            echo "::error::No macOS updater archive found in $BUNDLE_ROOT"
+            echo "::error::No macOS updater archive found in $APP_BUNDLE_ROOT"
             exit 1
           fi
 
           cp "$MAC_ARCHIVE" "$MAC_STABLE_ASSET"
 
+          if [ -z "$MAC_DMG" ]; then
+            echo "::error::No macOS DMG found in $DMG_BUNDLE_ROOT"
+            exit 1
+          fi
+
+          cp "$MAC_DMG" "$MAC_DMG_ASSET"
+
       - name: Upload stable macOS release asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          files: ${{ env.MAC_STABLE_ASSET }}
+          files: |
+            ${{ env.MAC_STABLE_ASSET }}
+            ${{ env.MAC_DMG_ASSET }}
           overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -156,6 +167,7 @@ jobs:
       APP_VERSION: ${{ needs.prepare-release.outputs.app_version }}
       RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
       WINDOWS_STABLE_ASSET: TimeFolio-Study-Tracker-Windows-x64-Setup.exe
+      WINDOWS_USER_ASSET: TimeFolio-Windows-x64-Setup.exe
       VITE_FF_TIMEFOLIO: "true"
       VITE_FF_AUTOTRACKER_V2_USER_MODE: "true"
       VITE_FF_NOTEBOOK: "true"
@@ -225,12 +237,15 @@ jobs:
           }
 
           Copy-Item $installer.FullName $env:WINDOWS_STABLE_ASSET -Force
+          Copy-Item $installer.FullName $env:WINDOWS_USER_ASSET -Force
 
       - name: Upload stable Windows release asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          files: ${{ env.WINDOWS_STABLE_ASSET }}
+          files: |
+            ${{ env.WINDOWS_STABLE_ASSET }}
+            ${{ env.WINDOWS_USER_ASSET }}
           overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

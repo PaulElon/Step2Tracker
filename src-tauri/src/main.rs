@@ -861,5 +861,5 @@ fn main() {
             purge_orphaned_notebook_pdfs
         ])
         .run(tauri::generate_context!())
-        .expect("error while running TimeFolio Study Tracker");
+        .expect("error while running TimeFolio");
 }

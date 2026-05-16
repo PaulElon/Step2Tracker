@@ -1,5 +1,6 @@
 {
-  "productName": "TimeFolio Study Tracker",
+  "productName": "TimeFolio",
+  "mainBinaryName": "TimeFolio",
   "version": "0.0.150",
   "identifier": "com.paul.step2ckcommandcenter",
   "build": {
@@ -12,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "TimeFolio Study Tracker",
+        "title": "TimeFolio",
         "width": 1440,
         "height": 960,
         "maximized": true,
@@ -28,7 +29,8 @@
   "bundle": {
     "active": true,
     "targets": [
-      "app"
+      "app",
+      "dmg"
     ],
     "createUpdaterArtifacts": true,
     "icon": [

@@ -647,7 +647,7 @@ function AboutPanel() {
 
   return (
     <Panel
-      title="About TimeFolio Study Tracker"
+      title="About TimeFolio"
       subtitle="Installed version and update status."
     >
       <div className="flex flex-col gap-5">
@@ -818,7 +818,7 @@ export function SettingsView({
     } catch (error) {
       setStorageMessage({
         tone: "error",
-        text: error instanceof Error && error.message ? error.message : "Unable to export TimeFolio Study Tracker data.",
+        text: error instanceof Error && error.message ? error.message : "Unable to export TimeFolio data.",
       });
     } finally {
       setIsStorageBusy(false);
@@ -878,7 +878,7 @@ export function SettingsView({
       if (restored) {
         setPendingImportRaw(null);
         setPendingImportPreview(null);
-        setStorageMessage({ tone: "success", text: "TimeFolio Study Tracker data imported." });
+        setStorageMessage({ tone: "success", text: "TimeFolio data imported." });
       } else {
         setStorageMessage({ tone: "error", text: "Unable to import the selected backup." });
       }
@@ -1069,7 +1069,7 @@ export function SettingsView({
             <div className="space-y-4">
               <Panel
                 title="Data & Safety"
-                subtitle="Manage your local Study Tracker data."
+                subtitle="Manage your local TimeFolio data."
               >
                 <div className="grid gap-4">
                   <div className="panel-subtle flex items-start gap-3">
@@ -1121,7 +1121,7 @@ export function SettingsView({
               <div className="grid gap-4 xl:grid-cols-2">
                 <Panel
                   title="Backup & Export"
-                  subtitle="Save a JSON snapshot of your Study Tracker data."
+                  subtitle="Save a JSON snapshot of your TimeFolio data."
                 >
                   <div className="flex flex-col gap-3">
                     <p className="text-xs leading-5 text-slate-400">
@@ -1158,7 +1158,7 @@ export function SettingsView({
 
                 <Panel
                   title="Import & Restore"
-                  subtitle="Replace local Study Tracker data from a backup file."
+                  subtitle="Replace local TimeFolio data from a backup file."
                   className="border-rose-500/20"
                 >
                   <div className="flex flex-col gap-3">
@@ -1168,7 +1168,7 @@ export function SettingsView({
                         <div className="space-y-1">
                           <p className="text-sm font-semibold text-rose-100">Destructive action</p>
                           <p className="text-xs leading-5 text-rose-200/80">
-                            Importing replaces your current Study Tracker data with the contents of the backup file.
+                            Importing replaces your current TimeFolio data with the contents of the backup file.
                             TimeFolio time-tracking data is untouched. Export a backup first if you want to keep your current state.
                           </p>
                         </div>
@@ -1201,7 +1201,7 @@ export function SettingsView({
                         </div>
                         <div className="rounded-[16px] border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-100">
                           <p className="font-medium">
-                            This will replace your current Study Tracker data. This cannot be undone.
+                            This will replace your current TimeFolio data. This cannot be undone.
                           </p>
                           <div className="mt-3 flex flex-wrap gap-2">
                             <button

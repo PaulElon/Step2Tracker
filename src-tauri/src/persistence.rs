@@ -2177,7 +2177,7 @@ impl StorageService {
         let value: serde_json::Value = serde_json::from_str(raw)?;
         if value.get("app").and_then(|entry| entry.as_str()) != Some(APP_ID) {
             return Err(StorageError::Validation(
-                "This file is not a TimeFolio Study Tracker backup artifact.".into(),
+                "This file is not a TimeFolio backup artifact.".into(),
             ));
         }
         let artifact: BackupArtifact = serde_json::from_value(value)?;
@@ -4513,7 +4513,7 @@ mod tests {
             .expect_err("should reject");
         assert!(error
             .to_string()
-            .contains("not a TimeFolio Study Tracker backup artifact"));
+            .contains("not a TimeFolio backup artifact"));
     }
 
     #[test]

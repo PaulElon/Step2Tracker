@@ -163,7 +163,7 @@ export function AccountPanel() {
           <StatusBanner
             tone="info"
             title="Not connected yet"
-            message="This is a local-only, read-only account snapshot. Study Tracker and TimeFolio local data continue to work offline."
+            message="This is a local-only, read-only account snapshot. TimeFolio local data continues to work offline."
           />
         ) : (
           <StatusBanner

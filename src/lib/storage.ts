@@ -1493,7 +1493,7 @@ export function exportBackupPayload(state: AppState) {
 export function parseBackupPayload(raw: string) {
   const parsed = JSON.parse(raw) as Partial<BackupPayload>;
   if (parsed.app !== "step2-command-center") {
-    throw new Error("This backup file is not for TimeFolio Study Tracker.");
+    throw new Error("This backup file is not for TimeFolio.");
   }
 
   return normalizeAppState(parsed.state);

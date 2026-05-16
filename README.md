@@ -1,6 +1,6 @@
-# TimeFolio Study Tracker
+# TimeFolio
 
-TimeFolio Study Tracker is a free, open-source, local-first study app for macOS. It is a React + TypeScript + Vite frontend with a Tauri desktop shell and native SQLite persistence.
+TimeFolio is a free, open-source, local-first study app for macOS. It is a React + TypeScript + Vite frontend with a Tauri desktop shell and native SQLite persistence.
 
 ## Distribution
 
@@ -34,7 +34,8 @@ Run npm run tauri:dev.
 
 Run npm run tauri:build.
 
-The signed app bundle is produced under src-tauri/target/release/bundle/macos/.
+The macOS app bundle is produced under src-tauri/target/release/bundle/macos/.
+If you build the DMG target, it is produced alongside the updater bundle.
 
 ## Required Environment
 
@@ -67,7 +68,7 @@ If alerts do not appear:
 
 1. Open System Settings.
 2. Go to Notifications.
-3. Find TimeFolio Study Tracker.
+3. Find TimeFolio.
 4. Enable notifications and alert style.
 
 ## Updater
@@ -126,5 +127,5 @@ Run these checks before shipping:
 - The app uses native persistence, so browser storage clearing does not reset data.
 - Practice test data, reminders, weak topics, planner tasks, settings, and backups are persisted together in the local database.
 - If you need a full reset, remove the app data directory only after backing it up.
-- Deleting /Applications/TimeFolio Study Tracker.app removes the app bundle only. It does not remove user data.
+- Deleting /Applications/TimeFolio.app removes the app bundle only. It does not remove user data.
 - Some technical identifiers keep legacy Step 2 naming for compatibility, including the app data path, updater environment variables, signing key path, and repository URL.
