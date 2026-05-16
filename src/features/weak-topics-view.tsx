@@ -42,6 +42,19 @@ function toTitleCase(str: string): string {
   return str.replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
 }
 
+function formatWeakTopicSignalLabel(occurrenceCount: number) {
+  return occurrenceCount > 0 ? `${occurrenceCount}× flagged weak` : "Manual entry";
+}
+
+function formatWeakTopicSourceLabel(sourceLabel: string) {
+  const trimmed = sourceLabel.trim();
+  if (!trimmed || trimmed.toLowerCase() === "manual") {
+    return "Manual entry";
+  }
+
+  return trimmed;
+}
+
 function createInitialDraft(entry?: WeakTopicEntry): WeakTopicInput & { id?: string } {
   if (!entry) {
     return {
@@ -401,7 +414,9 @@ function HistoryModal({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className={`h-2 w-2 shrink-0 rounded-full ${priorityDotClass[entry.priority] ?? "bg-slate-400"}`} />
-                  <p className="truncate text-sm font-semibold text-white">{entry.topic}</p>
+                  <p className="truncate text-sm font-semibold text-white" title={entry.topic}>
+                    {entry.topic}
+                  </p>
                   <span className="shrink-0 rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-400">
                     {entry.priority}
                   </span>
@@ -410,10 +425,12 @@ function HistoryModal({
                   {entry.lastSeenAt && (
                     <span>Last seen: {formatShortDate(entry.lastSeenAt)}</span>
                   )}
-                  {entry.sourceLabel && <span>{entry.sourceLabel}</span>}
-                  <span>{entry.occurrenceCount > 0 ? `${entry.occurrenceCount}× flagged weak` : "Manual entry"}</span>
+                  <span>Source: {formatWeakTopicSourceLabel(entry.sourceLabel)}</span>
+                  <span>{formatWeakTopicSignalLabel(entry.occurrenceCount)}</span>
                   {entry.linkedBlockCount > 0 && (
-                    <span>Scheduled review: {entry.linkedBlockCount}</span>
+                    <span title="Future planner tasks already linked to this topic">
+                      Scheduled review links: {entry.linkedBlockCount}
+                    </span>
                   )}
                 </div>
               </div>
@@ -513,7 +530,7 @@ export function WeakTopicsView() {
         <MetricCard
           label="Recurring Weakest Topic"
           value={recurringInsight ? recurringInsight.topic : "—"}
-          meta={recurringInsight ? `${recurringInsight.occurrenceCount}x flagged weak` : "No repeating topics yet"}
+          meta={recurringInsight ? formatWeakTopicSignalLabel(recurringInsight.occurrenceCount) : "No repeating topics yet"}
         />
         <MetricCard
           label="Unscheduled Topics"
@@ -586,9 +603,11 @@ export function WeakTopicsView() {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold leading-tight text-white">{entry.topic}</p>
+                            <p className="truncate text-sm font-semibold leading-tight text-white" title={entry.topic}>
+                              {entry.topic}
+                            </p>
                             <p className="mt-0.5 text-xs text-slate-400">
-                              {entry.occurrenceCount > 0 ? `${entry.occurrenceCount}× flagged weak` : "Manual entry"}
+                              {formatWeakTopicSignalLabel(entry.occurrenceCount)}
                             </p>
                           </div>
                           <div className="flex shrink-0 items-center gap-0.5">
@@ -624,8 +643,8 @@ export function WeakTopicsView() {
                             </button>
                           </div>
                         </div>
-                        <p className="mt-1 text-xs text-slate-300">
-                          Scheduled review: {entry.linkedBlockCount}
+                        <p className="mt-1 text-xs text-slate-300" title="Future planner tasks already linked to this topic">
+                          Scheduled review links: {entry.linkedBlockCount}
                         </p>
                       </div>
                     ))}

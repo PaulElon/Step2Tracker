@@ -1029,7 +1029,7 @@ export function PlannerView() {
                           </span>
                         </p>
                         <p className="mt-0.5 text-[11px] tabular-nums text-slate-400">
-                          {dayMinutes ? formatMinutes(dayMinutes) : "—"}
+                          {dayTasks.length ? formatMinutes(dayMinutes) : "Quiet day"}
                         </p>
                       </div>
                     </div>
@@ -1155,9 +1155,12 @@ export function PlannerView() {
                           {Number(date.slice(8))}
                         </span>
                         {isOverdue ? (
-                          <span className="flex items-center gap-0.5 text-[9px] font-medium leading-none text-rose-200">
+                          <span
+                            className="flex items-center gap-0.5 rounded-full border border-rose-300/20 bg-rose-500/12 px-1.5 py-0.5 text-[9px] font-medium leading-none text-rose-100"
+                            title={`${overdueCount} overdue task${overdueCount === 1 ? "" : "s"}`}
+                          >
                             <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
-                            {overdueCount}
+                            Overdue {overdueCount}
                           </span>
                         ) : null}
                       </div>
@@ -1215,6 +1218,10 @@ export function PlannerView() {
                 <span className="flex items-center gap-1.5">
                   <span className="h-1.5 w-6 rounded-full bg-rose-400/70" aria-hidden="true" />
                   Intense
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <AlertTriangle className="h-3 w-3 text-rose-300" aria-hidden="true" />
+                  Overdue
                 </span>
                 {state.preferences.examTimers.length ? (
                   <span className="flex items-center gap-1.5">
