@@ -1,5 +1,4 @@
-import { useMemo, useState } from "react";
-import { ModalShell } from "../../components/modal-shell";
+import { useEffect, useMemo, useState } from "react";
 import { addDays, daysBetween, formatLongDate, formatMinutes, getTodayKey, startOfWeek } from "../../lib/datetime";
 import { splitAutoSessionMethodLabel } from "../../lib/tf-session-adapters";
 import { cn } from "../../lib/ui";
@@ -240,6 +239,21 @@ function OverviewActivityHeatmapBody() {
   const tooltipTopMethod = tooltipActivity?.topMethod ? getDisplayMethod(tooltipActivity.topMethod) : null;
   const selectedTopMethod = selectedActivity?.topMethod ? getDisplayMethod(selectedActivity.topMethod) : null;
 
+  useEffect(() => {
+    if (!selectedDate) {
+      return;
+    }
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setSelectedDate(null);
+      }
+    }
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [selectedDate]);
+
   if (isLoading) {
     return (
       <section className="glass-panel flex flex-col gap-3 p-5 xl:p-6">
@@ -348,6 +362,7 @@ function OverviewActivityHeatmapBody() {
                         }}
                         onClick={() => {
                           if (!inYear) return;
+                          setHovered(null);
                           setSelectedDate(date);
                         }}
                         className={cn(
@@ -375,7 +390,7 @@ function OverviewActivityHeatmapBody() {
                   }),
                 )}
 
-                {hovered ? (
+                {hovered && !selectedDate ? (
                   <div
                     className="pointer-events-none absolute z-20 w-[230px] -translate-x-1/2 -translate-y-full rounded-xl border px-3 py-2.5 text-xs shadow-2xl"
                     style={{
@@ -448,19 +463,14 @@ function OverviewActivityHeatmapBody() {
       </div>
 
       {selectedDate ? (
-        <ModalShell
-          onClose={() => setSelectedDate(null)}
-          position="center"
-          titleId="overview-heatmap-day-title"
-          contentClassName="max-w-[920px]"
-        >
-          <div className="flex items-start justify-between gap-4">
+        <div className="relative mt-2 overflow-hidden rounded-[22px] border border-white/10 bg-white/[0.02] shadow-[0_20px_60px_-32px_rgba(2,8,23,0.9)]">
+          <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-white/[0.02] px-4 py-3.5">
             <div>
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Day details</p>
-              <h4 id="overview-heatmap-day-title" className="mt-2 text-2xl font-semibold text-white">
+              <h4 id="overview-heatmap-day-title" className="mt-1.5 text-xl font-semibold text-white">
                 {formatLongDate(selectedDate)}
               </h4>
-              <p className="mt-2 text-sm text-slate-300">
+              <p className="mt-1 text-sm text-slate-300">
                 Review study and session details for the selected day.
               </p>
             </div>
@@ -473,115 +483,117 @@ function OverviewActivityHeatmapBody() {
             </button>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatTile label="Study Time" value={formatMinutes(selectedActivity?.studyMinutes ?? 0)} />
-            <StatTile
-              label="Sessions"
-              value={`${selectedStats.totalStudySessions}`}
-              meta={`${selectedStats.totalSessions} total logged`}
-            />
-            <StatTile
-              label="Top Method"
-              value={selectedTopMethod?.label ?? "—"}
-              meta={selectedTopMethod?.isAuto ? "Auto-tracked method" : "Most-used method"}
-              badge={selectedTopMethod?.isAuto ? "Auto" : undefined}
-              tone={selectedTopMethod?.isAuto ? "info" : "default"}
-            />
-            <StatTile
-              label="Distraction"
-              value={
-                selectedStats.distractionSessions > 0
-                  ? `${selectedStats.distractionSessions} session${selectedStats.distractionSessions === 1 ? "" : "s"}`
-                  : "None"
-              }
-              meta={
-                selectedStats.distractionMinutes > 0
-                  ? `${formatMinutes(selectedStats.distractionMinutes)} logged`
-                  : "No distraction time logged"
-              }
-              tone={selectedStats.distractionSessions > 0 ? "warn" : "default"}
-            />
-          </div>
-
-          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)]">
-            <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Method breakdown</p>
-              {selectedActivity?.methodBreakdown.length ? (
-                <ol className="mt-3 space-y-2">
-                  {selectedActivity.methodBreakdown.slice(0, 6).map((entry, index) => {
-                    const display = getDisplayMethod(entry.method);
-                    return (
-                      <li
-                        key={entry.method}
-                        className="flex items-center justify-between gap-3 rounded-[12px] border border-white/[0.08] bg-slate-950/35 px-3 py-2"
-                      >
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="text-[11px] tabular-nums text-slate-500">{String(index + 1).padStart(2, "0")}</span>
-                          <span className="truncate text-sm text-slate-100">{display.label}</span>
-                          {display.isAuto ? (
-                            <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
-                              auto
-                            </span>
-                          ) : null}
-                        </div>
-                        <span className="shrink-0 text-sm tabular-nums text-slate-300">
-                          {formatMinutes(entry.minutes)}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ol>
-              ) : (
-                <p className="mt-2 text-sm text-slate-400">No study sessions on this day.</p>
-              )}
+          <div className="max-h-[min(70vh,720px)] overflow-y-auto px-4 py-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <StatTile label="Study Time" value={formatMinutes(selectedActivity?.studyMinutes ?? 0)} />
+              <StatTile
+                label="Sessions"
+                value={`${selectedStats.totalStudySessions}`}
+                meta={`${selectedStats.totalSessions} total logged`}
+              />
+              <StatTile
+                label="Top Method"
+                value={selectedTopMethod?.label ?? "—"}
+                meta={selectedTopMethod?.isAuto ? "Auto-tracked method" : "Most-used method"}
+                badge={selectedTopMethod?.isAuto ? "Auto" : undefined}
+                tone={selectedTopMethod?.isAuto ? "info" : "default"}
+              />
+              <StatTile
+                label="Distraction"
+                value={
+                  selectedStats.distractionSessions > 0
+                    ? `${selectedStats.distractionSessions} session${selectedStats.distractionSessions === 1 ? "" : "s"}`
+                    : "None"
+                }
+                meta={
+                  selectedStats.distractionMinutes > 0
+                    ? `${formatMinutes(selectedStats.distractionMinutes)} logged`
+                    : "No distraction time logged"
+                }
+                tone={selectedStats.distractionSessions > 0 ? "warn" : "default"}
+              />
             </div>
 
-            <div className="rounded-[16px] border border-white/10 bg-white/[0.02] p-4">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Session log</p>
-              {selectedActivity?.allSessions.length ? (
-                <div className="mt-3 max-h-[340px] space-y-2 overflow-y-auto pr-1">
-                  {selectedActivity.allSessions.map((session) => {
-                    const { label, isAuto } = splitAutoSessionMethodLabel(session.method);
-                    const minutes = Math.max(0, Math.round(session.hours * 60));
-                    return (
-                      <div
-                        key={session.id}
-                        className="rounded-[12px] border border-white/10 bg-slate-950/50 px-3 py-2.5"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-medium text-slate-100">{label}</span>
-                          <span className="text-sm tabular-nums text-slate-300">{formatMinutes(minutes)}</span>
+            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)]">
+              <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Method breakdown</p>
+                {selectedActivity?.methodBreakdown.length ? (
+                  <ol className="mt-3 space-y-2">
+                    {selectedActivity.methodBreakdown.slice(0, 6).map((entry, index) => {
+                      const display = getDisplayMethod(entry.method);
+                      return (
+                        <li
+                          key={entry.method}
+                          className="flex items-center justify-between gap-3 rounded-[12px] border border-white/[0.08] bg-slate-950/35 px-3 py-2"
+                        >
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="text-[11px] tabular-nums text-slate-500">{String(index + 1).padStart(2, "0")}</span>
+                            <span className="truncate text-sm text-slate-100">{display.label}</span>
+                            {display.isAuto ? (
+                              <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
+                                auto
+                              </span>
+                            ) : null}
+                          </div>
+                          <span className="shrink-0 text-sm tabular-nums text-slate-300">
+                            {formatMinutes(entry.minutes)}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-400">No study sessions on this day.</p>
+                )}
+              </div>
+
+              <div className="rounded-[16px] border border-white/10 bg-white/[0.02] p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Session log</p>
+                {selectedActivity?.allSessions.length ? (
+                  <div className="mt-3 max-h-[min(44vh,420px)] space-y-2 overflow-y-auto pr-1">
+                    {selectedActivity.allSessions.map((session) => {
+                      const { label, isAuto } = splitAutoSessionMethodLabel(session.method);
+                      const minutes = Math.max(0, Math.round(session.hours * 60));
+                      return (
+                        <div
+                          key={session.id}
+                          className="rounded-[12px] border border-white/10 bg-slate-950/50 px-3 py-2.5"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate text-sm font-medium text-slate-100">{label}</span>
+                            <span className="text-sm tabular-nums text-slate-300">{formatMinutes(minutes)}</span>
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            {isAuto ? (
+                              <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
+                                auto
+                              </span>
+                            ) : null}
+                            {session.isDistraction ? (
+                              <span className="rounded-full border border-rose-400/25 bg-rose-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-rose-200">
+                                distraction
+                              </span>
+                            ) : null}
+                            {session.isLive ? (
+                              <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-emerald-200">
+                                live
+                              </span>
+                            ) : null}
+                          </div>
+                          {session.notes ? (
+                            <p className="mt-1.5 text-xs leading-5 text-slate-400">{session.notes}</p>
+                          ) : null}
                         </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                          {isAuto ? (
-                            <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
-                              auto
-                            </span>
-                          ) : null}
-                          {session.isDistraction ? (
-                            <span className="rounded-full border border-rose-400/25 bg-rose-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-rose-200">
-                              distraction
-                            </span>
-                          ) : null}
-                          {session.isLive ? (
-                            <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-emerald-200">
-                              live
-                            </span>
-                          ) : null}
-                        </div>
-                        {session.notes ? (
-                          <p className="mt-1.5 text-xs leading-5 text-slate-400">{session.notes}</p>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="mt-2 text-sm text-slate-400">No sessions recorded for this day.</p>
-              )}
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-400">No sessions recorded for this day.</p>
+                )}
+              </div>
             </div>
           </div>
-        </ModalShell>
+        </div>
       ) : null}
     </section>
   );
