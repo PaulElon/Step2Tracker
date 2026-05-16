@@ -1273,7 +1273,7 @@ export function PlannerView() {
               <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">{completionPercent}%</p>
             </div>
             <div className="px-2.5 py-2">
-              <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Studied</p>
+              <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Done time</p>
               <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">{formatMinutes(studiedMinutes)}</p>
             </div>
           </div>

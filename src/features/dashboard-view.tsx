@@ -523,7 +523,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                 <div className="mt-3 flex items-center gap-4">
                   <ProgressRing percent={dailyGoalProgress} size={88} stroke={8} />
                   <div className="min-w-0 flex-1 space-y-1.5 text-sm">
-                    <SnapshotRow icon={Clock3} label="Studied" value={formatMinutes(completedMinutes)} />
+                    <SnapshotRow icon={Clock3} label="Done time" value={formatMinutes(completedMinutes)} />
                     <SnapshotRow
                       icon={ListTodo}
                       label="Tasks done"
@@ -716,7 +716,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                     <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Today</p>
                     <p className="mt-1 text-sm text-slate-200">
                       <span className="tabular-nums text-white">{formatMinutes(completedMinutes)}</span>
-                      <span className="text-slate-500"> studied · {formatMinutes(plannedMinutes)} planned</span>
+                      <span className="text-slate-500"> done · {formatMinutes(plannedMinutes)} planned</span>
                     </p>
                   </div>
                 </div>
@@ -729,7 +729,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                     <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Today</p>
                     <p className="mt-1 text-sm text-slate-200">
                       <span className="tabular-nums text-white">{formatMinutes(completedMinutes)}</span>
-                      <span className="text-slate-500"> studied · {formatMinutes(plannedMinutes)} planned</span>
+                      <span className="text-slate-500"> done · {formatMinutes(plannedMinutes)} planned</span>
                     </p>
                   </div>
                 </div>
