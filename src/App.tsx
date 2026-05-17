@@ -902,7 +902,7 @@ export default function App() {
 
       <div className="relative mx-auto flex h-full max-w-[1760px] gap-4 px-4 py-4 md:px-6 xl:px-8">
         <aside className="hidden w-[236px] shrink-0 xl:flex">
-          <div className="glass-panel flex h-full w-full flex-col gap-5 p-3">
+          <div className="glass-panel app-sidebar-shell flex h-full w-full flex-col gap-5 p-3">
             <div className="flex items-center gap-2.5 px-2 pt-1">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.04]">
                 <ShieldPlus className="h-4 w-4 text-cyan-200" />

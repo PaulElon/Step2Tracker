@@ -33,8 +33,10 @@ import { getTrackedStudyMinutesForDate } from "../lib/tf-session-metrics";
 import { StudyTaskCard } from "../components/study-task-card";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { TaskLaunchButton } from "../components/task-launch-button";
-import { CategoryBadge, EmptyState, FlatList, FlatListRow, QuietPanel, SoftDivider } from "../components/ui";
+import { CategoryBadge, EmptyState, FlatList, FlatListRow, SoftDivider } from "../components/ui";
 import type { ExamTimer, ResourceLink, SectionId, StudyBlock } from "../types/models";
+
+const todayPanelClassName = "glass-panel min-w-0";
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -340,26 +342,25 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-subtle">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Today</h2>
+            <p className="mt-1 text-sm text-slate-400">{formatLongDate(todayKey)}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-slate-300">
+              <span className="text-slate-500">{greeting}.</span>{" "}
+              {nextTask ? "Keep your momentum going." : completedCount > 0 ? "You finished today's plan." : "Plan your day to get started."}
+            </p>
+          </div>
+        </div>
+
         <div className="grid w-full gap-5 xl:grid-cols-[minmax(0,2.2fr)_minmax(280px,1fr)]">
           {/* MAIN COLUMN */}
           <div className="flex min-w-0 flex-col gap-5">
-            {/* Masthead */}
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Today</h2>
-                <p className="mt-1 text-sm text-slate-400">{formatLongDate(todayKey)}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <p className="text-sm text-slate-300">
-                  <span className="text-slate-500">{greeting}.</span>{" "}
-                  {nextTask ? "Keep your momentum going." : completedCount > 0 ? "You finished today's plan." : "Plan your day to get started."}
-                </p>
-              </div>
-            </div>
-
             {/* HERO: Your Next Task */}
             {nextTask ? (
-              <section className="glass-panel min-w-0 p-6">
+              <section className={cn(todayPanelClassName, "p-6")}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <p className="text-[0.65rem] text-slate-500">Your next task</p>
@@ -424,7 +425,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                 </div>
               </section>
             ) : (
-              <section className="glass-panel min-w-0 p-6">
+              <section className={cn(todayPanelClassName, "p-6")}>
                 <p className="text-[0.65rem] text-slate-500">Your next task</p>
                 <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
                   <div>
@@ -460,7 +461,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
 
             {/* Today's Plan + Today Snapshot */}
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-              <section className="glass-panel flex min-w-0 flex-col p-5">
+              <section className={cn(todayPanelClassName, "flex flex-col p-5")}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-white">Today's Plan</h3>
@@ -521,7 +522,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
               </section>
 
               {/* Today Snapshot */}
-              <section className="glass-panel flex min-w-0 flex-col p-4">
+              <section className={cn(todayPanelClassName, "flex flex-col p-4")}>
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-base font-semibold text-white">Today Snapshot</h3>
                   <span className="text-xs text-slate-500">Goal {formatMinutes(todayGoalMinutes)}</span>
@@ -582,7 +583,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
             </div>
 
             {/* Next Best Moves */}
-            <QuietPanel>
+            <section className={cn(todayPanelClassName, "p-5")}>
               <div className="mb-4 flex items-center gap-2">
                 <Zap className="h-4 w-4 text-slate-500" />
                 <h3 className="text-base font-semibold text-white">Next Best Moves</h3>
@@ -613,13 +614,13 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
               <p className="mt-3 text-xs text-slate-500">
                 These recommendations are based on your plan and recent activity.
               </p>
-            </QuietPanel>
+            </section>
           </div>
 
           {/* RIGHT RAIL */}
           <div className="flex min-w-0 flex-col gap-5">
             {/* Needs Attention */}
-            <section className="glass-panel min-w-0 p-5">
+            <section className={cn(todayPanelClassName, "p-5")}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <AlertCircle
@@ -709,7 +710,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
             </section>
 
             {/* Active Tracker */}
-            <QuietPanel>
+            <section className={cn(todayPanelClassName, "p-5")}>
               <div>
                 <div className="flex items-center gap-2">
                   <Timer className="h-4 w-4 text-cyan-200" />
@@ -759,10 +760,10 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-300">{getDailyFocusTip(todayKey)}</p>
               </div>
-            </QuietPanel>
+            </section>
 
             {/* Quick Actions */}
-            <QuietPanel>
+            <section className={cn(todayPanelClassName, "p-5")}>
               <div className="flex items-center gap-2">
                 <Zap className="h-4 w-4 text-slate-500" />
                 <h3 className="text-base font-semibold text-white">Quick Actions</h3>
@@ -806,7 +807,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                   <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-600" />
                 </FlatListRow>
               </FlatList>
-            </QuietPanel>
+            </section>
           </div>
         </div>
       </div>

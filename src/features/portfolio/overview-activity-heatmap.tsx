@@ -7,8 +7,10 @@ import { TimeFolioStoreProvider, useTimeFolioStore } from "../../state/tf-store"
 import type { TfSessionLog } from "../../types/models";
 
 const ROW_LABELS = ["Mon", "", "Wed", "", "Fri", "", "Sun"];
-const DAY_CELL_SIZE = 14;
-const DAY_CELL_GAP = 4;
+const DEFAULT_DAY_CELL_SIZE = 14;
+const DEFAULT_DAY_CELL_GAP = 4;
+const COMPACT_DAY_CELL_SIZE = 16;
+const COMPACT_DAY_CELL_GAP = 4;
 
 type MethodBreakdown = {
   method: string;
@@ -207,12 +209,14 @@ function buildMonthBands(weeks: string[][], yearStart: string, yearEnd: string) 
   return bands;
 }
 
-function OverviewActivityHeatmapBody() {
+function OverviewActivityHeatmapBody({ compact = false }: { compact?: boolean }) {
   const { state, isLoading, error } = useTimeFolioStore();
   const today = getTodayKey();
   const year = Number(today.slice(0, 4));
   const themeId = document.documentElement.dataset.theme;
   const isLightTheme = themeId === "light" || themeId === "maggiepink";
+  const dayCellSize = compact ? COMPACT_DAY_CELL_SIZE : DEFAULT_DAY_CELL_SIZE;
+  const dayCellGap = compact ? COMPACT_DAY_CELL_GAP : DEFAULT_DAY_CELL_GAP;
 
   const { yearStart, yearEnd, weeks } = useMemo(() => buildYearWeeks(year), [year]);
   const activityByDate = useMemo(() => buildActivityByDate(state.sessionLogs), [state.sessionLogs]);
@@ -238,6 +242,7 @@ function OverviewActivityHeatmapBody() {
   const [hovered, setHovered] = useState<HoverState | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const dayDetailsRef = useRef<HTMLDivElement | null>(null);
+  const dayGridRef = useRef<HTMLDivElement | null>(null);
 
   const selectedActivity = selectedDate ? activityByDate.get(selectedDate) : null;
   const tooltipActivity = hovered ? activityByDate.get(hovered.date) : null;
@@ -281,9 +286,11 @@ function OverviewActivityHeatmapBody() {
 
   if (isLoading) {
     return (
-      <section className="glass-panel flex flex-col gap-3 p-5 xl:p-6">
+      <section className={cn("glass-panel flex flex-col", compact ? "min-h-[360px] gap-3 p-4" : "gap-3 p-5 xl:p-6")}>
         <div>
-          <h3 className="text-base font-semibold text-white">Study Activity Heatmap</h3>
+          <h3 className={cn("font-semibold text-white", compact ? "text-[0.95rem]" : "text-base")}>
+            Study Activity Heatmap
+          </h3>
           <p className="mt-1 text-sm text-slate-400">Loading TimeFolio activity...</p>
         </div>
       </section>
@@ -292,36 +299,42 @@ function OverviewActivityHeatmapBody() {
 
   if (error) {
     return (
-      <section className="glass-panel flex flex-col gap-3 p-5 xl:p-6">
+      <section className={cn("glass-panel flex flex-col", compact ? "min-h-[360px] gap-3 p-4" : "gap-3 p-5 xl:p-6")}>
         <div>
-          <h3 className="text-base font-semibold text-white">Study Activity Heatmap</h3>
+          <h3 className={cn("font-semibold text-white", compact ? "text-[0.95rem]" : "text-base")}>
+            Study Activity Heatmap
+          </h3>
           <p className="mt-1 text-sm text-rose-300">{error}</p>
         </div>
       </section>
     );
   }
 
-  const gridWidth = weeks.length * DAY_CELL_SIZE + (weeks.length - 1) * DAY_CELL_GAP;
+  const gridWidth = weeks.length * dayCellSize + (weeks.length - 1) * dayCellGap;
+  const tooltipGridWidth = compact ? (dayGridRef.current?.clientWidth ?? gridWidth) : gridWidth;
 
   return (
-    <section className="glass-panel flex flex-col gap-3 p-4 xl:p-5">
+    <section className={cn("glass-panel flex flex-col", compact ? "min-h-[360px] gap-3 p-4" : "gap-3 p-4 xl:p-5")}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-white">Study Activity Heatmap</h3>
+          <h3 className={cn("font-semibold text-white", compact ? "text-[0.95rem]" : "text-base")}>
+            Study Activity Heatmap
+          </h3>
         </div>
-        <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-slate-400">
+        <div className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-400">
           {year}
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <div className="min-w-fit">
-          <div className="mb-1 pl-8">
+      <div className={cn("overflow-x-auto", compact ? "flex-1" : "")}>
+        <div className={cn("min-w-fit", compact ? "w-full" : "")}>
+          <div className={cn("mb-1", compact ? "pl-6" : "pl-8")}>
             <div
               className="grid"
               style={{
-                gridTemplateColumns: `repeat(${weeks.length}, ${DAY_CELL_SIZE}px)`,
-                columnGap: `${DAY_CELL_GAP}px`,
+                gridTemplateColumns: compact ? `repeat(${weeks.length}, minmax(0, 1fr))` : `repeat(${weeks.length}, ${dayCellSize}px)`,
+                columnGap: `${dayCellGap}px`,
+                width: compact ? "100%" : `${gridWidth}px`,
               }}
             >
               {monthBands.map((band) => (
@@ -338,12 +351,12 @@ function OverviewActivityHeatmapBody() {
 
           <div className="relative">
             <div className="flex gap-2">
-              <div className="grid grid-rows-7 gap-1" style={{ rowGap: `${DAY_CELL_GAP}px` }}>
+              <div className="grid grid-rows-7 gap-1" style={{ rowGap: `${dayCellGap}px` }}>
                 {ROW_LABELS.map((label, index) => (
                   <div
                     key={`${label}-${index}`}
-                    className="flex items-center justify-end text-[10px] text-slate-500"
-                    style={{ height: `${DAY_CELL_SIZE}px` }}
+                    className={cn("flex items-center justify-end text-slate-500", compact ? "text-[9px]" : "text-[10px]")}
+                    style={{ height: `${dayCellSize}px` }}
                   >
                     {label}
                   </div>
@@ -351,13 +364,14 @@ function OverviewActivityHeatmapBody() {
               </div>
 
               <div
+                ref={dayGridRef}
                 className="relative grid"
                 style={{
-                  gridTemplateColumns: `repeat(${weeks.length}, ${DAY_CELL_SIZE}px)`,
-                  gridTemplateRows: `repeat(7, ${DAY_CELL_SIZE}px)`,
-                  columnGap: `${DAY_CELL_GAP}px`,
-                  rowGap: `${DAY_CELL_GAP}px`,
-                  width: `${gridWidth}px`,
+                  gridTemplateColumns: compact ? `repeat(${weeks.length}, minmax(0, 1fr))` : `repeat(${weeks.length}, ${dayCellSize}px)`,
+                  gridTemplateRows: `repeat(7, ${dayCellSize}px)`,
+                  columnGap: `${dayCellGap}px`,
+                  rowGap: `${dayCellGap}px`,
+                  width: compact ? "100%" : `${gridWidth}px`,
                 }}
                 onMouseLeave={() => setHovered(null)}
               >
@@ -378,7 +392,7 @@ function OverviewActivityHeatmapBody() {
                           if (!inYear) return;
                           setHovered({
                             date,
-                            left: event.currentTarget.offsetLeft + DAY_CELL_SIZE / 2,
+                            left: event.currentTarget.offsetLeft + event.currentTarget.offsetWidth / 2,
                             top: event.currentTarget.offsetTop,
                           });
                         }}
@@ -402,8 +416,8 @@ function OverviewActivityHeatmapBody() {
                         style={{
                           gridColumn: weekIndex + 1,
                           gridRow: dayIndex + 1,
-                          width: `${DAY_CELL_SIZE}px`,
-                          height: `${DAY_CELL_SIZE}px`,
+                          width: compact ? "100%" : `${dayCellSize}px`,
+                          height: `${dayCellSize}px`,
                         }}
                         aria-label={
                           inYear
@@ -419,7 +433,7 @@ function OverviewActivityHeatmapBody() {
                   <div
                     className="pointer-events-none absolute z-20 w-[230px] -translate-x-1/2 -translate-y-full rounded-xl border px-3 py-2.5 text-xs shadow-2xl"
                     style={{
-                      left: `${Math.min(Math.max(hovered.left, 112), Math.max(gridWidth - 112, 112))}px`,
+                      left: `${Math.min(Math.max(hovered.left, 112), Math.max(tooltipGridWidth - 112, 112))}px`,
                       top: `${Math.max(hovered.top - 8, 8)}px`,
                       borderColor: "var(--panel-border)",
                       background: "var(--panel-support-bg)",
@@ -437,18 +451,9 @@ function OverviewActivityHeatmapBody() {
                     </p>
                     <p className="mt-0.5 flex items-center gap-1.5 text-slate-400 [color:var(--rich-text-muted,#94a3b8)]">
                       <span className="shrink-0">Top method:</span>
-                      {tooltipTopMethod ? (
-                        <>
-                          <span className="truncate [color:var(--rich-text,#e2e8f0)]">{tooltipTopMethod.label}</span>
-                          {tooltipTopMethod.isAuto ? (
-                            <span className="rounded-full border border-cyan-400/30 bg-cyan-500/15 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
-                              auto
-                            </span>
-                          ) : null}
-                        </>
-                      ) : (
-                        <span className="[color:var(--rich-text,#e2e8f0)]">—</span>
-                      )}
+                      <span className="truncate [color:var(--rich-text,#e2e8f0)]">
+                        {tooltipTopMethod ? tooltipTopMethod.label : "—"}
+                      </span>
                     </p>
                     <span
                       className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r"
@@ -466,7 +471,7 @@ function OverviewActivityHeatmapBody() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-2">
+      <div className={cn("flex flex-col gap-2 border-t border-white/10", compact ? "pt-2" : "pt-2")}>
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
           <span>Less</span>
           <span className="h-2.5 w-2.5 rounded-[3px] border border-white/[0.08] bg-slate-500/15" />
@@ -477,27 +482,55 @@ function OverviewActivityHeatmapBody() {
           <span>More</span>
         </div>
 
-        <MetricStrip columns="sm:grid-cols-2 xl:grid-cols-4" className="text-[13px] text-slate-200">
-          <MetricStripItem label="Daily average" value={formatMinutes(Math.round(dailyAverageMinutes))} />
-          <MetricStripItem label="Days learned" value={`${Math.round(daysLearnedPercent)}%`} meta={`${activeDays}/${daysElapsed} days`} />
-          <MetricStripItem label="Longest streak" value={`${streaks.longest} day${streaks.longest === 1 ? "" : "s"}`} />
-          <MetricStripItem label="Current streak" value={`${streaks.current} day${streaks.current === 1 ? "" : "s"}`} />
-          <MetricStripItem label="Total tracked" value={formatMinutes(totalStudyMinutes)} />
-        </MetricStrip>
+        {compact ? (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            {[
+              ["Daily avg", formatMinutes(Math.round(dailyAverageMinutes)), ""],
+              ["Days learned", `${Math.round(daysLearnedPercent)}%`, `${activeDays}/${daysElapsed}`],
+              ["Longest", `${streaks.longest}d`, ""],
+              ["Current", `${streaks.current}d`, ""],
+              ["Tracked", formatMinutes(totalStudyMinutes), ""],
+            ].map(([label, value, meta]) => (
+              <div key={label} className="rounded-[12px] border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
+                <p className="text-[10px] text-slate-500">{label}</p>
+                <p className="mt-0.5 truncate text-[13px] font-semibold tabular-nums text-white">{value}</p>
+                {meta ? <p className="text-[10px] text-slate-500">{meta}</p> : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <MetricStrip
+            columns="grid-cols-2 sm:grid-cols-3 md:grid-cols-5"
+            className="text-[13px] text-slate-200"
+          >
+            <MetricStripItem label="Daily average" value={formatMinutes(Math.round(dailyAverageMinutes))} />
+            <MetricStripItem
+              label="Days learned"
+              value={`${Math.round(daysLearnedPercent)}%`}
+              meta={`${activeDays}/${daysElapsed} days`}
+            />
+            <MetricStripItem label="Longest streak" value={`${streaks.longest} day${streaks.longest === 1 ? "" : "s"}`} />
+            <MetricStripItem label="Current streak" value={`${streaks.current} day${streaks.current === 1 ? "" : "s"}`} />
+            <MetricStripItem label="Total tracked" value={formatMinutes(totalStudyMinutes)} />
+          </MetricStrip>
+        )}
       </div>
 
       {selectedDate ? (
         <div
           ref={dayDetailsRef}
-          className="relative mt-1 overflow-hidden rounded-[22px] border border-white/10 bg-white/[0.02] shadow-[0_20px_60px_-32px_rgba(2,8,23,0.9)] scroll-mt-6 scroll-mb-6"
+          className={cn(
+            "relative mt-1 overflow-hidden border border-white/10 bg-white/[0.02] shadow-[0_20px_60px_-32px_rgba(2,8,23,0.9)] scroll-mt-6 scroll-mb-6",
+            compact ? "rounded-[16px]" : "rounded-[22px]",
+          )}
         >
-          <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-white/[0.02] px-4 py-3.5">
+          <div className={cn("flex items-start justify-between gap-4 border-b border-white/10 bg-white/[0.02]", compact ? "px-3 py-2.5" : "px-4 py-3.5")}>
             <div>
               <p className="text-[11px] text-slate-500">Day details</p>
-              <h4 id="overview-heatmap-day-title" className="mt-1.5 text-xl font-semibold text-white">
+              <h4 id="overview-heatmap-day-title" className={cn("mt-1 font-semibold text-white", compact ? "text-base" : "text-xl")}>
                 {formatLongDate(selectedDate)}
               </h4>
-              <p className="mt-1 text-sm text-slate-300">
+              <p className={cn("mt-1 text-slate-300", compact ? "hidden" : "text-sm")}>
                 Review study and session details for the selected day.
               </p>
             </div>
@@ -510,7 +543,7 @@ function OverviewActivityHeatmapBody() {
             </button>
           </div>
 
-          <div className="max-h-[min(70vh,720px)] overflow-y-auto px-4 py-4">
+          <div className={cn("overflow-y-auto", compact ? "max-h-[min(42vh,360px)] px-3 py-3" : "max-h-[min(70vh,720px)] px-4 py-4")}>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <StatTile label="Study Time" value={formatMinutes(selectedActivity?.studyMinutes ?? 0)} />
               <StatTile
@@ -521,9 +554,7 @@ function OverviewActivityHeatmapBody() {
               <StatTile
                 label="Top Method"
                 value={selectedTopMethod?.label ?? "—"}
-                meta={selectedTopMethod?.isAuto ? "Auto-tracked method" : "Most-used method"}
-                badge={selectedTopMethod?.isAuto ? "Auto" : undefined}
-                tone={selectedTopMethod?.isAuto ? "info" : "default"}
+                meta="Most-used method"
               />
               <StatTile
                 label="Distraction"
@@ -554,14 +585,7 @@ function OverviewActivityHeatmapBody() {
                         <li key={entry.method} className="py-3">
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className="truncate text-sm font-medium text-slate-200">{display.label}</span>
-                                {display.isAuto ? (
-                                  <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
-                                    auto
-                                  </span>
-                                ) : null}
-                              </div>
+                              <span className="block truncate text-sm font-medium text-slate-200">{display.label}</span>
                               <div className="mt-0.5 text-xs text-slate-500">
                                 {entry.sessionCount} session{entry.sessionCount === 1 ? "" : "s"}
                               </div>
@@ -593,8 +617,9 @@ function OverviewActivityHeatmapBody() {
                 {selectedActivity?.allSessions.length ? (
                   <div className="mt-3 max-h-[min(44vh,420px)] space-y-2 overflow-y-auto pr-1">
                     {selectedActivity.allSessions.map((session) => {
-                      const { label, isAuto } = splitAutoSessionMethodLabel(session.method);
+                      const { label } = splitAutoSessionMethodLabel(session.method);
                       const minutes = Math.max(0, Math.round(session.hours * 60));
+                      const hasFlag = session.isDistraction || session.isLive;
                       return (
                         <div
                           key={session.id}
@@ -604,23 +629,20 @@ function OverviewActivityHeatmapBody() {
                             <span className="truncate text-sm font-medium text-slate-100">{label}</span>
                             <span className="text-sm tabular-nums text-slate-300">{formatMinutes(minutes)}</span>
                           </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                            {isAuto ? (
-                              <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
-                                auto
-                              </span>
-                            ) : null}
-                            {session.isDistraction ? (
-                              <span className="rounded-full border border-rose-400/25 bg-rose-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-rose-200">
-                                distraction
-                              </span>
-                            ) : null}
-                            {session.isLive ? (
-                              <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-emerald-200">
-                                live
-                              </span>
-                            ) : null}
-                          </div>
+                          {hasFlag ? (
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              {session.isDistraction ? (
+                                <span className="rounded-full border border-rose-400/25 bg-rose-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-rose-200">
+                                  distraction
+                                </span>
+                              ) : null}
+                              {session.isLive ? (
+                                <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-emerald-200">
+                                  live
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
                           {session.notes ? (
                             <p className="mt-1.5 text-xs leading-5 text-slate-400">{session.notes}</p>
                           ) : null}
@@ -671,10 +693,10 @@ function StatTile({
   );
 }
 
-export function OverviewActivityHeatmap() {
+export function OverviewActivityHeatmap({ compact = false }: { compact?: boolean }) {
   return (
     <TimeFolioStoreProvider>
-      <OverviewActivityHeatmapBody />
+      <OverviewActivityHeatmapBody compact={compact} />
     </TimeFolioStoreProvider>
   );
 }

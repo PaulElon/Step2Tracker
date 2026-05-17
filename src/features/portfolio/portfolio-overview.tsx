@@ -164,14 +164,11 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
       if (!topic) continue;
       topicCounts.set(topic, (topicCounts.get(topic) ?? 0) + 1);
     }
-    if (topicCounts.size) {
-      const [label, count] = [...topicCounts.entries()].sort(
-        (left, right) => right[1] - left[1],
-      )[0];
-      if (count >= 2) {
-        return { kind: "topic", label, count };
-      }
-      return null;
+    const topTopic = [...topicCounts.entries()].sort(
+      (left, right) => right[1] - left[1],
+    )[0];
+    if (topTopic && topTopic[1] >= 2) {
+      return { kind: "topic", label: topTopic[0], count: topTopic[1] };
     }
     const errorTypeCounts = new Map<string, number>();
     for (const entry of errorLogEntries) {
@@ -180,10 +177,13 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
         (errorTypeCounts.get(entry.errorType) ?? 0) + 1,
       );
     }
-    const [label, count] = [...errorTypeCounts.entries()].sort(
+    const topErrorType = [...errorTypeCounts.entries()].sort(
       (left, right) => right[1] - left[1],
     )[0];
-    return { kind: "errorType", label, count };
+    if (topErrorType && topErrorType[1] >= 2) {
+      return { kind: "errorType", label: topErrorType[0], count: topErrorType[1] };
+    }
+    return null;
   }, [errorLogEntries]);
 
   const topCategory = useMemo<TopCategory | null>(() => {
@@ -207,10 +207,10 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
         : "Build pace";
 
   return (
-    <div className="flex flex-col gap-4 pb-2">
+    <div className="flex flex-col gap-3 pb-2">
       <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Overview</h2>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
-        <div className="flex min-w-0 flex-col gap-4">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
+        <div className="flex min-w-0 flex-col gap-3">
           <MetricStrip columns="grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <MetricStripItem
               label="Readiness"
@@ -257,7 +257,7 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
             />
           </MetricStrip>
 
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid gap-3 xl:grid-cols-2">
             <FocusAreasPanel
               focusInsights={focusInsights}
               onNavigate={onNavigate}
@@ -265,6 +265,16 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
             <PerformanceTrendPanel trend={trend} onNavigate={onNavigate} />
           </div>
 
+          {FF.timefolio ? <OverviewActivityHeatmap compact /> : null}
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <InsightsRail
+            topErrorPattern={topErrorPattern}
+            trendImprovement={trendImprovement}
+            topCategory={topCategory}
+          />
+          <QuickActions onNavigate={onNavigate} />
           <RecommendedNextActions
             errorCount={errorLogEntries.length}
             focusCount={focusInsights.length}
@@ -273,17 +283,7 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
             onNavigate={onNavigate}
           />
         </div>
-
-        <div className="flex flex-col gap-4">
-          <InsightsRail
-            topErrorPattern={topErrorPattern}
-            trendImprovement={trendImprovement}
-            topCategory={topCategory}
-          />
-          <QuickActions onNavigate={onNavigate} />
-        </div>
       </div>
-      {FF.timefolio ? <OverviewActivityHeatmap /> : null}
     </div>
   );
 }
@@ -302,7 +302,7 @@ function SectionPanel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="glass-panel flex min-w-0 flex-col gap-3 p-4">
+    <section className="glass-panel flex min-w-0 flex-col gap-2.5 p-3.5">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -310,7 +310,7 @@ function SectionPanel({
             <h3 className="text-[0.95rem] font-semibold text-white">{title}</h3>
           </div>
           {subtitle ? (
-            <p className="mt-1 text-[12px] text-slate-400">{subtitle}</p>
+            <p className="mt-0.5 text-[12px] text-slate-400">{subtitle}</p>
           ) : null}
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
@@ -588,7 +588,7 @@ function InsightsRail({
   topCategory: TopCategory | null;
 }) {
   return (
-    <section className="glass-panel flex flex-col gap-3 p-4">
+    <section className="glass-panel flex flex-col gap-2.5 p-3.5">
       <header className="flex items-center gap-2">
         <Lightbulb className="h-4 w-4 text-cyan-200" />
         <p className="text-[0.6rem] font-semibold text-slate-500">
@@ -611,7 +611,7 @@ function InsightsRail({
           }
           valueTone="violet"
         />
-        <SoftDivider className="my-3" />
+        <SoftDivider className="my-2.5" />
         <InsightRow
           label="Trending improvement"
           value={
@@ -635,7 +635,7 @@ function InsightsRail({
           }
           icon={trendImprovement && trendImprovement.delta > 0 ? TrendingUp : undefined}
         />
-        <SoftDivider className="my-3" />
+        <SoftDivider className="my-2.5" />
         <InsightRow
           label="Time allocation"
           value={topCategory ? topCategory.name : "—"}
@@ -721,14 +721,14 @@ function QuickActions({
   }
 
   return (
-    <QuietPanel>
+    <QuietPanel className="p-3.5">
       <header className="flex items-center gap-2">
         <Plus className="h-4 w-4 text-cyan-200" />
         <p className="text-[0.6rem] font-semibold text-slate-500">
           Quick Actions
         </p>
       </header>
-      <SoftDivider className="my-4" />
+      <SoftDivider className="my-3" />
       <FlatList>
         {actions.map(({ key, icon: Icon, label, target }) => (
           <FlatListRow key={key} onClick={() => onNavigate(target)} className="group">
@@ -819,28 +819,32 @@ function RecommendedNextActions({
   }
 
   return (
-    <QuietPanel>
+    <QuietPanel className="p-3.5">
       <header className="flex items-center gap-2">
         <CalendarDays className="h-4 w-4 text-cyan-200" />
-        <h3 className="text-[0.95rem] font-semibold text-white">
+        <h3 className="text-[0.82rem] font-semibold text-white">
           Recommended Next Actions
         </h3>
       </header>
-      <SoftDivider className="my-4" />
-      <FlatList>
+      <div className="mt-3 flex flex-col gap-2">
         {actions.slice(0, 3).map(({ key, icon: Icon, title, description, target }) => (
-          <FlatListRow key={key} onClick={() => onNavigate(target)} className="group">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-white/10 bg-slate-950/60 text-cyan-200">
+          <button
+            key={key}
+            type="button"
+            onClick={() => onNavigate(target)}
+            className="group flex w-full items-center gap-2.5 rounded-[14px] border border-white/[0.08] bg-white/[0.025] px-2.5 py-2 text-left transition hover:border-cyan-300/25 hover:bg-cyan-300/[0.06]"
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] border border-white/10 bg-slate-950/45 text-cyan-200 transition group-hover:border-cyan-300/25">
               <Icon className="h-4 w-4" />
             </span>
             <span className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-semibold text-white">{title}</p>
+              <p className="truncate text-[12.5px] font-semibold text-white">{title}</p>
               <p className="mt-0.5 truncate text-[11px] text-slate-400">{description}</p>
             </span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-slate-500 transition-colors group-hover:text-slate-200" />
-          </FlatListRow>
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500 transition-colors group-hover:text-slate-200" />
+          </button>
         ))}
-      </FlatList>
+      </div>
     </QuietPanel>
   );
 }

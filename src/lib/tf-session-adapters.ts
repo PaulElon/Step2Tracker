@@ -30,6 +30,36 @@ export function splitAutoSessionMethodLabel(method: string): { label: string; is
   };
 }
 
+export function displayMethodLabel(method: string): string {
+  return splitAutoSessionMethodLabel(method).label;
+}
+
+export function allocationByMethodDisplay(
+  sessions: TfSessionLog[]
+): Array<{ method: string; methodKey: string; hours: number; sessionCount: number }> {
+  const map = new Map<string, { method: string; methodKey: string; hours: number; sessionCount: number }>();
+  for (const s of sessions) {
+    const label = displayMethodLabel(s.method);
+    const key = methodKeyFromLabel(label);
+    const existing = map.get(key);
+    if (existing) {
+      existing.hours = roundHours(existing.hours + s.hours);
+      existing.sessionCount += 1;
+    } else {
+      map.set(key, {
+        method: label,
+        methodKey: key,
+        hours: s.hours,
+        sessionCount: 1,
+      });
+    }
+  }
+  return [...map.values()].sort((a, b) => {
+    if (b.hours !== a.hours) return b.hours - a.hours;
+    return a.method.localeCompare(b.method);
+  });
+}
+
 export function studyBlockToSession(block: StudyBlock): TfSessionLog {
   const method = block.category || block.task || "Other";
   const methodKey = methodKeyFromLabel(method);

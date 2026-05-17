@@ -1206,6 +1206,9 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
               (t as { displayMode?: unknown })?.displayMode === "months+weeks+days")
                 ? ((t as { displayMode: "weeks+days" | "months+weeks+days" }).displayMode)
                 : ("days" as const),
+            color: typeof (t as { color?: unknown })?.color === "string" && (t as { color: string }).color
+              ? (t as { color: string }).color
+              : undefined,
           }))
           .filter((t) => t.examDate.length > 0 && t.label.length > 0)
       : [],
