@@ -3,7 +3,6 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 const tauriHost = process.env.TAURI_DEV_HOST;
-const isTauriDev = Boolean(process.env.TAURI_ENV_PLATFORM || tauriHost);
 
 export default defineConfig({
   clearScreen: false,
@@ -12,16 +11,11 @@ export default defineConfig({
     host: tauriHost || false,
     port: 5173,
     strictPort: true,
-    // Tauri WebView can fail on React refresh runtime in dev; keep HMR for browser dev.
-    hmr: isTauriDev
-      ? false
-      : tauriHost
-      ? {
-          protocol: "ws",
-          host: tauriHost,
-          port: 1421,
-        }
-      : undefined,
+    // React Fast Refresh crashes Tauri WebView; HMR is off for localhost.
+    // Remote-host dev (TAURI_DEV_HOST) keeps its WebSocket tunnel.
+    hmr: tauriHost
+      ? { protocol: "ws", host: tauriHost, port: 1421 }
+      : false,
     watch: {
       ignored: ["**/src-tauri/**"],
     },
