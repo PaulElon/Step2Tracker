@@ -9,8 +9,8 @@ import type { TfSessionLog } from "../../types/models";
 const ROW_LABELS = ["Mon", "", "Wed", "", "Fri", "", "Sun"];
 const DEFAULT_DAY_CELL_SIZE = 14;
 const DEFAULT_DAY_CELL_GAP = 4;
-const COMPACT_DAY_CELL_SIZE = 12;
-const COMPACT_DAY_CELL_GAP = 3;
+const COMPACT_DAY_CELL_SIZE = 16;
+const COMPACT_DAY_CELL_GAP = 4;
 
 type MethodBreakdown = {
   method: string;
@@ -326,7 +326,7 @@ function OverviewActivityHeatmapBody({ compact = false }: { compact?: boolean })
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className={cn("overflow-x-auto", compact ? "flex-1" : "")}>
         <div className={cn("min-w-fit", compact ? "w-full" : "")}>
           <div className={cn("mb-1", compact ? "pl-6" : "pl-8")}>
             <div

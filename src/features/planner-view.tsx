@@ -1,4 +1,5 @@
 import { AlertTriangle, ArrowDown, ArrowUp, Bell, CalendarDays, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Plus, Search, Upload, X } from "lucide-react";
+import type React from "react";
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { getStudyBlockMinutes, getWeekDates } from "../lib/analytics";
 import {
@@ -560,12 +561,164 @@ function PlannerTrackedStudyStat({ selectedDateKey }: { selectedDateKey: string 
   );
 }
 
+const EVENT_COLORS = [
+  "#7c3aed",
+  "#e11d48",
+  "#2563eb",
+  "#059669",
+  "#d97706",
+  "#0284c7",
+  "#db2777",
+  "#0f766e",
+];
+
+function eventPillStyle(color: string | undefined): React.CSSProperties | undefined {
+  if (!color) return undefined;
+  return {
+    borderColor: `${color}60`,
+    backgroundColor: `${color}26`,
+  };
+}
+
+function EventEditorModal({
+  event,
+  seedDate,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  event?: ExamTimer;
+  seedDate?: string;
+  onClose: () => void;
+  onSave: (ev: ExamTimer) => void;
+  onDelete?: () => void;
+}) {
+  const id = useId();
+  const titleId = `${id}-ev-title`;
+  const [title, setTitle] = useState(event?.label ?? "");
+  const [date, setDate] = useState(event?.examDate ?? seedDate ?? "");
+  const [color, setColor] = useState(event?.color ?? EVENT_COLORS[0]);
+
+  function handleSubmit() {
+    if (!title.trim() || !date) return;
+    onSave({
+      id: event?.id ?? (globalThis.crypto?.randomUUID?.() ?? `ev-${Date.now()}`),
+      label: title.trim(),
+      examDate: date,
+      examTime: event?.examTime,
+      displayMode: event?.displayMode,
+      showHrMin: event?.showHrMin,
+      color,
+    });
+    onClose();
+  }
+
+  return (
+    <ModalShell onClose={onClose} titleId={titleId} position="center">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] text-slate-500">{event ? "Edit event" : "New event"}</p>
+          <h3 id={titleId} className="mt-2 text-2xl font-semibold text-white">
+            {event ? "Edit event" : "Add event"}
+          </h3>
+        </div>
+        <button type="button" onClick={onClose} className={secondaryButtonClassName} aria-label="Close">
+          Close
+        </button>
+      </div>
+
+      <div className="mt-6 space-y-4">
+        <div>
+          <label htmlFor={`${id}-ev-label`} className="block text-sm font-medium text-white">
+            Title
+          </label>
+          <input
+            id={`${id}-ev-label`}
+            className={`${fieldClassName} mt-2 w-full`}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. COMSAE >450"
+            // eslint-disable-next-line jsx-a11y/no-autofocus
+            autoFocus
+          />
+        </div>
+        <div>
+          <label htmlFor={`${id}-ev-date`} className="block text-sm font-medium text-white">
+            Date
+          </label>
+          <input
+            id={`${id}-ev-date`}
+            type="date"
+            className={`${fieldClassName} mt-2 w-full`}
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-white">Color</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {EVENT_COLORS.map((hex) => (
+              <button
+                key={hex}
+                type="button"
+                onClick={() => setColor(hex)}
+                className={cn(
+                  "h-7 w-7 rounded-full border-2 transition",
+                  color === hex
+                    ? "scale-110 border-white"
+                    : "border-transparent hover:border-white/40",
+                )}
+                style={{ backgroundColor: hex }}
+                aria-label={`Color ${hex}`}
+                aria-pressed={color === hex}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 flex items-center justify-between gap-3">
+        {onDelete ? (
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm(`Delete "${event?.label ?? "this event"}"?`)) {
+                onDelete();
+                onClose();
+              }
+            }}
+            className="inline-flex h-9 items-center rounded-[14px] border border-rose-400/20 bg-rose-500/10 px-3.5 text-sm font-medium text-rose-100 transition hover:border-rose-300/35 hover:bg-rose-500/15"
+          >
+            Delete event
+          </button>
+        ) : (
+          <div />
+        )}
+        <div className="flex items-center gap-3">
+          <button type="button" className={secondaryButtonClassName} onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!title.trim() || !date}
+            onClick={handleSubmit}
+            className={`${primaryButtonClassName} disabled:cursor-not-allowed disabled:opacity-50`}
+          >
+            {event ? "Save changes" : "Add event"}
+          </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
 export function PlannerView() {
   const {
     state,
     importStudyBlocks,
     setPlannerFocusDate,
     setPlannerMode,
+    setExamTimers,
     trashStudyBlock,
     updatePlannerFilters,
     upsertStudyBlock,
@@ -573,6 +726,8 @@ export function PlannerView() {
   const [editorTask, setEditorTask] = useState<StudyBlock | undefined>();
   const [editorSeedDate, setEditorSeedDate] = useState<string | undefined>();
   const [showEditor, setShowEditor] = useState(false);
+  const [editorEvent, setEditorEvent] = useState<ExamTimer | undefined>();
+  const [showEventEditor, setShowEventEditor] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showIcsImport, setShowIcsImport] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -770,6 +925,19 @@ export function PlannerView() {
   function handlePlannerFocusDate(date: string) {
     clearBulkSelection();
     void setPlannerFocusDate(date);
+  }
+
+  async function handleSaveEvent(ev: ExamTimer) {
+    const existing = state.preferences.examTimers;
+    const idx = existing.findIndex((t) => t.id === ev.id);
+    const next =
+      idx >= 0 ? existing.map((t) => (t.id === ev.id ? ev : t)) : [...existing, ev];
+    await setExamTimers(next);
+  }
+
+  async function handleDeleteEvent(id: string) {
+    const next = state.preferences.examTimers.filter((t) => t.id !== id);
+    await setExamTimers(next);
   }
 
   const periodLabel = plannerMode === "week" ? `Week of ${formatLongDate(weekStart)}` : formatMonthLabel(selectedDate);
@@ -1099,13 +1267,19 @@ export function PlannerView() {
                         {dayEvents.slice(0, 1).map((timer) => (
                           <span
                             key={timer.id}
-                            className="inline-flex max-w-full items-center truncate rounded-[7px] border border-violet-300/25 bg-violet-300/12 px-1.5 py-0.5 text-[10px] font-medium text-violet-100"
+                            className={cn(
+                              "inline-flex max-w-full items-center truncate rounded-[7px] border px-1.5 py-0.5 text-[10px] font-medium",
+                              !timer.color
+                                ? "border-violet-300/25 bg-violet-300/12 text-violet-100"
+                                : "text-white",
+                            )}
+                            style={eventPillStyle(timer.color)}
                           >
                             {timer.label || "Exam"}
                           </span>
                         ))}
                         {dayEvents.length > 1 ? (
-                          <span className="text-[10px] font-medium text-violet-200/80">
+                          <span className="text-[10px] font-medium text-slate-400">
                             +{dayEvents.length - 1}
                           </span>
                         ) : null}
@@ -1219,9 +1393,26 @@ export function PlannerView() {
                       </div>
 
                       {dayEvents.length ? (
-                        <div className="truncate rounded-[6px] border border-violet-300/30 bg-violet-300/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-100">
-                          {dayEvents[0].label || "Exam"}
-                          {dayEvents.length > 1 ? ` +${dayEvents.length - 1}` : ""}
+                        <div className="space-y-0.5">
+                          {dayEvents.slice(0, 2).map((ev) => (
+                            <div
+                              key={ev.id}
+                              className={cn(
+                                "truncate rounded-[6px] px-1.5 py-0.5 text-[10px] font-medium",
+                                !ev.color
+                                  ? "border border-violet-300/30 bg-violet-300/15 text-violet-100"
+                                  : "border text-white",
+                              )}
+                              style={eventPillStyle(ev.color)}
+                            >
+                              {ev.label || "Event"}
+                            </div>
+                          ))}
+                          {dayEvents.length > 2 ? (
+                            <span className="text-[10px] font-medium text-slate-400">
+                              +{dayEvents.length - 2}
+                            </span>
+                          ) : null}
                         </div>
                       ) : null}
 
@@ -1314,16 +1505,29 @@ export function PlannerView() {
                   </button>
                 </>
               ) : (
-                <button
-                  type="button"
-                  className="inline-flex h-8 items-center rounded-[10px] border border-white/10 bg-slate-900/55 px-2.5 text-[11px] font-medium text-slate-300 transition hover:border-cyan-300/25 hover:text-white"
-                  onClick={() => {
-                    setIsSelectionMode(true);
-                    clearBulkSelection();
-                  }}
-                >
-                  Select tasks
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="inline-flex h-8 items-center rounded-[10px] border border-white/10 bg-slate-900/55 px-2.5 text-[11px] font-medium text-slate-300 transition hover:border-cyan-300/25 hover:text-white"
+                    onClick={() => {
+                      setIsSelectionMode(true);
+                      clearBulkSelection();
+                    }}
+                  >
+                    Select tasks
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-8 items-center gap-1 rounded-[10px] border border-white/10 bg-slate-900/55 px-2.5 text-[11px] font-medium text-slate-300 transition hover:border-cyan-300/25 hover:text-white"
+                    onClick={() => {
+                      setEditorEvent(undefined);
+                      setShowEventEditor(true);
+                    }}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add event
+                  </button>
+                </>
               )}
               <button
                 type="button"
@@ -1361,6 +1565,53 @@ export function PlannerView() {
               </TimeFolioStoreProvider>
             ) : null}
           </div>
+
+          {(() => {
+            const dayEvents = eventsByDate.get(selectedDate) ?? [];
+            if (!dayEvents.length) return null;
+            return (
+              <div className="mb-3 space-y-1">
+                <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">Events</p>
+                {dayEvents.map((ev) => (
+                  <div
+                    key={ev.id}
+                    className="flex items-center gap-2 rounded-[12px] border border-white/8 bg-slate-900/45 px-2.5 py-2"
+                  >
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: ev.color ?? "#7c3aed" }}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-white">
+                      {ev.label || "Event"}
+                    </span>
+                    <button
+                      type="button"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-500 transition hover:bg-white/[0.06] hover:text-white"
+                      onClick={() => {
+                        setEditorEvent(ev);
+                        setShowEventEditor(true);
+                      }}
+                      aria-label={`Edit ${ev.label}`}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-500 transition hover:bg-rose-500/15 hover:text-rose-300"
+                      onClick={() => {
+                        if (window.confirm(`Delete "${ev.label}"?`)) {
+                          void handleDeleteEvent(ev.id);
+                        }
+                      }}
+                      aria-label={`Delete ${ev.label}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {isSelectionMode ? (
             <div className="mb-3 rounded-[12px] border border-white/10 bg-slate-950/45 p-2">
@@ -1778,6 +2029,25 @@ export function PlannerView() {
             .map((block) => block.importSourceId)
             .filter((value): value is string => typeof value === "string" && value.length > 0)}
           onImport={(tasks) => importStudyBlocks(tasks, "merge")}
+        />
+      ) : null}
+
+      {showEventEditor ? (
+        <EventEditorModal
+          event={editorEvent}
+          seedDate={selectedDate}
+          onClose={() => setShowEventEditor(false)}
+          onSave={(ev) => {
+            void handleSaveEvent(ev);
+          }}
+          onDelete={
+            editorEvent
+              ? () => {
+                  void handleDeleteEvent(editorEvent.id);
+                  setShowEventEditor(false);
+                }
+              : undefined
+          }
         />
       ) : null}
     </div>

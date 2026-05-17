@@ -155,6 +155,7 @@ export interface ExamTimer {
   examTime?: string;
   displayMode?: ExamDisplayMode;
   showHrMin?: boolean;
+  color?: string;
 }
 
 export interface NotebookFolder {
