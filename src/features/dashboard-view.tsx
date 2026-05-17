@@ -33,7 +33,7 @@ import { getTrackedStudyMinutesForDate } from "../lib/tf-session-metrics";
 import { StudyTaskCard } from "../components/study-task-card";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { TaskLaunchButton } from "../components/task-launch-button";
-import { CategoryBadge, EmptyState } from "../components/ui";
+import { CategoryBadge, EmptyState, FlatList, FlatListRow, QuietPanel, SoftDivider } from "../components/ui";
 import type { ExamTimer, ResourceLink, SectionId, StudyBlock } from "../types/models";
 
 function getGreeting() {
@@ -362,10 +362,10 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
               <section className="glass-panel min-w-0 p-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <p className="text-[0.65rem] uppercase tracking-[0.22em] text-slate-500">Your next task</p>
+                    <p className="text-[0.65rem] text-slate-500">Your next task</p>
                     <CategoryBadge category={nextTask.category} />
                   </div>
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                  <p className="text-[11px] text-slate-500">
                     {todayTasks.length === 1
                       ? "Only task today"
                       : `${completedCount} of ${todayTasks.length} done`}
@@ -425,7 +425,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
               </section>
             ) : (
               <section className="glass-panel min-w-0 p-6">
-                <p className="text-[0.65rem] uppercase tracking-[0.22em] text-slate-500">Your next task</p>
+                <p className="text-[0.65rem] text-slate-500">Your next task</p>
                 <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
                   <div>
                     <h3 className="text-2xl font-semibold tracking-[-0.02em] text-white">
@@ -547,7 +547,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                 <div className="mt-3 border-t border-white/[0.06] pt-3">
                   {editingGoal ? (
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Min</span>
+                      <span className="text-[10px] text-slate-500">Min</span>
                       <input
                         type="number"
                         inputMode="numeric"
@@ -582,39 +582,38 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
             </div>
 
             {/* Next Best Moves */}
-            <section className="glass-panel min-w-0 p-5">
+            <QuietPanel>
               <div className="mb-4 flex items-center gap-2">
                 <Zap className="h-4 w-4 text-slate-500" />
                 <h3 className="text-base font-semibold text-white">Next Best Moves</h3>
               </div>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <FlatList className="mt-3">
                 {bestMoves.slice(0, 4).map((move) => (
-                  <button
-                    type="button"
-                    key={move.title}
-                    onClick={move.action}
-                    className="group flex items-start gap-3 rounded-[14px] border border-white/[0.06] bg-white/[0.02] p-3.5 text-left transition-colors hover:border-white/15 hover:bg-white/[0.05]"
-                  >
+                  <FlatListRow key={move.title} onClick={move.action}>
                     <div
-                      className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border",
-                        move.iconBgClass,
-                      )}
+                      className="flex min-w-0 flex-1 items-center gap-3"
                     >
-                      <move.icon className={cn("h-4 w-4", move.iconColorClass)} />
+                      <div
+                        className={cn(
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border",
+                          move.iconBgClass,
+                        )}
+                      >
+                        <move.icon className={cn("h-4 w-4", move.iconColorClass)} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white">{move.title}</p>
+                        <p className="truncate text-xs text-slate-400">{move.subtitle}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-white">{move.title}</p>
-                      <p className="mt-0.5 truncate text-xs text-slate-400">{move.subtitle}</p>
-                    </div>
-                    <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-600 transition-colors group-hover:text-slate-300" />
-                  </button>
+                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-600" />
+                  </FlatListRow>
                 ))}
-              </div>
+              </FlatList>
               <p className="mt-3 text-xs text-slate-500">
                 These recommendations are based on your plan and recent activity.
               </p>
-            </section>
+            </QuietPanel>
           </div>
 
           {/* RIGHT RAIL */}
@@ -696,7 +695,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
 
                 {activeWeakTopics.length ? (
                   <div className="border-t border-white/[0.06] pt-3">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                    <p className="text-[11px] text-slate-500">
                       {activeWeakTopics.length} active weak topic{activeWeakTopics.length === 1 ? "" : "s"}
                     </p>
                     {practiceMetrics.averageScore != null ? (
@@ -710,83 +709,104 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
             </section>
 
             {/* Active Tracker */}
-            <section className="glass-panel min-w-0 p-5">
-              <div className="flex items-center gap-2">
-                <Timer className="h-4 w-4 text-cyan-200" />
-                <h3 className="text-base font-semibold text-white">Active Tracker</h3>
+            <QuietPanel>
+              <div>
+                <div className="flex items-center gap-2">
+                  <Timer className="h-4 w-4 text-cyan-200" />
+                  <h3 className="text-base font-semibold text-white">Active Tracker</h3>
+                </div>
+
+                {upcomingTimer ? (
+                  <div className="mt-3 space-y-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{upcomingTimer.label}</p>
+                      <p className="mt-0.5 text-xs text-slate-400">
+                        {countdownDays} day{countdownDays === 1 ? "" : "s"} until test
+                      </p>
+                    </div>
+                    <div className="border-t border-white/[0.06] pt-3">
+                      <p className="text-[11px] text-slate-500">Today</p>
+                      <p className="mt-1 text-sm text-slate-200">
+                        <span className="tabular-nums text-white">{formatMinutes(completedMinutes)}</span>
+                        <span className="text-slate-500"> done · {formatMinutes(plannedMinutes)} planned</span>
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    <p className="text-sm text-slate-400">
+                      No upcoming test set. Add a countdown from the sidebar to track an exam date.
+                    </p>
+                    <div className="border-t border-white/[0.06] pt-3">
+                      <p className="text-[11px] text-slate-500">Today</p>
+                      <p className="mt-1 text-sm text-slate-200">
+                        <span className="tabular-nums text-white">{formatMinutes(completedMinutes)}</span>
+                        <span className="text-slate-500"> done · {formatMinutes(plannedMinutes)} planned</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {upcomingTimer ? (
-                <div className="mt-3 space-y-3">
-                  <div>
-                    <p className="text-sm font-semibold text-white">{upcomingTimer.label}</p>
-                    <p className="mt-0.5 text-xs text-slate-400">
-                      {countdownDays} day{countdownDays === 1 ? "" : "s"} until test
-                    </p>
-                  </div>
-                  <div className="border-t border-white/[0.06] pt-3">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Today</p>
-                    <p className="mt-1 text-sm text-slate-200">
-                      <span className="tabular-nums text-white">{formatMinutes(completedMinutes)}</span>
-                      <span className="text-slate-500"> done · {formatMinutes(plannedMinutes)} planned</span>
-                    </p>
-                  </div>
+              <SoftDivider className="my-4" />
+
+              <div>
+                <div className="flex items-center gap-2">
+                  <Lightbulb
+                    className={themeAwareWarmAccent(themeId, "h-4 w-4 text-orange-300/80", "h-4 w-4 text-amber-300/80")}
+                  />
+                  <h3 className="text-base font-semibold text-white">Focus Tip</h3>
                 </div>
-              ) : (
-                <div className="mt-3 space-y-3">
-                  <p className="text-sm text-slate-400">
-                    No upcoming test set. Add a countdown from the sidebar to track an exam date.
-                  </p>
-                  <div className="border-t border-white/[0.06] pt-3">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Today</p>
-                    <p className="mt-1 text-sm text-slate-200">
-                      <span className="tabular-nums text-white">{formatMinutes(completedMinutes)}</span>
-                      <span className="text-slate-500"> done · {formatMinutes(plannedMinutes)} planned</span>
-                    </p>
-                  </div>
-                </div>
-              )}
-            </section>
+                <p className="mt-3 text-sm leading-6 text-slate-300">{getDailyFocusTip(todayKey)}</p>
+              </div>
+            </QuietPanel>
 
             {/* Quick Actions */}
-            <section className="glass-panel min-w-0 p-5">
+            <QuietPanel>
               <div className="flex items-center gap-2">
                 <Zap className="h-4 w-4 text-slate-500" />
                 <h3 className="text-base font-semibold text-white">Quick Actions</h3>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <QuickAction
-                  icon={ClipboardCheck}
-                  label="Practice Tests"
-                  onClick={() => goToSection("tests")}
-                />
-                <QuickAction
-                  icon={Flame}
-                  label="Weak Topics"
-                  onClick={() => goToSection("weakTopics")}
-                />
-                <QuickAction
-                  icon={AlertCircle}
-                  label="Error Log"
-                  onClick={() => goToSection("errorLog")}
-                />
+              <FlatList className="mt-3">
+                <FlatListRow onClick={() => goToSection("tests")}>
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <ClipboardCheck className="h-4 w-4 shrink-0 text-slate-500" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200">Practice Tests</span>
+                  </div>
+                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-600" />
+                </FlatListRow>
+                <FlatListRow onClick={() => goToSection("weakTopics")}>
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <Flame className="h-4 w-4 shrink-0 text-slate-500" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200">Weak Topics</span>
+                  </div>
+                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-600" />
+                </FlatListRow>
+                <FlatListRow onClick={() => goToSection("errorLog")}>
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-slate-500" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200">Error Log</span>
+                  </div>
+                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-600" />
+                </FlatListRow>
                 {FF.notebook && onOpenNotebook ? (
-                  <QuickAction icon={BookOpen} label="Notebook" onClick={onOpenNotebook} />
+                  <FlatListRow onClick={onOpenNotebook}>
+                    <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                      <BookOpen className="h-4 w-4 shrink-0 text-slate-500" />
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200">Notebook</span>
+                    </div>
+                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-600" />
+                  </FlatListRow>
                 ) : null}
-                <QuickAction icon={Plus} label="Add Task" onClick={openNewTaskEditor} />
-              </div>
-            </section>
-
-            {/* Focus Tip */}
-            <section className="glass-panel min-w-0 p-5">
-              <div className="flex items-center gap-2">
-                <Lightbulb
-                  className={themeAwareWarmAccent(themeId, "h-4 w-4 text-orange-300/80", "h-4 w-4 text-amber-300/80")}
-                />
-                <h3 className="text-base font-semibold text-white">Focus Tip</h3>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-slate-300">{getDailyFocusTip(todayKey)}</p>
-            </section>
+                <FlatListRow onClick={openNewTaskEditor}>
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <Plus className="h-4 w-4 shrink-0 text-slate-500" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200">Add Task</span>
+                  </div>
+                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-600" />
+                </FlatListRow>
+              </FlatList>
+            </QuietPanel>
           </div>
         </div>
       </div>
@@ -831,27 +851,5 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
         />
       ) : null}
     </div>
-  );
-}
-
-function QuickAction({
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  icon: typeof ArrowUpRight;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group flex items-center gap-2.5 rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-left text-sm text-slate-200 transition-colors hover:border-white/15 hover:bg-white/[0.05] hover:text-white"
-    >
-      <Icon className="h-4 w-4 shrink-0 text-slate-500 transition-colors group-hover:text-cyan-200" />
-      <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
-      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-600 transition-colors group-hover:text-slate-300" />
-    </button>
   );
 }

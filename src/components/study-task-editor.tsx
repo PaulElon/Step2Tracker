@@ -117,7 +117,7 @@ export function StudyTaskEditorSheet({
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{task ? "Edit task" : "New task"}</p>
+          <p className="text-[11px] text-slate-500">{task ? "Edit task" : "New task"}</p>
           <h3 id={titleId} className="mt-2 text-2xl font-semibold text-white">
             {task ? task.task : "Create daily task"}
           </h3>
@@ -161,7 +161,7 @@ export function StudyTaskEditorSheet({
         }}
       >
         <div>
-          <label htmlFor={dateId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
+          <label htmlFor={dateId} className="text-[11px] text-slate-500">
             Date
           </label>
           <input
@@ -185,7 +185,7 @@ export function StudyTaskEditorSheet({
         </div>
 
         <div>
-          <label htmlFor={taskId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
+          <label htmlFor={taskId} className="text-[11px] text-slate-500">
             Task
           </label>
           <input
@@ -209,7 +209,7 @@ export function StudyTaskEditorSheet({
         </div>
 
         <div>
-          <label htmlFor={categoryId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
+          <label htmlFor={categoryId} className="text-[11px] text-slate-500">
             Category
           </label>
           <select
@@ -240,7 +240,7 @@ export function StudyTaskEditorSheet({
         </div>
 
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Optional duration</p>
+          <p className="text-[11px] text-slate-500">Optional duration</p>
           <div className="mt-2 grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor={hoursId} className="sr-only">
@@ -288,7 +288,7 @@ export function StudyTaskEditorSheet({
         </div>
 
         <div>
-          <label htmlFor={reminderId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
+          <label htmlFor={reminderId} className="text-[11px] text-slate-500">
             Reminder
           </label>
           <input

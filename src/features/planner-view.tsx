@@ -77,7 +77,7 @@ function ImportDialog({
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Legacy import</p>
+          <p className="text-[11px] text-slate-500">Legacy import</p>
           <h3 id={titleId} className="mt-2 text-2xl font-semibold text-white">
             Import legacy workbook
           </h3>
@@ -158,17 +158,17 @@ function ImportDialog({
         <div className="mt-6 rounded-[24px] border border-white/10 bg-slate-900/55 p-5">
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Tasks</p>
+              <p className="text-[11px] text-slate-500">Tasks</p>
               <p className="mt-2 text-2xl font-semibold text-white">{preview.summary.blockCount}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Start</p>
+              <p className="text-[11px] text-slate-500">Start</p>
               <p className="mt-2 text-2xl font-semibold text-white">
                 {preview.summary.startDate ? formatShortDate(preview.summary.startDate) : "--"}
               </p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">End</p>
+              <p className="text-[11px] text-slate-500">End</p>
               <p className="mt-2 text-2xl font-semibold text-white">
                 {preview.summary.endDate ? formatShortDate(preview.summary.endDate) : "--"}
               </p>
@@ -273,7 +273,7 @@ function IcsImportDialog({
       <div className="flex max-h-[calc(100vh-3rem)] flex-col">
         <div className="flex items-start justify-between gap-4 px-6 pb-4 pt-6">
           <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Calendar import</p>
+            <p className="text-[11px] text-slate-500">Calendar import</p>
             <h3 id={titleId} className="mt-2 text-2xl font-semibold text-white">
               Import .ics
             </h3>
@@ -337,19 +337,19 @@ function IcsImportDialog({
             <div className="mt-6 space-y-4">
               <div className="grid gap-4 sm:grid-cols-4">
                 <div className="rounded-[22px] border border-white/10 bg-slate-900/55 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">VEVENTs</p>
+                  <p className="text-[11px] text-slate-500">VEVENTs</p>
                   <p className="mt-2 text-2xl font-semibold text-white">{preview.totalEvents}</p>
                 </div>
                 <div className="rounded-[22px] border border-white/10 bg-slate-900/55 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Importable</p>
+                  <p className="text-[11px] text-slate-500">Importable</p>
                   <p className="mt-2 text-2xl font-semibold text-white">{preview.importableCount}</p>
                 </div>
                 <div className="rounded-[22px] border border-white/10 bg-slate-900/55 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Duplicates</p>
+                  <p className="text-[11px] text-slate-500">Duplicates</p>
                   <p className="mt-2 text-2xl font-semibold text-white">{preview.duplicateCount}</p>
                 </div>
                 <div className="rounded-[22px] border border-white/10 bg-slate-900/55 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Skipped</p>
+                  <p className="text-[11px] text-slate-500">Skipped</p>
                   <p className="mt-2 text-2xl font-semibold text-white">{preview.skippedCount}</p>
                 </div>
               </div>
@@ -371,7 +371,7 @@ function IcsImportDialog({
               <div className="overflow-hidden rounded-[24px] border border-white/10 bg-slate-900/55">
                 <div className="flex items-center justify-between gap-3 px-5 pb-4 pt-5">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Preview</p>
+                    <p className="text-[11px] text-slate-500">Preview</p>
                     <p className="mt-1 text-sm text-slate-400">{preview.fileName}</p>
                   </div>
                   <p className="text-sm text-slate-400">
@@ -389,7 +389,7 @@ function IcsImportDialog({
                         >
                           <div className="flex items-center justify-between gap-3">
                             <p className="font-medium text-white">{formatShortDate(group.date)}</p>
-                            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                            <p className="text-[11px] text-slate-500">
                               {group.titles.length} task{group.titles.length === 1 ? "" : "s"}
                             </p>
                           </div>
@@ -552,7 +552,7 @@ function PlannerTrackedStudyStat({ selectedDateKey }: { selectedDateKey: string 
 
   return (
     <div className="px-2.5 py-2">
-      <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Tracked study</p>
+      <p className="text-[9px] text-slate-500">Tracked study</p>
       <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">
         {formatMinutes(trackedStudyMinutes)}
       </p>
@@ -857,7 +857,7 @@ export function PlannerView() {
                 role="menu"
                 className="absolute right-0 top-full z-30 mt-1.5 w-48 overflow-hidden rounded-[12px] border border-white/10 bg-slate-950/95 p-1 shadow-xl backdrop-blur"
               >
-                <p className="px-2.5 pb-1 pt-1.5 text-[10px] uppercase tracking-[0.18em] text-slate-500">Import</p>
+                <p className="px-2.5 pb-1 pt-1.5 text-[10px] text-slate-500">Import</p>
                 <button
                   type="button"
                   role="menuitem"
@@ -951,7 +951,7 @@ export function PlannerView() {
       <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(20rem,0.85fr)] xl:items-stretch">
         <Panel className="flex min-h-0 flex-col xl:h-full">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+            <p className="text-[11px] text-slate-500">
               {plannerMode === "week" ? "7-day plan" : `${formatMonthLabel(selectedDate)} overview`}
             </p>
             <p className="text-xs text-slate-400">
@@ -1024,7 +1024,7 @@ export function PlannerView() {
                       <div className="text-right">
                         <p className="text-[12px] font-semibold tabular-nums text-slate-100">
                           {dayTasks.length}
-                          <span className="ml-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">
+                          <span className="ml-0.5 text-[10px] font-medium text-slate-500">
                             {dayTasks.length === 1 ? "task" : "tasks"}
                           </span>
                         </p>
@@ -1106,7 +1106,7 @@ export function PlannerView() {
             <div className="flex min-h-0 flex-1 flex-col gap-2">
               <div className="grid grid-cols-7 gap-px text-center">
                 {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-                  <div key={day} className="py-1 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                  <div key={day} className="py-1 text-[10px] text-slate-500">
                     {day}
                   </div>
                 ))}
@@ -1181,7 +1181,7 @@ export function PlannerView() {
                             )}
                           >
                             <span className="text-[12px] font-semibold tabular-nums">{dayTasks.length}</span>
-                            <span className="text-[9px] uppercase tracking-[0.12em] text-slate-500">
+                            <span className="text-[9px] text-slate-500">
                               {dayTasks.length === 1 ? "task" : "tasks"}
                             </span>
                             <span className="ml-auto text-[10px] tabular-nums text-slate-400">
@@ -1202,7 +1202,7 @@ export function PlannerView() {
                   );
                 })}
               </div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-[10px] text-slate-500">
                 <span className="flex items-center gap-1.5">
                   <span className="h-1.5 w-6 rounded-full bg-emerald-400/65" aria-hidden="true" />
                   Light
@@ -1237,7 +1237,7 @@ export function PlannerView() {
         <Panel className="flex min-h-0 flex-col xl:h-full">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Selected day</p>
+              <p className="text-[10px] text-slate-500">Selected day</p>
               <h3 className="mt-0.5 truncate text-[15px] font-semibold tracking-[-0.01em] text-white">
                 {formatLongDate(selectedDate)}
               </h3>
@@ -1287,19 +1287,19 @@ export function PlannerView() {
             className={`mb-3 grid ${FF.timefolio ? "grid-cols-5" : "grid-cols-4"} divide-x divide-white/8 overflow-hidden rounded-[12px] border border-white/8 bg-slate-950/45`}
           >
             <div className="px-2.5 py-2">
-              <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Tasks</p>
+              <p className="text-[9px] text-slate-500">Tasks</p>
               <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">{allSelectedDateTasks.length}</p>
             </div>
             <div className="px-2.5 py-2">
-              <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Planned</p>
+              <p className="text-[9px] text-slate-500">Planned</p>
               <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">{formatMinutes(plannedMinutes)}</p>
             </div>
             <div className="px-2.5 py-2">
-              <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Done</p>
+              <p className="text-[9px] text-slate-500">Done</p>
               <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">{completionPercent}%</p>
             </div>
             <div className="px-2.5 py-2">
-              <p className="text-[9px] uppercase tracking-[0.16em] text-slate-500">Done time</p>
+              <p className="text-[9px] text-slate-500">Done time</p>
               <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-white">{formatMinutes(studiedMinutes)}</p>
             </div>
             {FF.timefolio ? (
@@ -1312,7 +1312,7 @@ export function PlannerView() {
           {isSelectionMode ? (
             <div className="mb-3 rounded-[12px] border border-white/10 bg-slate-950/45 p-2">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5 border-b border-white/8 px-0.5 pb-2">
-                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400">
+                <span className="text-[10px] font-medium text-slate-500">
                   Bulk edit · {selectedVisibleCount} selected
                 </span>
                 <div className="flex flex-wrap items-center gap-1.5">

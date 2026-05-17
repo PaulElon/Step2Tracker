@@ -21,6 +21,14 @@ import {
   getWeakTopicPlannerInsights,
   sumStudyMinutes,
 } from "../../lib/analytics";
+import {
+  FlatList,
+  FlatListRow,
+  MetricStrip,
+  MetricStripItem,
+  QuietPanel,
+  SoftDivider,
+} from "../../components/ui";
 import { formatHoursValue, formatLongDate } from "../../lib/datetime";
 import { cn } from "../../lib/ui";
 import { useAppStore } from "../../state/app-store";
@@ -191,8 +199,6 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
   }, [categoryBreakdown, totalStudyMinutes]);
 
   const readinessValue = practiceMetrics.averageScore;
-  const readinessTone: MetricTone =
-    readinessValue == null ? "neutral" : readinessValue >= 70 ? "good" : "warn";
   const readinessMeta =
     readinessValue == null
       ? "Awaiting first test"
@@ -205,15 +211,14 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
       <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Overview</h2>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
         <div className="flex min-w-0 flex-col gap-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            <OverviewMetric
+          <MetricStrip columns="grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <MetricStripItem
               label="Readiness"
               value={readinessValue == null ? "—" : formatPercent(readinessValue)}
               meta={readinessMeta}
-              tone={readinessTone}
             />
-            <OverviewMetric
-              label="Tests Taken"
+            <MetricStripItem
+              label="Tests taken"
               value={String(practiceTests.length)}
               meta={
                 practiceTests.length
@@ -221,8 +226,8 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
                   : "Log your first test"
               }
             />
-            <OverviewMetric
-              label="Avg Score"
+            <MetricStripItem
+              label="Avg score"
               value={
                 practiceMetrics.averageScore == null
                   ? "—"
@@ -234,14 +239,13 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
                   : `Best ${formatPercent(practiceMetrics.bestScore)}`
               }
             />
-            <OverviewMetric
-              label="Missed Questions"
+            <MetricStripItem
+              label="Missed questions"
               value={String(errorLogEntries.length)}
               meta={errorLogEntries.length ? "Review needed" : "No entries"}
-              tone={errorLogEntries.length ? "warn" : "neutral"}
             />
-            <OverviewMetric
-              label="Study Time"
+            <MetricStripItem
+              label="Study time"
               value={
                 totalStudyMinutes ? formatHoursValue(totalStudyMinutes) : "0h 00m"
               }
@@ -251,7 +255,7 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
                   : "Add a study block"
               }
             />
-          </div>
+          </MetricStrip>
 
           <div className="grid gap-4 xl:grid-cols-2">
             <FocusAreasPanel
@@ -280,51 +284,6 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
         </div>
       </div>
       {FF.timefolio ? <OverviewActivityHeatmap /> : null}
-    </div>
-  );
-}
-
-type MetricTone = "neutral" | "good" | "warn";
-
-const METRIC_TONE_VALUE: Record<MetricTone, string> = {
-  neutral: "text-white",
-  good: "text-emerald-100",
-  warn: "text-amber-100",
-};
-
-const METRIC_TONE_META: Record<MetricTone, string> = {
-  neutral: "text-slate-400",
-  good: "text-emerald-200/85",
-  warn: "text-amber-200/85",
-};
-
-function OverviewMetric({
-  label,
-  value,
-  meta,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  meta?: string;
-  tone?: MetricTone;
-}) {
-  return (
-    <div className="panel-subtle flex min-w-0 flex-col gap-1.5 px-4 py-3.5">
-      <p className="text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">
-        {label}
-      </p>
-      <p
-        className={cn(
-          "text-[1.45rem] font-semibold tracking-[-0.03em] tabular-nums",
-          METRIC_TONE_VALUE[tone],
-        )}
-      >
-        {value}
-      </p>
-      {meta ? (
-        <p className={cn("text-[11px]", METRIC_TONE_META[tone])}>{meta}</p>
-      ) : null}
     </div>
   );
 }
@@ -401,7 +360,7 @@ function FocusAreasPanel({
       icon={Flame}
     >
       {focusInsights.length ? (
-        <ul className="flex flex-col gap-2">
+        <FlatList>
           {focusInsights.map((insight) => {
             const priority = insight.priority as WeakTopicPriority;
             const dotClass = PRIORITY_DOT[priority] ?? "bg-slate-400/70";
@@ -418,10 +377,7 @@ function FocusAreasPanel({
                   ? "From practice test"
                   : "Manual";
             return (
-              <li
-                key={insight.id}
-                className="flex items-center gap-3 rounded-[14px] border border-white/[0.06] bg-white/[0.025] px-3 py-2.5"
-              >
+              <FlatListRow key={insight.id} className="gap-2.5">
                 <span
                   className={cn("mt-1 h-2 w-2 shrink-0 rounded-full", dotClass)}
                   aria-hidden="true"
@@ -451,10 +407,14 @@ function FocusAreasPanel({
                 >
                   Review
                 </button>
-              </li>
+              </FlatListRow>
             );
           })}
-        </ul>
+          <FlatListRow onClick={() => onNavigate("weakTopics")}>
+            <span className="text-[12px] text-slate-300">View all weak topics</span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" />
+          </FlatListRow>
+        </FlatList>
       ) : (
         <EmptyHint
           text="No weak areas flagged yet."
@@ -462,16 +422,6 @@ function FocusAreasPanel({
           onClick={() => onNavigate("weakTopics")}
         />
       )}
-      {focusInsights.length ? (
-        <button
-          type="button"
-          onClick={() => onNavigate("weakTopics")}
-          className="mt-1 flex w-full items-center justify-between rounded-[12px] border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[12px] text-slate-300 transition-colors hover:border-white/15 hover:text-white"
-        >
-          <span>View all weak topics</span>
-          <ChevronRight className="h-4 w-4 text-slate-500" />
-        </button>
-      ) : null}
     </SectionPanel>
   );
 }
@@ -613,7 +563,7 @@ function TrendSparkline({ trend }: { trend: TrendPoint[] }) {
           </circle>
         ))}
       </svg>
-      <div className="mt-2 flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-slate-500">
+      <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500">
         <span>{firstLabel}</span>
         <span className="flex items-center gap-1 normal-case tracking-normal text-[11px] text-slate-400">
           <span className="inline-block h-[6px] w-[6px] rounded-full bg-cyan-300/80" />
@@ -641,12 +591,12 @@ function InsightsRail({
     <section className="glass-panel flex flex-col gap-3 p-4">
       <header className="flex items-center gap-2">
         <Lightbulb className="h-4 w-4 text-cyan-200" />
-        <p className="text-[0.6rem] font-semibold uppercase tracking-[0.22em] text-slate-400">
+        <p className="text-[0.6rem] font-semibold text-slate-500">
           Insights
         </p>
       </header>
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col">
         <InsightRow
           label={
             topErrorPattern?.kind === "errorType"
@@ -661,6 +611,7 @@ function InsightsRail({
           }
           valueTone="violet"
         />
+        <SoftDivider className="my-3" />
         <InsightRow
           label="Trending improvement"
           value={
@@ -684,6 +635,7 @@ function InsightsRail({
           }
           icon={trendImprovement && trendImprovement.delta > 0 ? TrendingUp : undefined}
         />
+        <SoftDivider className="my-3" />
         <InsightRow
           label="Time allocation"
           value={topCategory ? topCategory.name : "—"}
@@ -724,10 +676,8 @@ function InsightRow({
   icon?: LucideIcon;
 }) {
   return (
-    <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.025] px-3 py-2.5">
-      <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
-        {label}
-      </p>
+    <div>
+      <p className="text-[11px] text-slate-500">{label}</p>
       <div className="mt-1 flex items-center gap-1.5">
         {Icon ? <Icon className="h-3.5 w-3.5 text-slate-300" /> : null}
         <p
@@ -771,28 +721,26 @@ function QuickActions({
   }
 
   return (
-    <section className="glass-panel flex flex-col gap-2 p-4">
+    <QuietPanel>
       <header className="flex items-center gap-2">
         <Plus className="h-4 w-4 text-cyan-200" />
-        <p className="text-[0.6rem] font-semibold uppercase tracking-[0.22em] text-slate-400">
+        <p className="text-[0.6rem] font-semibold text-slate-500">
           Quick Actions
         </p>
       </header>
-      <div className="flex flex-col gap-1">
+      <SoftDivider className="my-4" />
+      <FlatList>
         {actions.map(({ key, icon: Icon, label, target }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => onNavigate(target)}
-            className="group flex items-center gap-2.5 rounded-[12px] px-2.5 py-2 text-left text-[13px] text-slate-300 transition-colors hover:bg-white/[0.04] hover:text-white"
-          >
+          <FlatListRow key={key} onClick={() => onNavigate(target)} className="group">
             <Icon className="h-4 w-4 text-slate-500 transition-colors group-hover:text-cyan-200" />
-            <span className="flex-1 truncate">{label}</span>
-            <ChevronRight className="h-3.5 w-3.5 text-slate-600 transition-colors group-hover:text-slate-300" />
-          </button>
+            <span className="min-w-0 flex-1 truncate text-[13px] text-slate-300 transition-colors group-hover:text-white">
+              {label}
+            </span>
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-600 transition-colors group-hover:text-slate-300" />
+          </FlatListRow>
         ))}
-      </div>
-    </section>
+      </FlatList>
+    </QuietPanel>
   );
 }
 
@@ -871,21 +819,17 @@ function RecommendedNextActions({
   }
 
   return (
-    <section className="glass-panel flex flex-col gap-3 p-4">
+    <QuietPanel>
       <header className="flex items-center gap-2">
         <CalendarDays className="h-4 w-4 text-cyan-200" />
         <h3 className="text-[0.95rem] font-semibold text-white">
           Recommended Next Actions
         </h3>
       </header>
-      <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+      <SoftDivider className="my-4" />
+      <FlatList>
         {actions.slice(0, 3).map(({ key, icon: Icon, title, description, target }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => onNavigate(target)}
-            className="group flex items-center gap-3 rounded-[16px] border border-white/[0.06] bg-white/[0.025] px-3 py-3 text-left transition-colors hover:border-white/15 hover:bg-white/[0.04]"
-          >
+          <FlatListRow key={key} onClick={() => onNavigate(target)} className="group">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-white/10 bg-slate-950/60 text-cyan-200">
               <Icon className="h-4 w-4" />
             </span>
@@ -893,10 +837,10 @@ function RecommendedNextActions({
               <p className="truncate text-[13px] font-semibold text-white">{title}</p>
               <p className="mt-0.5 truncate text-[11px] text-slate-400">{description}</p>
             </span>
-            <ChevronRight className="h-4 w-4 text-slate-500 transition-colors group-hover:text-slate-200" />
-          </button>
+            <ChevronRight className="h-4 w-4 shrink-0 text-slate-500 transition-colors group-hover:text-slate-200" />
+          </FlatListRow>
         ))}
-      </div>
-    </section>
+      </FlatList>
+    </QuietPanel>
   );
 }

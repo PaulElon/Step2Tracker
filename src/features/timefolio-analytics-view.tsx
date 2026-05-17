@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { EmptyState, MetricCard, Panel } from "../components/ui";
+import { EmptyState, MetricStrip, MetricStripItem, Panel } from "../components/ui";
 import { formatMinutes } from "../lib/datetime";
 import { allocationByMethod, totalsByDay } from "../lib/tf-session-adapters";
 import { TimeFolioStoreProvider, useTimeFolioStore } from "../state/tf-store";
@@ -123,7 +123,7 @@ function TrendBar({
         </div>
       </div>
       <div className="text-center">
-        <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400">{label}</div>
+        <div className="text-[11px] font-medium text-slate-500">{label}</div>
         <div className="mt-0.5 text-[11px] tabular-nums text-slate-500">{formatMinutes(Math.round(hours * 60))}</div>
       </div>
     </div>
@@ -286,30 +286,21 @@ function TimeFolioAnalyticsContent() {
         <p className="max-w-4xl text-sm leading-7 text-slate-300">{analytics.narrative}</p>
       </Panel>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total Time" value={formatMinutes(Math.round(analytics.totalHours * 60))} meta="Across all recorded study sessions." />
-        <MetricCard label="Sessions" value={String(sessions.length)} meta={`${analytics.activeDays} active day${analytics.activeDays === 1 ? "" : "s"} captured.`} />
-        <MetricCard label="Top Method" value={analytics.methodRows[0]?.method ?? "—"} meta={analytics.methodRows[0] ? `${formatMinutes(Math.round(analytics.methodRows[0].hours * 60))} logged` : "Waiting for session data."} />
-        <MetricCard label="Focus Rate" value={`${analytics.focusRate.toFixed(0)}%`} meta={analytics.totalHours < 1 ? `Based on ${formatMinutes(Math.round(analytics.totalHours * 60))} total — log more for a reliable rate.` : `${formatMinutes(Math.round(analytics.distractionHours * 60))} marked as distraction.`} />
-      </div>
+      <MetricStrip columns="sm:grid-cols-2 xl:grid-cols-4">
+        <MetricStripItem label="Total time" value={formatMinutes(Math.round(analytics.totalHours * 60))} meta="Across all recorded study sessions." />
+        <MetricStripItem label="Sessions" value={String(sessions.length)} meta={`${analytics.activeDays} active day${analytics.activeDays === 1 ? "" : "s"} captured.`} />
+        <MetricStripItem label="Top method" value={analytics.methodRows[0]?.method ?? "—"} meta={analytics.methodRows[0] ? `${formatMinutes(Math.round(analytics.methodRows[0].hours * 60))} logged` : "Waiting for session data."} />
+        <MetricStripItem label="Focus rate" value={`${analytics.focusRate.toFixed(0)}%`} meta={analytics.totalHours < 1 ? `Based on ${formatMinutes(Math.round(analytics.totalHours * 60))} total — log more for a reliable rate.` : `${formatMinutes(Math.round(analytics.distractionHours * 60))} marked as distraction.`} />
+      </MetricStrip>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.95fr)]">
         <Panel title="Activity Trend" subtitle="Last 14 days of recorded study time.">
           <div className="grid gap-4">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Last 7 Days</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{formatMinutes(Math.round(analytics.last7DaysHours * 60))}</div>
-              </div>
-              <div className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Last 30 Days</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{formatMinutes(Math.round(analytics.last30DaysHours * 60))}</div>
-              </div>
-              <div className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Best Day</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{bestDayLabel}</div>
-              </div>
-            </div>
+            <MetricStrip columns="sm:grid-cols-3">
+              <MetricStripItem label="Last 7 days" value={formatMinutes(Math.round(analytics.last7DaysHours * 60))} />
+              <MetricStripItem label="Last 30 days" value={formatMinutes(Math.round(analytics.last30DaysHours * 60))} />
+              <MetricStripItem label="Best day" value={bestDayLabel} />
+            </MetricStrip>
 
             {trendPeakHours === 0 ? (
               <div className="flex h-32 items-center justify-center rounded-[18px] border border-white/10 bg-slate-950/35 text-sm text-slate-500">
@@ -333,16 +324,10 @@ function TimeFolioAnalyticsContent() {
 
         <Panel title="Summary" subtitle="A quick narrative plus the biggest operating signals.">
           <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Focus Time</div>
-                <div className="mt-2 text-lg font-semibold text-white">{formatMinutes(Math.round(focusHours * 60))}</div>
-              </div>
-              <div className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Method Count</div>
-                <div className="mt-2 text-lg font-semibold text-white">{analytics.methodRows.length}</div>
-              </div>
-            </div>
+            <MetricStrip columns="sm:grid-cols-2">
+              <MetricStripItem label="Focus time" value={formatMinutes(Math.round(focusHours * 60))} />
+              <MetricStripItem label="Method count" value={String(analytics.methodRows.length)} />
+            </MetricStrip>
           </div>
         </Panel>
       </div>
@@ -373,7 +358,7 @@ function TimeFolioAnalyticsContent() {
                 <div key={row.methodKey} className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">#{index + 1}</div>
+                      <div className="text-[11px] text-slate-500">#{index + 1}</div>
                       <div className="mt-1 truncate text-sm font-medium text-slate-100">{row.method}</div>
                     </div>
                     <div className="text-right">

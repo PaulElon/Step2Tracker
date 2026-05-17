@@ -27,7 +27,7 @@ import { launchResource } from "../lib/launcher";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
-import { NavigationButton, Panel } from "../components/ui";
+import { MetricStrip, MetricStripItem, NavigationButton, Panel } from "../components/ui";
 import { FF } from "../lib/feature-flags";
 import { themeAwareWarmAccent } from "../lib/ui";
 import { TimeFolioStoreProvider } from "../state/tf-store";
@@ -47,16 +47,6 @@ function getBackupFileName(date = new Date()) {
 
 function formatCountsLine(counts: BackupArtifactPreview["counts"]) {
   return `${counts.studyBlocks} tasks · ${counts.practiceTests} tests · ${counts.weakTopicEntries} topics`;
-}
-
-function StorageStatCard({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return (
-    <div className="rounded-[16px] border border-white/10 bg-slate-950/45 p-4">
-      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-2 text-lg font-semibold text-white">{value}</p>
-      <p className="mt-1 text-xs text-slate-400">{detail}</p>
-    </div>
-  );
 }
 
 function CategoriesPanel({
@@ -691,7 +681,7 @@ function AboutPanel() {
       <div className="flex flex-col gap-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-[16px] border border-white/10 bg-slate-950/45 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Installed version</p>
+            <p className="text-[11px] text-slate-500">Installed version</p>
             <p className="mt-2 text-lg font-semibold text-white">
               {displayVersion ? `v${displayVersion}` : "—"}
             </p>
@@ -700,7 +690,7 @@ function AboutPanel() {
             </p>
           </div>
           <div className="rounded-[16px] border border-white/10 bg-slate-950/45 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Update status</p>
+            <p className="text-[11px] text-slate-500">Update status</p>
             <p className="mt-2 text-sm">{statusLine}</p>
             <p className="mt-1 text-xs text-slate-400">
               Checked automatically once per day.
@@ -956,7 +946,7 @@ export function SettingsView({
               if (groupItems.length === 0) return null;
               return (
               <div key={group.id} className="space-y-0.5">
-                <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">
+                <p className="px-3 pb-1 text-[0.6rem] text-slate-500">
                   {group.label}
                 </p>
                 {groupItems.map((item) => (
@@ -1050,12 +1040,12 @@ export function SettingsView({
             >
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="panel-subtle">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Daily target</p>
+                  <p className="text-[11px] text-slate-500">Daily target</p>
                   <p className="mt-2 text-3xl font-semibold text-white">
                     {Math.max(Math.round(dailyGoalMinutes / 60), 1)}h
                   </p>
                   <label
-                    className="mt-5 block text-xs uppercase tracking-[0.16em] text-slate-500"
+                    className="mt-5 block text-[11px] text-slate-500"
                     htmlFor="daily-goal-hours"
                   >
                     Goal hours
@@ -1109,7 +1099,7 @@ export function SettingsView({
               <div className="flex flex-col gap-4">
                 <div className="panel-subtle flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Status</p>
+                    <p className="text-[11px] text-slate-500">Status</p>
                     <p className="mt-1 text-sm font-medium text-white">
                       {notificationPermission === "granted"
                         ? "Enabled"
@@ -1143,36 +1133,37 @@ export function SettingsView({
                 subtitle="Manage your local TimeFolio data."
               >
                 <div className="grid gap-4">
-                  <div className="panel-subtle flex items-start gap-3">
-                    <Database className="mt-0.5 h-5 w-5 shrink-0 text-cyan-200" />
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold text-white">Local-first storage</p>
-                      <p className="text-xs leading-5 text-slate-300">{persistenceCopy}</p>
-                    </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-400">
+                    <Database className="h-4 w-4 shrink-0 text-cyan-200" />
+                    <span className="text-slate-200">Local-first storage</span>
+                    <span aria-hidden className="text-slate-500">
+                      •
+                    </span>
+                    <span>{persistenceCopy}</span>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <StorageStatCard
+                  <MetricStrip columns="sm:grid-cols-2 lg:grid-cols-4">
+                    <MetricStripItem
                       label="Task count"
                       value={String(studyStorageCounts.studyBlocks)}
-                      detail="Study tasks in local storage."
+                      meta="Study tasks in local storage."
                     />
-                    <StorageStatCard
+                    <MetricStripItem
                       label="Practice tests"
                       value={String(studyStorageCounts.practiceTests)}
-                      detail="Saved practice test records."
+                      meta="Saved practice test records."
                     />
-                    <StorageStatCard
+                    <MetricStripItem
                       label="Weak topics"
                       value={String(studyStorageCounts.weakTopicEntries)}
-                      detail="Tracked weak topic entries."
+                      meta="Tracked weak topic entries."
                     />
-                    <StorageStatCard
+                    <MetricStripItem
                       label="Trash items"
                       value={String(studyStorageCounts.trashItems)}
-                      detail="Recoverable records in trash."
+                      meta="Recoverable records in trash."
                     />
-                  </div>
+                  </MetricStrip>
 
                   {storageMessage ? (
                     <div
@@ -1246,7 +1237,7 @@ export function SettingsView({
                       </div>
                     </div>
 
-                    <label className="block text-xs uppercase tracking-[0.16em] text-slate-500">
+                    <label className="block text-[11px] text-slate-500">
                       Backup file
                     </label>
                     <input

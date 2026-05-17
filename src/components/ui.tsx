@@ -70,7 +70,7 @@ export function MetricCard({
     <div className="panel-subtle flex min-h-[132px] min-w-0 flex-col justify-between">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{label}</p>
+          <p className="text-[11px] text-slate-500">{label}</p>
           <p className="mt-2 text-[1.75rem] font-semibold tracking-[-0.04em] text-white">{value}</p>
         </div>
         {Icon ? (
@@ -215,4 +215,118 @@ export function MobileNav({
       })}
     </div>
   );
+}
+
+export function SectionHeader({
+  title,
+  subtitle,
+  action,
+  icon: Icon,
+  className,
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  action?: ReactNode;
+  icon?: LucideIcon;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex items-start justify-between gap-3", className)}>
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          {Icon ? <Icon className="h-4 w-4 text-slate-400" /> : null}
+          <h3 className="text-base font-semibold text-white">{title}</h3>
+        </div>
+        {subtitle ? <p className="mt-0.5 text-sm text-slate-400">{subtitle}</p> : null}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  );
+}
+
+export function QuietPanel({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className={cn("quiet-panel min-w-0", className)}>{children}</section>
+  );
+}
+
+export function CommandBar({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return <div className={cn("command-bar", className)}>{children}</div>;
+}
+
+export function MetricStrip({
+  columns,
+  className,
+  children,
+}: {
+  columns: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cn("metric-strip", columns, className)}>{children}</div>
+  );
+}
+
+export function MetricStripItem({
+  label,
+  value,
+  meta,
+}: {
+  label: string;
+  value: string;
+  meta?: string;
+}) {
+  return (
+    <div className="metric-strip-item">
+      <p className="text-[11px] text-slate-500">{label}</p>
+      <p className="text-[1.4rem] font-semibold tabular-nums text-white">{value}</p>
+      {meta ? <p className="text-[11px] text-slate-400">{meta}</p> : null}
+    </div>
+  );
+}
+
+export function FlatList({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return <div className={cn("flat-list", className)}>{children}</div>;
+}
+
+export function FlatListRow({
+  className,
+  onClick,
+  children,
+}: {
+  className?: string;
+  onClick?: () => void;
+  children: ReactNode;
+}) {
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={cn("flat-list-row w-full text-left", className)}>
+        {children}
+      </button>
+    );
+  }
+  return <div className={cn("flat-list-row", className)}>{children}</div>;
+}
+
+export function SoftDivider({ className }: { className?: string }) {
+  return <div role="separator" className={cn("soft-divider", className)} />;
 }

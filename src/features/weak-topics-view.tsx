@@ -15,25 +15,22 @@ import {
 import { useAppStore } from "../state/app-store";
 import { ModalShell } from "../components/modal-shell";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
-import { EmptyState, MetricCard, Panel } from "../components/ui";
+import {
+  EmptyState,
+  FlatList,
+  FlatListRow,
+  MetricStrip,
+  MetricStripItem,
+  Panel,
+  QuietPanel,
+  SectionHeader,
+} from "../components/ui";
 import type { StudyBlockInput, WeakTopicEntry, WeakTopicInput } from "../types/models";
 
 const priorityDotClass: Record<string, string> = {
   High: "bg-rose-400",
   Medium: "bg-amber-400",
   Low: "bg-slate-400",
-};
-
-const prioritySectionStyle: Record<string, string> = {
-  High: "border-rose-500/30 bg-rose-950/20",
-  Medium: "border-amber-500/30 bg-amber-900/15",
-  Low: "border-cyan-500/20 bg-cyan-950/10",
-};
-
-const priorityHeadingStyle: Record<string, string> = {
-  High: "text-rose-300",
-  Medium: "text-amber-300",
-  Low: "text-cyan-300",
 };
 
 const historyPriorityOrder: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
@@ -128,7 +125,7 @@ function WeakTopicEditorSheet({
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+          <p className="text-[11px] text-slate-500">
             {entry ? "Edit weak topic" : "New weak topic"}
           </p>
           <h3 id={titleId} className="mt-2 text-2xl font-semibold text-white">
@@ -160,7 +157,7 @@ function WeakTopicEditorSheet({
         }}
       >
         <div>
-          <label htmlFor={topicId} className="text-xs uppercase tracking-[0.18em] text-slate-500">Topic</label>
+          <label htmlFor={topicId} className="text-[11px] text-slate-500">Topic</label>
           <div className="relative mt-2">
             <input
               ref={(el) => { topicRef.current = el; }}
@@ -206,7 +203,7 @@ function WeakTopicEditorSheet({
         </div>
 
         <div>
-          <label htmlFor={priorityId} className="text-xs uppercase tracking-[0.18em] text-slate-500">Priority</label>
+          <label htmlFor={priorityId} className="text-[11px] text-slate-500">Priority</label>
           <select
             id={priorityId}
             value={draft.priority}
@@ -228,7 +225,7 @@ function WeakTopicEditorSheet({
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor={lastSeenId} className="text-xs uppercase tracking-[0.18em] text-slate-500">Last seen</label>
+            <label htmlFor={lastSeenId} className="text-[11px] text-slate-500">Last seen</label>
             <input
               id={lastSeenId}
               type="date"
@@ -238,7 +235,7 @@ function WeakTopicEditorSheet({
             />
           </div>
           <div>
-            <label htmlFor={sourceId} className="text-xs uppercase tracking-[0.18em] text-slate-500">Latest source</label>
+            <label htmlFor={sourceId} className="text-[11px] text-slate-500">Latest source</label>
             <input
               id={sourceId}
               value={draft.sourceLabel}
@@ -250,7 +247,7 @@ function WeakTopicEditorSheet({
         </div>
 
         <div>
-          <label htmlFor={notesId} className="text-xs uppercase tracking-[0.18em] text-slate-500">Notes</label>
+          <label htmlFor={notesId} className="text-[11px] text-slate-500">Notes</label>
           <textarea
             id={notesId}
             value={draft.notes}
@@ -522,26 +519,27 @@ export function WeakTopicsView() {
   return (
     <div className="flex h-full flex-col gap-4">
       <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Weak Topics</h2>
-      {/* Metric cards */}
-      <div className="grid shrink-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
+      {/* Metric strip */}
+      <MetricStrip columns="grid-cols-2 lg:grid-cols-4" className="shrink-0">
+        <MetricStripItem
           label="Logged topics"
           value={`${state.weakTopicEntries.length}`}
         />
-        <MetricCard
-          label="Recurring Weakest Topic"
+        <MetricStripItem
+          label="Recurring weakest topic"
           value={recurringInsight ? recurringInsight.topic : "—"}
           meta={recurringInsight ? formatWeakTopicSignalLabel(recurringInsight.occurrenceCount) : "No repeating topics yet"}
         />
-        <MetricCard
-          label="Unscheduled Topics"
+        <MetricStripItem
+          label="Unscheduled topics"
           value={`${unscheduledCount}`}
         />
-        <MetricCard
-          label={latestLabel}
+        <MetricStripItem
+          label="Latest weak topic"
           value={latestInsight ? latestInsight.topic : "—"}
+          meta={latestLabel}
         />
-      </div>
+      </MetricStrip>
 
       {/* Priority panel — fills remaining height */}
       <Panel
@@ -584,32 +582,57 @@ export function WeakTopicsView() {
           <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">
             {WEAK_TOPIC_PRIORITY_VALUES.map((priority) => {
               const priorityInsights = activeInsights.filter((e) => e.priority === priority);
+              const headingClass =
+                priority === "High"
+                  ? "text-rose-300"
+                  : priority === "Medium"
+                    ? "text-amber-300"
+                    : "text-cyan-300";
+              const accentClass =
+                priority === "High"
+                  ? "border-l-2 border-rose-400"
+                  : priority === "Medium"
+                    ? "border-l-2 border-amber-400"
+                    : "border-l-2 border-cyan-400";
               return (
-                <div
+                <QuietPanel
                   key={priority}
-                  className={`flex min-h-0 flex-col rounded-[16px] border ${prioritySectionStyle[priority]}`}
+                  className="flex min-h-0 flex-col !p-0"
                 >
-                  <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-2">
-                    <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${priorityHeadingStyle[priority]}`}>
-                      {priority} Priority
-                    </p>
-                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs text-slate-400">
-                      {priorityInsights.length}
-                    </span>
-                  </div>
-                  <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2">
+                  <SectionHeader
+                    className="shrink-0 border-b border-white/10 px-3 py-2"
+                    title={<span className={`text-[11px] text-slate-500 ${headingClass}`}>{priority} Priority</span>}
+                    action={
+                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs text-slate-400">
+                        {priorityInsights.length}
+                      </span>
+                    }
+                  />
+                  <FlatList className="min-h-0 flex-1 overflow-y-auto rounded-none border-0 bg-transparent">
                     {priorityInsights.map((entry) => (
-                      <div
+                      <FlatListRow
                         key={entry.id}
-                        className="rounded-[12px] border border-white/10 bg-slate-900/50 px-2.5 py-2"
+                        className={accentClass}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold leading-tight text-white" title={entry.topic}>
-                              {entry.topic}
+                            <div className="flex items-center gap-2">
+                              <span className={`h-2 w-2 shrink-0 rounded-full ${priorityDotClass[entry.priority] ?? "bg-slate-400"}`} />
+                              <p className="truncate text-sm font-semibold leading-tight text-white" title={entry.topic}>
+                                {entry.topic}
+                              </p>
+                              <span className="shrink-0 rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-400">
+                                {entry.priority}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 truncate pl-4 text-xs text-slate-400">
+                              Source: {formatWeakTopicSourceLabel(entry.sourceLabel)}
                             </p>
-                            <p className="mt-0.5 text-xs text-slate-400">
+                            <p className="mt-0.5 pl-4 text-xs text-slate-300">
                               {formatWeakTopicSignalLabel(entry.occurrenceCount)}
+                            </p>
+                            <p className="mt-0.5 pl-4 text-xs text-slate-300" title="Future planner tasks already linked to this topic">
+                              Scheduled review links: {entry.linkedBlockCount}
                             </p>
                           </div>
                           <div className="flex shrink-0 items-center gap-0.5">
@@ -648,18 +671,15 @@ export function WeakTopicsView() {
                             </button>
                           </div>
                         </div>
-                        <p className="mt-1 text-xs text-slate-300" title="Future planner tasks already linked to this topic">
-                          Scheduled review links: {entry.linkedBlockCount}
-                        </p>
-                      </div>
+                      </FlatListRow>
                     ))}
                     {priorityInsights.length === 0 && (
                       <div className="flex h-full items-center justify-center text-xs text-slate-500">
                         No {priority.toLowerCase()} priority topics
                       </div>
                     )}
-                  </div>
-                </div>
+                  </FlatList>
+                </QuietPanel>
               );
             })}
           </div>

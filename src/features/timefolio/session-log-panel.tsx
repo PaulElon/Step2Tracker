@@ -5,6 +5,14 @@ import { formatLongDate, formatMinutes, formatShortMinutes } from "../../lib/dat
 import { cn, fieldClassName, primaryButtonClassName, secondaryButtonClassName } from "../../lib/ui";
 import { splitAutoSessionMethodLabel } from "../../lib/tf-session-adapters";
 import type { TfSessionLog } from "../../types/models";
+import {
+  CommandBar,
+  MetricStrip,
+  MetricStripItem,
+  QuietPanel,
+  SectionHeader,
+  SoftDivider,
+} from "../../components/ui";
 import { AutoTrackerV2UserControlStrip } from "./autotracker-v2-user-control-card";
 import { useAutoTrackerV2SessionControl } from "./autotracker-v2-session-control";
 
@@ -21,24 +29,6 @@ type FeedbackState = {
   kind: "success" | "error";
   text: string;
 };
-
-function OverviewStat({
-  label,
-  value,
-  meta,
-}: {
-  label: string;
-  value: string;
-  meta: string;
-}) {
-  return (
-    <div className="rounded-[14px] bg-slate-950/20 px-3 py-3 ring-1 ring-white/8">
-      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-1.5 text-[22px] font-semibold tracking-[-0.03em] text-white">{value}</p>
-      <p className="mt-1 text-xs text-slate-400">{meta}</p>
-    </div>
-  );
-}
 
 function toMethodKey(method: string): string {
   return method.trim().toLowerCase().replace(/\s+/g, "-");
@@ -184,7 +174,7 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-white/8 bg-slate-950/30 p-4">
+    <QuietPanel className="flex flex-col gap-3">
       <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
         Manual timer
       </div>
@@ -276,7 +266,7 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
           Cancel
         </button>
       </div>
-    </div>
+    </QuietPanel>
   );
 }
 
@@ -318,106 +308,108 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
   }
 
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        void submitForm();
-      }}
-      className="flex flex-col gap-3 rounded-2xl border border-white/8 bg-slate-950/30 p-4"
-    >
-      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-        {isNew ? "New session" : "Edit session"}
-      </div>
+    <QuietPanel>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submitForm();
+        }}
+        className="flex flex-col gap-3"
+      >
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          {isNew ? "New session" : "Edit session"}
+        </div>
 
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-slate-400">Method *</label>
-        <input
-          className={fieldClassName}
-          type="text"
-          value={form.method}
-          onChange={(e) => set("method", e.target.value)}
-          placeholder="e.g. Active Recall"
-          required
-          disabled={isSaving}
-        />
-      </div>
-
-      <div className="flex gap-3">
-        <div className="flex flex-col gap-1 flex-1">
-          <label className="text-xs text-slate-400">Date *</label>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-slate-400">Method *</label>
           <input
             className={fieldClassName}
-            type="date"
-            value={form.date}
-            onChange={(e) => set("date", e.target.value)}
+            type="text"
+            value={form.method}
+            onChange={(e) => set("method", e.target.value)}
+            placeholder="e.g. Active Recall"
             required
             disabled={isSaving}
           />
         </div>
-        <div className="flex flex-col gap-1 w-28">
-          <label className="text-xs text-slate-400">Minutes *</label>
-          <input
+
+        <div className="flex gap-3">
+          <div className="flex flex-1 flex-col gap-1">
+            <label className="text-xs text-slate-400">Date *</label>
+            <input
+              className={fieldClassName}
+              type="date"
+              value={form.date}
+              onChange={(e) => set("date", e.target.value)}
+              required
+              disabled={isSaving}
+            />
+          </div>
+          <div className="flex w-28 flex-col gap-1">
+            <label className="text-xs text-slate-400">Minutes *</label>
+            <input
+              className={fieldClassName}
+              type="number"
+              inputMode="numeric"
+              min="1"
+              max="1440"
+              step="1"
+              value={form.minutes}
+              onChange={(e) => set("minutes", e.target.value)}
+              placeholder="45"
+              required
+              disabled={isSaving}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-slate-400">Notes</label>
+          <textarea
             className={fieldClassName}
-            type="number"
-            inputMode="numeric"
-            min="1"
-            max="1440"
-            step="1"
-            value={form.minutes}
-            onChange={(e) => set("minutes", e.target.value)}
-            placeholder="45"
-            required
+            rows={2}
+            value={form.notes}
+            onChange={(e) => set("notes", e.target.value)}
+            placeholder="Optional notes…"
             disabled={isSaving}
           />
         </div>
-      </div>
 
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-slate-400">Notes</label>
-        <textarea
-          className={fieldClassName}
-          rows={2}
-          value={form.notes}
-          onChange={(e) => set("notes", e.target.value)}
-          placeholder="Optional notes…"
-          disabled={isSaving}
-        />
-      </div>
+        <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-300">
+          <input
+            type="checkbox"
+            checked={form.isDistraction}
+            onChange={(e) => set("isDistraction", e.target.checked)}
+            className="accent-red-400"
+            disabled={isSaving}
+          />
+          Mark as distraction
+        </label>
 
-      <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-300">
-        <input
-          type="checkbox"
-          checked={form.isDistraction}
-          onChange={(e) => set("isDistraction", e.target.checked)}
-          className="accent-red-400"
-          disabled={isSaving}
-        />
-        Mark as distraction
-      </label>
+        {submitError && (
+          <div
+            role="alert"
+            className="rounded-md border border-red-800/70 bg-red-950/50 px-3 py-2 text-sm text-red-200"
+          >
+            {submitError}
+          </div>
+        )}
 
-      {submitError && (
-        <div
-          role="alert"
-          className="rounded-md border border-red-800/70 bg-red-950/50 px-3 py-2 text-sm text-red-200"
-        >
-          {submitError}
+        <div className="flex gap-2 justify-end pt-1">
+          <button
+            type="button"
+            className={secondaryButtonClassName}
+            onClick={onCancel}
+            disabled={isSaving}
+          >
+            Cancel
+          </button>
+          <button type="submit" className={primaryButtonClassName} disabled={isSaving}>
+            {isSaving ? "Saving..." : "Save"}
+          </button>
         </div>
-      )}
-
-      <div className="flex gap-2 justify-end pt-1">
-        <button
-          type="button"
-          className={secondaryButtonClassName}
-          onClick={onCancel}
-          disabled={isSaving}
-        >
-          Cancel
-        </button>
-        <button type="submit" className={primaryButtonClassName} disabled={isSaving}>
-          {isSaving ? "Saving..." : "Save"}
-        </button>
-      </div>
-    </form>
+      </form>
+    </QuietPanel>
   );
 }
 
@@ -506,20 +498,13 @@ export function SessionLogPanel({
         </div>
       ) : null}
 
-      <section className="rounded-2xl border border-white/10 bg-slate-950/30 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-col gap-2">
-            <div className="inline-flex w-fit rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.2em] text-cyan-300">
-              Capture tools
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-slate-100">Manual sessions and Auto-Tracking</h3>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-                Keep quick adds, the timer, and Auto-Tracking controls in one place.
-              </p>
-            </div>
-          </div>
+      <section>
+        <SectionHeader
+          title="Capture"
+          subtitle="Keep quick adds, the timer, and Auto-Tracking controls in one place."
+        />
 
+        <CommandBar className="mt-3">
           <div className="flex flex-wrap items-center gap-2">
             <button
               className={secondaryButtonClassName}
@@ -531,20 +516,21 @@ export function SessionLogPanel({
               + Add session
             </button>
           </div>
-        </div>
+        </CommandBar>
 
         {FF.autotrackerV2UserMode ? (
-          <div className="mt-4 space-y-3 border-t border-white/8 pt-3">
+          <>
+            <SoftDivider className="my-3" />
             <div className="text-xs text-slate-400">
               <span className="font-medium text-slate-200">Configured Auto-Tracking rules:</span>{" "}
               Allowed {autoTracker.trackedRuleCount} · Distractions {autoTracker.distractionRuleCount}
             </div>
             <AutoTrackerV2UserControlStrip control={autoTracker} />
-          </div>
+          </>
         ) : null}
 
         {showTimer ? (
-          <div className="mt-4 border-t border-white/8 pt-3">
+          <div className="mt-3">
             <ManualTimer
               onSave={async (session) => {
                 await persistSession(session, "Timer session saved.");
@@ -555,7 +541,7 @@ export function SessionLogPanel({
         ) : null}
 
         {showAddForm ? (
-          <div className="mt-4 border-t border-white/8 pt-3">
+          <div className="mt-3">
             <SessionForm
               initial={EMPTY_FORM}
               isNew
@@ -567,28 +553,28 @@ export function SessionLogPanel({
       </section>
 
       {showOverviewMetrics ? (
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <OverviewStat
-            label="Total Time"
+        <MetricStrip columns="sm:grid-cols-2 xl:grid-cols-4">
+          <MetricStripItem
+            label="Total time"
             value={formatMinutes(Math.round(totalHours * 60))}
             meta="All recorded TimeFolio session time."
           />
-          <OverviewStat
+          <MetricStripItem
             label="Sessions"
             value={String(sessions.length)}
             meta="Manual, timer, and Auto-Tracking entries."
           />
-          <OverviewStat
-            label="Latest Session"
+          <MetricStripItem
+            label="Latest session"
             value={latestSessionDate ? formatLongDate(latestSessionDate) : "No sessions yet"}
             meta="Most recent recorded study activity."
           />
-          <OverviewStat
+          <MetricStripItem
             label="Summaries"
             value={String(state.summaries.length)}
             meta="Saved TimeFolio summary snapshots."
           />
-        </section>
+        </MetricStrip>
       ) : null}
 
       {feedback && (

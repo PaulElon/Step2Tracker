@@ -387,7 +387,7 @@ function DataStatCard({
 }) {
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900/70 px-4 py-3">
-      <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-500">{label}</div>
+      <div className="text-[11px] font-medium text-slate-500">{label}</div>
       <div className="mt-2 text-sm font-semibold text-slate-100">{value}</div>
       <div className="mt-1 text-xs leading-5 text-slate-400">{detail}</div>
     </div>
@@ -2183,7 +2183,7 @@ export function TrackerSettingsPanel({
 
       {FF.autotrackerV2UserMode ? (
         <section className="flex flex-col gap-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-5 py-4 shadow-lg shadow-black/10">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-100">
+          <div className="text-[11px] font-medium text-slate-500">
             Auto-Tracking setup
           </div>
           <p className="text-sm leading-6 text-cyan-50">
@@ -2703,7 +2703,7 @@ export function TrackerSettingsPanel({
               <div className="flex flex-col gap-3 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3">
                 <div className="flex flex-wrap items-baseline justify-between gap-3">
                   <div>
-                    <div className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-100">
+                    <div className="text-[11px] font-medium text-slate-500">
                       Recovery
                     </div>
                     <div className="mt-1 text-sm text-cyan-50">
@@ -2791,7 +2791,7 @@ export function TrackerSettingsPanel({
 
                 {v2RecoveryDiagnostics ? (
                   <div className="rounded-lg border border-cyan-400/20 bg-slate-950/30 px-4 py-3 text-sm text-cyan-50">
-                    <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-cyan-100">
+                    <div className="text-[11px] font-medium text-slate-500">
                       Native recovery diagnostics
                     </div>
                     <div className="mt-2 grid gap-x-4 gap-y-1 text-xs text-cyan-50/85 sm:grid-cols-2">
@@ -2843,7 +2843,7 @@ export function TrackerSettingsPanel({
                     </div>
                     {v2RecoveryDiagnostics.fallbackCandidates.length > 0 ? (
                       <div className="mt-3 flex flex-col gap-2">
-                        <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-cyan-100/80">
+                        <div className="text-[11px] font-medium text-slate-500">
                           Fallback candidates
                         </div>
                         {v2RecoveryDiagnostics.fallbackCandidates.map((candidate) => (
@@ -3014,7 +3014,7 @@ export function TrackerSettingsPanel({
             )}
 
             <div className="rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3">
-              <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500">Last detected app</div>
+              <div className="text-[11px] font-medium text-slate-500">Last detected app</div>
               {lastAppEvent ? (
                 <div className="mt-1.5 flex flex-col gap-1">
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -3043,7 +3043,7 @@ export function TrackerSettingsPanel({
 
             {v2Snapshot && v2Snapshot.events.length > 0 ? (
               <div className="flex flex-col gap-2">
-                <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                <div className="text-[11px] font-medium text-slate-500">
                   Last {Math.min(v2Snapshot.events.length, 10)} of {v2Snapshot.events.length} buffered events
                 </div>
                 <div className="flex flex-col divide-y divide-slate-800 rounded-xl border border-slate-700 bg-slate-950/50 overflow-hidden">
@@ -3090,7 +3090,7 @@ export function TrackerSettingsPanel({
 
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                <div className="text-[11px] font-medium text-slate-500">
                   Preview spans (read-only)
                 </div>
                 <span className="text-[10px] text-slate-600">Preview only — no sessions written.</span>
@@ -3185,7 +3185,7 @@ export function TrackerSettingsPanel({
 
               <div className="flex flex-col gap-2 rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3">
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                  <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                  <div className="text-[11px] font-medium text-slate-500">
                     Reducer preview (read-only)
                   </div>
                   <span className="text-[10px] text-slate-600">In-memory only — no sessions written.</span>
@@ -3212,7 +3212,7 @@ export function TrackerSettingsPanel({
                 </div>
                 {reducerPreview.reducerEvents.length > 0 ? (
                   <div className="flex flex-col gap-1.5">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                    <div className="text-[10px] text-slate-500">
                       Last reducer events
                     </div>
                     <div className="flex flex-col divide-y divide-slate-800 overflow-hidden rounded-lg border border-slate-800 bg-slate-950/70">
@@ -3237,7 +3237,7 @@ export function TrackerSettingsPanel({
                 )}
                 {reducerPreview.ignoredSpans.length > 0 ? (
                   <div className="flex flex-col gap-1.5">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                    <div className="text-[10px] text-slate-500">
                       Ignored spans
                     </div>
                     <div className="flex flex-wrap gap-2 text-xs text-slate-400">
@@ -3257,7 +3257,7 @@ export function TrackerSettingsPanel({
                 {FF.autotrackerV2ContinuousWrite ? (
                   <div className="flex flex-col gap-3 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3">
                     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <div className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-100">
+                      <div className="text-[11px] font-medium text-slate-500">
                         Continuous writer
                       </div>
                       <span className="text-[10px] text-cyan-50/80">

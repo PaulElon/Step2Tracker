@@ -363,6 +363,46 @@ button {
     background: var(--surface-muted);
   }
 
+  .quiet-panel {
+    @apply rounded-[18px] border p-5;
+    border-color: var(--panel-support-border);
+    background: var(--panel-support-bg);
+  }
+
+  .metric-strip {
+    @apply grid divide-x overflow-hidden rounded-[16px] border;
+    border-color: var(--panel-support-border);
+    background: var(--panel-support-bg);
+  }
+
+  .metric-strip > * + * {
+    border-color: var(--panel-support-border);
+  }
+
+  .metric-strip-item {
+    @apply flex flex-col gap-1 px-4 py-3;
+  }
+
+  .soft-divider {
+    @apply border-t border-white/[0.06];
+  }
+
+  .flat-list {
+    @apply overflow-hidden rounded-[14px] border border-white/[0.06] bg-white/[0.015];
+  }
+
+  .flat-list > * + * {
+    @apply border-t border-white/[0.06];
+  }
+
+  .flat-list-row {
+    @apply flex items-center justify-between gap-3 px-3 py-2.5 transition-colors hover:bg-white/[0.03];
+  }
+
+  .command-bar {
+    @apply flex flex-wrap items-center gap-2 px-1 py-2;
+  }
+
   .content-auto {
     content-visibility: auto;
     contain-intrinsic-size: 320px;

@@ -17,7 +17,7 @@ function PanelState({
 
   return (
     <div className={`rounded-2xl border px-5 py-4 ${toneClasses}`}>
-      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+      <div className="text-[11px] font-semibold text-slate-500">
         {title}
       </div>
       <p className="mt-2 text-sm leading-6 text-slate-300">{description}</p>
@@ -28,7 +28,7 @@ function PanelState({
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-slate-700/80 bg-slate-800/60 p-5 shadow-sm shadow-slate-950/20">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
+      <span className="text-[11px] font-semibold text-slate-500">
         {label}
       </span>
       <span className="mt-3 block text-3xl font-semibold tracking-tight text-slate-100">

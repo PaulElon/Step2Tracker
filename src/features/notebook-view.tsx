@@ -2642,7 +2642,7 @@ export function NotebookView() {
             }}
           >
             <label className="flex flex-col gap-2">
-              <span className="text-xs uppercase tracking-[0.16em] text-slate-500">{promptCopy.label}</span>
+              <span className="text-[11px] text-slate-500">{promptCopy.label}</span>
               <input
                 ref={promptInputRef}
                 type="text"
