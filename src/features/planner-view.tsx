@@ -1479,7 +1479,7 @@ export function PlannerView() {
         </Panel>
 
         <Panel className="flex min-h-0 flex-col xl:h-full">
-          <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
               <p className="text-[10px] text-slate-500">Selected day</p>
               <h3 className="mt-0.5 truncate text-[15px] font-semibold tracking-[-0.01em] text-white">
