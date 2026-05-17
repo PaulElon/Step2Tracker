@@ -12,7 +12,10 @@ import {
   type TfAutotrackerV2FinalizedPreviewSession,
   type TfAutotrackerV2StopSaveSelection,
 } from "../../lib/tf-autotracker-v2-reducer-preview";
+import { persistAutoTrackerV2StopSaveSelection } from "../../lib/tf-autotracker-v2-stop-save-persistence";
 import {
+  clearAutoTrackerV2NativeBuffer,
+  clearAutoTrackerV2NativeRecovery,
   getAutoTrackerV2NativeSamplerStatus,
   snapshotAutoTrackerV2Native,
   startAutoTrackerV2NativeSampler,
@@ -269,18 +272,34 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
         v2WritingPreviewSessionIdsRef.current.add(previewSession.previewSessionId);
       }
       try {
-        for (const previewSession of selection.previewSessions) {
-          const sessionLog = toSessionLog(previewSession);
-          await upsertSessionLog(sessionLog);
-          setV2WrittenPreviewSessionIds((current) => {
-            if (current.has(previewSession.previewSessionId)) {
-              return current;
-            }
-            const next = new Set(current);
-            next.add(previewSession.previewSessionId);
-            return next;
-          });
-        }
+        await persistAutoTrackerV2StopSaveSelection({
+          previewSessions: selection.previewSessions,
+          toSessionLog,
+          upsertSessionLog: async (sessionLog) => {
+            await upsertSessionLog(sessionLog);
+          },
+          onPreviewSessionPersisted: (previewSessionId) => {
+            setV2WrittenPreviewSessionIds((current) => {
+              if (current.has(previewSessionId)) {
+                return current;
+              }
+              const next = new Set(current);
+              next.add(previewSessionId);
+              return next;
+            });
+          },
+          clearSavedRunState: async () => {
+            const [status] = await Promise.all([
+              clearAutoTrackerV2NativeBuffer(),
+              clearAutoTrackerV2NativeRecovery(),
+            ]);
+            setV2Snapshot({
+              status,
+              events: [],
+            });
+            setV2WrittenPreviewSessionIds(new Set());
+          },
+        });
         setV2UserModeMessage({
           tone: "success",
           text: stoppedSampler
