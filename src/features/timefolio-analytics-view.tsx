@@ -298,6 +298,8 @@ function TimeFolioAnalyticsContent() {
 
   const visibleMethods = analytics.methodRows.slice(0, 6);
   const trendPeakHours = analytics.trend.reduce((max, point) => Math.max(max, point.hours), 0);
+  const trendAxisMax = Math.max(1, Math.ceil(trendPeakHours * 2) / 2);
+  const trendAxisTicks = [trendAxisMax, trendAxisMax / 2, 0];
   const bestDayLabel = analytics.bestDayEntry
     ? BEST_DAY_FORMATTER.format(new Date(`${analytics.bestDayEntry[0]}T12:00:00`))
     : null;
@@ -360,17 +362,24 @@ function TimeFolioAnalyticsContent() {
                 Log more sessions to see a trend.
               </div>
             ) : (
-              <div className="mt-3 flex items-end gap-1.5">
-                {analytics.trend.map((point, index) => (
-                  <TrendBar
-                    key={point.dateKey}
-                    hours={point.hours}
-                    isLatest={index === analytics.trend.length - 1}
-                    isWeekend={point.weekday === 0 || point.weekday === 6}
-                    label={point.label}
-                    maxHours={trendPeakHours}
-                  />
-                ))}
+              <div className="mt-3 grid grid-cols-[2.75rem_minmax(0,1fr)] gap-2">
+                <div className="flex h-40 flex-col justify-between border-r border-white/[0.08] pr-2 text-right text-[10px] tabular-nums text-slate-500">
+                  {trendAxisTicks.map((tick) => (
+                    <span key={tick}>{formatHoursShort(tick)}</span>
+                  ))}
+                </div>
+                <div className="flex h-40 items-end gap-1.5">
+                  {analytics.trend.map((point, index) => (
+                    <TrendBar
+                      key={point.dateKey}
+                      hours={point.hours}
+                      isLatest={index === analytics.trend.length - 1}
+                      isWeekend={point.weekday === 0 || point.weekday === 6}
+                      label={point.label}
+                      maxHours={trendAxisMax}
+                    />
+                  ))}
+                </div>
               </div>
             )}
           </div>

@@ -9,8 +9,8 @@ import type { TfSessionLog } from "../../types/models";
 const ROW_LABELS = ["Mon", "", "Wed", "", "Fri", "", "Sun"];
 const DEFAULT_DAY_CELL_SIZE = 14;
 const DEFAULT_DAY_CELL_GAP = 4;
-const COMPACT_DAY_CELL_SIZE = 10;
-const COMPACT_DAY_CELL_GAP = 2;
+const COMPACT_DAY_CELL_SIZE = 12;
+const COMPACT_DAY_CELL_GAP = 3;
 
 type MethodBreakdown = {
   method: string;
@@ -286,7 +286,7 @@ function OverviewActivityHeatmapBody({ compact = false }: { compact?: boolean })
 
   if (isLoading) {
     return (
-      <section className={cn("glass-panel flex flex-col", compact ? "gap-2.5 p-3.5" : "gap-3 p-5 xl:p-6")}>
+      <section className={cn("glass-panel flex flex-col", compact ? "min-h-[360px] gap-3 p-4" : "gap-3 p-5 xl:p-6")}>
         <div>
           <h3 className={cn("font-semibold text-white", compact ? "text-[0.95rem]" : "text-base")}>
             Study Activity Heatmap
@@ -299,7 +299,7 @@ function OverviewActivityHeatmapBody({ compact = false }: { compact?: boolean })
 
   if (error) {
     return (
-      <section className={cn("glass-panel flex flex-col", compact ? "gap-2.5 p-3.5" : "gap-3 p-5 xl:p-6")}>
+      <section className={cn("glass-panel flex flex-col", compact ? "min-h-[360px] gap-3 p-4" : "gap-3 p-5 xl:p-6")}>
         <div>
           <h3 className={cn("font-semibold text-white", compact ? "text-[0.95rem]" : "text-base")}>
             Study Activity Heatmap
@@ -314,7 +314,7 @@ function OverviewActivityHeatmapBody({ compact = false }: { compact?: boolean })
   const tooltipGridWidth = compact ? (dayGridRef.current?.clientWidth ?? gridWidth) : gridWidth;
 
   return (
-    <section className={cn("glass-panel flex flex-col", compact ? "gap-2.5 p-3.5" : "gap-3 p-4 xl:p-5")}>
+    <section className={cn("glass-panel flex flex-col", compact ? "min-h-[360px] gap-3 p-4" : "gap-3 p-4 xl:p-5")}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className={cn("font-semibold text-white", compact ? "text-[0.95rem]" : "text-base")}>

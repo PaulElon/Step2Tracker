@@ -1,5 +1,5 @@
 import { AlertTriangle, ArrowDown, ArrowUp, Bell, CalendarDays, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Plus, Search, Upload } from "lucide-react";
-import { useDeferredValue, useEffect, useId, useRef, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { getStudyBlockMinutes, getWeekDates } from "../lib/analytics";
 import {
   addDays,
@@ -577,6 +577,7 @@ export function PlannerView() {
   const [showIcsImport, setShowIcsImport] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [bulkTaskTitle, setBulkTaskTitle] = useState("");
   const [bulkCategory, setBulkCategory] = useState("");
   const [bulkDurationHours, setBulkDurationHours] = useState("0");
   const [bulkDurationMinutes, setBulkDurationMinutes] = useState("0");
@@ -610,6 +611,18 @@ export function PlannerView() {
   const selectedVisibleTasks = selectedDateTasks.filter((task) => selectedVisibleTaskIdSet.has(task.id));
   const selectedVisibleCount = selectedVisibleTasks.length;
   const allVisibleSelected = selectedDateTasks.length > 0 && selectedVisibleCount === selectedDateTasks.length;
+  const taskTitleOptions = useMemo(
+    () =>
+      Array.from(new Set(state.studyBlocks.map((task) => task.task).filter((title) => title.trim().length > 0))).sort(
+        (left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }),
+      ),
+    [state.studyBlocks],
+  );
+  const matchingTitleTasks = useMemo(
+    () => (bulkTaskTitle ? state.studyBlocks.filter((task) => task.task === bulkTaskTitle) : []),
+    [bulkTaskTitle, state.studyBlocks],
+  );
+  const matchingTitleCount = matchingTitleTasks.length;
   const categoryOptions = [...state.preferences.customCategories];
   for (const task of allSelectedDateTasks) {
     if (!categoryOptions.includes(task.category)) {
@@ -649,7 +662,14 @@ export function PlannerView() {
   function exitSelectionMode() {
     setIsSelectionMode(false);
     clearBulkSelection();
+    setBulkTaskTitle("");
   }
+
+  useEffect(() => {
+    if (bulkTaskTitle && !taskTitleOptions.includes(bulkTaskTitle)) {
+      setBulkTaskTitle("");
+    }
+  }, [bulkTaskTitle, taskTitleOptions]);
 
   async function toggleTask(task: StudyBlock, completed: boolean) {
     await upsertStudyBlock({
@@ -711,6 +731,27 @@ export function PlannerView() {
         await trashStudyBlock(task.id);
       }
       exitSelectionMode();
+    } finally {
+      setIsBulkPending(false);
+    }
+  }
+
+  async function handleBulkTrashByTitle() {
+    if (!bulkTaskTitle || !matchingTitleCount || isBulkPending) {
+      return;
+    }
+
+    if (!window.confirm(`Move ${matchingTitleCount} tasks named ‘${bulkTaskTitle}’ to trash?`)) {
+      return;
+    }
+
+    setIsBulkPending(true);
+    try {
+      for (const task of matchingTitleTasks) {
+        await trashStudyBlock(task.id);
+      }
+      setBulkTaskTitle("");
+      clearBulkSelection();
     } finally {
       setIsBulkPending(false);
     }
@@ -1335,6 +1376,40 @@ export function PlannerView() {
                     }}
                   >
                     Move selected to trash
+                  </button>
+                </div>
+              </div>
+              <div className="mb-2 rounded-[12px] border border-[color:var(--panel-support-border)] bg-[color:var(--panel-support-bg)] p-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] font-medium text-slate-500">Delete by exact task name</span>
+                  <select
+                    value={bulkTaskTitle}
+                    onChange={(event) => setBulkTaskTitle(event.target.value)}
+                    className={`${compactPlannerFieldClassName} min-w-[13rem] flex-1 pr-8`}
+                    aria-label="Task name to move to trash"
+                    disabled={!taskTitleOptions.length || isBulkPending}
+                  >
+                    <option value="">{taskTitleOptions.length ? "Choose task name" : "No planned task names"}</option>
+                    {taskTitleOptions.map((title) => (
+                      <option key={title} value={title}>
+                        {title}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="min-w-[5.5rem] text-[10px] tabular-nums text-slate-500">
+                    {bulkTaskTitle
+                      ? `${matchingTitleCount} match${matchingTitleCount === 1 ? "" : "es"}`
+                      : "No name selected"}
+                  </span>
+                  <button
+                    type="button"
+                    className={compactPlannerDangerButtonClassName}
+                    disabled={!bulkTaskTitle || !matchingTitleCount || isBulkPending}
+                    onClick={() => {
+                      void handleBulkTrashByTitle();
+                    }}
+                  >
+                    Move named tasks to trash
                   </button>
                 </div>
               </div>

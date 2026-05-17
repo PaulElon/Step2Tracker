@@ -388,15 +388,21 @@ button {
   }
 
   .flat-list {
-    @apply overflow-hidden rounded-[14px] border border-white/[0.06] bg-white/[0.015];
+    @apply overflow-hidden rounded-[14px] border;
+    border-color: var(--panel-support-border);
+    background: var(--panel-support-bg);
   }
 
   .flat-list > * + * {
-    @apply border-t border-white/[0.06];
+    border-top: 1px solid var(--panel-support-border);
   }
 
   .flat-list-row {
-    @apply flex items-center justify-between gap-3 px-3 py-2.5 transition-colors hover:bg-white/[0.03];
+    @apply flex items-center justify-between gap-3 px-3 py-2.5 transition-colors;
+  }
+
+  .flat-list-row:hover {
+    background: var(--surface-muted);
   }
 
   .command-bar {

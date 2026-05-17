@@ -7,12 +7,9 @@ import { cn, fieldClassName, primaryButtonClassName, secondaryButtonClassName } 
 import { splitAutoSessionMethodLabel } from "../../lib/tf-session-adapters";
 import type { TfSessionLog } from "../../types/models";
 import {
-  CommandBar,
   MetricStrip,
   MetricStripItem,
   QuietPanel,
-  SectionHeader,
-  SoftDivider,
 } from "../../components/ui";
 import { AutoTrackerV2UserControlStrip } from "./autotracker-v2-user-control-card";
 import { useAutoTrackerV2SessionControl } from "./autotracker-v2-session-control";
@@ -175,9 +172,9 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
   }
 
   return (
-    <QuietPanel className="overflow-hidden p-0">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] bg-[linear-gradient(135deg,var(--primary-start),transparent_62%)] px-4 py-3">
-        <div className="min-w-0">
+    <section className="glass-panel overflow-hidden p-0">
+      <div className="grid gap-5 border-b border-[color:var(--panel-border)] bg-[radial-gradient(circle_at_50%_0%,var(--primary-start),transparent_42%)] px-5 py-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div className="min-w-0 text-center lg:text-left">
           <div className="flex items-center gap-2">
             <Clock3 className="h-4 w-4 text-cyan-200" />
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
@@ -188,8 +185,8 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
             {method.trim() || "Start a focused study block"}
           </p>
         </div>
-        <div className="rounded-[18px] border border-white/10 bg-slate-950/45 px-4 py-2 text-right">
-          <p className="font-mono text-2xl font-semibold tabular-nums text-white">
+        <div className="mx-auto min-w-[min(100%,24rem)] rounded-[24px] border border-[color:var(--panel-border)] bg-[color:var(--panel-support-bg)] px-6 py-5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_20px_60px_var(--panel-shadow)] lg:mx-0">
+          <p className="font-mono text-[clamp(3rem,8vw,5.6rem)] font-semibold leading-none tabular-nums text-white">
             {formatElapsed(displayMs)}
           </p>
           <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-500">
@@ -198,7 +195,7 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
         </div>
       </div>
 
-      <div className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto]">
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-slate-400">Method *</label>
@@ -285,7 +282,7 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
           </button>
         </div>
       </div>
-    </QuietPanel>
+    </section>
   );
 }
 
@@ -433,11 +430,9 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
 }
 
 export function SessionLogPanel({
-  pageDescription,
   pageTitle,
   showOverviewMetrics = false,
 }: {
-  pageDescription?: string;
   pageTitle?: string;
   showOverviewMetrics?: boolean;
 }) {
@@ -445,7 +440,6 @@ export function SessionLogPanel({
   const { state, isLoading, error } = store;
   const autoTracker = useAutoTrackerV2SessionControl();
   const [showAddForm, setShowAddForm] = useState(false);
-  const [showTimer, setShowTimer] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -530,51 +524,31 @@ export function SessionLogPanel({
       {pageTitle ? (
         <div className="space-y-1 px-1">
           <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">{pageTitle}</h2>
-          {pageDescription ? <p className="text-sm text-slate-400">{pageDescription}</p> : null}
         </div>
       ) : null}
 
-      <section>
-        <SectionHeader
-          title="Capture"
-          subtitle="Keep quick adds, the timer, and Auto-Tracking controls in one place."
+      <section className="flex flex-col gap-3">
+        <ManualTimer
+          onSave={async (session) => {
+            await persistSession(session, "Timer session saved.");
+          }}
+          onDismiss={() => undefined}
         />
 
-        <CommandBar className="mt-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              className={secondaryButtonClassName}
-              onClick={() => setShowTimer(true)}
-            >
-              Start Timer
-            </button>
-            <button className={primaryButtonClassName} onClick={() => setShowAddForm(true)}>
-              + Add session
-            </button>
-          </div>
-        </CommandBar>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+          <button type="button" className={secondaryButtonClassName} onClick={() => setShowAddForm(true)}>
+            + Add session
+          </button>
 
-        {FF.autotrackerV2UserMode ? (
-          <>
-            <SoftDivider className="my-3" />
+          {FF.autotrackerV2UserMode ? (
             <div className="text-xs text-slate-400">
               <span className="font-medium text-slate-200">Configured Auto-Tracking rules:</span>{" "}
               Allowed {autoTracker.trackedRuleCount} · Distractions {autoTracker.distractionRuleCount}
             </div>
-            <AutoTrackerV2UserControlStrip control={autoTracker} />
-          </>
-        ) : null}
+          ) : null}
+        </div>
 
-        {showTimer ? (
-          <div className="mt-3">
-            <ManualTimer
-              onSave={async (session) => {
-                await persistSession(session, "Timer session saved.");
-              }}
-              onDismiss={() => setShowTimer(false)}
-            />
-          </div>
-        ) : null}
+        {FF.autotrackerV2UserMode ? <AutoTrackerV2UserControlStrip control={autoTracker} /> : null}
 
         {showAddForm ? (
           <div className="mt-3">
