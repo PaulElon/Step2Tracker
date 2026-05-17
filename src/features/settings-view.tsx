@@ -27,7 +27,7 @@ import { launchResource } from "../lib/launcher";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
-import { NavigationButton, Panel } from "../components/ui";
+import { MetricStrip, MetricStripItem, NavigationButton, Panel } from "../components/ui";
 import { FF } from "../lib/feature-flags";
 import { themeAwareWarmAccent } from "../lib/ui";
 import { TimeFolioStoreProvider } from "../state/tf-store";
@@ -47,16 +47,6 @@ function getBackupFileName(date = new Date()) {
 
 function formatCountsLine(counts: BackupArtifactPreview["counts"]) {
   return `${counts.studyBlocks} tasks · ${counts.practiceTests} tests · ${counts.weakTopicEntries} topics`;
-}
-
-function StorageStatCard({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return (
-    <div className="rounded-[16px] border border-white/10 bg-slate-950/45 p-4">
-      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-2 text-lg font-semibold text-white">{value}</p>
-      <p className="mt-1 text-xs text-slate-400">{detail}</p>
-    </div>
-  );
 }
 
 function CategoriesPanel({
@@ -1151,28 +1141,28 @@ export function SettingsView({
                     </div>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <StorageStatCard
+                  <MetricStrip columns="sm:grid-cols-2 lg:grid-cols-4">
+                    <MetricStripItem
                       label="Task count"
                       value={String(studyStorageCounts.studyBlocks)}
-                      detail="Study tasks in local storage."
+                      meta="Study tasks in local storage."
                     />
-                    <StorageStatCard
+                    <MetricStripItem
                       label="Practice tests"
                       value={String(studyStorageCounts.practiceTests)}
-                      detail="Saved practice test records."
+                      meta="Saved practice test records."
                     />
-                    <StorageStatCard
+                    <MetricStripItem
                       label="Weak topics"
                       value={String(studyStorageCounts.weakTopicEntries)}
-                      detail="Tracked weak topic entries."
+                      meta="Tracked weak topic entries."
                     />
-                    <StorageStatCard
+                    <MetricStripItem
                       label="Trash items"
                       value={String(studyStorageCounts.trashItems)}
-                      detail="Recoverable records in trash."
+                      meta="Recoverable records in trash."
                     />
-                  </div>
+                  </MetricStrip>
 
                   {storageMessage ? (
                     <div

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { EmptyState, MetricCard, Panel } from "../components/ui";
+import { EmptyState, MetricStrip, MetricStripItem, Panel } from "../components/ui";
 import { formatMinutes } from "../lib/datetime";
 import { allocationByMethod, totalsByDay } from "../lib/tf-session-adapters";
 import { TimeFolioStoreProvider, useTimeFolioStore } from "../state/tf-store";
@@ -286,12 +286,12 @@ function TimeFolioAnalyticsContent() {
         <p className="max-w-4xl text-sm leading-7 text-slate-300">{analytics.narrative}</p>
       </Panel>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total Time" value={formatMinutes(Math.round(analytics.totalHours * 60))} meta="Across all recorded study sessions." />
-        <MetricCard label="Sessions" value={String(sessions.length)} meta={`${analytics.activeDays} active day${analytics.activeDays === 1 ? "" : "s"} captured.`} />
-        <MetricCard label="Top Method" value={analytics.methodRows[0]?.method ?? "—"} meta={analytics.methodRows[0] ? `${formatMinutes(Math.round(analytics.methodRows[0].hours * 60))} logged` : "Waiting for session data."} />
-        <MetricCard label="Focus Rate" value={`${analytics.focusRate.toFixed(0)}%`} meta={analytics.totalHours < 1 ? `Based on ${formatMinutes(Math.round(analytics.totalHours * 60))} total — log more for a reliable rate.` : `${formatMinutes(Math.round(analytics.distractionHours * 60))} marked as distraction.`} />
-      </div>
+      <MetricStrip columns="sm:grid-cols-2 xl:grid-cols-4">
+        <MetricStripItem label="Total time" value={formatMinutes(Math.round(analytics.totalHours * 60))} meta="Across all recorded study sessions." />
+        <MetricStripItem label="Sessions" value={String(sessions.length)} meta={`${analytics.activeDays} active day${analytics.activeDays === 1 ? "" : "s"} captured.`} />
+        <MetricStripItem label="Top method" value={analytics.methodRows[0]?.method ?? "—"} meta={analytics.methodRows[0] ? `${formatMinutes(Math.round(analytics.methodRows[0].hours * 60))} logged` : "Waiting for session data."} />
+        <MetricStripItem label="Focus rate" value={`${analytics.focusRate.toFixed(0)}%`} meta={analytics.totalHours < 1 ? `Based on ${formatMinutes(Math.round(analytics.totalHours * 60))} total — log more for a reliable rate.` : `${formatMinutes(Math.round(analytics.distractionHours * 60))} marked as distraction.`} />
+      </MetricStrip>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.95fr)]">
         <Panel title="Activity Trend" subtitle="Last 14 days of recorded study time.">

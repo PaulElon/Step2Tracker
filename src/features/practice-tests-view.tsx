@@ -11,7 +11,7 @@ import {
 } from "../lib/practice-tests";
 import { useAppStore } from "../state/app-store";
 import { ModalShell } from "../components/modal-shell";
-import { EmptyState, MetricCard, Panel } from "../components/ui";
+import { EmptyState, MetricStrip, MetricStripItem, Panel } from "../components/ui";
 import {
   fieldClassName,
   iconButtonClassName,
@@ -483,8 +483,8 @@ export function PracticeTestsView() {
   return (
     <div className="space-y-4">
       <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Practice Tests</h2>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
+      <MetricStrip columns="md:grid-cols-2 xl:grid-cols-4">
+        <MetricStripItem
           label="Average"
           value={metrics.averageScore == null ? "Awaiting log" : `${metrics.averageScore.toFixed(1)}%`}
           meta={
@@ -493,22 +493,22 @@ export function PracticeTestsView() {
               : `${state.practiceTests.length} test${state.practiceTests.length === 1 ? "" : "s"} logged`
           }
         />
-        <MetricCard
+        <MetricStripItem
           label="Best"
           value={metrics.bestScore == null ? "—" : `${metrics.bestScore.toFixed(1)}%`}
           meta="Highest score"
         />
-        <MetricCard
+        <MetricStripItem
           label="Latest"
           value={metrics.latestScore == null ? "—" : `${metrics.latestScore.toFixed(1)}%`}
           meta="Most recent result"
         />
-        <MetricCard
+        <MetricStripItem
           label="Questions answered"
           value={metrics.totalQuestions ? `${metrics.totalQuestions} Qs` : "0 Qs"}
           meta={metrics.totalMinutes ? formatHoursValue(metrics.totalMinutes) : "No time logged"}
         />
-      </div>
+      </MetricStrip>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
         <Panel

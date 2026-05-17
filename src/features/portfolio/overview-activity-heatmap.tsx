@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { MetricStrip, MetricStripItem } from "../../components/ui";
 import { addDays, daysBetween, formatLongDate, formatMinutes, getTodayKey, startOfWeek } from "../../lib/datetime";
 import { splitAutoSessionMethodLabel } from "../../lib/tf-session-adapters";
 import { cn } from "../../lib/ui";
@@ -476,13 +477,13 @@ function OverviewActivityHeatmapBody() {
           <span>More</span>
         </div>
 
-        <div className="grid gap-2 text-[13px] text-slate-200 sm:grid-cols-2 xl:grid-cols-5">
-          <StatPill label="Daily average" value={formatMinutes(Math.round(dailyAverageMinutes))} />
-          <StatPill label="Days learned" value={`${Math.round(daysLearnedPercent)}%`} meta={`${activeDays}/${daysElapsed} days`} />
-          <StatPill label="Longest streak" value={`${streaks.longest} day${streaks.longest === 1 ? "" : "s"}`} />
-          <StatPill label="Current streak" value={`${streaks.current} day${streaks.current === 1 ? "" : "s"}`} />
-          <StatPill label="Total tracked" value={formatMinutes(totalStudyMinutes)} />
-        </div>
+        <MetricStrip columns="sm:grid-cols-2 xl:grid-cols-4" className="text-[13px] text-slate-200">
+          <MetricStripItem label="Daily average" value={formatMinutes(Math.round(dailyAverageMinutes))} />
+          <MetricStripItem label="Days learned" value={`${Math.round(daysLearnedPercent)}%`} meta={`${activeDays}/${daysElapsed} days`} />
+          <MetricStripItem label="Longest streak" value={`${streaks.longest} day${streaks.longest === 1 ? "" : "s"}`} />
+          <MetricStripItem label="Current streak" value={`${streaks.current} day${streaks.current === 1 ? "" : "s"}`} />
+          <MetricStripItem label="Total tracked" value={formatMinutes(totalStudyMinutes)} />
+        </MetricStrip>
       </div>
 
       {selectedDate ? (
@@ -636,16 +637,6 @@ function OverviewActivityHeatmapBody() {
         </div>
       ) : null}
     </section>
-  );
-}
-
-function StatPill({ label, value, meta }: { label: string; value: string; meta?: string }) {
-  return (
-    <div className="rounded-[12px] border border-white/10 bg-white/[0.025] px-3 py-2">
-      <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-0.5 text-sm font-semibold tabular-nums text-cyan-100">{value}</p>
-      {meta ? <p className="mt-0.5 text-[10px] text-slate-500">{meta}</p> : null}
-    </div>
   );
 }
 

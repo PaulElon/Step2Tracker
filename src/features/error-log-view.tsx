@@ -9,11 +9,10 @@ import {
   Search,
   Sparkles,
   SlidersHorizontal,
-  Target,
   Trash2,
-  TrendingUp,
   X,
 } from "lucide-react";
+import { MetricStrip, MetricStripItem } from "../components/ui";
 import { ModalShell } from "../components/modal-shell";
 import { RichTextEditor, RichTextRender } from "../components/rich-text-editor";
 import { richTextToPlain } from "../components/rich-text-utils";
@@ -1091,9 +1090,9 @@ function SummaryStrip({
   filtersActive: boolean;
 }) {
   return (
-    <section className="grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <SummaryCell
-        label="Total Missed"
+    <MetricStrip columns="sm:grid-cols-2 xl:grid-cols-4" className="shrink-0">
+      <MetricStripItem
+        label="Total missed"
         value={String(totalMissed)}
         meta={
           filtersActive && filteredCount !== totalMissed
@@ -1102,56 +1101,23 @@ function SummaryStrip({
               ? "1 entry logged"
               : `${totalMissed} entries logged`
         }
-        icon={AlertTriangle}
-        tone="text-rose-200"
       />
-      <SummaryCell
-        label="Recurring Patterns"
+      <MetricStripItem
+        label="Recurring patterns"
         value={String(recurringPatterns)}
         meta={recurringPatterns === 0 ? "No repeat misses yet" : recurringPatterns === 1 ? "1 repeat miss" : `${recurringPatterns} repeat misses`}
-        icon={Repeat}
-        tone="text-amber-200"
       />
-      <SummaryCell
-        label="High Impact"
+      <MetricStripItem
+        label="High impact"
         value={String(highImpact)}
         meta={highImpact === 0 ? "Nothing at high priority" : "High-priority entries"}
-        icon={Target}
-        tone="text-cyan-200"
       />
-      <SummaryCell
-        label="Top Category"
+      <MetricStripItem
+        label="Top category"
         value={mostCommonSystem ?? "—"}
         meta={mostCommonErrorType ? `Most common: ${mostCommonErrorType}` : "Add entries to see trends"}
-        icon={TrendingUp}
-        tone="text-emerald-200"
       />
-    </section>
-  );
-}
-
-function SummaryCell({
-  label,
-  value,
-  meta,
-  icon: Icon,
-  tone,
-}: {
-  label: string;
-  value: string;
-  meta: string;
-  icon: typeof AlertTriangle;
-  tone: string;
-}) {
-  return (
-    <div className="flex min-w-0 items-start justify-between gap-3 rounded-2xl border border-white/[0.07] bg-slate-950/40 px-4 py-3">
-      <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">{label}</p>
-        <p className="mt-1 truncate text-[1.6rem] font-semibold leading-none tracking-[-0.03em] text-white">{value}</p>
-        <p className="mt-1.5 truncate text-[11px] text-slate-400">{meta}</p>
-      </div>
-      <Icon className={`h-4 w-4 shrink-0 ${tone}`} />
-    </div>
+    </MetricStrip>
   );
 }
 

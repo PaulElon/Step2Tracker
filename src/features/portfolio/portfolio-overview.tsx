@@ -21,6 +21,7 @@ import {
   getWeakTopicPlannerInsights,
   sumStudyMinutes,
 } from "../../lib/analytics";
+import { MetricStrip, MetricStripItem } from "../../components/ui";
 import { formatHoursValue, formatLongDate } from "../../lib/datetime";
 import { cn } from "../../lib/ui";
 import { useAppStore } from "../../state/app-store";
@@ -191,8 +192,6 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
   }, [categoryBreakdown, totalStudyMinutes]);
 
   const readinessValue = practiceMetrics.averageScore;
-  const readinessTone: MetricTone =
-    readinessValue == null ? "neutral" : readinessValue >= 70 ? "good" : "warn";
   const readinessMeta =
     readinessValue == null
       ? "Awaiting first test"
@@ -205,15 +204,14 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
       <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Overview</h2>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
         <div className="flex min-w-0 flex-col gap-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            <OverviewMetric
+          <MetricStrip columns="grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <MetricStripItem
               label="Readiness"
               value={readinessValue == null ? "—" : formatPercent(readinessValue)}
               meta={readinessMeta}
-              tone={readinessTone}
             />
-            <OverviewMetric
-              label="Tests Taken"
+            <MetricStripItem
+              label="Tests taken"
               value={String(practiceTests.length)}
               meta={
                 practiceTests.length
@@ -221,8 +219,8 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
                   : "Log your first test"
               }
             />
-            <OverviewMetric
-              label="Avg Score"
+            <MetricStripItem
+              label="Avg score"
               value={
                 practiceMetrics.averageScore == null
                   ? "—"
@@ -234,14 +232,13 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
                   : `Best ${formatPercent(practiceMetrics.bestScore)}`
               }
             />
-            <OverviewMetric
-              label="Missed Questions"
+            <MetricStripItem
+              label="Missed questions"
               value={String(errorLogEntries.length)}
               meta={errorLogEntries.length ? "Review needed" : "No entries"}
-              tone={errorLogEntries.length ? "warn" : "neutral"}
             />
-            <OverviewMetric
-              label="Study Time"
+            <MetricStripItem
+              label="Study time"
               value={
                 totalStudyMinutes ? formatHoursValue(totalStudyMinutes) : "0h 00m"
               }
@@ -251,7 +248,7 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
                   : "Add a study block"
               }
             />
-          </div>
+          </MetricStrip>
 
           <div className="grid gap-4 xl:grid-cols-2">
             <FocusAreasPanel
@@ -280,51 +277,6 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
         </div>
       </div>
       {FF.timefolio ? <OverviewActivityHeatmap /> : null}
-    </div>
-  );
-}
-
-type MetricTone = "neutral" | "good" | "warn";
-
-const METRIC_TONE_VALUE: Record<MetricTone, string> = {
-  neutral: "text-white",
-  good: "text-emerald-100",
-  warn: "text-amber-100",
-};
-
-const METRIC_TONE_META: Record<MetricTone, string> = {
-  neutral: "text-slate-400",
-  good: "text-emerald-200/85",
-  warn: "text-amber-200/85",
-};
-
-function OverviewMetric({
-  label,
-  value,
-  meta,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  meta?: string;
-  tone?: MetricTone;
-}) {
-  return (
-    <div className="panel-subtle flex min-w-0 flex-col gap-1.5 px-4 py-3.5">
-      <p className="text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">
-        {label}
-      </p>
-      <p
-        className={cn(
-          "text-[1.45rem] font-semibold tracking-[-0.03em] tabular-nums",
-          METRIC_TONE_VALUE[tone],
-        )}
-      >
-        {value}
-      </p>
-      {meta ? (
-        <p className={cn("text-[11px]", METRIC_TONE_META[tone])}>{meta}</p>
-      ) : null}
     </div>
   );
 }
