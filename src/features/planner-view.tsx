@@ -701,7 +701,7 @@ export function PlannerView() {
     }
 
     const taskLabel = tasksToTrash.length === 1 ? "task" : "tasks";
-    if (!window.confirm(`Trash ${tasksToTrash.length} selected ${taskLabel}?`)) {
+    if (!window.confirm(`Move ${tasksToTrash.length} selected ${taskLabel} to trash?`)) {
       return;
     }
 
@@ -1257,7 +1257,7 @@ export function PlannerView() {
                     className="inline-flex h-8 items-center gap-1 rounded-[10px] bg-cyan-300/90 px-3 text-[11px] font-semibold text-slate-950 transition hover:bg-cyan-200"
                     onClick={exitSelectionMode}
                   >
-                    Done
+                    Exit bulk edit
                   </button>
                 </>
               ) : (
@@ -1269,7 +1269,7 @@ export function PlannerView() {
                     clearBulkSelection();
                   }}
                 >
-                  Select
+                  Select tasks
                 </button>
               )}
               <button
@@ -1311,10 +1311,32 @@ export function PlannerView() {
 
           {isSelectionMode ? (
             <div className="mb-3 rounded-[12px] border border-white/10 bg-slate-950/45 p-2">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="mr-1 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400">
-                  {selectedVisibleCount} selected
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5 border-b border-white/8 px-0.5 pb-2">
+                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400">
+                  Bulk edit · {selectedVisibleCount} selected
                 </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    className={compactPlannerButtonClassName}
+                    disabled={!selectedVisibleCount || isBulkPending}
+                    onClick={clearBulkSelection}
+                  >
+                    Clear selection
+                  </button>
+                  <button
+                    type="button"
+                    className={compactPlannerDangerButtonClassName}
+                    disabled={!selectedVisibleCount || isBulkPending}
+                    onClick={() => {
+                      void handleBulkTrash();
+                    }}
+                  >
+                    Move selected to trash
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   type="button"
                   className={compactPlannerButtonClassName}
@@ -1324,14 +1346,6 @@ export function PlannerView() {
                   }}
                 >
                   Select all visible
-                </button>
-                <button
-                  type="button"
-                  className={compactPlannerButtonClassName}
-                  disabled={!selectedVisibleCount || isBulkPending}
-                  onClick={clearBulkSelection}
-                >
-                  Clear
                 </button>
                 <button
                   type="button"
@@ -1429,16 +1443,6 @@ export function PlannerView() {
                   }}
                 >
                   Change duration
-                </button>
-                <button
-                  type="button"
-                  className={compactPlannerDangerButtonClassName}
-                  disabled={!selectedVisibleCount || isBulkPending}
-                  onClick={() => {
-                    void handleBulkTrash();
-                  }}
-                >
-                  Trash
                 </button>
               </div>
             </div>

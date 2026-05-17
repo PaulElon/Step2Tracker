@@ -32,9 +32,9 @@ function OverviewStat({
   meta: string;
 }) {
   return (
-    <div className="rounded-[20px] border border-white/10 bg-slate-950/35 p-4">
+    <div className="rounded-[14px] bg-slate-950/20 px-3 py-3 ring-1 ring-white/8">
       <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-white">{value}</p>
+      <p className="mt-1.5 text-[22px] font-semibold tracking-[-0.03em] text-white">{value}</p>
       <p className="mt-1 text-xs text-slate-400">{meta}</p>
     </div>
   );
@@ -184,7 +184,7 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-950/40 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur">
+    <div className="flex flex-col gap-3 rounded-2xl border border-white/8 bg-slate-950/30 p-4">
       <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
         Manual timer
       </div>
@@ -323,7 +323,7 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
         e.preventDefault();
         void submitForm();
       }}
-      className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-950/40 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur"
+      className="flex flex-col gap-3 rounded-2xl border border-white/8 bg-slate-950/30 p-4"
     >
       <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
         {isNew ? "New session" : "Edit session"}
@@ -506,10 +506,10 @@ export function SessionLogPanel({
         </div>
       ) : null}
 
-      <section className="rounded-3xl border border-slate-700 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-5 shadow-lg shadow-black/20">
+      <section className="rounded-2xl border border-white/10 bg-slate-950/30 p-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
-            <div className="inline-flex w-fit rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-cyan-300">
+            <div className="inline-flex w-fit rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.2em] text-cyan-300">
               Capture tools
             </div>
             <div>
@@ -534,19 +534,17 @@ export function SessionLogPanel({
         </div>
 
         {FF.autotrackerV2UserMode ? (
-          <div className="mt-4 space-y-3">
-            <div className="rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-3 text-xs text-slate-300">
-              <p className="font-medium text-slate-100">Configured Auto-Tracking rules</p>
-              <p className="mt-1 text-slate-400">
-                Allowed: {autoTracker.trackedRuleCount} · Distractions: {autoTracker.distractionRuleCount}
-              </p>
+          <div className="mt-4 space-y-3 border-t border-white/8 pt-3">
+            <div className="text-xs text-slate-400">
+              <span className="font-medium text-slate-200">Configured Auto-Tracking rules:</span>{" "}
+              Allowed {autoTracker.trackedRuleCount} · Distractions {autoTracker.distractionRuleCount}
             </div>
             <AutoTrackerV2UserControlStrip control={autoTracker} />
           </div>
         ) : null}
 
         {showTimer ? (
-          <div className="mt-4">
+          <div className="mt-4 border-t border-white/8 pt-3">
             <ManualTimer
               onSave={async (session) => {
                 await persistSession(session, "Timer session saved.");
@@ -557,7 +555,7 @@ export function SessionLogPanel({
         ) : null}
 
         {showAddForm ? (
-          <div className="mt-4">
+          <div className="mt-4 border-t border-white/8 pt-3">
             <SessionForm
               initial={EMPTY_FORM}
               isNew
@@ -613,99 +611,104 @@ export function SessionLogPanel({
         </div>
       )}
 
-      {sessions.map((s) =>
-        editingId === s.id ? (
-          <SessionForm
-            key={s.id}
-            initial={sessionToForm(s)}
-            isNew={false}
-            onSave={(form) => handleEdit(s.id, form)}
-            onCancel={() => setEditingId(null)}
-          />
-        ) : (
-          (() => {
-            const { label, isAuto } = splitAutoSessionMethodLabel(s.method);
+      {sessions.length ? (
+        <div className="overflow-hidden rounded-xl border border-white/10 bg-slate-950/30">
+          {sessions.map((s, index) =>
+            editingId === s.id ? (
+              <div key={s.id} className={cn("px-3 py-3", index > 0 ? "border-t border-white/8" : "")}>
+                <SessionForm
+                  initial={sessionToForm(s)}
+                  isNew={false}
+                  onSave={(form) => handleEdit(s.id, form)}
+                  onCancel={() => setEditingId(null)}
+                />
+              </div>
+            ) : (
+              (() => {
+                const { label, isAuto } = splitAutoSessionMethodLabel(s.method);
 
-            return (
-              <div
-                key={s.id}
-                className={cn(
-                  "flex flex-col gap-1 rounded-lg border p-4",
-                  isAuto
-                    ? "border-cyan-500/15 bg-cyan-500/[0.06] p-3.5"
-                    : "border-slate-700 bg-slate-800",
-                )}
-              >
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="min-w-0 truncate font-semibold text-slate-100">{label}</span>
-                    {isAuto ? (
-                      <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-cyan-200">
-                        auto
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="flex gap-1.5 items-center">
-                    {s.isDistraction && (
-                      <span className="text-xs rounded px-1.5 py-0.5 bg-red-900/60 text-red-300">
-                        distraction
-                      </span>
+                return (
+                  <article
+                    key={s.id}
+                    className={cn(
+                      "flex flex-col gap-1.5 px-3 py-2.5",
+                      index > 0 ? "border-t border-white/8" : "",
+                      isAuto ? "bg-cyan-500/[0.05]" : "",
+                      s.isDistraction ? "bg-rose-500/[0.06]" : "",
                     )}
-                    {s.isLive && (
-                      <span className="text-xs rounded px-1.5 py-0.5 bg-green-900/60 text-green-300">
-                        live
-                      </span>
-                    )}
-                    <button
-                      className="inline-flex items-center rounded-[10px] border border-white/10 bg-slate-900/60 px-2.5 py-0.5 text-xs font-medium text-slate-300 transition hover:border-white/20 hover:bg-slate-900 hover:text-white"
-                      onClick={() => {
-                        setDeleteConfirmId(null);
-                        setEditingId(s.id);
-                      }}
-                      disabled={deletingId === s.id}
-                    >
-                      Edit
-                    </button>
-                    {deleteConfirmId === s.id ? (
-                      <>
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="min-w-0 truncate font-semibold text-slate-100">{label}</span>
+                        {isAuto ? (
+                          <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-cyan-200">
+                            auto
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {s.isDistraction ? (
+                          <span className="rounded px-1.5 py-0.5 text-xs text-rose-200 ring-1 ring-rose-300/30">
+                            distraction
+                          </span>
+                        ) : null}
+                        {s.isLive ? (
+                          <span className="rounded px-1.5 py-0.5 text-xs text-emerald-200 ring-1 ring-emerald-300/30">
+                            live
+                          </span>
+                        ) : null}
                         <button
-                          className="inline-flex items-center rounded-[10px] border border-rose-400/30 bg-rose-500/20 px-2.5 py-0.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/30 disabled:opacity-60"
+                          className="inline-flex items-center rounded-[10px] border border-white/10 bg-slate-900/60 px-2.5 py-0.5 text-xs font-medium text-slate-300 transition hover:border-white/20 hover:bg-slate-900 hover:text-white"
                           onClick={() => {
-                            void handleDeleteConfirm(s.id);
+                            setDeleteConfirmId(null);
+                            setEditingId(s.id);
                           }}
                           disabled={deletingId === s.id}
                         >
-                          {deletingId === s.id ? "Deleting..." : "Confirm delete"}
+                          Edit
                         </button>
-                        <button
-                          className="inline-flex items-center rounded-[10px] border border-slate-600/80 bg-slate-800 px-2.5 py-0.5 text-xs font-medium text-slate-200 transition hover:bg-slate-700 disabled:opacity-60"
-                          onClick={() => setDeleteConfirmId(null)}
-                          disabled={deletingId === s.id}
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        className="inline-flex items-center rounded-[10px] border border-rose-400/30 bg-rose-500/15 px-2.5 py-0.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/25"
-                        onClick={() => setDeleteConfirmId(s.id)}
-                        disabled={deletingId === s.id}
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-4 text-sm text-slate-400">
-                  <span>{formatLongDate(s.date)}</span>
-                  <span>{formatShortMinutes(Math.max(0, Math.round(s.hours * 60)))}</span>
-                </div>
-                {s.notes && <p className="text-sm text-slate-300 mt-1">{s.notes}</p>}
-              </div>
-            );
-          })()
-        )
-      )}
+                        {deleteConfirmId === s.id ? (
+                          <>
+                            <button
+                              className="inline-flex items-center rounded-[10px] border border-rose-400/30 bg-rose-500/20 px-2.5 py-0.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/30 disabled:opacity-60"
+                              onClick={() => {
+                                void handleDeleteConfirm(s.id);
+                              }}
+                              disabled={deletingId === s.id}
+                            >
+                              {deletingId === s.id ? "Deleting..." : "Confirm delete"}
+                            </button>
+                            <button
+                              className="inline-flex items-center rounded-[10px] border border-slate-600/80 bg-slate-800 px-2.5 py-0.5 text-xs font-medium text-slate-200 transition hover:bg-slate-700 disabled:opacity-60"
+                              onClick={() => setDeleteConfirmId(null)}
+                              disabled={deletingId === s.id}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="inline-flex items-center rounded-[10px] border border-rose-400/30 bg-rose-500/15 px-2.5 py-0.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/25"
+                            onClick={() => setDeleteConfirmId(s.id)}
+                            disabled={deletingId === s.id}
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-slate-400">
+                      <span>{formatLongDate(s.date)}</span>
+                      <span>{formatShortMinutes(Math.max(0, Math.round(s.hours * 60)))}</span>
+                    </div>
+                    {s.notes ? <p className="text-sm text-slate-300">{s.notes}</p> : null}
+                  </article>
+                );
+              })()
+            ),
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
