@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Check, Clock3, Pause, Pencil, Play, Square, Trash2, X } from "lucide-react";
 import { FF } from "../../lib/feature-flags";
 import { useTimeFolioStore } from "../../state/tf-store";
 import { formatLongDate, formatMinutes, formatShortMinutes } from "../../lib/datetime";
@@ -174,97 +175,115 @@ function ManualTimer({ onSave, onDismiss }: ManualTimerProps) {
   }
 
   return (
-    <QuietPanel className="flex flex-col gap-3">
-      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-        Manual timer
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-slate-400">Method *</label>
-        <input
-          className={fieldClassName}
-          type="text"
-          value={method}
-          onChange={(e) => setMethod(e.target.value)}
-          placeholder="e.g. Active Recall"
-          disabled={status !== "idle"}
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-slate-400">Notes</label>
-        <input
-          className={fieldClassName}
-          type="text"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Optional notes…"
-        />
-      </div>
-
-      <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-300">
-        <input
-          type="checkbox"
-          checked={isDistraction}
-          onChange={(e) => setIsDistraction(e.target.checked)}
-          className="accent-red-400"
-        />
-        Mark as distraction
-      </label>
-
-      {status !== "idle" && (
-        <div className="text-2xl font-mono text-center py-1 text-slate-100">
-          {formatElapsed(displayMs)}
-          {status === "paused" && (
-            <span className="text-xs text-slate-400 ml-3">paused</span>
-          )}
+    <QuietPanel className="overflow-hidden p-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] bg-[linear-gradient(135deg,var(--primary-start),transparent_62%)] px-4 py-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Clock3 className="h-4 w-4 text-cyan-200" />
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              Manual timer
+            </p>
+          </div>
+          <p className="mt-1 truncate text-sm font-medium text-slate-200">
+            {method.trim() || "Start a focused study block"}
+          </p>
         </div>
-      )}
+        <div className="rounded-[18px] border border-white/10 bg-slate-950/45 px-4 py-2 text-right">
+          <p className="font-mono text-2xl font-semibold tabular-nums text-white">
+            {formatElapsed(displayMs)}
+          </p>
+          <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-500">
+            {status === "idle" ? "ready" : status}
+          </p>
+        </div>
+      </div>
 
-      <div className="flex gap-2 flex-wrap pt-1">
-        {status === "idle" && (
+      <div className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">Method *</label>
+            <input
+              className={fieldClassName}
+              type="text"
+              value={method}
+              onChange={(e) => setMethod(e.target.value)}
+              placeholder="e.g. Active Recall"
+              disabled={status !== "idle"}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">Notes</label>
+            <input
+              className={fieldClassName}
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional notes..."
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-2 lg:justify-end">
+          <label className="flex h-10 items-center gap-2 rounded-[14px] border border-white/[0.08] bg-white/[0.025] px-3 text-xs font-medium text-slate-300">
+            <input
+              type="checkbox"
+              checked={isDistraction}
+              onChange={(e) => setIsDistraction(e.target.checked)}
+              className="accent-red-400"
+            />
+            Distraction
+          </label>
+
+          {status === "idle" && (
+            <button
+              type="button"
+              className={primaryButtonClassName}
+              onClick={handleStart}
+              disabled={!method.trim()}
+            >
+              <Play className="h-4 w-4" />
+              Start
+            </button>
+          )}
+          {status === "running" && (
+            <button type="button" className={secondaryButtonClassName} onClick={handlePause}>
+              <Pause className="h-4 w-4" />
+              Pause
+            </button>
+          )}
+          {status === "paused" && (
+            <button type="button" className={primaryButtonClassName} onClick={handleResume}>
+              <Play className="h-4 w-4" />
+              Resume
+            </button>
+          )}
+          {status !== "idle" && (
+            <button
+              type="button"
+              className={primaryButtonClassName}
+              onClick={() => {
+                void handleStopAndSave();
+              }}
+              disabled={isSaving}
+            >
+              <Square className="h-4 w-4" />
+              {isSaving ? "Saving..." : "Stop & Save"}
+            </button>
+          )}
           <button
             type="button"
-            className={primaryButtonClassName}
-            onClick={handleStart}
-            disabled={!method.trim()}
-          >
-            Start
-          </button>
-        )}
-        {status === "running" && (
-          <button type="button" className={secondaryButtonClassName} onClick={handlePause}>
-            Pause
-          </button>
-        )}
-        {status === "paused" && (
-          <button type="button" className={primaryButtonClassName} onClick={handleResume}>
-            Resume
-          </button>
-        )}
-        {status !== "idle" && (
-          <button
-            type="button"
-            className={primaryButtonClassName}
+            className={secondaryButtonClassName}
             onClick={() => {
-              void handleStopAndSave();
+              reset();
+              onDismiss();
             }}
             disabled={isSaving}
           >
-            {isSaving ? "Saving..." : "Stop & Save"}
+            <X className="h-4 w-4" />
+            Cancel
           </button>
-        )}
-        <button
-          type="button"
-          className={secondaryButtonClassName}
-          onClick={() => {
-            reset();
-            onDismiss();
-          }}
-          disabled={isSaving}
-        >
-          Cancel
-        </button>
+        </div>
       </div>
     </QuietPanel>
   );
@@ -445,6 +464,23 @@ export function SessionLogPanel({
   );
   const totalHours = sessions.reduce((sum, session) => sum + session.hours, 0);
   const latestSessionDate = sessions[0]?.date ?? null;
+  const sessionGroups = sessions.reduce<
+    Array<{ date: string; sessions: TfSessionLog[]; studyMinutes: number; distractionMinutes: number }>
+  >((groups, session) => {
+    const minutes = Math.max(0, Math.round(session.hours * 60));
+    let group = groups[groups.length - 1];
+    if (!group || group.date !== session.date) {
+      group = { date: session.date, sessions: [], studyMinutes: 0, distractionMinutes: 0 };
+      groups.push(group);
+    }
+    group.sessions.push(session);
+    if (session.isDistraction) {
+      group.distractionMinutes += minutes;
+    } else {
+      group.studyMinutes += minutes;
+    }
+    return groups;
+  }, []);
 
   async function persistSession(session: TfSessionLog, successText: string) {
     try {
@@ -592,107 +628,164 @@ export function SessionLogPanel({
       )}
 
       {sessions.length === 0 && !showAddForm && (
-        <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/40 p-4 text-slate-400">
+        <div className="rounded-[18px] border border-dashed border-[color:var(--panel-border)] bg-[color:var(--panel-support-bg)] p-4 text-slate-400 [color:var(--rich-text-muted,#94a3b8)]">
           No TimeFolio sessions yet.
         </div>
       )}
 
       {sessions.length ? (
-        <div className="overflow-hidden rounded-xl border border-white/10 bg-slate-950/30">
-          {sessions.map((s, index) =>
-            editingId === s.id ? (
-              <div key={s.id} className={cn("px-3 py-3", index > 0 ? "border-t border-white/8" : "")}>
-                <SessionForm
-                  initial={sessionToForm(s)}
-                  isNew={false}
-                  onSave={(form) => handleEdit(s.id, form)}
-                  onCancel={() => setEditingId(null)}
-                />
+        <div className="overflow-hidden rounded-[20px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] shadow-[0_18px_54px_var(--panel-shadow)]">
+          {sessionGroups.map((group, groupIndex) => (
+            <section
+              key={group.date}
+              className={cn(groupIndex > 0 ? "border-t border-white/[0.08]" : "")}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-white/[0.025] px-3.5 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-semibold text-white">
+                    {formatLongDate(group.date)}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    {group.sessions.length} entr{group.sessions.length === 1 ? "y" : "ies"} ·{" "}
+                    {formatShortMinutes(group.studyMinutes)} focus
+                    {group.distractionMinutes > 0 ? ` · ${formatShortMinutes(group.distractionMinutes)} distraction` : ""}
+                  </p>
+                </div>
               </div>
-            ) : (
-              (() => {
-                const { label, isAuto } = splitAutoSessionMethodLabel(s.method);
 
-                return (
-                  <article
-                    key={s.id}
-                    className={cn(
-                      "flex flex-col gap-1.5 px-3 py-2.5",
-                      index > 0 ? "border-t border-white/8" : "",
-                      isAuto ? "bg-cyan-500/[0.05]" : "",
-                      s.isDistraction ? "bg-rose-500/[0.06]" : "",
-                    )}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="min-w-0 truncate font-semibold text-slate-100">{label}</span>
-                        {isAuto ? (
-                          <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-cyan-200">
-                            auto
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {s.isDistraction ? (
-                          <span className="rounded px-1.5 py-0.5 text-xs text-rose-200 ring-1 ring-rose-300/30">
-                            distraction
-                          </span>
-                        ) : null}
-                        {s.isLive ? (
-                          <span className="rounded px-1.5 py-0.5 text-xs text-emerald-200 ring-1 ring-emerald-300/30">
-                            live
-                          </span>
-                        ) : null}
-                        <button
-                          className="inline-flex items-center rounded-[10px] border border-white/10 bg-slate-900/60 px-2.5 py-0.5 text-xs font-medium text-slate-300 transition hover:border-white/20 hover:bg-slate-900 hover:text-white"
-                          onClick={() => {
-                            setDeleteConfirmId(null);
-                            setEditingId(s.id);
-                          }}
-                          disabled={deletingId === s.id}
+              <div className="divide-y divide-white/[0.06]">
+                {group.sessions.map((s) =>
+                  editingId === s.id ? (
+                    <div key={s.id} className="px-3 py-3">
+                      <SessionForm
+                        initial={sessionToForm(s)}
+                        isNew={false}
+                        onSave={(form) => handleEdit(s.id, form)}
+                        onCancel={() => setEditingId(null)}
+                      />
+                    </div>
+                  ) : (
+                    (() => {
+                      const { label, isAuto } = splitAutoSessionMethodLabel(s.method);
+                      const minutes = Math.max(0, Math.round(s.hours * 60));
+
+                      return (
+                        <article
+                          key={s.id}
+                          className={cn(
+                            "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-3.5 py-2.5 transition-colors hover:bg-white/[0.03]",
+                            isAuto ? "bg-cyan-500/[0.025]" : "",
+                            s.isDistraction ? "bg-rose-500/[0.035]" : "",
+                          )}
                         >
-                          Edit
-                        </button>
-                        {deleteConfirmId === s.id ? (
-                          <>
+                          <div className="flex h-full min-h-10 flex-col items-center pt-1">
+                            <span
+                              className={cn(
+                                "h-2.5 w-2.5 rounded-full ring-4",
+                                s.isDistraction
+                                  ? "bg-rose-300 ring-rose-500/[0.12]"
+                                  : isAuto
+                                    ? "bg-cyan-300 ring-cyan-500/[0.12]"
+                                    : "bg-emerald-300 ring-emerald-500/[0.12]",
+                              )}
+                              aria-hidden="true"
+                            />
+                            <span className="mt-1 h-full w-px flex-1 bg-white/[0.06]" aria-hidden="true" />
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                              <span className="min-w-0 truncate text-[13px] font-semibold text-white">
+                                {label}
+                              </span>
+                              {isAuto ? (
+                                <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-cyan-200">
+                                  auto
+                                </span>
+                              ) : null}
+                              {s.isDistraction ? (
+                                <span className="rounded-full border border-rose-400/25 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-rose-200">
+                                  distraction
+                                </span>
+                              ) : null}
+                              {s.isLive ? (
+                                <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-emerald-200">
+                                  live
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
+                              <span>{formatLongDate(s.date)}</span>
+                              <span className="font-medium tabular-nums text-slate-300">
+                                {formatShortMinutes(minutes)}
+                              </span>
+                            </div>
+                            {s.notes ? (
+                              <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-slate-400">
+                                {s.notes}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
                             <button
-                              className="inline-flex items-center rounded-[10px] border border-rose-400/30 bg-rose-500/20 px-2.5 py-0.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/30 disabled:opacity-60"
+                              type="button"
+                              aria-label={`Edit ${label}`}
+                              title="Edit session"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.025] text-slate-400 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-cyan-100 disabled:opacity-50"
                               onClick={() => {
-                                void handleDeleteConfirm(s.id);
+                                setDeleteConfirmId(null);
+                                setEditingId(s.id);
                               }}
                               disabled={deletingId === s.id}
                             >
-                              {deletingId === s.id ? "Deleting..." : "Confirm delete"}
+                              <Pencil className="h-3.5 w-3.5" />
                             </button>
-                            <button
-                              className="inline-flex items-center rounded-[10px] border border-slate-600/80 bg-slate-800 px-2.5 py-0.5 text-xs font-medium text-slate-200 transition hover:bg-slate-700 disabled:opacity-60"
-                              onClick={() => setDeleteConfirmId(null)}
-                              disabled={deletingId === s.id}
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            className="inline-flex items-center rounded-[10px] border border-rose-400/30 bg-rose-500/15 px-2.5 py-0.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/25"
-                            onClick={() => setDeleteConfirmId(s.id)}
-                            disabled={deletingId === s.id}
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-slate-400">
-                      <span>{formatLongDate(s.date)}</span>
-                      <span>{formatShortMinutes(Math.max(0, Math.round(s.hours * 60)))}</span>
-                    </div>
-                    {s.notes ? <p className="text-sm text-slate-300">{s.notes}</p> : null}
-                  </article>
-                );
-              })()
-            ),
-          )}
+                            {deleteConfirmId === s.id ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-8 items-center gap-1.5 rounded-[10px] border border-rose-400/30 bg-rose-500/15 px-2.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/25 disabled:opacity-60"
+                                  onClick={() => {
+                                    void handleDeleteConfirm(s.id);
+                                  }}
+                                  disabled={deletingId === s.id}
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                  {deletingId === s.id ? "Deleting..." : "Delete"}
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label="Cancel delete"
+                                  title="Cancel delete"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.025] text-slate-400 transition hover:border-white/20 hover:text-white disabled:opacity-60"
+                                  onClick={() => setDeleteConfirmId(null)}
+                                  disabled={deletingId === s.id}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                aria-label={`Delete ${label}`}
+                                title="Delete session"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-rose-400/25 bg-rose-500/[0.08] text-rose-200 transition hover:bg-rose-500/15 disabled:opacity-50"
+                                onClick={() => setDeleteConfirmId(s.id)}
+                                disabled={deletingId === s.id}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })()
+                  ),
+                )}
+              </div>
+            </section>
+          ))}
         </div>
       ) : null}
     </div>

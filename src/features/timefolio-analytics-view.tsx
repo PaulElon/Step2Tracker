@@ -119,10 +119,10 @@ function StatChip({
   viz?: React.ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-[18px] border border-white/[0.06] bg-white/[0.025] px-4 py-3">
+    <div className="flex min-w-0 items-center gap-3 rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-medium text-slate-500">{label}</p>
-        <p className="mt-1 truncate text-[1.35rem] font-semibold tabular-nums text-white">{value}</p>
+        <p className="mt-0.5 truncate text-[1.15rem] font-semibold tabular-nums text-white">{value}</p>
         {meta ? <p className="mt-0.5 truncate text-[11px] text-slate-400">{meta}</p> : null}
       </div>
       {viz ? <div className="shrink-0">{viz}</div> : null}
@@ -188,17 +188,17 @@ function TrendBar({
   const surface = isLatest
     ? "bg-gradient-to-t from-cyan-400 via-sky-400 to-indigo-400"
     : isWeekend
-      ? "bg-gradient-to-t from-slate-500/40 via-slate-400/40 to-slate-300/40"
+      ? "bg-gradient-to-t from-cyan-500/35 via-sky-400/35 to-indigo-300/35"
       : "bg-gradient-to-t from-cyan-400/65 via-sky-400/55 to-indigo-400/55";
 
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
       <div
-        className="flex h-28 w-full items-end justify-center"
+        className="flex h-36 w-full items-end justify-center"
         title={`${label}: ${formatHoursShort(hours)}`}
       >
         <div
-          className={`w-full max-w-[18px] rounded-t-[5px] ${surface}`}
+          className={`w-full max-w-[22px] rounded-t-[6px] ${surface}`}
           style={{ height: `${height}%` }}
         />
       </div>
@@ -296,7 +296,7 @@ function TimeFolioAnalyticsContent() {
     );
   }
 
-  const top4Methods = analytics.methodRows.slice(0, 4);
+  const visibleMethods = analytics.methodRows.slice(0, 6);
   const trendPeakHours = analytics.trend.reduce((max, point) => Math.max(max, point.hours), 0);
   const bestDayLabel = analytics.bestDayEntry
     ? BEST_DAY_FORMATTER.format(new Date(`${analytics.bestDayEntry[0]}T12:00:00`))
@@ -311,9 +311,12 @@ function TimeFolioAnalyticsContent() {
   const focusMeta = hasDistraction
     ? `${formatHoursShort(analytics.distractionHours)} distraction`
     : "Distraction-free";
+  const momentumLabel = showMomentum
+    ? formatSignedHoursShort(analytics.last7DaysHours - analytics.prev7DaysHours)
+    : `${formatHoursShort(analytics.last7DaysHours)} in last 7 days`;
 
   return (
-    <div className="flex flex-col gap-4 pb-2">
+    <div className="flex flex-col gap-3 pb-2">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Analytics</h2>
         <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] tabular-nums text-slate-400">
@@ -321,49 +324,108 @@ function TimeFolioAnalyticsContent() {
         </span>
       </div>
 
-      <section className="glass-panel flex flex-col gap-5 p-5 xl:p-6">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.95fr)]">
-          <div className="flex flex-col justify-between gap-3">
+      <section className="glass-panel p-4 xl:p-5">
+        <div className="grid gap-4 xl:grid-cols-[minmax(240px,0.78fr)_minmax(0,1.42fr)]">
+          <div className="flex min-w-0 flex-col gap-3">
             <div>
-              <p className="text-[10.5px] font-medium text-slate-500">Total tracked</p>
-              <p className="mt-2 font-display text-[3.25rem] font-semibold leading-none tracking-[-0.04em] text-white tabular-nums">
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-slate-500">Summary</p>
+              <p className="mt-2 font-display text-[3rem] font-semibold leading-none tracking-[-0.04em] text-white tabular-nums">
                 {formatHoursShort(analytics.totalHours)}
               </p>
-              <p className="mt-2 text-[12px] text-slate-300">
-                {showMomentum
-                  ? formatSignedHoursShort(analytics.last7DaysHours - analytics.prev7DaysHours)
-                  : `${formatHoursShort(analytics.last7DaysHours)} in last 7 days`}
-              </p>
+              <p className="mt-2 text-[12px] font-medium text-slate-300">{momentumLabel}</p>
             </div>
-            {trendPeakHours > 0 ? (
-              <div className="flex items-end gap-[3px]">
-                {analytics.trend.map((point) => {
-                  const h = Math.max((point.hours / trendPeakHours) * 28, point.hours > 0 ? 4 : 2);
-                  return (
-                    <span
-                      key={`hero-${point.dateKey}`}
-                      className="w-[6px] rounded-[2px] bg-cyan-300/60"
-                      style={{ height: `${h}px` }}
-                      title={`${point.label}: ${formatHoursShort(point.hours)}`}
-                    />
-                  );
-                })}
-                <span className="ml-2 text-[10.5px] text-slate-500">14d</span>
-              </div>
-            ) : null}
+
+            <div className="grid grid-cols-2 gap-2">
+              <StatChip label="Last 7 days" value={formatHoursShort(analytics.last7DaysHours)} />
+              <StatChip label="Last 30 days" value={formatHoursShort(analytics.last30DaysHours)} />
+              <StatChip label="Active days" value={String(analytics.activeDays)} />
+              <StatChip label="Focus rate" value={`${analytics.focusRate.toFixed(0)}%`} meta={focusMeta} />
+            </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <StatChip
-              label="Focus rate"
-              value={`${analytics.focusRate.toFixed(0)}%`}
-              meta={focusMeta}
-              viz={<FocusRing percent={analytics.focusRate} />}
-            />
+          <div className="min-w-0">
+            <div className="flex items-baseline justify-between gap-3">
+              <div>
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-slate-500">14-day activity</p>
+                <p className="mt-0.5 text-[12px] text-slate-400">
+                  Hours per day · peak {formatHoursShort(trendPeakHours)}
+                </p>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                7d {formatHoursShort(analytics.last7DaysHours)}
+              </p>
+            </div>
+            {trendPeakHours === 0 ? (
+              <div className="mt-4 flex h-40 items-center justify-center rounded-[14px] border border-dashed border-white/[0.08] bg-white/[0.015] text-[12px] text-slate-500">
+                Log more sessions to see a trend.
+              </div>
+            ) : (
+              <div className="mt-3 flex items-end gap-1.5">
+                {analytics.trend.map((point, index) => (
+                  <TrendBar
+                    key={point.dateKey}
+                    hours={point.hours}
+                    isLatest={index === analytics.trend.length - 1}
+                    isWeekend={point.weekday === 0 || point.weekday === 6}
+                    label={point.label}
+                    maxHours={trendPeakHours}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+        <section className="glass-panel flex flex-col gap-3 p-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-slate-500">Method allocation</p>
+            <p className="text-[11px] text-slate-500">
+              {analytics.methodRows.length} method{analytics.methodRows.length === 1 ? "" : "s"}
+            </p>
+          </div>
+          <ol className="grid gap-x-6 divide-y divide-white/[0.05] md:grid-cols-2 md:divide-y-0">
+            {visibleMethods.map((row, index) => {
+              const percent = analytics.totalHours > 0 ? (row.hours / analytics.totalHours) * 100 : 0;
+              return (
+                <MethodAllocationRow
+                  key={row.methodKey}
+                  hours={row.hours}
+                  method={row.method}
+                  percent={percent}
+                  rank={index + 1}
+                  sessionCount={row.sessionCount}
+                />
+              );
+            })}
+          </ol>
+          {analytics.methodRows.length > visibleMethods.length ? (
+            <p className="text-[11px] text-slate-500">
+              + {analytics.methodRows.length - visibleMethods.length} more method{analytics.methodRows.length - visibleMethods.length === 1 ? "" : "s"}
+            </p>
+          ) : null}
+        </section>
+
+        <section className="glass-panel flex flex-col gap-3 p-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-slate-500">Focus quality</p>
+            <p className="text-[11px] text-slate-500">{focusMeta}</p>
+          </div>
+          <div className="flex items-center gap-3 rounded-[16px] border border-white/[0.06] bg-white/[0.02] px-3 py-3">
+            <FocusRing percent={analytics.focusRate} />
+            <div className="min-w-0">
+              <p className="text-[1.7rem] font-semibold leading-none text-white tabular-nums">
+                {analytics.focusRate.toFixed(0)}%
+              </p>
+              <p className="mt-1 text-[12px] text-slate-400">Focused study time</p>
+            </div>
+          </div>
+          <div className="grid gap-2">
             <StatChip
               label="Daily pace"
               value={formatHoursShort(analytics.activeDayAverageHours)}
-              meta={`avg on ${analytics.activeDays} active day${analytics.activeDays === 1 ? "" : "s"}`}
+              meta={`avg on active days`}
             />
             <StatChip
               label="Top method"
@@ -380,105 +442,6 @@ function TimeFolioAnalyticsContent() {
               meta={bestDayLabel ? `${formatHoursShort(bestDayHours)} logged` : "No daily totals"}
             />
           </div>
-        </div>
-
-        {top4Methods.length > 0 ? (
-          <div className="border-t border-white/[0.06] pt-4">
-            <div className="flex items-baseline justify-between gap-3">
-              <p className="text-[10.5px] font-medium text-slate-500">Method mix</p>
-              <p className="text-[11px] text-slate-500">Top {top4Methods.length} of {analytics.methodRows.length}</p>
-            </div>
-            <div className="mt-3 grid gap-x-6 gap-y-2.5 md:grid-cols-2">
-              {top4Methods.map((row, index) => {
-                const percent = analytics.totalHours > 0 ? (row.hours / analytics.totalHours) * 100 : 0;
-                return (
-                  <div key={row.methodKey} className="flex min-w-0 items-center gap-3">
-                    <span className="text-[11px] font-medium tabular-nums text-slate-500">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <p className="truncate text-[12.5px] font-medium text-slate-100">{row.method}</p>
-                        <span className="shrink-0 text-[11px] tabular-nums text-slate-400">
-                          {percent.toFixed(0)}%
-                        </span>
-                      </div>
-                      <div className="mt-1 h-[4px] w-full overflow-hidden rounded-full bg-white/[0.05]">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-indigo-400"
-                          style={{ width: `${Math.min(100, Math.max(percent, row.hours > 0 ? 3 : 0))}%` }}
-                        />
-                      </div>
-                    </div>
-                    <span className="shrink-0 text-[11.5px] font-semibold tabular-nums text-slate-200">
-                      {formatHoursShort(row.hours)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-      </section>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <section className="glass-panel flex flex-col gap-3 p-5">
-          <div className="flex items-baseline justify-between gap-3">
-            <div>
-              <p className="text-[10.5px] font-medium text-slate-500">14-day activity</p>
-              <p className="mt-0.5 text-[12px] text-slate-400">
-                Last 7d {formatHoursShort(analytics.last7DaysHours)} · 30d {formatHoursShort(analytics.last30DaysHours)}
-                {trendPeakHours > 0 ? ` · peak ${formatHoursShort(trendPeakHours)}` : ""}
-              </p>
-            </div>
-          </div>
-          {trendPeakHours === 0 ? (
-            <div className="flex h-28 items-center justify-center rounded-[14px] border border-dashed border-white/[0.08] bg-white/[0.015] text-[12px] text-slate-500">
-              Log more sessions to see a trend.
-            </div>
-          ) : (
-            <div className="flex items-end gap-1.5">
-              {analytics.trend.map((point, index) => (
-                <TrendBar
-                  key={point.dateKey}
-                  hours={point.hours}
-                  isLatest={index === analytics.trend.length - 1}
-                  isWeekend={point.weekday === 0 || point.weekday === 6}
-                  label={point.label}
-                  maxHours={trendPeakHours}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="glass-panel flex flex-col gap-3 p-5">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-[10.5px] font-medium text-slate-500">Method allocation</p>
-            <p className="text-[11px] text-slate-500">
-              {analytics.methodRows.length} method{analytics.methodRows.length === 1 ? "" : "s"}
-            </p>
-          </div>
-          <ol className="divide-y divide-white/[0.05]">
-            {analytics.methodRows.slice(0, 6).map((row, index) => {
-              const percent = analytics.totalHours > 0 ? (row.hours / analytics.totalHours) * 100 : 0;
-              return (
-                <MethodAllocationRow
-                  key={row.methodKey}
-                  hours={row.hours}
-                  method={row.method}
-                  percent={percent}
-                  rank={index + 1}
-                  sessionCount={row.sessionCount}
-                />
-              );
-            })}
-          </ol>
-          {analytics.methodRows.length > 6 ? (
-            <p className="text-[11px] text-slate-500">
-              + {analytics.methodRows.length - 6} more method{analytics.methodRows.length - 6 === 1 ? "" : "s"}
-            </p>
-          ) : null}
         </section>
       </div>
     </div>

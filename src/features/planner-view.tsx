@@ -855,9 +855,11 @@ export function PlannerView() {
             {showMore ? (
               <div
                 role="menu"
-                className="absolute right-0 top-full z-30 mt-1.5 w-48 overflow-hidden rounded-[12px] border border-white/10 bg-slate-950/95 p-1 shadow-xl backdrop-blur"
+                className="absolute right-0 top-full z-30 mt-1.5 w-52 overflow-hidden rounded-[14px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] p-1.5 shadow-[0_18px_48px_var(--panel-shadow)] backdrop-blur-xl"
               >
-                <p className="px-2.5 pb-1 pt-1.5 text-[10px] text-slate-500">Import</p>
+                <p className="px-2.5 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 [color:var(--rich-text-muted,#64748b)]">
+                  Import
+                </p>
                 <button
                   type="button"
                   role="menuitem"
@@ -866,9 +868,9 @@ export function PlannerView() {
                     setShowIcsImport(false);
                     setShowImport(true);
                   }}
-                  className="flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-xs text-slate-200 transition hover:bg-white/[0.06]"
+                  className="flex w-full items-center gap-2 rounded-[10px] px-2.5 py-2 text-left text-xs font-medium text-slate-200 transition hover:bg-[color:var(--surface-muted)] [color:var(--rich-text,#e2e8f0)]"
                 >
-                  <Upload className="h-3.5 w-3.5 text-slate-400" />
+                  <Upload className="h-3.5 w-3.5 text-slate-400 [color:var(--rich-text-muted,#94a3b8)]" />
                   Legacy workbook
                 </button>
                 <button
@@ -879,9 +881,9 @@ export function PlannerView() {
                     setShowImport(false);
                     setShowIcsImport(true);
                   }}
-                  className="flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-xs text-slate-200 transition hover:bg-white/[0.06]"
+                  className="flex w-full items-center gap-2 rounded-[10px] px-2.5 py-2 text-left text-xs font-medium text-slate-200 transition hover:bg-[color:var(--surface-muted)] [color:var(--rich-text,#e2e8f0)]"
                 >
-                  <Upload className="h-3.5 w-3.5 text-slate-400" />
+                  <Upload className="h-3.5 w-3.5 text-slate-400 [color:var(--rich-text-muted,#94a3b8)]" />
                   Calendar (.ics)
                 </button>
               </div>
