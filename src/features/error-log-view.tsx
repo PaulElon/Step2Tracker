@@ -742,7 +742,17 @@ export function ErrorLogView() {
   }
 
   async function handleDelete(id: string) {
-    await trashErrorLogEntry(id);
+    const deletedIndex = sorted.findIndex((entry) => entry.id === id);
+    const fallbackEntry =
+      deletedIndex >= 0 ? sorted[deletedIndex + 1] ?? sorted[deletedIndex - 1] ?? null : sorted[0] ?? null;
+    const deletedEntry = entries.find((entry) => entry.id === id) ?? null;
+    const deleted = await trashErrorLogEntry(id);
+    if (deleted) {
+      setSelectedEntryId(fallbackEntry?.id ?? null);
+      if (deletedEntry) {
+        setToast(`Deleted "${deletedEntry.topic || "Untitled topic"}".`);
+      }
+    }
     setConfirmDeleteId(null);
   }
 
@@ -1542,15 +1552,18 @@ function InsightsRail({
             <ActionRow icon={Download} label="Export This Entry" onClick={() => onExportEntry(selectedEntry)} />
             <div className="mt-2 border-t border-white/[0.06] pt-2">
               {isConfirming ? (
-                <div className="flex items-center justify-between gap-2 rounded-lg border border-rose-400/25 bg-rose-500/[0.06] px-3 py-2">
-                  <p className="text-[11px] text-rose-200">Delete this entry?</p>
-                  <div className="flex items-center gap-2">
+                <div className="rounded-lg border border-rose-400/25 bg-rose-500/[0.06] px-3 py-2">
+                  <p className="text-[11px] font-semibold text-rose-200">Delete this error log entry?</p>
+                  <p className="mt-1 text-[11px] text-slate-300">
+                    "{selectedEntry.topic || "Untitled topic"}" will be removed.
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => onDeleteConfirm(selectedEntry.id)}
                       className="text-[11px] font-medium text-rose-300 hover:text-rose-200"
                     >
-                      Confirm
+                      Delete
                     </button>
                     <button
                       type="button"
