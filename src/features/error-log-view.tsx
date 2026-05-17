@@ -852,7 +852,6 @@ export function ErrorLogView() {
           entries={entries}
           selectedEntry={selectedEntry}
           topMissedTopics={topMissedTopics}
-          recurringPatterns={recurringPatternsCount}
           nextReview={nextReviewSuggestions}
           themeId={themeId}
           weakTopicAdded={selectedEntry ? addedWeakTopicIds.has(selectedEntry.id) : false}
@@ -1427,7 +1426,6 @@ function InsightsRail({
   entries,
   selectedEntry,
   topMissedTopics,
-  recurringPatterns,
   nextReview,
   themeId,
   weakTopicAdded,
@@ -1443,7 +1441,6 @@ function InsightsRail({
   entries: ErrorLogEntry[];
   selectedEntry: ErrorLogEntry | null;
   topMissedTopics: Array<[string, number]>;
-  recurringPatterns: number;
   nextReview: ErrorLogEntry[];
   themeId: string;
   weakTopicAdded: boolean;
@@ -1486,17 +1483,6 @@ function InsightsRail({
                 );
               })}
             </ul>
-            <div className="mt-3 border-t border-white/[0.06] pt-3">
-              <p className="text-[10px] font-semibold text-slate-500">Recurring Patterns</p>
-              <p className="mt-1 text-[1.4rem] font-semibold leading-none tracking-[-0.03em] text-white">{recurringPatterns}</p>
-              <p className="mt-1 text-[11px] text-slate-500">
-                {recurringPatterns === 0
-                  ? "No repeat misses yet"
-                  : recurringPatterns === 1
-                    ? "1 repeat miss flagged"
-                    : `${recurringPatterns} repeat misses flagged`}
-              </p>
-            </div>
           </>
         )}
       </RailCard>

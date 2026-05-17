@@ -164,14 +164,11 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
       if (!topic) continue;
       topicCounts.set(topic, (topicCounts.get(topic) ?? 0) + 1);
     }
-    if (topicCounts.size) {
-      const [label, count] = [...topicCounts.entries()].sort(
-        (left, right) => right[1] - left[1],
-      )[0];
-      if (count >= 2) {
-        return { kind: "topic", label, count };
-      }
-      return null;
+    const topTopic = [...topicCounts.entries()].sort(
+      (left, right) => right[1] - left[1],
+    )[0];
+    if (topTopic && topTopic[1] >= 2) {
+      return { kind: "topic", label: topTopic[0], count: topTopic[1] };
     }
     const errorTypeCounts = new Map<string, number>();
     for (const entry of errorLogEntries) {
@@ -180,10 +177,13 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
         (errorTypeCounts.get(entry.errorType) ?? 0) + 1,
       );
     }
-    const [label, count] = [...errorTypeCounts.entries()].sort(
+    const topErrorType = [...errorTypeCounts.entries()].sort(
       (left, right) => right[1] - left[1],
     )[0];
-    return { kind: "errorType", label, count };
+    if (topErrorType && topErrorType[1] >= 2) {
+      return { kind: "errorType", label: topErrorType[0], count: topErrorType[1] };
+    }
+    return null;
   }, [errorLogEntries]);
 
   const topCategory = useMemo<TopCategory | null>(() => {

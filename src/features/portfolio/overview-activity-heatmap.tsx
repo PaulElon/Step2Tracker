@@ -437,18 +437,9 @@ function OverviewActivityHeatmapBody() {
                     </p>
                     <p className="mt-0.5 flex items-center gap-1.5 text-slate-400 [color:var(--rich-text-muted,#94a3b8)]">
                       <span className="shrink-0">Top method:</span>
-                      {tooltipTopMethod ? (
-                        <>
-                          <span className="truncate [color:var(--rich-text,#e2e8f0)]">{tooltipTopMethod.label}</span>
-                          {tooltipTopMethod.isAuto ? (
-                            <span className="rounded-full border border-cyan-400/30 bg-cyan-500/15 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
-                              auto
-                            </span>
-                          ) : null}
-                        </>
-                      ) : (
-                        <span className="[color:var(--rich-text,#e2e8f0)]">—</span>
-                      )}
+                      <span className="truncate [color:var(--rich-text,#e2e8f0)]">
+                        {tooltipTopMethod ? tooltipTopMethod.label : "—"}
+                      </span>
                     </p>
                     <span
                       className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r"
@@ -466,7 +457,7 @@ function OverviewActivityHeatmapBody() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-2">
+      <div className="flex flex-col gap-2 border-t border-white/10 pt-2">
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
           <span>Less</span>
           <span className="h-2.5 w-2.5 rounded-[3px] border border-white/[0.08] bg-slate-500/15" />
@@ -477,9 +468,16 @@ function OverviewActivityHeatmapBody() {
           <span>More</span>
         </div>
 
-        <MetricStrip columns="sm:grid-cols-2 xl:grid-cols-4" className="text-[13px] text-slate-200">
+        <MetricStrip
+          columns="grid-cols-2 sm:grid-cols-3 md:grid-cols-5"
+          className="text-[13px] text-slate-200"
+        >
           <MetricStripItem label="Daily average" value={formatMinutes(Math.round(dailyAverageMinutes))} />
-          <MetricStripItem label="Days learned" value={`${Math.round(daysLearnedPercent)}%`} meta={`${activeDays}/${daysElapsed} days`} />
+          <MetricStripItem
+            label="Days learned"
+            value={`${Math.round(daysLearnedPercent)}%`}
+            meta={`${activeDays}/${daysElapsed} days`}
+          />
           <MetricStripItem label="Longest streak" value={`${streaks.longest} day${streaks.longest === 1 ? "" : "s"}`} />
           <MetricStripItem label="Current streak" value={`${streaks.current} day${streaks.current === 1 ? "" : "s"}`} />
           <MetricStripItem label="Total tracked" value={formatMinutes(totalStudyMinutes)} />
@@ -521,9 +519,7 @@ function OverviewActivityHeatmapBody() {
               <StatTile
                 label="Top Method"
                 value={selectedTopMethod?.label ?? "—"}
-                meta={selectedTopMethod?.isAuto ? "Auto-tracked method" : "Most-used method"}
-                badge={selectedTopMethod?.isAuto ? "Auto" : undefined}
-                tone={selectedTopMethod?.isAuto ? "info" : "default"}
+                meta="Most-used method"
               />
               <StatTile
                 label="Distraction"
@@ -554,14 +550,7 @@ function OverviewActivityHeatmapBody() {
                         <li key={entry.method} className="py-3">
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className="truncate text-sm font-medium text-slate-200">{display.label}</span>
-                                {display.isAuto ? (
-                                  <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
-                                    auto
-                                  </span>
-                                ) : null}
-                              </div>
+                              <span className="block truncate text-sm font-medium text-slate-200">{display.label}</span>
                               <div className="mt-0.5 text-xs text-slate-500">
                                 {entry.sessionCount} session{entry.sessionCount === 1 ? "" : "s"}
                               </div>
@@ -593,8 +582,9 @@ function OverviewActivityHeatmapBody() {
                 {selectedActivity?.allSessions.length ? (
                   <div className="mt-3 max-h-[min(44vh,420px)] space-y-2 overflow-y-auto pr-1">
                     {selectedActivity.allSessions.map((session) => {
-                      const { label, isAuto } = splitAutoSessionMethodLabel(session.method);
+                      const { label } = splitAutoSessionMethodLabel(session.method);
                       const minutes = Math.max(0, Math.round(session.hours * 60));
+                      const hasFlag = session.isDistraction || session.isLive;
                       return (
                         <div
                           key={session.id}
@@ -604,23 +594,20 @@ function OverviewActivityHeatmapBody() {
                             <span className="truncate text-sm font-medium text-slate-100">{label}</span>
                             <span className="text-sm tabular-nums text-slate-300">{formatMinutes(minutes)}</span>
                           </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                            {isAuto ? (
-                              <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
-                                auto
-                              </span>
-                            ) : null}
-                            {session.isDistraction ? (
-                              <span className="rounded-full border border-rose-400/25 bg-rose-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-rose-200">
-                                distraction
-                              </span>
-                            ) : null}
-                            {session.isLive ? (
-                              <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-emerald-200">
-                                live
-                              </span>
-                            ) : null}
-                          </div>
+                          {hasFlag ? (
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              {session.isDistraction ? (
+                                <span className="rounded-full border border-rose-400/25 bg-rose-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-rose-200">
+                                  distraction
+                                </span>
+                              ) : null}
+                              {session.isLive ? (
+                                <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-emerald-200">
+                                  live
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
                           {session.notes ? (
                             <p className="mt-1.5 text-xs leading-5 text-slate-400">{session.notes}</p>
                           ) : null}

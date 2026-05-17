@@ -1,13 +1,14 @@
 import { useMemo } from "react";
-import { EmptyState, MetricStrip, MetricStripItem, Panel } from "../components/ui";
+import { EmptyState, Panel } from "../components/ui";
 import { formatMinutes } from "../lib/datetime";
-import { allocationByMethod, totalsByDay } from "../lib/tf-session-adapters";
+import { allocationByMethodDisplay, totalsByDay } from "../lib/tf-session-adapters";
 import { TimeFolioStoreProvider, useTimeFolioStore } from "../state/tf-store";
 import type { TfSessionLog } from "../types/models";
 
 type TrendPoint = {
   dateKey: string;
   label: string;
+  weekday: number;
   hours: number;
 };
 
@@ -16,6 +17,7 @@ const DAY_LABEL_FORMATTER = new Intl.DateTimeFormat("en-US", {
 });
 
 const BEST_DAY_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  weekday: "short",
   month: "short",
   day: "numeric",
 });
@@ -42,6 +44,7 @@ function buildTrendPoints(dailyTotals: Record<string, number>): TrendPoint[] {
     return {
       dateKey,
       label: DAY_LABEL_FORMATTER.format(date),
+      weekday: date.getDay(),
       hours: dailyTotals[dateKey] ?? 0,
     };
   });
@@ -56,111 +59,152 @@ function sumHoursInRange(logs: TfSessionLog[], startKey: string, endKey: string)
   }, 0);
 }
 
-function buildNarrative(params: {
-  totalHours: number;
-  sessionCount: number;
-  topMethod: string | null;
-  focusRate: number;
-  last7DaysHours: number;
-  last30DaysHours: number;
-}) {
-  const { totalHours, sessionCount, topMethod, focusRate, last7DaysHours, last30DaysHours } = params;
-
-  if (sessionCount === 0) {
-    return "No sessions logged yet. Analytics will populate once study time is recorded.";
-  }
-
-  const totalHoursText = formatMinutes(Math.round(totalHours * 60));
-  const last7DaysText = formatMinutes(Math.round(last7DaysHours * 60));
-  const last30DaysText = formatMinutes(Math.round(last30DaysHours * 60));
-
-  let narrative = `You have logged ${totalHoursText} across ${sessionCount} session${sessionCount === 1 ? "" : "s"}.`;
-
-  if (topMethod) {
-    narrative += ` ${topMethod} is your leading method so far.`;
-  }
-
-  if (last7DaysHours === last30DaysHours) {
-    narrative += ` ${last7DaysText} logged in the last 7 days.`;
-  } else {
-    narrative += ` ${last7DaysText} in the last 7 days, ${last30DaysText} in the last 30 days.`;
-  }
-
-  if (focusRate >= 90) {
-    narrative += ` Focus quality is excellent at ${focusRate.toFixed(0)}% distraction-free time.`;
-  } else if (focusRate >= 70) {
-    narrative += ` Focus quality is solid at ${focusRate.toFixed(0)}% distraction-free time.`;
-  } else {
-    narrative += ` Focus quality is ${focusRate.toFixed(0)}%, so distraction cleanup is the clearest next lever.`;
-  }
-
-  return narrative;
+function formatHoursShort(hours: number): string {
+  return formatMinutes(Math.round(hours * 60));
 }
 
-function TrendBar({
-  hours,
-  isLatest,
-  label,
-  maxHours,
-}: {
-  hours: number;
-  isLatest: boolean;
-  label: string;
-  maxHours: number;
-}) {
-  const height = maxHours > 0 ? Math.max((hours / maxHours) * 100, hours > 0 ? 10 : 2) : 2;
+function formatSignedHoursShort(hours: number): string {
+  if (Math.abs(hours) < 0.05) {
+    return "Flat vs prior 7d";
+  }
+  const sign = hours > 0 ? "+" : "−";
+  return `${sign}${formatHoursShort(Math.abs(hours))} vs prior 7d`;
+}
 
+function FocusRing({ percent }: { percent: number }) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  const radius = 16;
+  const circumference = 2 * Math.PI * radius;
+  const dash = (clamped / 100) * circumference;
   return (
-    <div className="flex flex-1 flex-col items-center gap-2">
-      <div className="flex h-40 w-full items-end rounded-[18px] border border-white/10 bg-slate-950/45 px-1.5 py-1.5">
-        <div
-          className={`relative w-full overflow-hidden rounded-[14px] ${isLatest ? "bg-cyan-400/20" : "bg-slate-700/40"}`}
-          style={{ height: `${height}%` }}
-          title={`${label}: ${formatMinutes(Math.round(hours * 60))}`}
-        >
-          <div className="absolute inset-0 bg-gradient-to-t from-cyan-400 via-sky-400 to-indigo-400 opacity-90" />
-          <div className="absolute inset-x-0 bottom-0 h-2/3 bg-white/10" />
-        </div>
+    <svg viewBox="0 0 40 40" className="h-11 w-11 shrink-0" aria-hidden="true">
+      <circle
+        cx={20}
+        cy={20}
+        r={radius}
+        fill="none"
+        stroke="rgba(148,163,184,0.18)"
+        strokeWidth={3.5}
+      />
+      <circle
+        cx={20}
+        cy={20}
+        r={radius}
+        fill="none"
+        stroke="url(#analytics-focus-ring)"
+        strokeWidth={3.5}
+        strokeLinecap="round"
+        strokeDasharray={`${dash.toFixed(2)} ${circumference.toFixed(2)}`}
+        transform="rotate(-90 20 20)"
+      />
+      <defs>
+        <linearGradient id="analytics-focus-ring" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stopColor="rgb(94,234,212)" />
+          <stop offset="100%" stopColor="rgb(56,189,248)" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+function StatChip({
+  label,
+  value,
+  meta,
+  viz,
+}: {
+  label: string;
+  value: string;
+  meta?: string;
+  viz?: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-3 rounded-[18px] border border-white/[0.06] bg-white/[0.025] px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-medium text-slate-500">{label}</p>
+        <p className="mt-1 truncate text-[1.35rem] font-semibold tabular-nums text-white">{value}</p>
+        {meta ? <p className="mt-0.5 truncate text-[11px] text-slate-400">{meta}</p> : null}
       </div>
-      <div className="text-center">
-        <div className="text-[11px] font-medium text-slate-500">{label}</div>
-        <div className="mt-0.5 text-[11px] tabular-nums text-slate-500">{formatMinutes(Math.round(hours * 60))}</div>
-      </div>
+      {viz ? <div className="shrink-0">{viz}</div> : null}
     </div>
   );
 }
 
-function MethodRow({
+function MethodAllocationRow({
   hours,
   method,
   percent,
+  rank,
   sessionCount,
 }: {
   hours: number;
   method: string;
   percent: number;
+  rank: number;
   sessionCount: number;
 }) {
+  const barWidth = Math.max(percent, hours > 0 ? 3 : 0);
   return (
-    <div className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-slate-100">{method}</div>
-          <div className="mt-0.5 text-xs text-slate-500">
-            {sessionCount} session{sessionCount === 1 ? "" : "s"}
-          </div>
+    <li className="grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-3 py-2">
+      <span className="text-[11px] font-medium tabular-nums text-slate-500">{rank}</span>
+      <div className="min-w-0">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="truncate text-[13px] font-medium text-slate-100">{method}</p>
+          <span className="shrink-0 text-[11px] tabular-nums text-slate-400">
+            {percent.toFixed(0)}%
+          </span>
         </div>
-        <div className="text-right">
-          <div className="text-sm font-semibold tabular-nums text-slate-100">{formatMinutes(Math.round(hours * 60))}</div>
-          <div className="text-xs tabular-nums text-slate-400">{percent.toFixed(0)}%</div>
+        <div className="mt-1.5 h-[5px] w-full overflow-hidden rounded-full bg-white/[0.05]">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-indigo-400"
+            style={{ width: `${Math.min(100, barWidth)}%` }}
+          />
         </div>
+        <p className="mt-1 text-[10.5px] text-slate-500">
+          {sessionCount} session{sessionCount === 1 ? "" : "s"}
+        </p>
       </div>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800">
+      <span className="self-center text-[12px] font-semibold tabular-nums text-slate-200">
+        {formatHoursShort(hours)}
+      </span>
+    </li>
+  );
+}
+
+function TrendBar({
+  hours,
+  isLatest,
+  isWeekend,
+  label,
+  maxHours,
+}: {
+  hours: number;
+  isLatest: boolean;
+  isWeekend: boolean;
+  label: string;
+  maxHours: number;
+}) {
+  const height = maxHours > 0 ? Math.max((hours / maxHours) * 100, hours > 0 ? 12 : 3) : 3;
+  const surface = isLatest
+    ? "bg-gradient-to-t from-cyan-400 via-sky-400 to-indigo-400"
+    : isWeekend
+      ? "bg-gradient-to-t from-slate-500/40 via-slate-400/40 to-slate-300/40"
+      : "bg-gradient-to-t from-cyan-400/65 via-sky-400/55 to-indigo-400/55";
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
+      <div
+        className="flex h-28 w-full items-end justify-center"
+        title={`${label}: ${formatHoursShort(hours)}`}
+      >
         <div
-          className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-sky-500 to-cyan-400"
-          style={{ width: `${percent}%` }}
+          className={`w-full max-w-[18px] rounded-t-[5px] ${surface}`}
+          style={{ height: `${height}%` }}
         />
       </div>
+      <span className={`text-[10px] tabular-nums ${isLatest ? "font-semibold text-cyan-200" : "text-slate-500"}`}>
+        {label.charAt(0)}
+      </span>
     </div>
   );
 }
@@ -173,9 +217,11 @@ function TimeFolioAnalyticsContent() {
     const today = new Date();
     const todayKey = toDateKey(today);
     const last7StartKey = toDateKey(shiftDate(today, -6));
+    const prev7StartKey = toDateKey(shiftDate(today, -13));
+    const prev7EndKey = toDateKey(shiftDate(today, -7));
     const last30StartKey = toDateKey(shiftDate(today, -29));
     const dailyTotals = totalsByDay(sessions);
-    const methodRows = allocationByMethod(sessions);
+    const methodRows = allocationByMethodDisplay(sessions);
     const trend = buildTrendPoints(dailyTotals);
 
     let totalHours = 0;
@@ -192,6 +238,7 @@ function TimeFolioAnalyticsContent() {
     const focusHours = totalHours - distractionHours;
     const focusRate = totalHours > 0 ? (focusHours / totalHours) * 100 : 0;
     const last7DaysHours = sumHoursInRange(sessions, last7StartKey, todayKey);
+    const prev7DaysHours = sumHoursInRange(sessions, prev7StartKey, prev7EndKey);
     const last30DaysHours = sumHoursInRange(sessions, last30StartKey, todayKey);
     const bestDayEntry = Object.entries(dailyTotals).sort((left, right) => {
       if (right[1] !== left[1]) {
@@ -199,23 +246,19 @@ function TimeFolioAnalyticsContent() {
       }
       return right[0].localeCompare(left[0]);
     })[0] ?? null;
+    const activeDayAverageHours = activeDays > 0 ? totalHours / activeDays : 0;
 
     return {
+      activeDayAverageHours,
       activeDays,
       bestDayEntry,
       distractionHours,
+      focusHours,
       focusRate,
       last30DaysHours,
       last7DaysHours,
       methodRows,
-      narrative: buildNarrative({
-        focusRate,
-        last7DaysHours,
-        last30DaysHours,
-        sessionCount: sessions.length,
-        topMethod: methodRows[0]?.method ?? null,
-        totalHours,
-      }),
+      prev7DaysHours,
       totalHours,
       trend,
     };
@@ -244,12 +287,7 @@ function TimeFolioAnalyticsContent() {
   if (sessions.length === 0) {
     return (
       <div className="space-y-4">
-        <div className="space-y-1">
-          <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Analytics</h2>
-          <p className="text-sm text-slate-400">
-            Combined study-time insights across method mix, focus quality, and recent activity.
-          </p>
-        </div>
+        <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Analytics</h2>
         <EmptyState
           title="No study time analytics yet"
           description="Log your first session in Session Log to unlock allocation, summary, and trend views."
@@ -258,119 +296,190 @@ function TimeFolioAnalyticsContent() {
     );
   }
 
-  const topMethods = analytics.methodRows.slice(0, 5);
+  const top4Methods = analytics.methodRows.slice(0, 4);
   const trendPeakHours = analytics.trend.reduce((max, point) => Math.max(max, point.hours), 0);
   const bestDayLabel = analytics.bestDayEntry
     ? BEST_DAY_FORMATTER.format(new Date(`${analytics.bestDayEntry[0]}T12:00:00`))
-    : "No sessions yet";
-  const focusHours = analytics.totalHours - analytics.distractionHours;
+    : null;
+  const bestDayHours = analytics.bestDayEntry ? analytics.bestDayEntry[1] : 0;
+  const topMethod = analytics.methodRows[0] ?? null;
+  const topMethodShare = topMethod && analytics.totalHours > 0
+    ? (topMethod.hours / analytics.totalHours) * 100
+    : 0;
+  const showMomentum = sessions.length >= 4 && analytics.last7DaysHours + analytics.prev7DaysHours > 0;
+  const hasDistraction = analytics.distractionHours > 0;
+  const focusMeta = hasDistraction
+    ? `${formatHoursShort(analytics.distractionHours)} distraction`
+    : "Distraction-free";
 
   return (
-    <div className="space-y-4 pb-2">
-      <div className="space-y-1">
+    <div className="flex flex-col gap-4 pb-2">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Analytics</h2>
-        <p className="text-sm text-slate-400">
-          Combined study-time insights across method mix, focus quality, and recent activity.
-        </p>
+        <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] tabular-nums text-slate-400">
+          {sessions.length} session{sessions.length === 1 ? "" : "s"} · {analytics.activeDays} active day{analytics.activeDays === 1 ? "" : "s"}
+        </span>
       </div>
 
-      <Panel
-        title="Study Time Dashboard"
-        subtitle="A unified read on workload, focus quality, and how your methods are actually being used."
-        action={
-          <div className="rounded-full border border-white/10 bg-slate-950/60 px-3 py-1 text-xs uppercase tracking-[0.22em] text-slate-400">
-            {sessions.length} session{sessions.length === 1 ? "" : "s"}
-          </div>
-        }
-      >
-        <p className="max-w-4xl text-sm leading-7 text-slate-300">{analytics.narrative}</p>
-      </Panel>
-
-      <MetricStrip columns="sm:grid-cols-2 xl:grid-cols-4">
-        <MetricStripItem label="Total time" value={formatMinutes(Math.round(analytics.totalHours * 60))} meta="Across all recorded study sessions." />
-        <MetricStripItem label="Sessions" value={String(sessions.length)} meta={`${analytics.activeDays} active day${analytics.activeDays === 1 ? "" : "s"} captured.`} />
-        <MetricStripItem label="Top method" value={analytics.methodRows[0]?.method ?? "—"} meta={analytics.methodRows[0] ? `${formatMinutes(Math.round(analytics.methodRows[0].hours * 60))} logged` : "Waiting for session data."} />
-        <MetricStripItem label="Focus rate" value={`${analytics.focusRate.toFixed(0)}%`} meta={analytics.totalHours < 1 ? `Based on ${formatMinutes(Math.round(analytics.totalHours * 60))} total — log more for a reliable rate.` : `${formatMinutes(Math.round(analytics.distractionHours * 60))} marked as distraction.`} />
-      </MetricStrip>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.95fr)]">
-        <Panel title="Activity Trend" subtitle="Last 14 days of recorded study time.">
-          <div className="grid gap-4">
-            <MetricStrip columns="sm:grid-cols-3">
-              <MetricStripItem label="Last 7 days" value={formatMinutes(Math.round(analytics.last7DaysHours * 60))} />
-              <MetricStripItem label="Last 30 days" value={formatMinutes(Math.round(analytics.last30DaysHours * 60))} />
-              <MetricStripItem label="Best day" value={bestDayLabel} />
-            </MetricStrip>
-
-            {trendPeakHours === 0 ? (
-              <div className="flex h-32 items-center justify-center rounded-[18px] border border-white/10 bg-slate-950/35 text-sm text-slate-500">
-                Log more sessions to see a trend.
+      <section className="glass-panel flex flex-col gap-5 p-5 xl:p-6">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.95fr)]">
+          <div className="flex flex-col justify-between gap-3">
+            <div>
+              <p className="text-[10.5px] font-medium text-slate-500">Total tracked</p>
+              <p className="mt-2 font-display text-[3.25rem] font-semibold leading-none tracking-[-0.04em] text-white tabular-nums">
+                {formatHoursShort(analytics.totalHours)}
+              </p>
+              <p className="mt-2 text-[12px] text-slate-300">
+                {showMomentum
+                  ? formatSignedHoursShort(analytics.last7DaysHours - analytics.prev7DaysHours)
+                  : `${formatHoursShort(analytics.last7DaysHours)} in last 7 days`}
+              </p>
+            </div>
+            {trendPeakHours > 0 ? (
+              <div className="flex items-end gap-[3px]">
+                {analytics.trend.map((point) => {
+                  const h = Math.max((point.hours / trendPeakHours) * 28, point.hours > 0 ? 4 : 2);
+                  return (
+                    <span
+                      key={`hero-${point.dateKey}`}
+                      className="w-[6px] rounded-[2px] bg-cyan-300/60"
+                      style={{ height: `${h}px` }}
+                      title={`${point.label}: ${formatHoursShort(point.hours)}`}
+                    />
+                  );
+                })}
+                <span className="ml-2 text-[10.5px] text-slate-500">14d</span>
               </div>
-            ) : (
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {analytics.trend.map((point, index) => (
-                  <TrendBar
-                    key={point.dateKey}
-                    hours={point.hours}
-                    isLatest={index === analytics.trend.length - 1}
-                    label={point.label}
-                    maxHours={trendPeakHours}
-                  />
-                ))}
-              </div>
-            )}
+            ) : null}
           </div>
-        </Panel>
 
-        <Panel title="Summary" subtitle="A quick narrative plus the biggest operating signals.">
-          <div className="space-y-4">
-            <MetricStrip columns="sm:grid-cols-2">
-              <MetricStripItem label="Focus time" value={formatMinutes(Math.round(focusHours * 60))} />
-              <MetricStripItem label="Method count" value={String(analytics.methodRows.length)} />
-            </MetricStrip>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <StatChip
+              label="Focus rate"
+              value={`${analytics.focusRate.toFixed(0)}%`}
+              meta={focusMeta}
+              viz={<FocusRing percent={analytics.focusRate} />}
+            />
+            <StatChip
+              label="Daily pace"
+              value={formatHoursShort(analytics.activeDayAverageHours)}
+              meta={`avg on ${analytics.activeDays} active day${analytics.activeDays === 1 ? "" : "s"}`}
+            />
+            <StatChip
+              label="Top method"
+              value={topMethod ? topMethod.method : "—"}
+              meta={
+                topMethod
+                  ? `${formatHoursShort(topMethod.hours)} · ${topMethodShare.toFixed(0)}% share`
+                  : "No method data yet"
+              }
+            />
+            <StatChip
+              label="Best day"
+              value={bestDayLabel ?? "—"}
+              meta={bestDayLabel ? `${formatHoursShort(bestDayHours)} logged` : "No daily totals"}
+            />
           </div>
-        </Panel>
-      </div>
+        </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-        <Panel title="Allocation" subtitle="Study time grouped by method and session count.">
-          <div className="space-y-3">
-            {analytics.methodRows.map((row) => {
+        {top4Methods.length > 0 ? (
+          <div className="border-t border-white/[0.06] pt-4">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-[10.5px] font-medium text-slate-500">Method mix</p>
+              <p className="text-[11px] text-slate-500">Top {top4Methods.length} of {analytics.methodRows.length}</p>
+            </div>
+            <div className="mt-3 grid gap-x-6 gap-y-2.5 md:grid-cols-2">
+              {top4Methods.map((row, index) => {
+                const percent = analytics.totalHours > 0 ? (row.hours / analytics.totalHours) * 100 : 0;
+                return (
+                  <div key={row.methodKey} className="flex min-w-0 items-center gap-3">
+                    <span className="text-[11px] font-medium tabular-nums text-slate-500">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="truncate text-[12.5px] font-medium text-slate-100">{row.method}</p>
+                        <span className="shrink-0 text-[11px] tabular-nums text-slate-400">
+                          {percent.toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="mt-1 h-[4px] w-full overflow-hidden rounded-full bg-white/[0.05]">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-indigo-400"
+                          style={{ width: `${Math.min(100, Math.max(percent, row.hours > 0 ? 3 : 0))}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-[11.5px] font-semibold tabular-nums text-slate-200">
+                      {formatHoursShort(row.hours)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        <section className="glass-panel flex flex-col gap-3 p-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <div>
+              <p className="text-[10.5px] font-medium text-slate-500">14-day activity</p>
+              <p className="mt-0.5 text-[12px] text-slate-400">
+                Last 7d {formatHoursShort(analytics.last7DaysHours)} · 30d {formatHoursShort(analytics.last30DaysHours)}
+                {trendPeakHours > 0 ? ` · peak ${formatHoursShort(trendPeakHours)}` : ""}
+              </p>
+            </div>
+          </div>
+          {trendPeakHours === 0 ? (
+            <div className="flex h-28 items-center justify-center rounded-[14px] border border-dashed border-white/[0.08] bg-white/[0.015] text-[12px] text-slate-500">
+              Log more sessions to see a trend.
+            </div>
+          ) : (
+            <div className="flex items-end gap-1.5">
+              {analytics.trend.map((point, index) => (
+                <TrendBar
+                  key={point.dateKey}
+                  hours={point.hours}
+                  isLatest={index === analytics.trend.length - 1}
+                  isWeekend={point.weekday === 0 || point.weekday === 6}
+                  label={point.label}
+                  maxHours={trendPeakHours}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="glass-panel flex flex-col gap-3 p-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-[10.5px] font-medium text-slate-500">Method allocation</p>
+            <p className="text-[11px] text-slate-500">
+              {analytics.methodRows.length} method{analytics.methodRows.length === 1 ? "" : "s"}
+            </p>
+          </div>
+          <ol className="divide-y divide-white/[0.05]">
+            {analytics.methodRows.slice(0, 6).map((row, index) => {
               const percent = analytics.totalHours > 0 ? (row.hours / analytics.totalHours) * 100 : 0;
               return (
-                <MethodRow
+                <MethodAllocationRow
                   key={row.methodKey}
                   hours={row.hours}
                   method={row.method}
                   percent={percent}
+                  rank={index + 1}
                   sessionCount={row.sessionCount}
                 />
               );
             })}
-          </div>
-        </Panel>
-
-        <Panel title="Top Methods" subtitle="Highest-share study methods right now.">
-          <div className="space-y-3">
-            {topMethods.map((row, index) => {
-              const percent = analytics.totalHours > 0 ? (row.hours / analytics.totalHours) * 100 : 0;
-              return (
-                <div key={row.methodKey} className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-[11px] text-slate-500">#{index + 1}</div>
-                      <div className="mt-1 truncate text-sm font-medium text-slate-100">{row.method}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-semibold text-white">{percent.toFixed(0)}%</div>
-                      <div className="text-xs text-slate-400">{formatMinutes(Math.round(row.hours * 60))}</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Panel>
+          </ol>
+          {analytics.methodRows.length > 6 ? (
+            <p className="text-[11px] text-slate-500">
+              + {analytics.methodRows.length - 6} more method{analytics.methodRows.length - 6 === 1 ? "" : "s"}
+            </p>
+          ) : null}
+        </section>
       </div>
     </div>
   );
