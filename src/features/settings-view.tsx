@@ -1133,12 +1133,13 @@ export function SettingsView({
                 subtitle="Manage your local TimeFolio data."
               >
                 <div className="grid gap-4">
-                  <div className="panel-subtle flex items-start gap-3">
-                    <Database className="mt-0.5 h-5 w-5 shrink-0 text-cyan-200" />
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold text-white">Local-first storage</p>
-                      <p className="text-xs leading-5 text-slate-300">{persistenceCopy}</p>
-                    </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-400">
+                    <Database className="h-4 w-4 shrink-0 text-cyan-200" />
+                    <span className="text-slate-200">Local-first storage</span>
+                    <span aria-hidden className="text-slate-500">
+                      •
+                    </span>
+                    <span>{persistenceCopy}</span>
                   </div>
 
                   <MetricStrip columns="sm:grid-cols-2 lg:grid-cols-4">
