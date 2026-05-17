@@ -2,7 +2,6 @@ import {
   Database,
   Plus,
   RotateCcw,
-  ShieldPlus,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -904,9 +903,11 @@ export default function App() {
         <aside className="hidden w-[236px] shrink-0 xl:flex">
           <div className="glass-panel app-sidebar-shell flex h-full w-full flex-col gap-5 p-3">
             <div className="flex items-center gap-2.5 px-2 pt-1">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.04]">
-                <ShieldPlus className="h-4 w-4 text-cyan-200" />
-              </div>
+              <img
+                src="/TimeFolioLogo.png"
+                alt="TimeFolio"
+                className="h-8 w-8 shrink-0 rounded-[10px] bg-white object-contain"
+              />
               <div className="min-w-0">
                 <h1 className="truncate text-[13px] font-semibold text-white">TimeFolio</h1>
               </div>
