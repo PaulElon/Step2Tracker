@@ -681,7 +681,7 @@ function AboutPanel() {
       <div className="flex flex-col gap-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-[16px] border border-white/10 bg-slate-950/45 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Installed version</p>
+            <p className="text-[11px] text-slate-500">Installed version</p>
             <p className="mt-2 text-lg font-semibold text-white">
               {displayVersion ? `v${displayVersion}` : "—"}
             </p>
@@ -690,7 +690,7 @@ function AboutPanel() {
             </p>
           </div>
           <div className="rounded-[16px] border border-white/10 bg-slate-950/45 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Update status</p>
+            <p className="text-[11px] text-slate-500">Update status</p>
             <p className="mt-2 text-sm">{statusLine}</p>
             <p className="mt-1 text-xs text-slate-400">
               Checked automatically once per day.
@@ -946,7 +946,7 @@ export function SettingsView({
               if (groupItems.length === 0) return null;
               return (
               <div key={group.id} className="space-y-0.5">
-                <p className="px-3 pb-1 text-[0.6rem] uppercase tracking-[0.22em] text-slate-500">
+                <p className="px-3 pb-1 text-[0.6rem] text-slate-500">
                   {group.label}
                 </p>
                 {groupItems.map((item) => (
@@ -1040,12 +1040,12 @@ export function SettingsView({
             >
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="panel-subtle">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Daily target</p>
+                  <p className="text-[11px] text-slate-500">Daily target</p>
                   <p className="mt-2 text-3xl font-semibold text-white">
                     {Math.max(Math.round(dailyGoalMinutes / 60), 1)}h
                   </p>
                   <label
-                    className="mt-5 block text-xs uppercase tracking-[0.16em] text-slate-500"
+                    className="mt-5 block text-[11px] text-slate-500"
                     htmlFor="daily-goal-hours"
                   >
                     Goal hours
@@ -1099,7 +1099,7 @@ export function SettingsView({
               <div className="flex flex-col gap-4">
                 <div className="panel-subtle flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Status</p>
+                    <p className="text-[11px] text-slate-500">Status</p>
                     <p className="mt-1 text-sm font-medium text-white">
                       {notificationPermission === "granted"
                         ? "Enabled"
@@ -1237,7 +1237,7 @@ export function SettingsView({
                       </div>
                     </div>
 
-                    <label className="block text-xs uppercase tracking-[0.16em] text-slate-500">
+                    <label className="block text-[11px] text-slate-500">
                       Backup file
                     </label>
                     <input

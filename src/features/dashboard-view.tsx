@@ -362,10 +362,10 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
               <section className="glass-panel min-w-0 p-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <p className="text-[0.65rem] uppercase tracking-[0.22em] text-slate-500">Your next task</p>
+                    <p className="text-[0.65rem] text-slate-500">Your next task</p>
                     <CategoryBadge category={nextTask.category} />
                   </div>
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                  <p className="text-[11px] text-slate-500">
                     {todayTasks.length === 1
                       ? "Only task today"
                       : `${completedCount} of ${todayTasks.length} done`}
@@ -425,7 +425,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
               </section>
             ) : (
               <section className="glass-panel min-w-0 p-6">
-                <p className="text-[0.65rem] uppercase tracking-[0.22em] text-slate-500">Your next task</p>
+                <p className="text-[0.65rem] text-slate-500">Your next task</p>
                 <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
                   <div>
                     <h3 className="text-2xl font-semibold tracking-[-0.02em] text-white">
@@ -547,7 +547,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                 <div className="mt-3 border-t border-white/[0.06] pt-3">
                   {editingGoal ? (
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Min</span>
+                      <span className="text-[10px] text-slate-500">Min</span>
                       <input
                         type="number"
                         inputMode="numeric"

@@ -79,7 +79,7 @@ function MetricCard({
   return (
     <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-5 shadow-[0_20px_50px_-35px_rgba(15,23,42,0.9)]">
       <div className={`mb-3 h-1.5 w-12 rounded-full ${accentClass}`} />
-      <span className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+      <span className="text-[11px] font-semibold text-slate-500">
         {label}
       </span>
       <div className="mt-2 text-2xl font-semibold tabular-nums text-slate-100">
@@ -116,7 +116,7 @@ function TrendBar({
         </div>
       </div>
       <div className="text-center">
-        <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400">
+        <div className="text-[11px] font-medium text-slate-500">
           {label}
         </div>
         <div className="mt-0.5 text-[11px] tabular-nums text-slate-500">
@@ -303,7 +303,7 @@ export function AnalyticsPanel() {
         <section className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-5 shadow-[0_20px_50px_-35px_rgba(15,23,42,0.9)] xl:col-span-3">
           <div className="flex items-baseline justify-between gap-3">
             <div>
-              <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">
+              <h3 className="text-sm font-semibold text-slate-500">
                 7-Day Activity Trend
               </h3>
               <p className="mt-1 text-sm text-slate-500">
@@ -337,7 +337,7 @@ export function AnalyticsPanel() {
         <section className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-5 shadow-[0_20px_50px_-35px_rgba(15,23,42,0.9)] xl:col-span-2">
           <div className="flex items-baseline justify-between gap-3">
             <div>
-              <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">
+              <h3 className="text-sm font-semibold text-slate-500">
                 Top Methods
               </h3>
               <p className="mt-1 text-sm text-slate-500">

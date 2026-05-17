@@ -350,7 +350,7 @@ function LogEntryModal({
   const fieldClass =
     "h-9 w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/40";
   const selectClass = fieldClass;
-  const labelClass = "mb-1 block text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400";
+  const labelClass = "mb-1 block text-[10px] font-medium text-slate-500";
   const bodyTextClass = "!font-sans !text-base !font-normal !leading-[1.65] !tracking-normal [word-spacing:0.05em]";
   const topTextareaClass = `mt-1 ${bodyTextClass}`;
   const bottomTextareaClass =
@@ -1144,7 +1144,7 @@ function EntryList({
     <section className="glass-panel flex min-h-0 min-w-0 flex-col overflow-hidden p-0">
       <header className="shrink-0 border-b border-white/[0.07] px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Entries</p>
+          <p className="text-[11px] font-semibold text-slate-500">Entries</p>
           <p className="text-[11px] text-slate-500">
             {totalEntries === 0
               ? "None yet"
@@ -1388,14 +1388,11 @@ function DetailSection({
       : tone === "emerald"
         ? "border-emerald-300/15"
         : "border-white/[0.07]";
-  const toneTitle =
-    tone === "rose" ? "text-rose-200" : tone === "emerald" ? "text-emerald-200" : "text-slate-200";
-
   return (
     <section className={`min-w-0 rounded-2xl border ${toneRing} bg-white/[0.03] px-4 py-3`}>
       <div className="flex items-center gap-2">
         {Icon ? <Icon className="h-3.5 w-3.5 text-slate-400" /> : null}
-        <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${toneTitle}`}>{title}</p>
+        <p className="text-[11px] font-semibold text-slate-500">{title}</p>
       </div>
       {badge ? <p className="mt-0.5 text-[11px] text-slate-500">{badge}</p> : null}
       <div className="mt-2 text-[0.92rem] leading-6 text-slate-200">{children}</div>
@@ -1469,7 +1466,7 @@ function InsightsRail({
           <p className="text-xs text-slate-500">Log entries to surface most-missed topics.</p>
         ) : (
           <>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Most missed topics</p>
+            <p className="text-[10px] font-semibold text-slate-500">Most missed topics</p>
             <ul className="mt-2 space-y-2">
               {topMissedTopics.map(([topic, count], index) => {
                 const pct = Math.round((count / totalForPercent) * 100);
@@ -1490,7 +1487,7 @@ function InsightsRail({
               })}
             </ul>
             <div className="mt-3 border-t border-white/[0.06] pt-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Recurring Patterns</p>
+              <p className="text-[10px] font-semibold text-slate-500">Recurring Patterns</p>
               <p className="mt-1 text-[1.4rem] font-semibold leading-none tracking-[-0.03em] text-white">{recurringPatterns}</p>
               <p className="mt-1 text-[11px] text-slate-500">
                 {recurringPatterns === 0
@@ -1609,7 +1606,7 @@ function RailCard({
     <section className="glass-panel min-w-0 p-4">
       <header className="flex items-center gap-2">
         {Icon ? <Icon className="h-3.5 w-3.5 text-slate-400" /> : null}
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{title}</p>
+        <p className="text-[11px] font-semibold text-slate-500">{title}</p>
       </header>
       <div className="mt-2.5">{children}</div>
     </section>

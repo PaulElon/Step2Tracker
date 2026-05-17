@@ -53,9 +53,9 @@ export function MiniCalendar({
     <div>
       <div className="mb-5 flex items-center justify-between">
         <p className="text-lg font-semibold text-white">{monthLabel}</p>
-        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Schedule density</p>
+        <p className="text-[11px] text-slate-500">Schedule density</p>
       </div>
-      <div className="grid grid-cols-7 gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-500">
+      <div className="grid grid-cols-7 gap-2 text-[11px] text-slate-500">
         {weekDayLabels.map((label) => (
           <div key={label} className="px-1 text-center">
             {label}

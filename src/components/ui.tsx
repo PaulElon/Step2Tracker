@@ -70,7 +70,7 @@ export function MetricCard({
     <div className="panel-subtle flex min-h-[132px] min-w-0 flex-col justify-between">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{label}</p>
+          <p className="text-[11px] text-slate-500">{label}</p>
           <p className="mt-2 text-[1.75rem] font-semibold tracking-[-0.04em] text-white">{value}</p>
         </div>
         {Icon ? (

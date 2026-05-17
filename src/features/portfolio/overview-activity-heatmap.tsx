@@ -327,7 +327,7 @@ function OverviewActivityHeatmapBody() {
               {monthBands.map((band) => (
                 <span
                   key={band.key}
-                  className="truncate text-[10px] uppercase tracking-[0.16em] text-slate-500"
+                  className="truncate text-[10px] text-slate-500"
                   style={{ gridColumn: `${band.startWeek + 1} / span ${band.span}` }}
                 >
                   {band.label}
@@ -342,7 +342,7 @@ function OverviewActivityHeatmapBody() {
                 {ROW_LABELS.map((label, index) => (
                   <div
                     key={`${label}-${index}`}
-                    className="flex items-center justify-end text-[10px] uppercase tracking-[0.16em] text-slate-500"
+                    className="flex items-center justify-end text-[10px] text-slate-500"
                     style={{ height: `${DAY_CELL_SIZE}px` }}
                   >
                     {label}
@@ -493,7 +493,7 @@ function OverviewActivityHeatmapBody() {
         >
           <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-white/[0.02] px-4 py-3.5">
             <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Day details</p>
+              <p className="text-[11px] text-slate-500">Day details</p>
               <h4 id="overview-heatmap-day-title" className="mt-1.5 text-xl font-semibold text-white">
                 {formatLongDate(selectedDate)}
               </h4>
@@ -543,7 +543,7 @@ function OverviewActivityHeatmapBody() {
 
             <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)]">
               <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Method breakdown</p>
+                <p className="text-[11px] text-slate-500">Method breakdown</p>
                 {selectedActivity?.methodBreakdown.length ? (
                   <ol className="mt-2 divide-y divide-white/10">
                     {selectedActivity.methodBreakdown.slice(0, 6).map((entry) => {
@@ -589,7 +589,7 @@ function OverviewActivityHeatmapBody() {
               </div>
 
               <div className="rounded-[16px] border border-white/10 bg-white/[0.02] p-4">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Session log</p>
+                <p className="text-[11px] text-slate-500">Session log</p>
                 {selectedActivity?.allSessions.length ? (
                   <div className="mt-3 max-h-[min(44vh,420px)] space-y-2 overflow-y-auto pr-1">
                     {selectedActivity.allSessions.map((session) => {
@@ -658,7 +658,7 @@ function StatTile({
   return (
     <div className="rounded-[14px] border border-white/10 bg-white/[0.03] px-3.5 py-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
+        <p className="text-[10px] text-slate-500">{label}</p>
         {badge ? (
           <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
             {badge}

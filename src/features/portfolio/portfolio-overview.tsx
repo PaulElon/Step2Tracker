@@ -563,7 +563,7 @@ function TrendSparkline({ trend }: { trend: TrendPoint[] }) {
           </circle>
         ))}
       </svg>
-      <div className="mt-2 flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-slate-500">
+      <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500">
         <span>{firstLabel}</span>
         <span className="flex items-center gap-1 normal-case tracking-normal text-[11px] text-slate-400">
           <span className="inline-block h-[6px] w-[6px] rounded-full bg-cyan-300/80" />
@@ -591,7 +591,7 @@ function InsightsRail({
     <section className="glass-panel flex flex-col gap-3 p-4">
       <header className="flex items-center gap-2">
         <Lightbulb className="h-4 w-4 text-cyan-200" />
-        <p className="text-[0.6rem] font-semibold uppercase tracking-[0.22em] text-slate-400">
+        <p className="text-[0.6rem] font-semibold text-slate-500">
           Insights
         </p>
       </header>
@@ -724,7 +724,7 @@ function QuickActions({
     <QuietPanel>
       <header className="flex items-center gap-2">
         <Plus className="h-4 w-4 text-cyan-200" />
-        <p className="text-[0.6rem] font-semibold uppercase tracking-[0.22em] text-slate-400">
+        <p className="text-[0.6rem] font-semibold text-slate-500">
           Quick Actions
         </p>
       </header>

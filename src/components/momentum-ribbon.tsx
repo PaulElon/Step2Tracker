@@ -26,13 +26,13 @@ export function MomentumRibbon({
     <div className="space-y-5 p-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Upcoming workload</p>
+          <p className="text-[11px] text-slate-500">Upcoming workload</p>
           <h4 className="mt-2 text-2xl font-semibold text-white">Planned vs completed</h4>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="panel-subtle px-4 py-3">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Window completion</p>
+            <p className="text-[11px] text-slate-500">Window completion</p>
             <p className="mt-2 text-lg font-semibold text-white">
               {toPercent(totalCompletedMinutes / Math.max(totalPlannedMinutes, 1))}%
             </p>
@@ -40,7 +40,7 @@ export function MomentumRibbon({
           </div>
 
           <div className="panel-subtle px-4 py-3">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Heaviest day</p>
+            <p className="text-[11px] text-slate-500">Heaviest day</p>
             <p className="mt-2 text-lg font-semibold text-white">{heaviestPoint?.label ?? "No load"}</p>
             <p className="mt-1 text-sm text-slate-300">
               {heaviestPoint ? formatMinutes(heaviestPoint.minutes) : "Nothing scheduled"}
@@ -48,7 +48,7 @@ export function MomentumRibbon({
           </div>
 
           <div className="panel-subtle px-4 py-3">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Over target</p>
+            <p className="text-[11px] text-slate-500">Over target</p>
             <p className="mt-2 text-lg font-semibold text-white">{overloadedDays}</p>
             <p className="mt-1 text-sm text-slate-300">{overloadedDays === 1 ? "day needs rebalancing" : "days need rebalancing"}</p>
           </div>

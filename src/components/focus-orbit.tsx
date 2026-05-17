@@ -45,7 +45,7 @@ export function FocusOrbit({
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="panel-subtle">
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Top concentration</p>
+          <p className="text-[11px] text-slate-500">Top concentration</p>
           <p className="mt-3 text-lg font-semibold text-white">{topSlice?.label ?? "None yet"}</p>
           <p className="mt-2 text-sm text-slate-300">
             {topSlice ? `${formatMinutes(topSlice.minutes)} · ${toPercent(topSlice.minutes / Math.max(totalMinutes, 1))}% of plan` : "No scheduled focus area"}
@@ -53,7 +53,7 @@ export function FocusOrbit({
         </div>
 
         <div className="panel-subtle">
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Completed</p>
+          <p className="text-[11px] text-slate-500">Completed</p>
           <p className="mt-3 text-lg font-semibold text-white">{formatHoursValue(totalCompletedMinutes)}</p>
           <p className="mt-2 text-sm text-slate-300">
             {toPercent(totalCompletedMinutes / Math.max(totalMinutes, 1))}% of scheduled study time finished
@@ -61,7 +61,7 @@ export function FocusOrbit({
         </div>
 
         <div className="panel-subtle">
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Active weak topics</p>
+          <p className="text-[11px] text-slate-500">Active weak topics</p>
           <p className="mt-3 text-lg font-semibold text-white">{activeWeakTopics}</p>
           <p className="mt-2 text-sm text-slate-300">Current risk count.</p>
         </div>

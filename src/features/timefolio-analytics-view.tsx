@@ -123,7 +123,7 @@ function TrendBar({
         </div>
       </div>
       <div className="text-center">
-        <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400">{label}</div>
+        <div className="text-[11px] font-medium text-slate-500">{label}</div>
         <div className="mt-0.5 text-[11px] tabular-nums text-slate-500">{formatMinutes(Math.round(hours * 60))}</div>
       </div>
     </div>
@@ -358,7 +358,7 @@ function TimeFolioAnalyticsContent() {
                 <div key={row.methodKey} className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">#{index + 1}</div>
+                      <div className="text-[11px] text-slate-500">#{index + 1}</div>
                       <div className="mt-1 truncate text-sm font-medium text-slate-100">{row.method}</div>
                     </div>
                     <div className="text-right">

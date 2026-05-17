@@ -70,7 +70,7 @@ export function ConsistencyHeatmap({
         {monthBands.map((band) => (
           <div
             key={band.key}
-            className="min-w-0 overflow-hidden text-center text-[11px] uppercase tracking-[0.12em] text-slate-500"
+            className="min-w-0 overflow-hidden text-center text-[11px] text-slate-500"
             style={{ flex: band.span }}
           >
             {band.label}

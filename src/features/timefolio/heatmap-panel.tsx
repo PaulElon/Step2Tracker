@@ -21,7 +21,7 @@ function PanelState({
 
   return (
     <div className={`rounded-2xl border px-5 py-4 ${toneClasses}`}>
-      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+      <div className="text-[11px] font-semibold text-slate-500">
         {title}
       </div>
       <p className="mt-2 text-sm leading-6 text-slate-300">{description}</p>
@@ -97,7 +97,7 @@ function SelectedDaySessionModal({
       >
         <div className="flex items-start justify-between gap-4 border-b border-slate-700/70 px-5 py-4">
           <div className="space-y-1">
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+            <div className="text-[11px] font-semibold text-slate-500">
               Day details
             </div>
             <div className="text-sm font-semibold text-slate-100">
@@ -153,7 +153,7 @@ function SelectedDaySessionLog({
       <div className="flex h-full min-h-0 min-w-0 flex-col gap-3 overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-800/60 p-5 shadow-sm shadow-slate-950/20">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+            <div className="text-[11px] font-semibold text-slate-500">
               Day session log
             </div>
             <div className="text-sm font-semibold text-slate-100">
@@ -188,16 +188,16 @@ function SelectedDaySessionLog({
               <p className="text-xs leading-5 text-slate-500">Select a day to inspect sessions.</p>
               <div className="grid gap-2">
                 <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-3">
-                  <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Active Days</div>
+                  <div className="text-[10px] text-slate-500">Active Days</div>
                   <div className="mt-1 text-xl font-semibold tabular-nums text-slate-100">{summaryStats.activeDays}</div>
                 </div>
                 <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-3">
-                  <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">All-Time Logged</div>
+                  <div className="text-[10px] text-slate-500">All-Time Logged</div>
                   <div className="mt-1 text-xl font-semibold tabular-nums text-slate-100">{formatMinutes(Math.round(summaryStats.totalHours * 60))}</div>
                 </div>
                 {summaryStats.topMethod ? (
                   <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-3">
-                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Top Method</div>
+                    <div className="text-[10px] text-slate-500">Top Method</div>
                     <div className="mt-1 text-sm font-semibold text-slate-100 truncate">{summaryStats.topMethod}</div>
                   </div>
                 ) : null}
@@ -276,7 +276,7 @@ export function HeatmapPanel({ showHeader = true }: { showHeader?: boolean }) {
             {sessionLogs.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center px-2 py-8">
                 <div className="w-full max-w-xs rounded-2xl border border-slate-700/60 bg-slate-900/60 p-6 text-center">
-                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">No Activity Yet</div>
+                  <div className="text-[11px] font-semibold text-slate-500">No Activity Yet</div>
                   <p className="mt-3 text-sm leading-6 text-slate-400">
                     Log your first study session to start filling the calendar. Each cell shades by hours — darker means more time logged that day.
                   </p>

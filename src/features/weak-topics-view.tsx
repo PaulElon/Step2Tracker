@@ -125,7 +125,7 @@ function WeakTopicEditorSheet({
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+          <p className="text-[11px] text-slate-500">
             {entry ? "Edit weak topic" : "New weak topic"}
           </p>
           <h3 id={titleId} className="mt-2 text-2xl font-semibold text-white">
@@ -157,7 +157,7 @@ function WeakTopicEditorSheet({
         }}
       >
         <div>
-          <label htmlFor={topicId} className="text-xs uppercase tracking-[0.18em] text-slate-500">Topic</label>
+          <label htmlFor={topicId} className="text-[11px] text-slate-500">Topic</label>
           <div className="relative mt-2">
             <input
               ref={(el) => { topicRef.current = el; }}
@@ -203,7 +203,7 @@ function WeakTopicEditorSheet({
         </div>
 
         <div>
-          <label htmlFor={priorityId} className="text-xs uppercase tracking-[0.18em] text-slate-500">Priority</label>
+          <label htmlFor={priorityId} className="text-[11px] text-slate-500">Priority</label>
           <select
             id={priorityId}
             value={draft.priority}
@@ -225,7 +225,7 @@ function WeakTopicEditorSheet({
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor={lastSeenId} className="text-xs uppercase tracking-[0.18em] text-slate-500">Last seen</label>
+            <label htmlFor={lastSeenId} className="text-[11px] text-slate-500">Last seen</label>
             <input
               id={lastSeenId}
               type="date"
@@ -235,7 +235,7 @@ function WeakTopicEditorSheet({
             />
           </div>
           <div>
-            <label htmlFor={sourceId} className="text-xs uppercase tracking-[0.18em] text-slate-500">Latest source</label>
+            <label htmlFor={sourceId} className="text-[11px] text-slate-500">Latest source</label>
             <input
               id={sourceId}
               value={draft.sourceLabel}
@@ -247,7 +247,7 @@ function WeakTopicEditorSheet({
         </div>
 
         <div>
-          <label htmlFor={notesId} className="text-xs uppercase tracking-[0.18em] text-slate-500">Notes</label>
+          <label htmlFor={notesId} className="text-[11px] text-slate-500">Notes</label>
           <textarea
             id={notesId}
             value={draft.notes}
@@ -601,7 +601,7 @@ export function WeakTopicsView() {
                 >
                   <SectionHeader
                     className="shrink-0 border-b border-white/10 px-3 py-2"
-                    title={<span className={`text-xs uppercase tracking-[0.18em] ${headingClass}`}>{priority} Priority</span>}
+                    title={<span className={`text-[11px] text-slate-500 ${headingClass}`}>{priority} Priority</span>}
                     action={
                       <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs text-slate-400">
                         {priorityInsights.length}

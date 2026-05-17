@@ -167,7 +167,7 @@ function PracticeTestEditorSheet({
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+          <p className="text-[11px] text-slate-500">
             {test ? "Edit test" : "New test"}
           </p>
           <h3 id={titleId} className="mt-2 text-2xl font-semibold text-white">
@@ -217,7 +217,7 @@ function PracticeTestEditorSheet({
       >
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
-            <label htmlFor={dateId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
+            <label htmlFor={dateId} className="text-[11px] text-slate-500">
               Date
             </label>
             <input
@@ -240,7 +240,7 @@ function PracticeTestEditorSheet({
             ) : null}
           </div>
           <div>
-            <label htmlFor={sourceId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
+            <label htmlFor={sourceId} className="text-[11px] text-slate-500">
               Source
             </label>
             <select
@@ -257,7 +257,7 @@ function PracticeTestEditorSheet({
             </select>
           </div>
           <div>
-            <label htmlFor={formId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
+            <label htmlFor={formId} className="text-[11px] text-slate-500">
               Form
             </label>
             <input
@@ -272,7 +272,7 @@ function PracticeTestEditorSheet({
 
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
-            <label htmlFor={questionCountId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
+            <label htmlFor={questionCountId} className="text-[11px] text-slate-500">
               Questions
             </label>
             <input
@@ -295,7 +295,7 @@ function PracticeTestEditorSheet({
             ) : null}
           </div>
           <div>
-            <label htmlFor={scorePercentId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
+            <label htmlFor={scorePercentId} className="text-[11px] text-slate-500">
               Score %
             </label>
             <input
@@ -320,7 +320,7 @@ function PracticeTestEditorSheet({
             ) : null}
           </div>
           <div>
-            <label htmlFor={minutesSpentId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
+            <label htmlFor={minutesSpentId} className="text-[11px] text-slate-500">
               Minutes
             </label>
             <input
@@ -345,7 +345,7 @@ function PracticeTestEditorSheet({
         </div>
 
         <div>
-          <label htmlFor={weakTopicsId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
+          <label htmlFor={weakTopicsId} className="text-[11px] text-slate-500">
             Weak topics
           </label>
           <input
@@ -358,7 +358,7 @@ function PracticeTestEditorSheet({
         </div>
 
         <div>
-          <label htmlFor={strongTopicsId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
+          <label htmlFor={strongTopicsId} className="text-[11px] text-slate-500">
             Strong topics
           </label>
           <input
@@ -371,7 +371,7 @@ function PracticeTestEditorSheet({
         </div>
 
         <div>
-          <label htmlFor={reflectionId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
+          <label htmlFor={reflectionId} className="text-[11px] text-slate-500">
             Reflection
           </label>
           <textarea
@@ -383,7 +383,7 @@ function PracticeTestEditorSheet({
         </div>
 
         <div>
-          <label htmlFor={actionPlanId} className="text-xs uppercase tracking-[0.18em] text-slate-500">
+          <label htmlFor={actionPlanId} className="text-[11px] text-slate-500">
             Action plan
           </label>
           <textarea
@@ -528,7 +528,7 @@ export function PracticeTestsView() {
               </button>
               {showChartSettings ? (
                 <div className="absolute left-0 top-full z-20 mt-3 w-[248px] rounded-[20px] border border-white/10 bg-[#081220]/95 p-4 shadow-[0_18px_48px_rgba(2,8,23,0.5)] backdrop-blur-xl">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Chart settings</p>
+                  <p className="text-[11px] text-slate-500">Chart settings</p>
                   <div className="mt-4 space-y-3">
                     <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-slate-200">
                       <span>Connect dots</span>
@@ -728,7 +728,7 @@ export function PracticeTestsView() {
           {weakPatterns.length || strongPatterns.length ? (
             <div>
               <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Weak topics</p>
+                <p className="text-[11px] text-slate-500">Weak topics</p>
                 <div className="mt-4 space-y-3">
                   {weakPatterns.length ? (
                     weakPatterns.slice(0, 5).map((topic) => (
@@ -744,7 +744,7 @@ export function PracticeTestsView() {
               </div>
               <SoftDivider className="my-3" />
               <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Strong topics</p>
+                <p className="text-[11px] text-slate-500">Strong topics</p>
                 <div className="mt-4 space-y-3">
                   {strongPatterns.length ? (
                     strongPatterns.slice(0, 5).map((topic) => (

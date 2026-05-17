@@ -60,7 +60,7 @@ function DetailCard({
 }) {
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-4">
-      <div className="text-xs font-medium uppercase tracking-[0.22em] text-slate-500">{label}</div>
+      <div className="text-[11px] font-medium text-slate-500">{label}</div>
       <div className="mt-2 text-sm font-semibold text-slate-100">{value}</div>
       {subtext ? <div className="mt-1 text-xs leading-5 text-slate-500">{subtext}</div> : null}
     </div>
@@ -78,7 +78,7 @@ function SectionCard({
 }) {
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-5">
-      <div className="text-xs font-medium uppercase tracking-[0.22em] text-slate-500">{title}</div>
+      <div className="text-[11px] font-medium text-slate-500">{title}</div>
       <p className="mt-2 text-sm leading-6 text-slate-400">{description}</p>
       <div className="mt-4">{children}</div>
     </div>
