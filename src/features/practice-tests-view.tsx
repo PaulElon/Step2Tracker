@@ -11,7 +11,7 @@ import {
 } from "../lib/practice-tests";
 import { useAppStore } from "../state/app-store";
 import { ModalShell } from "../components/modal-shell";
-import { EmptyState, MetricStrip, MetricStripItem, Panel } from "../components/ui";
+import { EmptyState, MetricStrip, MetricStripItem, Panel, SoftDivider } from "../components/ui";
 import {
   fieldClassName,
   iconButtonClassName,
@@ -726,8 +726,8 @@ export function PracticeTestsView() {
 
         <Panel title="Topic patterns">
           {weakPatterns.length || strongPatterns.length ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="panel-subtle p-4">
+            <div>
+              <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Weak topics</p>
                 <div className="mt-4 space-y-3">
                   {weakPatterns.length ? (
@@ -742,7 +742,8 @@ export function PracticeTestsView() {
                   )}
                 </div>
               </div>
-              <div className="panel-subtle p-4">
+              <SoftDivider className="my-3" />
+              <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Strong topics</p>
                 <div className="mt-4 space-y-3">
                   {strongPatterns.length ? (

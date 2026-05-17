@@ -296,20 +296,11 @@ function TimeFolioAnalyticsContent() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.95fr)]">
         <Panel title="Activity Trend" subtitle="Last 14 days of recorded study time.">
           <div className="grid gap-4">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Last 7 Days</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{formatMinutes(Math.round(analytics.last7DaysHours * 60))}</div>
-              </div>
-              <div className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Last 30 Days</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{formatMinutes(Math.round(analytics.last30DaysHours * 60))}</div>
-              </div>
-              <div className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Best Day</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{bestDayLabel}</div>
-              </div>
-            </div>
+            <MetricStrip columns="sm:grid-cols-3">
+              <MetricStripItem label="Last 7 days" value={formatMinutes(Math.round(analytics.last7DaysHours * 60))} />
+              <MetricStripItem label="Last 30 days" value={formatMinutes(Math.round(analytics.last30DaysHours * 60))} />
+              <MetricStripItem label="Best day" value={bestDayLabel} />
+            </MetricStrip>
 
             {trendPeakHours === 0 ? (
               <div className="flex h-32 items-center justify-center rounded-[18px] border border-white/10 bg-slate-950/35 text-sm text-slate-500">
@@ -333,16 +324,10 @@ function TimeFolioAnalyticsContent() {
 
         <Panel title="Summary" subtitle="A quick narrative plus the biggest operating signals.">
           <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Focus Time</div>
-                <div className="mt-2 text-lg font-semibold text-white">{formatMinutes(Math.round(focusHours * 60))}</div>
-              </div>
-              <div className="rounded-[18px] border border-white/10 bg-slate-950/35 p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Method Count</div>
-                <div className="mt-2 text-lg font-semibold text-white">{analytics.methodRows.length}</div>
-              </div>
-            </div>
+            <MetricStrip columns="sm:grid-cols-2">
+              <MetricStripItem label="Focus time" value={formatMinutes(Math.round(focusHours * 60))} />
+              <MetricStripItem label="Method count" value={String(analytics.methodRows.length)} />
+            </MetricStrip>
           </div>
         </Panel>
       </div>
