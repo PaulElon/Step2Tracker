@@ -30,3 +30,15 @@ export function verifyAccount(input: AccountVerifyInput): Promise<AccountSummary
     password: input.password,
   });
 }
+
+export function rememberSession(accountId: string): Promise<void> {
+  return command<void>("account_remember_session", { accountId });
+}
+
+export function loadRememberedSession(): Promise<AccountSummary | null> {
+  return command<AccountSummary | null>("account_load_remembered_session");
+}
+
+export function clearRememberedSession(): Promise<void> {
+  return command<void>("account_clear_remembered_session");
+}

@@ -38,6 +38,7 @@ export function AuthGate() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [rememberDevice, setRememberDevice] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -54,6 +55,7 @@ export function AuthGate() {
     setEmail("");
     setPassword("");
     setConfirmPassword("");
+    setRememberDevice(true);
     setError(null);
     setSuccess(false);
     setLoading(false);
@@ -69,7 +71,13 @@ export function AuthGate() {
     try {
       const account = await createAccount({ email, password });
       setSuccess(true);
-      window.setTimeout(() => auth.login(account), 2000);
+      window.setTimeout(() => {
+        if (rememberDevice) {
+          void auth.loginAndRemember(account);
+        } else {
+          auth.login(account);
+        }
+      }, 2000);
     } catch (err) {
       const mapped = mapError(err);
       setError(mapped);
@@ -86,7 +94,11 @@ export function AuthGate() {
     setLoading(true);
     try {
       const account = await verifyAccount({ email, password });
-      auth.login(account);
+      if (rememberDevice) {
+        await auth.loginAndRemember(account);
+      } else {
+        auth.login(account);
+      }
     } catch (err) {
       setError(mapError(err));
       setLoading(false);
@@ -196,6 +208,17 @@ export function AuthGate() {
                   Password: 10+ characters, at least one number, at least one special character.
                 </p>
 
+                <label className="flex cursor-pointer items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={rememberDevice}
+                    onChange={(e) => setRememberDevice(e.target.checked)}
+                    disabled={loading}
+                    className="h-4 w-4 rounded border-slate-600 bg-slate-800 accent-cyan-400"
+                  />
+                  <span className="text-sm text-slate-400">Remember this device</span>
+                </label>
+
                 {error ? <InlineError message={error} /> : null}
 
                 <button
@@ -259,6 +282,17 @@ export function AuthGate() {
                 disabled={loading}
               />
             </div>
+
+            <label className="flex cursor-pointer items-center gap-2.5">
+              <input
+                type="checkbox"
+                checked={rememberDevice}
+                onChange={(e) => setRememberDevice(e.target.checked)}
+                disabled={loading}
+                className="h-4 w-4 rounded border-slate-600 bg-slate-800 accent-cyan-400"
+              />
+              <span className="text-sm text-slate-400">Remember this device</span>
+            </label>
 
             {error ? <InlineError message={error} /> : null}
 

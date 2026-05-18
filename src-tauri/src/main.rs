@@ -863,7 +863,10 @@ fn main() {
             accounts::account_count,
             accounts::account_list_emails,
             accounts::account_create,
-            accounts::account_verify
+            accounts::account_verify,
+            accounts::account_remember_session,
+            accounts::account_load_remembered_session,
+            accounts::account_clear_remembered_session
         ])
         .run(tauri::generate_context!())
         .expect("error while running TimeFolio");

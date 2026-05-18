@@ -52,6 +52,11 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
             email_verified_at         TEXT,
             legacy_data_adopted_at    TEXT
         );
+        CREATE TABLE IF NOT EXISTS remembered_session (
+            id               INTEGER PRIMARY KEY CHECK (id = 1),
+            account_id       TEXT NOT NULL,
+            remembered_at    TEXT NOT NULL
+        );
     "#,
     )
     .map_err(|e| format!("Schema init failed: {e}"))?;
@@ -61,21 +66,31 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
         .map_err(|e| format!("Schema meta query failed: {e}"))?;
 
     if meta_count == 0 {
-        // New DB: CREATE TABLE already includes legacy_data_adopted_at, start at v2.
-        conn.execute("INSERT INTO schema_meta (version) VALUES (2)", [])
+        // New DB: all tables already created above, start at v3.
+        conn.execute("INSERT INTO schema_meta (version) VALUES (3)", [])
             .map_err(|e| format!("Schema meta insert failed: {e}"))?;
     } else {
         // Existing DB: migrate forward if needed.
         let version: i64 = conn
             .query_row("SELECT version FROM schema_meta", [], |row| row.get(0))
             .map_err(|e| format!("Schema meta version query failed: {e}"))?;
-        if version < 2 {
+
+        let mut current_version = version;
+
+        if current_version < 2 {
             conn.execute_batch(
                 "ALTER TABLE accounts ADD COLUMN legacy_data_adopted_at TEXT;",
             )
             .map_err(|e| format!("Migration to v2 failed: {e}"))?;
             conn.execute("UPDATE schema_meta SET version = 2", [])
-                .map_err(|e| format!("Schema meta update failed: {e}"))?;
+                .map_err(|e| format!("Schema meta update to v2 failed: {e}"))?;
+            current_version = 2;
+        }
+
+        if current_version < 3 {
+            // remembered_session table already created above by CREATE TABLE IF NOT EXISTS.
+            conn.execute("UPDATE schema_meta SET version = 3", [])
+                .map_err(|e| format!("Schema meta update to v3 failed: {e}"))?;
         }
     }
 
@@ -260,7 +275,87 @@ pub fn verify_inner(
     })
 }
 
+pub fn remember_session_inner(app_data_dir: &Path, account_id: &str) -> Result<(), String> {
+    let conn = open_db(app_data_dir)?;
+    let now = Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT OR REPLACE INTO remembered_session (id, account_id, remembered_at) VALUES (1, ?1, ?2)",
+        params![account_id, now],
+    )
+    .map_err(|e| format!("Insert remembered session failed: {e}"))?;
+    Ok(())
+}
+
+pub fn load_remembered_session_inner(app_data_dir: &Path) -> Result<Option<AccountSummary>, String> {
+    let conn = open_db(app_data_dir)?;
+
+    let account_id: String = match conn.query_row(
+        "SELECT account_id FROM remembered_session WHERE id = 1",
+        [],
+        |row| row.get(0),
+    ) {
+        Ok(id) => id,
+        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+        Err(e) => return Err(format!("Query remembered session failed: {e}")),
+    };
+
+    match conn.query_row(
+        "SELECT id, email_display, created_at, last_login_at, email_verified_at, legacy_data_adopted_at \
+         FROM accounts WHERE id = ?1",
+        params![account_id],
+        |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+            ))
+        },
+    ) {
+        Ok((id, email, created_at, last_login_at, email_verified_at, legacy_data_adopted_at)) => {
+            Ok(Some(AccountSummary {
+                id,
+                email,
+                created_at,
+                last_login_at,
+                email_verified_at,
+                legacy_data_adopted_at,
+            }))
+        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            // Account no longer exists — clear stale marker.
+            let _ = conn.execute("DELETE FROM remembered_session WHERE id = 1", []);
+            Ok(None)
+        }
+        Err(e) => Err(format!("Account lookup failed: {e}")),
+    }
+}
+
+pub fn clear_remembered_session_inner(app_data_dir: &Path) -> Result<(), String> {
+    let conn = open_db(app_data_dir)?;
+    conn.execute("DELETE FROM remembered_session WHERE id = 1", [])
+        .map_err(|e| format!("Clear remembered session failed: {e}"))?;
+    Ok(())
+}
+
 // Tauri commands.
+
+#[tauri::command]
+pub fn account_remember_session(app: tauri::AppHandle, account_id: String) -> Result<(), String> {
+    remember_session_inner(&get_app_data_dir(&app)?, &account_id)
+}
+
+#[tauri::command]
+pub fn account_load_remembered_session(app: tauri::AppHandle) -> Result<Option<AccountSummary>, String> {
+    load_remembered_session_inner(&get_app_data_dir(&app)?)
+}
+
+#[tauri::command]
+pub fn account_clear_remembered_session(app: tauri::AppHandle) -> Result<(), String> {
+    clear_remembered_session_inner(&get_app_data_dir(&app)?)
+}
 
 #[tauri::command]
 pub fn account_count(app: tauri::AppHandle) -> Result<u32, String> {
@@ -391,5 +486,58 @@ mod tests {
         let result = create_inner(dir.path(), "x@y.com".into(), "LongPassword1".into());
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "PASSWORD_REQUIRES_SPECIAL");
+    }
+
+    #[test]
+    fn remember_session_stores_account_id() {
+        let dir = tmp();
+        let s = create_inner(dir.path(), "user@example.com".into(), "Password1!".into()).unwrap();
+        let result = remember_session_inner(dir.path(), &s.id);
+        assert!(result.is_ok(), "remember_session_inner should succeed: {:?}", result);
+    }
+
+    #[test]
+    fn load_remembered_session_returns_account_summary() {
+        let dir = tmp();
+        let s = create_inner(dir.path(), "user@example.com".into(), "Password1!".into()).unwrap();
+        remember_session_inner(dir.path(), &s.id).unwrap();
+        let loaded = load_remembered_session_inner(dir.path()).unwrap();
+        assert!(loaded.is_some(), "should return Some(AccountSummary)");
+        let acct = loaded.unwrap();
+        assert_eq!(acct.id, s.id);
+        assert_eq!(acct.email, "user@example.com");
+    }
+
+    #[test]
+    fn clear_remembered_session_returns_none() {
+        let dir = tmp();
+        let s = create_inner(dir.path(), "user@example.com".into(), "Password1!".into()).unwrap();
+        remember_session_inner(dir.path(), &s.id).unwrap();
+        clear_remembered_session_inner(dir.path()).unwrap();
+        let loaded = load_remembered_session_inner(dir.path()).unwrap();
+        assert!(loaded.is_none(), "after clear, load should return None");
+    }
+
+    #[test]
+    fn load_remembered_session_with_invalid_account_id_returns_none() {
+        let dir = tmp();
+        // Write a stale account_id that doesn't exist in accounts table.
+        remember_session_inner(dir.path(), "nonexistent-uuid-1234").unwrap();
+        let loaded = load_remembered_session_inner(dir.path()).unwrap();
+        assert!(loaded.is_none(), "stale account_id should return None and clear itself");
+        // Confirm the stale row was cleared.
+        let loaded_again = load_remembered_session_inner(dir.path()).unwrap();
+        assert!(loaded_again.is_none());
+    }
+
+    #[test]
+    fn migration_to_v3_is_idempotent() {
+        let dir = tmp();
+        // First open creates schema at v3.
+        let first = open_db(dir.path());
+        assert!(first.is_ok(), "first open failed: {:?}", first);
+        // Second open re-runs init_schema; v3 migration must be a no-op.
+        let second = open_db(dir.path());
+        assert!(second.is_ok(), "second open (re-migration) failed: {:?}", second);
     }
 }

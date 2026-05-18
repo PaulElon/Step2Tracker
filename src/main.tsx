@@ -12,6 +12,13 @@ const isTauriShell =
 
 function Root() {
   const auth = useAuthSession();
+  if (auth.isHydrating) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <span className="text-sm text-slate-500">Loading…</span>
+      </div>
+    );
+  }
   if (!auth.isAuthenticated) return <AuthGate />;
   return (
     <AppStoreProvider>
