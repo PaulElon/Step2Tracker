@@ -12,8 +12,8 @@ import {
   X,
 } from "lucide-react";
 import { FF } from "../../lib/feature-flags";
+import { formatLongDate, formatMinutes, formatShortMinutes, formatTimerLabel, getTodayKey } from "../../lib/datetime";
 import { useTimeFolioStore } from "../../state/tf-store";
-import { formatLongDate, formatMinutes, formatShortMinutes, getTodayKey } from "../../lib/datetime";
 import { cn, fieldClassName, primaryButtonClassName, secondaryButtonClassName } from "../../lib/ui";
 import { splitAutoSessionMethodLabel } from "../../lib/tf-session-adapters";
 import type { TfSessionLog } from "../../types/models";
@@ -84,15 +84,6 @@ function sessionToForm(s: TfSessionLog): FormState {
     notes: s.notes,
     isDistraction: s.isDistraction,
   };
-}
-
-function formatElapsed(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return h > 0 ? `${h}h ${m}m ${pad(s)}s` : `${m}m ${pad(s)}s`;
 }
 
 function localDateStr(isoStr: string): string {
@@ -237,7 +228,9 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
     autoTrackerControl !== null;
   const showSwitchToManual = timerMode === "auto" && !autoNeedsAttention && autoTrackerControl !== null;
   const timerLabel =
-    timerMode === "auto" ? autoTrackerControl?.runningElapsedLabel ?? "00:00" : formatElapsed(displayMs);
+    timerMode === "auto"
+      ? autoTrackerControl?.runningElapsedLabel ?? formatTimerLabel(0)
+      : formatTimerLabel(displayMs);
   const timerStatusLabel =
     timerMode === "auto"
       ? isAutoRunning
@@ -372,7 +365,7 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
           </p>
         </div>
         <div className="justify-self-center text-center lg:col-start-2">
-          <p className="font-mono text-[clamp(3rem,8vw,5.6rem)] font-semibold leading-none tabular-nums text-white">
+          <p className="font-display text-[clamp(3rem,8vw,5.6rem)] font-medium leading-none tracking-[-0.045em] tabular-nums text-white drop-shadow-[0_1px_0_rgba(255,255,255,0.08)]">
             {timerLabel}
           </p>
           <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-500">

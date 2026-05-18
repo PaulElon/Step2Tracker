@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { FF } from "../../lib/feature-flags";
+import { formatTimerLabel } from "../../lib/datetime";
 import {
   buildAutoTrackerV2PreviewSpans,
   type TfAutotrackerV2ClassificationSettings,
@@ -79,14 +80,6 @@ function toSessionLog(
   );
 }
 
-function formatElapsedLabel(elapsedMs: number): string {
-  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${pad(minutes)}:${pad(seconds)}`;
-}
-
 export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
   const store = useTimeFolioStore();
   const { state } = store;
@@ -138,7 +131,7 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
   const currentPreviewSpan = previewSpans.at(-1) ?? null;
   const runningElapsedLabel =
     isRunning && v2RunningStartedAtMs !== null
-      ? formatElapsedLabel(v2RunningNowMs - v2RunningStartedAtMs)
+      ? formatTimerLabel(v2RunningNowMs - v2RunningStartedAtMs)
       : null;
 
   async function refreshSamplerState() {

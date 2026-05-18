@@ -24,6 +24,20 @@ function pad(value: number) {
   return String(value).padStart(2, "0");
 }
 
+export function formatTimerLabel(milliseconds: number) {
+  const safeMilliseconds = Math.max(0, Math.floor(milliseconds));
+  const totalSeconds = Math.floor(safeMilliseconds / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+  }
+
+  return `${pad(minutes)}:${pad(seconds)}`;
+}
+
 export function formatDateKey(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
