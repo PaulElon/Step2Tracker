@@ -217,31 +217,29 @@ function TodayTimeLogSummary({
 
   if (totalSessions === 0) {
     return (
-      <div className="mt-3 border-t border-white/[0.06] pt-3">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(220px,0.9fr)]">
-          <div>
-            <p className="text-[11px] text-slate-500">Today’s time log</p>
-            <p className="mt-1 text-sm text-slate-300">No study sessions logged yet.</p>
-            <p className="mt-1 text-xs text-slate-500">Open the timer when you start a block.</p>
-          </div>
+      <div className="mt-3 border-t border-white/[0.06] pt-3 space-y-4">
+        <div>
+          <p className="text-[11px] text-slate-500">Today’s time log</p>
+          <p className="mt-1 text-sm text-slate-300">No study sessions logged yet.</p>
+          <p className="mt-1 text-xs text-slate-500">Open the timer when you start a block.</p>
+        </div>
 
-          <div>
-            <p className="text-[11px] text-slate-500">Allowed vs distractions</p>
-            <div className="mt-3">
-              <div className="flex h-2.5 overflow-hidden rounded-full bg-white/[0.06]">
-                <div
-                  className="bg-cyan-300/70"
-                  style={{ width: "0%" }}
-                />
-                <div
-                  className="bg-rose-300/70"
-                  style={{ width: "0%" }}
-                />
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-slate-500">
-                <span>Allowed 0m</span>
-                <span>Distractions 0m</span>
-              </div>
+        <div>
+          <p className="text-[11px] text-slate-500">Allowed vs distractions</p>
+          <div className="mt-3">
+            <div className="flex h-2.5 overflow-hidden rounded-full bg-white/[0.06]">
+              <div
+                className="bg-cyan-300/70"
+                style={{ width: "0%" }}
+              />
+              <div
+                className="bg-rose-300/70"
+                style={{ width: "0%" }}
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-slate-500">
+              <span>Allowed 0m</span>
+              <span>Distractions 0m</span>
             </div>
           </div>
         </div>
@@ -250,73 +248,71 @@ function TodayTimeLogSummary({
   }
 
   return (
-    <div className="mt-3 border-t border-white/[0.06] pt-3">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(220px,0.9fr)]">
-        <div>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] text-slate-500">Today’s time log</p>
-              <p className="mt-1 text-sm font-semibold text-white">{formatMinutes(allowedMinutes)}</p>
-            </div>
-            <div className="text-right text-[11px] text-slate-500">
-              <p>{totalSessions} session{totalSessions === 1 ? "" : "s"}</p>
-              {distractionMinutes > 0 ? <p>{formatMinutes(distractionMinutes)} distraction</p> : null}
-            </div>
+    <div className="mt-3 border-t border-white/[0.06] pt-3 space-y-5">
+      <div>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] text-slate-500">Today’s time log</p>
+            <p className="mt-1 text-sm font-semibold text-white">{formatMinutes(allowedMinutes)}</p>
           </div>
-
-          <div className="mt-3 space-y-2">
-            {visibleRows.map((row) => {
-              const minutes = Math.round(row.hours * 60);
-              const percent = allowedMinutes > 0 ? (minutes / allowedMinutes) * 100 : 0;
-              return (
-                <div key={row.methodKey} className="space-y-1">
-                  <div className="flex items-center justify-between gap-2 text-xs">
-                    <span className="min-w-0 truncate text-slate-200">{row.method}</span>
-                    <span className="tabular-nums text-slate-400">{formatMinutes(minutes)}</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-                    <div
-                      className="h-full rounded-full bg-cyan-300/70"
-                      style={{ width: `${Math.max(percent, minutes > 0 ? 8 : 0)}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+          <div className="text-right text-[11px] text-slate-500">
+            <p>{totalSessions} session{totalSessions === 1 ? "" : "s"}</p>
+            {distractionMinutes > 0 ? <p>{formatMinutes(distractionMinutes)} distraction</p> : null}
           </div>
-
-          {rowCount > visibleRows.length ? (
-            <p className="mt-2 text-[11px] text-slate-500">+ {rowCount - visibleRows.length} more categories</p>
-          ) : null}
         </div>
 
-        <div>
-          <p className="text-[11px] text-slate-500">Allowed vs distractions</p>
-          <div className="mt-3">
-            <div className="flex h-3 overflow-hidden rounded-full bg-white/[0.06]">
-              <div
-                className="bg-cyan-300/70"
-                style={{ width: `${allowedShare}%` }}
-              />
-              <div
-                className="bg-rose-300/70"
-                style={{ width: `${distractionShare}%` }}
-              />
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-slate-500">
-              <span>Allowed {formatMinutes(allowedMinutes)}</span>
-              <span>Distractions {formatMinutes(distractionMinutes)}</span>
-            </div>
+        <div className="mt-3 space-y-2">
+          {visibleRows.map((row) => {
+            const minutes = Math.round(row.hours * 60);
+            const percent = allowedMinutes > 0 ? (minutes / allowedMinutes) * 100 : 0;
+            return (
+              <div key={row.methodKey} className="space-y-1">
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="min-w-0 truncate text-slate-200">{row.method}</span>
+                  <span className="tabular-nums text-slate-400">{formatMinutes(minutes)}</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                  <div
+                    className="h-full rounded-full bg-cyan-300/70"
+                    style={{ width: `${Math.max(percent, minutes > 0 ? 8 : 0)}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {rowCount > visibleRows.length ? (
+          <p className="mt-2 text-[11px] text-slate-500">+ {rowCount - visibleRows.length} more categories</p>
+        ) : null}
+      </div>
+
+      <div>
+        <p className="text-[11px] text-slate-500">Allowed vs distractions</p>
+        <div className="mt-3">
+          <div className="flex h-3 overflow-hidden rounded-full bg-white/[0.06]">
+            <div
+              className="bg-cyan-300/70"
+              style={{ width: `${allowedShare}%` }}
+            />
+            <div
+              className="bg-rose-300/70"
+              style={{ width: `${distractionShare}%` }}
+            />
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-200/70">Allowed</p>
-              <p className="mt-1 text-sm font-semibold text-white">{allowedShare.toFixed(0)}%</p>
-            </div>
-            <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-rose-200/70">Distractions</p>
-              <p className="mt-1 text-sm font-semibold text-white">{distractionShare.toFixed(0)}%</p>
-            </div>
+          <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-slate-500">
+            <span>Allowed {formatMinutes(allowedMinutes)}</span>
+            <span>Distractions {formatMinutes(distractionMinutes)}</span>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-200/70">Allowed</p>
+            <p className="mt-1 text-sm font-semibold text-white">{allowedShare.toFixed(0)}%</p>
+          </div>
+          <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-rose-200/70">Distractions</p>
+            <p className="mt-1 text-sm font-semibold text-white">{distractionShare.toFixed(0)}%</p>
           </div>
         </div>
       </div>
