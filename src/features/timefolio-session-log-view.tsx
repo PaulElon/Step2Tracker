@@ -4,10 +4,7 @@ import { SessionLogPanel } from "./timefolio/session-log-panel";
 export function TimeFolioSessionLogView() {
   return (
     <TimeFolioStoreProvider>
-      <SessionLogPanel
-        pageTitle="Session Log"
-        showOverviewMetrics
-      />
+      <SessionLogPanel pageTitle="Session Log" />
     </TimeFolioStoreProvider>
   );
 }

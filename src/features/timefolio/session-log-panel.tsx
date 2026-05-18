@@ -1,30 +1,45 @@
 import { useState, useEffect, useRef } from "react";
-import { Check, ChevronDown, ChevronRight, Clock3, Pause, Pencil, Play, Square, Trash2, X } from "lucide-react";
+import {
+  Calendar,
+  ChevronDown,
+  ChevronRight,
+  Clock3,
+  Pause,
+  Pencil,
+  Play,
+  Square,
+  Trash2,
+  X,
+} from "lucide-react";
 import { FF } from "../../lib/feature-flags";
 import { useTimeFolioStore } from "../../state/tf-store";
-import { formatLongDate, formatMinutes, formatShortMinutes } from "../../lib/datetime";
+import { formatLongDate, formatMinutes, formatShortMinutes, getTodayKey } from "../../lib/datetime";
 import { cn, fieldClassName, primaryButtonClassName, secondaryButtonClassName } from "../../lib/ui";
 import { splitAutoSessionMethodLabel } from "../../lib/tf-session-adapters";
 import type { TfSessionLog } from "../../types/models";
-import {
-  MetricStrip,
-  MetricStripItem,
-  QuietPanel,
-} from "../../components/ui";
+import { QuietPanel } from "../../components/ui";
 import { useAutoTrackerV2SessionControl, type AutoTrackerV2SessionControl } from "./autotracker-v2-session-control";
 
-const EMPTY_FORM = {
-  method: "",
-  date: new Date().toISOString().slice(0, 10),
-  minutes: "",
-  notes: "",
-  isDistraction: false,
-};
+function createEmptyForm() {
+  return {
+    method: "",
+    date: getTodayKey(),
+    minutes: "",
+    notes: "",
+    isDistraction: false,
+  };
+}
+
+const EMPTY_FORM = createEmptyForm();
 
 type FormState = typeof EMPTY_FORM;
 type FeedbackState = {
   kind: "success" | "error";
   text: string;
+};
+
+type DeleteNoticeState = {
+  token: number;
 };
 
 function toMethodKey(method: string): string {
@@ -654,31 +669,33 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
 
 export function SessionLogPanel({
   pageTitle,
-  showOverviewMetrics = false,
 }: {
   pageTitle?: string;
-  showOverviewMetrics?: boolean;
 }) {
   const store = useTimeFolioStore();
   const { state, isLoading, error } = store;
   const autoTracker = useAutoTrackerV2SessionControl();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [expandedDates, setExpandedDates] = useState<Set<string>>(() => new Set());
   const [entryMetaDisplay, setEntryMetaDisplay] = useState<EntryMetaDisplayState>({
     showTimeRange: false,
     showDuration: true,
   });
+  const [selectedDate, setSelectedDate] = useState(() => getTodayKey());
+  const [deleteNotice, setDeleteNotice] = useState<DeleteNoticeState | null>(null);
+  const [deletedSession, setDeletedSession] = useState<TfSessionLog | null>(null);
+  const deleteNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const undoDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deleteNoticeTokenRef = useRef(0);
 
   const sessions = [...state.sessionLogs].sort(
     (a, b) => new Date(b.startISO).getTime() - new Date(a.startISO).getTime()
   );
-  const totalHours = sessions.reduce((sum, session) => sum + session.hours, 0);
-  const latestSessionDate = sessions[0]?.date ?? null;
-  const sessionGroups = sessions.reduce<
+  const todayKey = getTodayKey();
+  const selectedSessions = sessions.filter((session) => session.date === selectedDate);
+  const sessionGroups = selectedSessions.reduce<
     Array<{
       date: string;
       sessions: TfSessionLog[];
@@ -702,6 +719,8 @@ export function SessionLogPanel({
     }
     return groups;
   }, []);
+  const selectedDayGroup = sessionGroups[0] ?? null;
+  const selectedDayIsExpanded = selectedDayGroup ? expandedDates.has(selectedDayGroup.date) : false;
 
   useEffect(() => {
     const validDates = new Set(sessionGroups.map((group) => group.date));
@@ -718,6 +737,48 @@ export function SessionLogPanel({
       return changed ? next : current;
     });
   }, [sessionGroups]);
+
+  useEffect(() => {
+    if (!deleteNotice) {
+      return;
+    }
+
+    if (deleteNoticeTimerRef.current) {
+      clearTimeout(deleteNoticeTimerRef.current);
+    }
+    deleteNoticeTimerRef.current = setTimeout(() => {
+      setDeleteNotice(null);
+      deleteNoticeTimerRef.current = null;
+    }, 2000);
+
+    return () => {
+      if (deleteNoticeTimerRef.current) {
+        clearTimeout(deleteNoticeTimerRef.current);
+        deleteNoticeTimerRef.current = null;
+      }
+    };
+  }, [deleteNotice?.token]);
+
+  useEffect(() => {
+    if (!deletedSession) {
+      return;
+    }
+
+    if (undoDeleteTimerRef.current) {
+      clearTimeout(undoDeleteTimerRef.current);
+    }
+    undoDeleteTimerRef.current = setTimeout(() => {
+      setDeletedSession(null);
+      undoDeleteTimerRef.current = null;
+    }, 60_000);
+
+    return () => {
+      if (undoDeleteTimerRef.current) {
+        clearTimeout(undoDeleteTimerRef.current);
+        undoDeleteTimerRef.current = null;
+      }
+    };
+  }, [deletedSession]);
 
   function toggleDayExpanded(date: string) {
     setExpandedDates((current) => {
@@ -761,20 +822,17 @@ export function SessionLogPanel({
     }
   }
 
-  async function removeSession(id: string) {
+  async function removeSession(session: TfSessionLog) {
     try {
-      setDeletingId(id);
-      await store.deleteSessionLog(id);
-      setFeedback({ kind: "success", text: "Session deleted." });
-      if (editingId === id) setEditingId(null);
-      setDeleteConfirmId((current) => (current === id ? null : current));
+      await store.deleteSessionLog(session.id);
+      if (editingId === session.id) setEditingId(null);
+      setDeleteNotice({ token: ++deleteNoticeTokenRef.current });
+      setDeletedSession(session);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unable to delete session right now.";
       setFeedback({ kind: "error", text: message });
       throw error;
-    } finally {
-      setDeletingId(null);
     }
   }
 
@@ -788,8 +846,25 @@ export function SessionLogPanel({
     setEditingId(null);
   }
 
-  async function handleDeleteConfirm(id: string) {
-    await removeSession(id);
+  async function handleUndoDelete() {
+    if (!deletedSession) return;
+
+    const session = deletedSession;
+    if (undoDeleteTimerRef.current) {
+      clearTimeout(undoDeleteTimerRef.current);
+      undoDeleteTimerRef.current = null;
+    }
+    setDeletedSession(null);
+    setDeleteNotice(null);
+
+    try {
+      await store.upsertSessionLog(session);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to restore session right now.";
+      setFeedback({ kind: "error", text: message });
+      throw error;
+    }
   }
 
   if (isLoading) {
@@ -816,49 +891,7 @@ export function SessionLogPanel({
           onDismiss={() => undefined}
           autoTrackerControl={FF.autotrackerV2UserMode ? autoTracker : null}
         />
-
-        <div className="flex flex-wrap items-center justify-between gap-3 px-1">
-          <button type="button" className={secondaryButtonClassName} onClick={() => setShowAddForm(true)}>
-            + Add session
-          </button>
-        </div>
-
-        {showAddForm ? (
-          <div className="mt-3">
-            <SessionForm
-              initial={EMPTY_FORM}
-              isNew
-              onSave={handleAdd}
-              onCancel={() => setShowAddForm(false)}
-            />
-          </div>
-        ) : null}
       </section>
-
-      {showOverviewMetrics ? (
-        <MetricStrip columns="sm:grid-cols-2 xl:grid-cols-4">
-          <MetricStripItem
-            label="Total time"
-            value={formatMinutes(Math.round(totalHours * 60))}
-            meta="All recorded TimeFolio session time."
-          />
-          <MetricStripItem
-            label="Sessions"
-            value={String(sessions.length)}
-            meta="Manual, timer, and Auto-Tracking entries."
-          />
-          <MetricStripItem
-            label="Latest session"
-            value={latestSessionDate ? formatLongDate(latestSessionDate) : "No sessions yet"}
-            meta="Most recent recorded study activity."
-          />
-          <MetricStripItem
-            label="Summaries"
-            value={String(state.summaries.length)}
-            meta="Saved TimeFolio summary snapshots."
-          />
-        </MetricStrip>
-      ) : null}
 
       {feedback && (
         <div
@@ -874,30 +907,90 @@ export function SessionLogPanel({
         </div>
       )}
 
-      {sessions.length === 0 && !showAddForm && (
-        <div className="rounded-[18px] border border-dashed border-[color:var(--panel-border)] bg-[color:var(--panel-support-bg)] p-4 text-slate-400 [color:var(--rich-text-muted,#94a3b8)]">
-          No TimeFolio sessions yet.
+      <div className="min-h-0 flex-1 overflow-hidden rounded-[20px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] shadow-[0_18px_54px_var(--panel-shadow)]">
+        <div className="border-b border-white/[0.08] bg-white/[0.015] px-3.5 py-3">
+          {deleteNotice ? (
+            <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.14em] text-rose-300">
+              Session deleted.
+            </div>
+          ) : null}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              {!selectedDayIsExpanded && deletedSession ? (
+                <button
+                  type="button"
+                  className="inline-flex h-7 items-center rounded-full border border-rose-400/30 bg-rose-500/10 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-100 transition hover:bg-rose-500/20"
+                  onClick={() => {
+                    void handleUndoDelete();
+                  }}
+                >
+                  Undo Delete?
+                </button>
+              ) : null}
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Session Log
+                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <span className="truncate text-sm font-medium text-white">
+                    {formatLongDate(selectedDate)}
+                  </span>
+                  <label className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-slate-400 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-cyan-100">
+                    <Calendar className="h-3.5 w-3.5" />
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(event) => setSelectedDate(event.target.value || todayKey)}
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      aria-label="Select session day"
+                    />
+                  </label>
+                  {selectedDate !== todayKey ? (
+                    <button
+                      type="button"
+                      className="inline-flex h-7 items-center rounded-full border border-white/10 bg-white/[0.03] px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-200 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-cyan-100"
+                      onClick={() => setSelectedDate(todayKey)}
+                    >
+                      Today
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className={secondaryButtonClassName}
+              onClick={() => setShowAddForm(true)}
+            >
+              + Add session
+            </button>
+          </div>
         </div>
-      )}
 
-      {sessions.length ? (
-        <div className="min-h-0 flex-1 overflow-hidden rounded-[20px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] shadow-[0_18px_54px_var(--panel-shadow)]">
-          <div className="max-h-full overflow-y-auto">
-          {sessionGroups.map((group, groupIndex) => (
+        {showAddForm ? (
+          <div className="border-b border-white/[0.08] px-3.5 py-3">
+            <SessionForm
+              initial={createEmptyForm()}
+              isNew
+              onSave={handleAdd}
+              onCancel={() => setShowAddForm(false)}
+            />
+          </div>
+        ) : null}
+
+        <div className="max-h-full overflow-y-auto">
+          {selectedDayGroup ? (
             (() => {
-              const isExpanded = expandedDates.has(group.date);
-              const methodRows = buildDayMethodAllocationRows(group.sessions);
+              const isExpanded = selectedDayIsExpanded;
+              const methodRows = buildDayMethodAllocationRows(selectedDayGroup.sessions);
               const visibleMethodRows = methodRows.slice(0, 6);
 
               return (
-                <section
-                  key={group.date}
-                  className={cn(groupIndex > 0 ? "border-t border-white/[0.08]" : "")}
-                >
+                <section>
                   <button
                     type="button"
                     className="flex w-full flex-wrap items-center justify-between gap-2 bg-white/[0.025] px-3.5 py-2 text-left transition hover:bg-white/[0.04]"
-                    onClick={() => toggleDayExpanded(group.date)}
+                    onClick={() => toggleDayExpanded(selectedDayGroup.date)}
                     aria-expanded={isExpanded}
                   >
                     <div className="flex min-w-0 items-start gap-2">
@@ -908,13 +1001,13 @@ export function SessionLogPanel({
                       )}
                       <div className="min-w-0">
                         <p className="truncate text-[13px] font-semibold text-white">
-                          {formatLongDate(group.date)}
+                          {formatLongDate(selectedDayGroup.date)}
                         </p>
                         <p className="mt-0.5 text-[11px] text-slate-500">
-                          {group.sessions.length} entr{group.sessions.length === 1 ? "y" : "ies"} ·{" "}
-                          {formatShortMinutes(group.studyMinutes)} focus
-                          {group.distractionMinutes > 0
-                            ? ` · ${formatShortMinutes(group.distractionMinutes)} distraction`
+                          {selectedDayGroup.sessions.length} entr{selectedDayGroup.sessions.length === 1 ? "y" : "ies"} ·{" "}
+                          {formatShortMinutes(selectedDayGroup.studyMinutes)} focus
+                          {selectedDayGroup.distractionMinutes > 0
+                            ? ` · ${formatShortMinutes(selectedDayGroup.distractionMinutes)} distraction`
                             : ""}
                         </p>
                       </div>
@@ -926,27 +1019,42 @@ export function SessionLogPanel({
 
                   {isExpanded ? (
                     <div className="max-h-[24rem] overflow-y-auto divide-y divide-white/[0.06]">
-                      <div className="flex justify-end gap-4 px-3.5 pt-2">
-                        <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-300">
-                          <input
-                            type="checkbox"
-                            checked={entryMetaDisplay.showTimeRange}
-                            onChange={(event) => toggleTimeRangeDisplay(event.target.checked)}
-                            className="accent-cyan-400"
-                          />
-                          Show time range
-                        </label>
-                        <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-300">
-                          <input
-                            type="checkbox"
-                            checked={entryMetaDisplay.showDuration}
-                            onChange={(event) => toggleDurationDisplay(event.target.checked)}
-                            className="accent-cyan-400"
-                          />
-                          Show duration
-                        </label>
+                      <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 pt-2">
+                        <div className="min-w-[7rem]">
+                          {deletedSession ? (
+                            <button
+                              type="button"
+                              className="inline-flex h-7 items-center rounded-full border border-rose-400/30 bg-rose-500/10 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-100 transition hover:bg-rose-500/20"
+                              onClick={() => {
+                                void handleUndoDelete();
+                              }}
+                            >
+                              Undo Delete?
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-4">
+                          <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-300">
+                            <input
+                              type="checkbox"
+                              checked={entryMetaDisplay.showTimeRange}
+                              onChange={(event) => toggleTimeRangeDisplay(event.target.checked)}
+                              className="accent-cyan-400"
+                            />
+                            Show time range
+                          </label>
+                          <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-300">
+                            <input
+                              type="checkbox"
+                              checked={entryMetaDisplay.showDuration}
+                              onChange={(event) => toggleDurationDisplay(event.target.checked)}
+                              className="accent-cyan-400"
+                            />
+                            Show duration
+                          </label>
+                        </div>
                       </div>
-                      {group.sessions.map((s) =>
+                      {selectedDayGroup.sessions.map((s) =>
                         editingId === s.id ? (
                           <div key={s.id} className="px-3 py-3">
                             <SessionForm
@@ -1024,49 +1132,22 @@ export function SessionLogPanel({
                                     title="Edit session"
                                     className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.025] text-slate-400 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-cyan-100 disabled:opacity-50"
                                     onClick={() => {
-                                      setDeleteConfirmId(null);
                                       setEditingId(s.id);
                                     }}
-                                    disabled={deletingId === s.id}
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
                                   </button>
-                                  {deleteConfirmId === s.id ? (
-                                    <>
-                                      <button
-                                        type="button"
-                                        className="inline-flex h-8 items-center gap-1.5 rounded-[10px] border border-rose-400/30 bg-rose-500/15 px-2.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/25 disabled:opacity-60"
-                                        onClick={() => {
-                                          void handleDeleteConfirm(s.id);
-                                        }}
-                                        disabled={deletingId === s.id}
-                                      >
-                                        <Check className="h-3.5 w-3.5" />
-                                        {deletingId === s.id ? "Deleting..." : "Delete"}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        aria-label="Cancel delete"
-                                        title="Cancel delete"
-                                        className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.025] text-slate-400 transition hover:border-white/20 hover:text-white disabled:opacity-60"
-                                        onClick={() => setDeleteConfirmId(null)}
-                                        disabled={deletingId === s.id}
-                                      >
-                                        <X className="h-3.5 w-3.5" />
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      aria-label={`Delete ${label}`}
-                                      title="Delete session"
-                                      className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-rose-400/25 bg-rose-500/[0.08] text-rose-200 transition hover:bg-rose-500/15 disabled:opacity-50"
-                                      onClick={() => setDeleteConfirmId(s.id)}
-                                      disabled={deletingId === s.id}
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
-                                  )}
+                                  <button
+                                    type="button"
+                                    aria-label={`Delete ${label}`}
+                                    title="Delete session"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-rose-400/25 bg-rose-500/[0.08] text-rose-200 transition hover:bg-rose-500/15 disabled:opacity-50"
+                                    onClick={() => {
+                                      void removeSession(s);
+                                    }}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
                                 </div>
                               </article>
                             );
@@ -1078,12 +1159,12 @@ export function SessionLogPanel({
                     <div className="grid gap-2 px-3.5 py-3">
                       <div className="flex flex-wrap items-center gap-2 text-[11px]">
                         <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-emerald-200">
-                          Focus {formatMinutes(group.studyMinutes)}
+                          Focus {formatMinutes(selectedDayGroup.studyMinutes)}
                         </span>
                         <span className="rounded-full border border-rose-400/25 bg-rose-500/10 px-2 py-0.5 text-rose-200">
-                          Distraction {formatMinutes(group.distractionMinutes)}
+                          Distraction {formatMinutes(selectedDayGroup.distractionMinutes)}
                         </span>
-                        <span className="text-slate-500">Total {formatMinutes(group.totalMinutes)}</span>
+                        <span className="text-slate-500">Total {formatMinutes(selectedDayGroup.totalMinutes)}</span>
                       </div>
                       <ol className="grid gap-2">
                         {visibleMethodRows.map((row, index) => {
@@ -1140,10 +1221,15 @@ export function SessionLogPanel({
                 </section>
               );
             })()
-          ))}
-          </div>
+          ) : (
+            <div className="p-4">
+              <div className="rounded-[18px] border border-dashed border-[color:var(--panel-border)] bg-[color:var(--panel-support-bg)] p-4 text-slate-400 [color:var(--rich-text-muted,#94a3b8)]">
+                No sessions recorded for {formatLongDate(selectedDate)}.
+              </div>
+            </div>
+          )}
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }
