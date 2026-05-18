@@ -49,9 +49,15 @@ function makeLogId(deviceId: string, spanId: string): string {
 
 export function reconcileNativeSpansToSessions(
   spans: NativeTrackerSpanInput[],
-  existingSessionLogs: TfSessionLog[]
+  existingSessionLogs: TfSessionLog[],
+  deletedNativeIds?: ReadonlySet<string>,
 ): NativeSpanReconcileResult {
   const existingIds = new Set(existingSessionLogs.map((session) => session.id));
+  if (deletedNativeIds) {
+    for (const id of deletedNativeIds) {
+      existingIds.add(id);
+    }
+  }
   const seenSpanKeys = new Set<string>();
   const newEntries: TfSessionLog[] = [];
   const ackKeys: NativeSpanAckKey[] = [];

@@ -13,6 +13,11 @@ import {
   type NativeSpanAckKey,
   type NativeTrackerSpanInput,
 } from "../lib/tf-native-span-reconciler";
+import {
+  addDeletedNativeId,
+  getDeletedNativeIds,
+  removeDeletedNativeId,
+} from "../lib/tf-deleted-native-ids";
 import type { TfAppState, TfSessionLog } from "../types/models";
 
 interface TimeFolioStoreValue {
@@ -130,6 +135,9 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
 
   const upsertSessionLog = useCallback(
     async (session: TfSessionLog) => {
+      if (session.id.startsWith("nat-")) {
+        removeDeletedNativeId(session.id);
+      }
       await commitStateChange((prev) => upsertTfSessionLog(prev, session));
     },
     [commitStateChange],
@@ -137,6 +145,9 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
 
   const deleteSessionLog = useCallback(
     async (id: string) => {
+      if (id.startsWith("nat-")) {
+        addDeletedNativeId(id);
+      }
       await commitStateChange((prev) => deleteTfSessionLog(prev, id));
     },
     [commitStateChange],
@@ -150,6 +161,7 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
         const { newEntries, skipped, ackKeys } = reconcileNativeSpansToSessions(
           spans,
           currentState.sessionLogs,
+          getDeletedNativeIds(),
         );
         if (newEntries.length === 0) {
           return { imported: 0, skipped, ackKeys };
