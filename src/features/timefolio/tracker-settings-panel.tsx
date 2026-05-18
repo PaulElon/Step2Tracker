@@ -495,6 +495,22 @@ function TrackerGroupCard({
   const [pendingTarget, setPendingTarget] = useState("");
   const [showTargetModal, setShowTargetModal] = useState(false);
   const [modalInput, setModalInput] = useState("");
+  const [showSavedBanner, setShowSavedBanner] = useState(false);
+  const savedBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onSaveRef = useRef(onSave);
+  useEffect(() => { onSaveRef.current = onSave; });
+
+  useEffect(() => {
+    if (!isDirty || isSaving || isDisabled) return;
+    const timerId = setTimeout(() => {
+      void onSaveRef.current().then(() => {
+        setShowSavedBanner(true);
+        if (savedBannerTimerRef.current) clearTimeout(savedBannerTimerRef.current);
+        savedBannerTimerRef.current = setTimeout(() => setShowSavedBanner(false), 2000);
+      }).catch(() => {});
+    }, 500);
+    return () => clearTimeout(timerId);
+  }, [isDirty, isSaving, isDisabled]);
 
   const combinedRules: TrackerRuleRow[] = [
     ...rulesByKind.website.map((rule) => ({
@@ -745,19 +761,15 @@ function TrackerGroupCard({
       </div>
 
       <div className="flex items-center justify-between gap-3 pt-1">
-        <span className="text-xs font-medium text-slate-300">
-          {isDirty ? "Unsaved local edits" : "Tracker rules are saved locally"}
+        <span className="text-xs font-medium text-slate-400">
+          {isSaving ? "Saving…" : "Tracker rules are saved locally"}
         </span>
-        <button
-          type="button"
-          onClick={() => {
-            void onSave();
-          }}
-          disabled={isSaving || isDisabled || !isDirty}
-          className="rounded-lg border border-slate-700 bg-slate-800/90 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isSaving ? "Saving…" : "Save changes"}
-        </button>
+        {showSavedBanner ? (
+          <span className="flex items-center gap-1 text-xs font-medium text-emerald-400">
+            <Check className="h-3 w-3" />
+            Saved Changes
+          </span>
+        ) : null}
       </div>
 
       {showTargetModal ? (
@@ -3095,7 +3107,7 @@ export function TrackerSettingsPanel({
                 </div>
                 <span className="text-[10px] text-slate-600">Preview only — no sessions written.</span>
                 <span className="text-[10px] text-slate-600">
-                  Classification uses saved tracker rules. Click Save changes after editing rules.
+                  Classification uses saved tracker rules. Changes are saved automatically.
                 </span>
               </div>
               {previewSpans.length > 0 ? (() => {

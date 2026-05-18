@@ -250,6 +250,12 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
     timerMode === "auto"
       ? autoTrackerControl?.runningElapsedLabel ?? formatTimerLabel(0)
       : formatTimerLabel(displayMs);
+  const currentTrackingLabel =
+    timerMode === "auto" && isAutoRunning
+      ? autoTrackerControl?.currentPreviewSpan?.matchedRuleName?.trim() ||
+        autoTrackerControl?.lastDetectedAppName?.trim() ||
+        null
+      : null;
   const timerStatusLabel =
     timerMode === "auto"
       ? isAutoRunning
@@ -395,6 +401,11 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
           <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-500">
             {timerStatusLabel}
           </p>
+          {currentTrackingLabel ? (
+            <p className="mt-1 max-w-[16ch] truncate text-xs font-medium text-slate-300">
+              {currentTrackingLabel}
+            </p>
+          ) : null}
         </div>
         <div aria-hidden="true" className="hidden lg:block" />
       </div>
@@ -704,8 +715,10 @@ export function SessionLogPanel({
   const [selectedDate, setSelectedDate] = useState(() => getTodayKey());
   const [deleteNotice, setDeleteNotice] = useState<DeleteNoticeState | null>(null);
   const [deletedSession, setDeletedSession] = useState<TfSessionLog | null>(null);
+  const [undoCountdown, setUndoCountdown] = useState<number | null>(null);
   const deleteNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const undoDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const undoCountdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const undoCountdownValueRef = useRef<number | null>(null);
   const deleteNoticeTokenRef = useRef(0);
 
   const sessions = [...state.sessionLogs].sort(
@@ -779,21 +792,38 @@ export function SessionLogPanel({
 
   useEffect(() => {
     if (!deletedSession) {
+      if (undoCountdownIntervalRef.current) {
+        clearInterval(undoCountdownIntervalRef.current);
+        undoCountdownIntervalRef.current = null;
+      }
+      undoCountdownValueRef.current = null;
       return;
     }
 
-    if (undoDeleteTimerRef.current) {
-      clearTimeout(undoDeleteTimerRef.current);
+    undoCountdownValueRef.current = 10;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUndoCountdown(10);
+
+    if (undoCountdownIntervalRef.current) {
+      clearInterval(undoCountdownIntervalRef.current);
     }
-    undoDeleteTimerRef.current = setTimeout(() => {
-      setDeletedSession(null);
-      undoDeleteTimerRef.current = null;
-    }, 60_000);
+    undoCountdownIntervalRef.current = setInterval(() => {
+      const next = (undoCountdownValueRef.current ?? 1) - 1;
+      undoCountdownValueRef.current = next > 0 ? next : null;
+      setUndoCountdown(next > 0 ? next : null);
+      if (next <= 0) {
+        if (undoCountdownIntervalRef.current) {
+          clearInterval(undoCountdownIntervalRef.current);
+          undoCountdownIntervalRef.current = null;
+        }
+        setDeletedSession(null);
+      }
+    }, 1000);
 
     return () => {
-      if (undoDeleteTimerRef.current) {
-        clearTimeout(undoDeleteTimerRef.current);
-        undoDeleteTimerRef.current = null;
+      if (undoCountdownIntervalRef.current) {
+        clearInterval(undoCountdownIntervalRef.current);
+        undoCountdownIntervalRef.current = null;
       }
     };
   }, [deletedSession]);
@@ -868,10 +898,12 @@ export function SessionLogPanel({
     if (!deletedSession) return;
 
     const session = deletedSession;
-    if (undoDeleteTimerRef.current) {
-      clearTimeout(undoDeleteTimerRef.current);
-      undoDeleteTimerRef.current = null;
+    if (undoCountdownIntervalRef.current) {
+      clearInterval(undoCountdownIntervalRef.current);
+      undoCountdownIntervalRef.current = null;
     }
+    undoCountdownValueRef.current = null;
+    setUndoCountdown(null);
     setDeletedSession(null);
     setDeleteNotice(null);
 
@@ -927,6 +959,20 @@ export function SessionLogPanel({
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] shadow-[0_18px_54px_var(--panel-shadow)]">
         <div className="shrink-0 border-b border-white/[0.08] bg-white/[0.015] px-3.5 py-3">
+          {!selectedDayIsExpanded && deletedSession ? (
+            <div className="mb-2 flex justify-center">
+              <button
+                type="button"
+                className="inline-flex h-6 items-center gap-1.5 rounded-full border border-red-400/70 bg-red-600/50 px-2.5 text-[10px] font-semibold tracking-[0.08em] text-white transition hover:bg-red-600/70"
+                onClick={() => {
+                  void handleUndoDelete();
+                }}
+              >
+                Undo Delete?
+                <span className="tabular-nums opacity-80">{undoCountdown ?? 10}s</span>
+              </button>
+            </div>
+          ) : null}
           {deleteNotice ? (
             <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.14em] text-rose-300">
               Session deleted.
@@ -934,18 +980,7 @@ export function SessionLogPanel({
           ) : null}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 flex-1 items-center gap-2">
-              {!selectedDayIsExpanded && deletedSession ? (
-                <button
-                  type="button"
-                  className="inline-flex h-7 items-center rounded-full border border-rose-400/30 bg-rose-500/10 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-100 transition hover:bg-rose-500/20"
-                  onClick={() => {
-                    void handleUndoDelete();
-                  }}
-                >
-                  Undo Delete?
-                </button>
-              ) : null}
-              <div className="min-w-0">
+            <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                   Session Log
                 </p>
