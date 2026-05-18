@@ -16,3 +16,9 @@ export interface AccountVerifyInput {
   email: string;
   password: string;
 }
+
+export interface AccountChangePasswordInput {
+  accountId: string;
+  currentPassword: string;
+  newPassword: string;
+}

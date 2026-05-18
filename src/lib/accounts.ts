@@ -1,5 +1,6 @@
 import { core } from "@tauri-apps/api";
 import type {
+  AccountChangePasswordInput,
   AccountCreateInput,
   AccountSummary,
   AccountVerifyInput,
@@ -41,4 +42,12 @@ export function loadRememberedSession(): Promise<AccountSummary | null> {
 
 export function clearRememberedSession(): Promise<void> {
   return command<void>("account_clear_remembered_session");
+}
+
+export function changePassword(input: AccountChangePasswordInput): Promise<void> {
+  return command<void>("account_change_password", {
+    accountId: input.accountId,
+    currentPassword: input.currentPassword,
+    newPassword: input.newPassword,
+  });
 }

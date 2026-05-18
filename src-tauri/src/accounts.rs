@@ -340,7 +340,50 @@ pub fn clear_remembered_session_inner(app_data_dir: &Path) -> Result<(), String>
     Ok(())
 }
 
+pub fn change_password_inner(
+    app_data_dir: &Path,
+    account_id: String,
+    current_password: String,
+    new_password: String,
+) -> Result<(), String> {
+    let conn = open_db(app_data_dir)?;
+
+    let stored_hash: String = conn
+        .query_row(
+            "SELECT password_hash FROM accounts WHERE id = ?1",
+            params![account_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "INVALID_CREDENTIALS".to_string())?;
+
+    if !verify_password(&current_password, &stored_hash)? {
+        return Err("INVALID_CREDENTIALS".to_string());
+    }
+
+    validate_password(&new_password)?;
+
+    let new_hash = hash_password(&new_password)?;
+
+    conn.execute(
+        "UPDATE accounts SET password_hash = ?1 WHERE id = ?2",
+        params![new_hash, account_id],
+    )
+    .map_err(|e| format!("Update failed: {e}"))?;
+
+    Ok(())
+}
+
 // Tauri commands.
+
+#[tauri::command]
+pub fn account_change_password(
+    app: tauri::AppHandle,
+    account_id: String,
+    current_password: String,
+    new_password: String,
+) -> Result<(), String> {
+    change_password_inner(&get_app_data_dir(&app)?, account_id, current_password, new_password)
+}
 
 #[tauri::command]
 pub fn account_remember_session(app: tauri::AppHandle, account_id: String) -> Result<(), String> {
@@ -528,6 +571,62 @@ mod tests {
         // Confirm the stale row was cleared.
         let loaded_again = load_remembered_session_inner(dir.path()).unwrap();
         assert!(loaded_again.is_none());
+    }
+
+    #[test]
+    fn change_password_rejects_wrong_current_password() {
+        let dir = tmp();
+        let s = create_inner(dir.path(), "user@example.com".into(), "Password1!".into()).unwrap();
+        let result = change_password_inner(dir.path(), s.id, "WrongPass1!".into(), "NewPass1!".into());
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "INVALID_CREDENTIALS");
+    }
+
+    #[test]
+    fn change_password_rejects_weak_new_password() {
+        let dir = tmp();
+        let s = create_inner(dir.path(), "user@example.com".into(), "Password1!".into()).unwrap();
+        let result = change_password_inner(dir.path(), s.id.clone(), "Password1!".into(), "short".into());
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "PASSWORD_TOO_SHORT");
+    }
+
+    #[test]
+    fn change_password_succeeds() {
+        let dir = tmp();
+        let s = create_inner(dir.path(), "user@example.com".into(), "Password1!".into()).unwrap();
+        let result = change_password_inner(dir.path(), s.id, "Password1!".into(), "NewPassword1!".into());
+        assert!(result.is_ok(), "expected change to succeed: {:?}", result);
+    }
+
+    #[test]
+    fn old_password_no_longer_works_after_change() {
+        let dir = tmp();
+        let s = create_inner(dir.path(), "user@example.com".into(), "Password1!".into()).unwrap();
+        change_password_inner(dir.path(), s.id, "Password1!".into(), "NewPassword1!".into()).unwrap();
+        let result = verify_inner(dir.path(), "user@example.com".into(), "Password1!".into());
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "INVALID_CREDENTIALS");
+    }
+
+    #[test]
+    fn new_password_works_after_change() {
+        let dir = tmp();
+        let s = create_inner(dir.path(), "user@example.com".into(), "Password1!".into()).unwrap();
+        change_password_inner(dir.path(), s.id, "Password1!".into(), "NewPassword1!".into()).unwrap();
+        let result = verify_inner(dir.path(), "user@example.com".into(), "NewPassword1!".into());
+        assert!(result.is_ok(), "new password should verify: {:?}", result);
+    }
+
+    #[test]
+    fn remembered_session_intact_after_password_change() {
+        let dir = tmp();
+        let s = create_inner(dir.path(), "user@example.com".into(), "Password1!".into()).unwrap();
+        remember_session_inner(dir.path(), &s.id).unwrap();
+        change_password_inner(dir.path(), s.id.clone(), "Password1!".into(), "NewPassword1!".into()).unwrap();
+        let loaded = load_remembered_session_inner(dir.path()).unwrap();
+        assert!(loaded.is_some(), "remembered session should still exist after password change");
+        assert_eq!(loaded.unwrap().id, s.id);
     }
 
     #[test]

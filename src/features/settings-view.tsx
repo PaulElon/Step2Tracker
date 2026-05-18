@@ -8,6 +8,7 @@ import {
   FolderOpen,
   Globe,
   Info,
+  Lock,
   Monitor,
   Palette,
   Pencil,
@@ -23,6 +24,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { changePassword } from "../lib/accounts";
 import { launchResource } from "../lib/launcher";
 import { useAuthSession } from "../state/auth-session";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
@@ -464,6 +466,134 @@ function ResourcesPanel({
         </div>
       )}
     </>
+  );
+}
+
+function cpErrorText(code: string): string {
+  switch (code) {
+    case "INVALID_CREDENTIALS": return "Current password is incorrect.";
+    case "PASSWORD_TOO_SHORT": return "New password must be at least 10 characters.";
+    case "PASSWORD_REQUIRES_NUMBER": return "New password must include at least one number.";
+    case "PASSWORD_REQUIRES_SPECIAL": return "New password must include at least one special character.";
+    default: return code;
+  }
+}
+
+function ChangePasswordPanel() {
+  const authSession = useAuthSession();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isBusy, setIsBusy] = useState(false);
+  const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!authSession.account) return;
+
+    if (newPassword !== confirmPassword) {
+      setMessage({ tone: "error", text: "New passwords do not match." });
+      return;
+    }
+
+    setIsBusy(true);
+    setMessage(null);
+
+    try {
+      await changePassword({
+        accountId: authSession.account.id,
+        currentPassword,
+        newPassword,
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setMessage({ tone: "success", text: "Password updated." });
+    } catch (err) {
+      const code = err instanceof Error ? err.message : String(err);
+      setMessage({ tone: "error", text: cpErrorText(code) });
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  return (
+    <Panel title="Change Password" subtitle="Update your local account password.">
+      <form
+        onSubmit={(e) => {
+          void handleSubmit(e);
+        }}
+        className="flex flex-col gap-3"
+      >
+        <div>
+          <label className="block text-[11px] text-slate-500 mb-1" htmlFor="cp-current">
+            Current password
+          </label>
+          <input
+            id="cp-current"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className={fieldClassName}
+            disabled={isBusy}
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] text-slate-500 mb-1" htmlFor="cp-new">
+            New password
+          </label>
+          <input
+            id="cp-new"
+            type="password"
+            autoComplete="new-password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className={fieldClassName}
+            disabled={isBusy}
+          />
+          <p className="mt-1 text-[11px] text-slate-500">
+            At least 10 characters · 1 number · 1 special character
+          </p>
+        </div>
+        <div>
+          <label className="block text-[11px] text-slate-500 mb-1" htmlFor="cp-confirm">
+            Confirm new password
+          </label>
+          <input
+            id="cp-confirm"
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className={fieldClassName}
+            disabled={isBusy}
+          />
+        </div>
+        {message ? (
+          <div
+            className={cn(
+              "rounded-[14px] border px-3 py-2 text-sm",
+              message.tone === "error"
+                ? "border-rose-500/25 bg-rose-500/10 text-rose-100"
+                : "border-emerald-500/25 bg-emerald-500/10 text-emerald-100",
+            )}
+          >
+            {message.text}
+          </div>
+        ) : null}
+        <div>
+          <button
+            type="submit"
+            className={secondaryButtonClassName}
+            disabled={isBusy || !currentPassword || !newPassword || !confirmPassword}
+          >
+            <Lock className="h-4 w-4" />
+            {isBusy ? "Updating…" : "Update password"}
+          </button>
+        </div>
+      </form>
+    </Panel>
   );
 }
 
@@ -1364,6 +1494,7 @@ export function SettingsView({
                   </div>
                 </div>
               </Panel>
+              <ChangePasswordPanel />
             </div>
           ) : null}
 
