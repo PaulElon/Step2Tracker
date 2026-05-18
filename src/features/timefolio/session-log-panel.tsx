@@ -353,7 +353,7 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
         </button>
       ) : null}
 
-      <div className="grid gap-5 border-b border-[color:var(--panel-border)] bg-[radial-gradient(circle_at_50%_0%,var(--primary-start),transparent_42%)] px-5 py-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+      <div className="relative grid gap-5 border-b border-[color:var(--panel-border)] bg-[radial-gradient(circle_at_50%_0%,var(--primary-start),transparent_42%)] px-5 py-6 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
         <div className="min-w-0 text-center lg:text-left">
           <div className="flex items-center gap-2">
             <Clock3 className="h-4 w-4 text-cyan-200" />
@@ -371,7 +371,7 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
                   : autoTrackerControl?.message?.text || "Auto-Tracking idle"}
           </p>
         </div>
-        <div className="mx-auto min-w-[min(100%,24rem)] rounded-[24px] border border-[color:var(--panel-border)] bg-[color:var(--panel-support-bg)] px-6 py-5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_20px_60px_var(--panel-shadow)] lg:mx-0">
+        <div className="justify-self-center text-center lg:col-start-2">
           <p className="font-mono text-[clamp(3rem,8vw,5.6rem)] font-semibold leading-none tabular-nums text-white">
             {timerLabel}
           </p>
@@ -379,6 +379,7 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
             {timerStatusLabel}
           </p>
         </div>
+        <div aria-hidden="true" className="hidden lg:block" />
       </div>
 
       {timerMode === "manual" ? (
