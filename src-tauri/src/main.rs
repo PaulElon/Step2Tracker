@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod accounts;
 mod persistence;
 mod tf_autotracker;
 mod tf_autotracker_v2_native;
@@ -858,7 +859,11 @@ fn main() {
             updater::check_for_update,
             updater::install_update,
             purge_orphaned_notebook_images,
-            purge_orphaned_notebook_pdfs
+            purge_orphaned_notebook_pdfs,
+            accounts::account_count,
+            accounts::account_list_emails,
+            accounts::account_create,
+            accounts::account_verify
         ])
         .run(tauri::generate_context!())
         .expect("error while running TimeFolio");
