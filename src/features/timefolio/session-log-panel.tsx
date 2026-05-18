@@ -901,8 +901,8 @@ export function SessionLogPanel({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded-[20px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] shadow-[0_18px_54px_var(--panel-shadow)]">
-        <div className="border-b border-white/[0.08] bg-white/[0.015] px-3.5 py-3">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] shadow-[0_18px_54px_var(--panel-shadow)]">
+        <div className="shrink-0 border-b border-white/[0.08] bg-white/[0.015] px-3.5 py-3">
           {deleteNotice ? (
             <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.14em] text-rose-300">
               Session deleted.
@@ -972,7 +972,7 @@ export function SessionLogPanel({
           </div>
         ) : null}
 
-        <div className="max-h-full overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {selectedDayGroup ? (
             (() => {
               const isExpanded = selectedDayIsExpanded;
@@ -1012,7 +1012,7 @@ export function SessionLogPanel({
                   </button>
 
                   {isExpanded ? (
-                    <div className="max-h-[24rem] overflow-y-auto divide-y divide-white/[0.06]">
+                    <div className="overflow-y-auto divide-y divide-white/[0.06]">
                       <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 pt-2">
                         <div className="min-w-[7rem]">
                           {deletedSession ? (
