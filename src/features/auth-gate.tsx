@@ -219,7 +219,7 @@ export function AuthGate() {
               type="button"
               className="text-sm text-slate-400 hover:text-slate-200 transition"
               onClick={() => reset("welcome")}
-              disabled={loading && !success}
+              disabled={loading || success}
             >
               ← Back
             </button>
