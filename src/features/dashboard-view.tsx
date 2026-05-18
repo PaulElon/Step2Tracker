@@ -203,7 +203,8 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
   const [showTaskEditor, setShowTaskEditor] = useState(false);
   const [editingTask, setEditingTask] = useState<StudyBlock | null>(null);
   const [editingGoal, setEditingGoal] = useState(false);
-  const [goalInputValue, setGoalInputValue] = useState("");
+  const [goalHoursValue, setGoalHoursValue] = useState("");
+  const [goalMinsValue, setGoalMinsValue] = useState("");
 
   const todayKey = getTodayKey();
   const trackedStudyMinutes = FF.timefolio
@@ -234,9 +235,11 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
   const resourceLinks = state.preferences.resourceLinks;
 
   const commitGoalMinutes = () => {
-    const parsedMinutes = Number(goalInputValue);
-    if (Number.isInteger(parsedMinutes) && parsedMinutes >= 1 && parsedMinutes <= 1440) {
-      void setDailyGoalMinutes(parsedMinutes);
+    const hours = Math.max(0, Math.floor(Number(goalHoursValue) || 0));
+    const mins = Math.max(0, Math.floor(Number(goalMinsValue) || 0));
+    const totalMinutes = hours * 60 + mins;
+    if (totalMinutes >= 1 && totalMinutes <= 1440) {
+      void setDailyGoalMinutes(totalMinutes);
     }
     setEditingGoal(false);
   };
@@ -483,7 +486,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
 
                 <div className="mt-4 min-w-0">
                   {todayTasks.length ? (
-                    <div className="space-y-2.5">
+                    <div className="max-h-[calc(5*4.5rem)] overflow-y-auto space-y-2.5 pr-0.5 scrollbar-subtle">
                       {todayTasks.map((task) => (
                         <StudyTaskCard
                           key={task.id}
@@ -521,65 +524,101 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                 </div>
               </section>
 
-              {/* Today Snapshot */}
-              <section className={cn(todayPanelClassName, "flex flex-col p-4")}>
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-base font-semibold text-white">Today Snapshot</h3>
-                  <span className="text-xs text-slate-500">Goal {formatMinutes(todayGoalMinutes)}</span>
-                </div>
-
-                <div className="mt-3 flex items-center gap-4">
-                  <ProgressRing percent={dailyGoalProgress} size={88} stroke={8} />
-                  <div className="min-w-0 flex-1 space-y-1.5 text-sm">
-                    <SnapshotRow icon={Clock3} label="Done time" value={formatMinutes(completedMinutes)} />
-                    {FF.timefolio ? (
-                      <SnapshotRow icon={Timer} label="Tracked study" value={formatMinutes(trackedStudyMinutes)} />
-                    ) : null}
-                    <SnapshotRow
-                      icon={ListTodo}
-                      label="Tasks done"
-                      value={`${completedCount} / ${todayTasks.length}`}
-                    />
-                    <SnapshotRow icon={Timer} label="Remaining" value={String(openCount)} />
-                    <SnapshotRow icon={Timer} label="Planned" value={formatMinutes(plannedMinutes)} />
+              {/* Today Snapshot + Timer box */}
+              <div className="flex flex-col gap-5">
+                <section className={cn(todayPanelClassName, "flex flex-col p-4")}>
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-base font-semibold text-white">Today Snapshot</h3>
+                    <span className="text-xs text-slate-500">Goal {formatMinutes(todayGoalMinutes)}</span>
                   </div>
-                </div>
 
-                <div className="mt-3 border-t border-white/[0.06] pt-3">
-                  {editingGoal ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-slate-500">Min</span>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        autoFocus
-                        min="1"
-                        max="1440"
-                        step="1"
-                        className="w-20 rounded-[12px] border border-white/20 bg-slate-900/80 px-2 py-1 text-sm text-white outline-none"
-                        value={goalInputValue}
-                        onChange={(e) => setGoalInputValue(e.target.value)}
-                        onBlur={commitGoalMinutes}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") e.currentTarget.blur();
-                          if (e.key === "Escape") setEditingGoal(false);
-                        }}
+                  <div className="mt-3 flex items-center gap-4">
+                    <ProgressRing percent={dailyGoalProgress} size={88} stroke={8} />
+                    <div className="min-w-0 flex-1 space-y-1.5 text-sm">
+                      <SnapshotRow icon={Clock3} label="Done time" value={formatMinutes(completedMinutes)} />
+                      {FF.timefolio ? (
+                        <SnapshotRow icon={Timer} label="Tracked study" value={formatMinutes(trackedStudyMinutes)} />
+                      ) : null}
+                      <SnapshotRow
+                        icon={ListTodo}
+                        label="Tasks done"
+                        value={`${completedCount} / ${todayTasks.length}`}
                       />
+                      <SnapshotRow icon={Timer} label="Remaining" value={String(openCount)} />
+                      <SnapshotRow icon={Timer} label="Planned" value={formatMinutes(plannedMinutes)} />
                     </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className="text-xs text-slate-400 transition-colors hover:text-slate-200"
-                      onClick={() => {
-                        setGoalInputValue(String(todayGoalMinutes));
-                        setEditingGoal(true);
-                      }}
-                    >
-                      Edit goal
-                    </button>
-                  )}
-                </div>
-              </section>
+                  </div>
+
+                  <div className="mt-3 border-t border-white/[0.06] pt-3">
+                    {editingGoal ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          autoFocus
+                          min="0"
+                          max="23"
+                          step="1"
+                          className="w-14 rounded-[12px] border border-white/20 bg-slate-900/80 px-2 py-1 text-sm text-white outline-none"
+                          value={goalHoursValue}
+                          onChange={(e) => setGoalHoursValue(e.target.value)}
+                          onBlur={commitGoalMinutes}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                            if (e.key === "Escape") setEditingGoal(false);
+                          }}
+                          placeholder="0"
+                        />
+                        <span className="text-[10px] text-slate-500">h</span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min="0"
+                          max="59"
+                          step="1"
+                          className="w-14 rounded-[12px] border border-white/20 bg-slate-900/80 px-2 py-1 text-sm text-white outline-none"
+                          value={goalMinsValue}
+                          onChange={(e) => setGoalMinsValue(e.target.value)}
+                          onBlur={commitGoalMinutes}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                            if (e.key === "Escape") setEditingGoal(false);
+                          }}
+                          placeholder="0"
+                        />
+                        <span className="text-[10px] text-slate-500">m</span>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="text-xs text-slate-400 transition-colors hover:text-slate-200"
+                        onClick={() => {
+                          setGoalHoursValue(String(Math.floor(todayGoalMinutes / 60)));
+                          setGoalMinsValue(String(todayGoalMinutes % 60));
+                          setEditingGoal(true);
+                        }}
+                      >
+                        Edit goal
+                      </button>
+                    )}
+                  </div>
+                </section>
+
+                <section className={cn(todayPanelClassName, "p-4")}>
+                  <div className="flex items-center gap-2">
+                    <Timer className="h-4 w-4 text-cyan-200" />
+                    <h3 className="text-base font-semibold text-white">Time your study session</h3>
+                  </div>
+                  <button
+                    type="button"
+                    className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-sm font-semibold text-slate-200 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-white"
+                    onClick={() => goToSection("sessionLog")}
+                  >
+                    <Timer className="h-3.5 w-3.5" />
+                    Timer
+                  </button>
+                </section>
+              </div>
             </div>
 
             {/* Next Best Moves */}

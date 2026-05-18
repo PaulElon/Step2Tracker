@@ -1346,10 +1346,10 @@ function EntryDetail({
         </DetailSection>
 
         <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <DetailSection title="Your Reasoning" tone="rose" badge="Why you picked the wrong answer">
+          <DetailSection title="Your Reasoning" tone="rose">
             {renderStudyContent(entry.whyPickedWrongAnswer)}
           </DetailSection>
-          <DetailSection title="Correct Reasoning" tone="emerald" badge="Why the correct answer is correct">
+          <DetailSection title="Correct Reasoning" tone="emerald">
             {renderStudyContent(entry.whyCorrectAnswerIsCorrect)}
           </DetailSection>
         </div>

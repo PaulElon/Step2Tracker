@@ -203,9 +203,28 @@ function buildDayMethodAllocationRows(sessions: TfSessionLog[]): DayMethodAlloca
     });
 }
 
+const TIMER_MODE_STORAGE_KEY = "tf-timer-mode";
+
+function readPersistedTimerMode(): TimerMode {
+  try {
+    const raw = localStorage.getItem(TIMER_MODE_STORAGE_KEY);
+    return raw === "auto" ? "auto" : "manual";
+  } catch {
+    return "manual";
+  }
+}
+
+function persistTimerMode(mode: TimerMode) {
+  try {
+    localStorage.setItem(TIMER_MODE_STORAGE_KEY, mode);
+  } catch {
+    // ignore
+  }
+}
+
 function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps) {
   const [status, setStatus] = useState<TimerStatus>("idle");
-  const [timerMode, setTimerMode] = useState<TimerMode>("manual");
+  const [timerMode, setTimerMode] = useState<TimerMode>(readPersistedTimerMode);
   const [method, setMethod] = useState("");
   const [notes, setNotes] = useState("");
   const [isDistraction, setIsDistraction] = useState(false);
@@ -256,13 +275,18 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
       : "Start New Run";
   const disableAutoStart = !isAutoRunning && status !== "idle";
 
+  function applyTimerMode(mode: TimerMode) {
+    setTimerMode(mode);
+    persistTimerMode(mode);
+  }
+
   useEffect(() => {
     if (autoNeedsAttention) {
-      setTimerMode("auto");
+      applyTimerMode("auto");
       return;
     }
     if (manualNeedsAttention) {
-      setTimerMode("manual");
+      applyTimerMode("manual");
     }
   }, [autoNeedsAttention, manualNeedsAttention]);
 
@@ -340,7 +364,7 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
           className={cn(
             "absolute right-4 top-4 z-10 inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/80 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-200 shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition hover:border-cyan-300/30 hover:bg-slate-900 hover:text-white",
           )}
-          onClick={() => setTimerMode(showSwitchToAuto ? "auto" : "manual")}
+          onClick={() => applyTimerMode(showSwitchToAuto ? "auto" : "manual")}
         >
           {showSwitchToAuto ? "Switch to Auto" : "Switch to Manual"}
         </button>
