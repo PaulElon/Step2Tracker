@@ -103,7 +103,7 @@ export function AuthGate() {
                 Welcome to TimeFolio
               </h1>
               <p className="mt-2 text-sm text-slate-400">
-                Your local-first study tracker.
+                Your Own Personal Study Tracker
               </p>
             </div>
             {accountExists ? (
