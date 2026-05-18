@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { createAccount, verifyAccount } from "../lib/accounts";
+import { useState, useEffect } from "react";
+import { createAccount, verifyAccount, accountCount } from "../lib/accounts";
 import { useAuthSession } from "../state/auth-session";
 import { fieldClassName, primaryButtonClassName } from "../lib/ui";
 
@@ -7,6 +7,7 @@ type Mode = "welcome" | "signup" | "login";
 
 function mapError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes("MULTI_PROFILE_NOT_READY")) return "This device already has a local TimeFolio account. Multi-profile support is coming soon. Please log in to continue.";
   if (msg.includes("EMAIL_IN_USE")) return "Email already in use.";
   if (msg.includes("INVALID_EMAIL")) return "Enter a valid email address.";
   if (msg.includes("PASSWORD_TOO_SHORT")) return "Password must be at least 10 characters.";
@@ -40,6 +41,14 @@ export function AuthGate() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  // null = still loading; true = account already exists on this device
+  const [accountExists, setAccountExists] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    accountCount()
+      .then((n) => setAccountExists(n > 0))
+      .catch(() => setAccountExists(false));
+  }, []);
 
   function reset(next: Mode) {
     setEmail("");
@@ -62,8 +71,13 @@ export function AuthGate() {
       setSuccess(true);
       window.setTimeout(() => auth.login(account), 2000);
     } catch (err) {
-      setError(mapError(err));
+      const mapped = mapError(err);
+      setError(mapped);
       setLoading(false);
+      if (String(err).includes("MULTI_PROFILE_NOT_READY")) {
+        setAccountExists(true);
+        window.setTimeout(() => reset("login"), 2000);
+      }
     }
   }
 
@@ -92,22 +106,38 @@ export function AuthGate() {
                 Your local-first study tracker.
               </p>
             </div>
-            <div className="flex w-full flex-col gap-3">
-              <button
-                type="button"
-                className={`${primaryButtonClassName} w-full`}
-                onClick={() => reset("signup")}
-              >
-                Sign up
-              </button>
-              <button
-                type="button"
-                className="secondary-button w-full"
-                onClick={() => reset("login")}
-              >
-                Log in
-              </button>
-            </div>
+            {accountExists ? (
+              <div className="flex w-full flex-col gap-4">
+                <p className="text-sm text-slate-300">
+                  This device already has a local TimeFolio account. Multi-profile support is coming soon. Please log in to continue.
+                </p>
+                <button
+                  type="button"
+                  className={`${primaryButtonClassName} w-full`}
+                  onClick={() => reset("login")}
+                >
+                  Log in
+                </button>
+              </div>
+            ) : (
+              <div className="flex w-full flex-col gap-3">
+                <button
+                  type="button"
+                  className={`${primaryButtonClassName} w-full`}
+                  onClick={() => reset("signup")}
+                  disabled={accountExists === null}
+                >
+                  Sign up
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button w-full"
+                  onClick={() => reset("login")}
+                >
+                  Log in
+                </button>
+              </div>
+            )}
           </div>
         )}
 

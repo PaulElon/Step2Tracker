@@ -18,6 +18,7 @@ pub struct AccountSummary {
     pub created_at: String,
     pub last_login_at: Option<String>,
     pub email_verified_at: Option<String>,
+    pub legacy_data_adopted_at: Option<String>,
 }
 
 fn db_path(app_data_dir: &Path) -> PathBuf {
@@ -42,24 +43,40 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
             version INTEGER NOT NULL
         );
         CREATE TABLE IF NOT EXISTS accounts (
-            id                TEXT PRIMARY KEY,
-            email_normalized  TEXT NOT NULL UNIQUE,
-            email_display     TEXT NOT NULL,
-            password_hash     TEXT NOT NULL,
-            created_at        TEXT NOT NULL,
-            last_login_at     TEXT,
-            email_verified_at TEXT
+            id                        TEXT PRIMARY KEY,
+            email_normalized          TEXT NOT NULL UNIQUE,
+            email_display             TEXT NOT NULL,
+            password_hash             TEXT NOT NULL,
+            created_at                TEXT NOT NULL,
+            last_login_at             TEXT,
+            email_verified_at         TEXT,
+            legacy_data_adopted_at    TEXT
         );
     "#,
     )
     .map_err(|e| format!("Schema init failed: {e}"))?;
 
-    let count: i64 = conn
+    let meta_count: i64 = conn
         .query_row("SELECT COUNT(*) FROM schema_meta", [], |row| row.get(0))
         .map_err(|e| format!("Schema meta query failed: {e}"))?;
-    if count == 0 {
-        conn.execute("INSERT INTO schema_meta (version) VALUES (1)", [])
+
+    if meta_count == 0 {
+        // New DB: CREATE TABLE already includes legacy_data_adopted_at, start at v2.
+        conn.execute("INSERT INTO schema_meta (version) VALUES (2)", [])
             .map_err(|e| format!("Schema meta insert failed: {e}"))?;
+    } else {
+        // Existing DB: migrate forward if needed.
+        let version: i64 = conn
+            .query_row("SELECT version FROM schema_meta", [], |row| row.get(0))
+            .map_err(|e| format!("Schema meta version query failed: {e}"))?;
+        if version < 2 {
+            conn.execute_batch(
+                "ALTER TABLE accounts ADD COLUMN legacy_data_adopted_at TEXT;",
+            )
+            .map_err(|e| format!("Migration to v2 failed: {e}"))?;
+            conn.execute("UPDATE schema_meta SET version = 2", [])
+                .map_err(|e| format!("Schema meta update failed: {e}"))?;
+        }
     }
 
     Ok(())
@@ -152,6 +169,14 @@ pub fn create_inner(
 
     let conn = open_db(app_data_dir)?;
 
+    // Slice 3: only one local account is supported until per-profile isolation lands.
+    let existing_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM accounts", [], |row| row.get(0))
+        .map_err(|e| format!("Query failed: {e}"))?;
+    if existing_count > 0 {
+        return Err("MULTI_PROFILE_NOT_READY".to_string());
+    }
+
     let exists: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM accounts WHERE email_normalized = ?1",
@@ -164,21 +189,23 @@ pub fn create_inner(
     }
 
     let id = Uuid::new_v4().to_string();
-    let created_at = Utc::now().to_rfc3339();
+    let now = Utc::now().to_rfc3339();
     let password_hash = hash_password(&password)?;
 
     conn.execute(
-        "INSERT INTO accounts (id, email_normalized, email_display, password_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![id, email_normalized, email_display, password_hash, created_at],
+        "INSERT INTO accounts (id, email_normalized, email_display, password_hash, created_at, legacy_data_adopted_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![id, email_normalized, email_display, password_hash, now, now],
     )
     .map_err(|e| format!("Insert failed: {e}"))?;
 
     Ok(AccountSummary {
         id,
         email: email_display,
-        created_at,
+        created_at: now.clone(),
         last_login_at: None,
         email_verified_at: None,
+        legacy_data_adopted_at: Some(now),
     })
 }
 
@@ -191,9 +218,9 @@ pub fn verify_inner(
 
     let conn = open_db(app_data_dir)?;
 
-    let result: Result<(String, String, String, String, Option<String>, Option<String>), _> =
+    let result: Result<(String, String, String, String, Option<String>, Option<String>, Option<String>), _> =
         conn.query_row(
-            "SELECT id, email_display, password_hash, created_at, last_login_at, email_verified_at \
+            "SELECT id, email_display, password_hash, created_at, last_login_at, email_verified_at, legacy_data_adopted_at \
              FROM accounts WHERE email_normalized = ?1",
             params![email_normalized],
             |row| {
@@ -204,11 +231,12 @@ pub fn verify_inner(
                     row.get::<_, String>(3)?,
                     row.get::<_, Option<String>>(4)?,
                     row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<String>>(6)?,
                 ))
             },
         );
 
-    let (id, email_display, stored_hash, created_at, _, email_verified_at) =
+    let (id, email_display, stored_hash, created_at, _, email_verified_at, legacy_data_adopted_at) =
         result.map_err(|_| "INVALID_CREDENTIALS".to_string())?;
 
     if !verify_password(&password, &stored_hash)? {
@@ -228,6 +256,7 @@ pub fn verify_inner(
         created_at,
         last_login_at: Some(now),
         email_verified_at,
+        legacy_data_adopted_at,
     })
 }
 
@@ -282,18 +311,36 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_normalized_email_rejected() {
+    fn first_account_has_legacy_data_adopted() {
         let dir = tmp();
-        create_inner(dir.path(), "User@Example.com".into(), "Password1!".into()).unwrap();
-        let second = create_inner(dir.path(), "user@example.com".into(), "Password1!".into());
+        let s = create_inner(dir.path(), "user@example.com".into(), "Password1!".into()).unwrap();
         assert!(
-            second.is_err(),
-            "expected duplicate to be rejected"
+            s.legacy_data_adopted_at.is_some(),
+            "first account must have legacy_data_adopted_at set"
         );
-        assert!(
-            second.unwrap_err().contains("EMAIL_IN_USE"),
-            "error must contain EMAIL_IN_USE"
+    }
+
+    #[test]
+    fn second_account_blocked() {
+        let dir = tmp();
+        create_inner(dir.path(), "first@example.com".into(), "Password1!".into()).unwrap();
+        let second = create_inner(dir.path(), "second@example.com".into(), "Password1!".into());
+        assert!(second.is_err(), "expected second create to be rejected");
+        assert_eq!(
+            second.unwrap_err(),
+            "MULTI_PROFILE_NOT_READY",
+            "error must be MULTI_PROFILE_NOT_READY"
         );
+    }
+
+    #[test]
+    fn migration_is_idempotent() {
+        let dir = tmp();
+        let first = open_db(dir.path());
+        assert!(first.is_ok(), "first open failed: {:?}", first);
+        // Second open runs init_schema again; v2 migration must be a no-op.
+        let second = open_db(dir.path());
+        assert!(second.is_ok(), "second open (re-migration) failed: {:?}", second);
     }
 
     #[test]
@@ -302,8 +349,6 @@ mod tests {
         assert_eq!(count_inner(dir.path()).unwrap(), 0);
         create_inner(dir.path(), "a@example.com".into(), "Password1!".into()).unwrap();
         assert_eq!(count_inner(dir.path()).unwrap(), 1);
-        create_inner(dir.path(), "b@example.com".into(), "Password1!".into()).unwrap();
-        assert_eq!(count_inner(dir.path()).unwrap(), 2);
     }
 
     #[test]
