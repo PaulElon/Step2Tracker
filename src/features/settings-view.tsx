@@ -24,6 +24,7 @@ import {
   Zap,
 } from "lucide-react";
 import { launchResource } from "../lib/launcher";
+import { useAuthSession } from "../state/auth-session";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
@@ -759,7 +760,7 @@ const SETTINGS_NAV: Array<{
   { id: "resources", label: "Resources", icon: BookmarkPlus, group: "content" },
   { id: "tracker", label: "Tracker Rules", icon: Zap, group: "tracking", requireTimefolio: true },
   { id: "reminders", label: "Reminders", icon: Bell, group: "tracking" },
-  { id: "account", label: "Account", icon: User, group: "account", requireTimefolio: true },
+  { id: "account", label: "Account", icon: User, group: "account" },
   { id: "data", label: "Data & Safety", icon: Database, group: "system" },
   { id: "about", label: "About", icon: Info, group: "system" },
 ];
@@ -813,6 +814,7 @@ export function SettingsView({
   };
 }) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
+  const authSession = useAuthSession();
 
   const reminderButtonLabel =
     notificationPermission === "granted"
@@ -1315,10 +1317,31 @@ export function SettingsView({
             </TimeFolioStoreProvider>
           ) : null}
 
-          {activeSection === "account" && FF.timefolio ? (
-            <TimeFolioStoreProvider>
-              <AccountPanel embedded />
-            </TimeFolioStoreProvider>
+          {activeSection === "account" ? (
+            <div className="space-y-4">
+              {FF.timefolio ? (
+                <TimeFolioStoreProvider>
+                  <AccountPanel embedded />
+                </TimeFolioStoreProvider>
+              ) : null}
+              <Panel
+                title="Session"
+                subtitle="You are signed in to your local account."
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-sm text-slate-400">
+                    {authSession.account?.email ?? ""}
+                  </p>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={authSession.logout}
+                  >
+                    Log out
+                  </button>
+                </div>
+              </Panel>
+            </div>
           ) : null}
 
           {activeSection === "about" ? <AboutPanel /> : null}

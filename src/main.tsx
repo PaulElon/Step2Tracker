@@ -3,16 +3,28 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import { AppStoreProvider } from "./state/app-store";
+import { AuthSessionProvider, useAuthSession } from "./state/auth-session";
+import { AuthGate } from "./features/auth-gate";
 
 const isTauriShell =
   typeof window !== "undefined" &&
   typeof (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== "undefined";
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
+function Root() {
+  const auth = useAuthSession();
+  if (!auth.isAuthenticated) return <AuthGate />;
+  return (
     <AppStoreProvider>
       <App />
     </AppStoreProvider>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <AuthSessionProvider>
+      <Root />
+    </AuthSessionProvider>
   </StrictMode>,
 );
 
