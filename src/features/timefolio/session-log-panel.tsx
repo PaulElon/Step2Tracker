@@ -673,14 +673,6 @@ export function SessionLogPanel({
     showDuration: true,
   });
 
-  if (isLoading) {
-    return <div className="p-8 text-slate-400">Loading sessions…</div>;
-  }
-
-  if (error) {
-    return <div className="p-8 text-red-400">Error: {error}</div>;
-  }
-
   const sessions = [...state.sessionLogs].sort(
     (a, b) => new Date(b.startISO).getTime() - new Date(a.startISO).getTime()
   );
@@ -800,6 +792,14 @@ export function SessionLogPanel({
     await removeSession(id);
   }
 
+  if (isLoading) {
+    return <div className="p-8 text-slate-400">Loading sessions…</div>;
+  }
+
+  if (error) {
+    return <div className="p-8 text-red-400">Error: {error}</div>;
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 p-4">
       {pageTitle ? (
@@ -874,32 +874,6 @@ export function SessionLogPanel({
         </div>
       )}
 
-      {sessions.length > 0 ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-4 rounded-[16px] border border-white/[0.08] bg-white/[0.02] px-3.5 py-2">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-            Entry metadata
-          </span>
-          <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-300">
-            <input
-              type="checkbox"
-              checked={entryMetaDisplay.showTimeRange}
-              onChange={(event) => toggleTimeRangeDisplay(event.target.checked)}
-              className="accent-cyan-400"
-            />
-            Show time range
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-300">
-            <input
-              type="checkbox"
-              checked={entryMetaDisplay.showDuration}
-              onChange={(event) => toggleDurationDisplay(event.target.checked)}
-              className="accent-cyan-400"
-            />
-            Show duration
-          </label>
-        </div>
-      ) : null}
-
       {sessions.length === 0 && !showAddForm && (
         <div className="rounded-[18px] border border-dashed border-[color:var(--panel-border)] bg-[color:var(--panel-support-bg)] p-4 text-slate-400 [color:var(--rich-text-muted,#94a3b8)]">
           No TimeFolio sessions yet.
@@ -952,6 +926,26 @@ export function SessionLogPanel({
 
                   {isExpanded ? (
                     <div className="max-h-[24rem] overflow-y-auto divide-y divide-white/[0.06]">
+                      <div className="flex justify-end gap-4 px-3.5 pt-2">
+                        <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={entryMetaDisplay.showTimeRange}
+                            onChange={(event) => toggleTimeRangeDisplay(event.target.checked)}
+                            className="accent-cyan-400"
+                          />
+                          Show time range
+                        </label>
+                        <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={entryMetaDisplay.showDuration}
+                            onChange={(event) => toggleDurationDisplay(event.target.checked)}
+                            className="accent-cyan-400"
+                          />
+                          Show duration
+                        </label>
+                      </div>
                       {group.sessions.map((s) =>
                         editingId === s.id ? (
                           <div key={s.id} className="px-3 py-3">
