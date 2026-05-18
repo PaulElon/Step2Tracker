@@ -1328,17 +1328,40 @@ export function SettingsView({
                 title="Session"
                 subtitle="You are signed in to your local account."
               >
-                <div className="flex items-center justify-between gap-4">
-                  <p className="text-sm text-slate-400">
-                    {authSession.account?.email ?? ""}
-                  </p>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={authSession.logout}
-                  >
-                    Log out
-                  </button>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="text-sm text-slate-400">
+                      {authSession.account?.email ?? ""}
+                    </p>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={authSession.logout}
+                    >
+                      Log out
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 border-t border-white/10 pt-3">
+                    <div>
+                      <p className="text-[11px] text-slate-500">This device</p>
+                      <p className="mt-1 text-sm text-slate-300">
+                        {authSession.isRemembered ? "Remembered — you will be signed in automatically" : "Not remembered on this device"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary-button shrink-0"
+                      onClick={() => {
+                        if (authSession.isRemembered) {
+                          void authSession.forgetDevice();
+                        } else {
+                          void authSession.rememberDevice();
+                        }
+                      }}
+                    >
+                      {authSession.isRemembered ? "Forget this device" : "Remember this device"}
+                    </button>
+                  </div>
                 </div>
               </Panel>
             </div>
