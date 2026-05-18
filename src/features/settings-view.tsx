@@ -944,6 +944,7 @@ export function SettingsView({
   };
 }) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
+  const [showChangePasswordPanel, setShowChangePasswordPanel] = useState(false);
   const authSession = useAuthSession();
 
   const reminderButtonLabel =
@@ -1459,17 +1460,27 @@ export function SettingsView({
                 subtitle="You are signed in to your local account."
               >
                 <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm text-slate-400">
                       {authSession.account?.email ?? ""}
                     </p>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={authSession.logout}
-                    >
-                      Log out
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={authSession.logout}
+                      >
+                        Log out
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button h-9 px-3 py-2 text-xs font-medium"
+                        aria-expanded={showChangePasswordPanel}
+                        onClick={() => setShowChangePasswordPanel((previous) => !previous)}
+                      >
+                        {showChangePasswordPanel ? "Hide password" : "Change password"}
+                      </button>
+                    </div>
                   </div>
                   <div className="flex items-center justify-between gap-4 border-t border-white/10 pt-3">
                     <div>
@@ -1494,7 +1505,7 @@ export function SettingsView({
                   </div>
                 </div>
               </Panel>
-              <ChangePasswordPanel />
+              {showChangePasswordPanel ? <ChangePasswordPanel /> : null}
             </div>
           ) : null}
 
