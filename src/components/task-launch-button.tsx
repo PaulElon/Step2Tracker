@@ -55,8 +55,8 @@ export function TaskLaunchButton({
         aria-label={`Open ${resource.label} for ${taskTitle}`}
         onClick={() => void handleClick()}
       >
-        <Icon className="h-4 w-4" />
-        Open {resource.label}
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">Open {resource.label}</span>
       </button>
       {error ? (
         <p className="text-xs text-red-400">{error}</p>

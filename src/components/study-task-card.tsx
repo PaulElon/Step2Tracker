@@ -59,7 +59,7 @@ export function StudyTaskCard({
           ) : null}
         </div>
 
-        <div className="flex shrink-0 items-center gap-3 text-slate-300">
+        <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5 text-slate-300">
           <span className="inline-flex items-center gap-1.5 text-xs">
             <Clock3 className="h-3.5 w-3.5 text-slate-500" />
             {durationLabel}
