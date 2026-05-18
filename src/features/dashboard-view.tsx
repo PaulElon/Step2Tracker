@@ -4,7 +4,6 @@ import {
   Bell,
   BookOpen,
   CheckCircle2,
-  ClipboardCheck,
   Clock3,
   Flame,
   Lightbulb,
@@ -26,6 +25,7 @@ import {
 import { daysUntilDateKey, formatLongDate, formatMinutes, getTodayKey } from "../lib/datetime";
 import { FF } from "../lib/feature-flags";
 import { launchResource } from "../lib/launcher";
+import { allocationByMethodDisplay } from "../lib/tf-session-adapters";
 import { cn, primaryButtonClassName, secondaryButtonClassName, themeAwareWarmAccent } from "../lib/ui";
 import { useAppStore } from "../state/app-store";
 import { useTimeFolioStore } from "../state/tf-store";
@@ -34,7 +34,7 @@ import { StudyTaskCard } from "../components/study-task-card";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { TaskLaunchButton } from "../components/task-launch-button";
 import { CategoryBadge, EmptyState, FlatList, FlatListRow, SoftDivider } from "../components/ui";
-import type { ExamTimer, ResourceLink, SectionId, StudyBlock } from "../types/models";
+import type { ExamTimer, ResourceLink, SectionId, StudyBlock, TfSessionLog } from "../types/models";
 
 const todayPanelClassName = "glass-panel min-w-0";
 
@@ -197,6 +197,73 @@ function SnapshotRow({
   );
 }
 
+function TodayTimeLogSummary({
+  sessionLogs,
+  trackedStudyMinutes,
+}: {
+  sessionLogs: TfSessionLog[];
+  trackedStudyMinutes: number;
+}) {
+  const focusLogs = sessionLogs.filter((log) => !log.isDistraction);
+  const distractionMinutes = sessionLogs
+    .filter((log) => log.isDistraction)
+    .reduce((total, log) => total + log.hours * 60, 0);
+  const byMethod = allocationByMethodDisplay(focusLogs);
+  const rowCount = byMethod.length;
+  const visibleRows = byMethod.slice(0, 3);
+  const totalSessions = focusLogs.length;
+
+  if (totalSessions === 0) {
+    return (
+      <div className="mt-3 rounded-[18px] border border-dashed border-white/10 bg-white/[0.025] px-3 py-3">
+        <p className="text-[11px] text-slate-500">Today’s time log</p>
+        <p className="mt-1 text-sm text-slate-300">No study sessions logged yet.</p>
+        <p className="mt-1 text-xs text-slate-500">Open the timer when you start a block.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-[18px] border border-white/10 bg-white/[0.03] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] text-slate-500">Today’s time log</p>
+          <p className="mt-1 text-sm font-semibold text-white">{formatMinutes(trackedStudyMinutes)}</p>
+        </div>
+        <div className="text-right text-[11px] text-slate-500">
+          <p>{totalSessions} session{totalSessions === 1 ? "" : "s"}</p>
+          {distractionMinutes > 0 ? <p>{formatMinutes(distractionMinutes)} distraction</p> : null}
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {visibleRows.map((row) => {
+          const minutes = Math.round(row.hours * 60);
+          const percent = trackedStudyMinutes > 0 ? (minutes / trackedStudyMinutes) * 100 : 0;
+          return (
+            <div key={row.methodKey} className="space-y-1">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="min-w-0 truncate text-slate-200">{row.method}</span>
+                <span className="tabular-nums text-slate-400">{formatMinutes(minutes)}</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                <div
+                  className="h-full rounded-full bg-cyan-300/70"
+                  style={{ width: `${Math.max(percent, minutes > 0 ? 8 : 0)}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {rowCount > visibleRows.length ? (
+        <p className="mt-2 text-[11px] text-slate-500">+ {rowCount - visibleRows.length} more categories</p>
+      ) : null}
+    </div>
+  );
+}
+
 export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void }) {
   const { state, upsertStudyBlock, setDailyGoalMinutes, setActiveSection } = useAppStore();
   const { state: tfState } = useTimeFolioStore();
@@ -210,6 +277,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
   const trackedStudyMinutes = FF.timefolio
     ? getTrackedStudyMinutesForDate(tfState.sessionLogs, todayKey)
     : 0;
+  const todaySessionLogs = FF.timefolio ? tfState.sessionLogs.filter((log) => log.date === todayKey) : [];
   const todayTasks = getTodayBlocks(state.studyBlocks, todayKey);
   const plannedMinutes = todayTasks.reduce((total, task) => total + getStudyBlockMinutes(task), 0);
   const completedMinutes = todayTasks
@@ -332,19 +400,30 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
       action: () => goToSection("planner"),
     });
   } else {
+  bestMoves.push({
+    icon: TrendingUp,
+    iconBgClass: "border-blue-300/20 bg-blue-300/10",
+    iconColorClass: "text-blue-300",
+    title: "Plan tomorrow",
+    subtitle: "Schedule your next session",
+    action: () => goToSection("planner"),
+  });
+
+  if (FF.notebook && onOpenNotebook) {
     bestMoves.push({
-      icon: TrendingUp,
-      iconBgClass: "border-blue-300/20 bg-blue-300/10",
-      iconColorClass: "text-blue-300",
-      title: "Plan tomorrow",
-      subtitle: "Schedule your next session",
-      action: () => goToSection("planner"),
+      icon: BookOpen,
+      iconBgClass: "border-slate-300/20 bg-slate-300/10",
+      iconColorClass: "text-slate-300",
+      title: "Open Notebook",
+      subtitle: "Capture notes and references",
+      action: onOpenNotebook,
     });
+  }
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-subtle">
+      <div className="min-h-0 flex-1 pr-1">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Today</h2>
@@ -358,12 +437,12 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
           </div>
         </div>
 
-        <div className="grid w-full gap-5 xl:grid-cols-[minmax(0,2.2fr)_minmax(280px,1fr)]">
+        <div className="grid w-full gap-4 xl:grid-cols-[minmax(0,2.2fr)_minmax(280px,1fr)]">
           {/* MAIN COLUMN */}
-          <div className="flex min-w-0 flex-col gap-5">
+          <div className="flex min-w-0 flex-col gap-4">
             {/* HERO: Your Next Task */}
             {nextTask ? (
-              <section className={cn(todayPanelClassName, "p-6")}>
+              <section className={cn(todayPanelClassName, "p-5")}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <p className="text-[0.65rem] text-slate-500">Your next task</p>
@@ -376,7 +455,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                   </p>
                 </div>
 
-                <div className="mt-4 flex flex-wrap items-start gap-5">
+                <div className="mt-4 flex flex-wrap items-start gap-4">
                   {heroTile ? (
                     <div
                       className={cn(
@@ -428,7 +507,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                 </div>
               </section>
             ) : (
-              <section className={cn(todayPanelClassName, "p-6")}>
+              <section className={cn(todayPanelClassName, "p-5")}>
                 <p className="text-[0.65rem] text-slate-500">Your next task</p>
                 <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
                   <div>
@@ -463,8 +542,8 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
             )}
 
             {/* Today's Plan + Today Snapshot */}
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-              <section className={cn(todayPanelClassName, "flex flex-col p-5")}>
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+              <section className={cn(todayPanelClassName, "flex h-full flex-col p-5")}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-white">Today's Plan</h3>
@@ -484,9 +563,9 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                   </button>
                 </div>
 
-                <div className="mt-4 min-w-0">
+                <div className="mt-4 min-w-0 flex-1">
                   {todayTasks.length ? (
-                    <div className="max-h-[calc(5*4.5rem)] overflow-y-auto space-y-2.5 pr-0.5 scrollbar-subtle">
+                    <div className="space-y-2.5 pr-0.5">
                       {todayTasks.map((task) => (
                         <StudyTaskCard
                           key={task.id}
@@ -525,8 +604,8 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
               </section>
 
               {/* Today Snapshot + Timer box */}
-              <div className="flex flex-col gap-5">
-                <section className={cn(todayPanelClassName, "flex flex-col p-4")}>
+              <div className="flex h-full flex-col gap-4">
+                <section className={cn(todayPanelClassName, "flex flex-1 flex-col p-4")}>
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-base font-semibold text-white">Today Snapshot</h3>
                     <span className="text-xs text-slate-500">Goal {formatMinutes(todayGoalMinutes)}</span>
@@ -604,7 +683,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                   </div>
                 </section>
 
-                <section className={cn(todayPanelClassName, "p-4")}>
+                <section className={cn(todayPanelClassName, "flex h-full flex-col p-4")}>
                   <div className="flex items-center gap-2">
                     <Timer className="h-4 w-4 text-cyan-200" />
                     <h3 className="text-base font-semibold text-white">Time your study session</h3>
@@ -617,49 +696,17 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                     <Timer className="h-3.5 w-3.5" />
                     Timer
                   </button>
+
+                  <TodayTimeLogSummary sessionLogs={todaySessionLogs} trackedStudyMinutes={trackedStudyMinutes} />
                 </section>
               </div>
             </div>
-
-            {/* Next Best Moves */}
-            <section className={cn(todayPanelClassName, "p-5")}>
-              <div className="mb-4 flex items-center gap-2">
-                <Zap className="h-4 w-4 text-slate-500" />
-                <h3 className="text-base font-semibold text-white">Next Best Moves</h3>
-              </div>
-              <FlatList className="mt-3">
-                {bestMoves.slice(0, 4).map((move) => (
-                  <FlatListRow key={move.title} onClick={move.action}>
-                    <div
-                      className="flex min-w-0 flex-1 items-center gap-3"
-                    >
-                      <div
-                        className={cn(
-                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border",
-                          move.iconBgClass,
-                        )}
-                      >
-                        <move.icon className={cn("h-4 w-4", move.iconColorClass)} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-white">{move.title}</p>
-                        <p className="truncate text-xs text-slate-400">{move.subtitle}</p>
-                      </div>
-                    </div>
-                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-600" />
-                  </FlatListRow>
-                ))}
-              </FlatList>
-              <p className="mt-3 text-xs text-slate-500">
-                These recommendations are based on your plan and recent activity.
-              </p>
-            </section>
           </div>
 
           {/* RIGHT RAIL */}
-          <div className="flex min-w-0 flex-col gap-5">
+          <div className="flex min-w-0 flex-col gap-4">
             {/* Needs Attention */}
-            <section className={cn(todayPanelClassName, "p-5")}>
+            <section className={cn(todayPanelClassName, "p-4")}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <AlertCircle
@@ -749,7 +796,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
             </section>
 
             {/* Active Tracker */}
-            <section className={cn(todayPanelClassName, "p-5")}>
+            <section className={cn(todayPanelClassName, "p-4")}>
               <div>
                 <div className="flex items-center gap-2">
                   <Timer className="h-4 w-4 text-cyan-200" />
@@ -801,51 +848,36 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
               </div>
             </section>
 
-            {/* Quick Actions */}
-            <section className={cn(todayPanelClassName, "p-5")}>
-              <div className="flex items-center gap-2">
+            {/* Next Best Moves */}
+            <section className={cn(todayPanelClassName, "p-4")}>
+              <div className="mb-3 flex items-center gap-2">
                 <Zap className="h-4 w-4 text-slate-500" />
-                <h3 className="text-base font-semibold text-white">Quick Actions</h3>
+                <h3 className="text-base font-semibold text-white">Next Best Moves</h3>
               </div>
               <FlatList className="mt-3">
-                <FlatListRow onClick={() => goToSection("tests")}>
-                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                    <ClipboardCheck className="h-4 w-4 shrink-0 text-slate-500" />
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200">Practice Tests</span>
-                  </div>
-                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-600" />
-                </FlatListRow>
-                <FlatListRow onClick={() => goToSection("weakTopics")}>
-                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                    <Flame className="h-4 w-4 shrink-0 text-slate-500" />
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200">Weak Topics</span>
-                  </div>
-                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-600" />
-                </FlatListRow>
-                <FlatListRow onClick={() => goToSection("errorLog")}>
-                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                    <AlertCircle className="h-4 w-4 shrink-0 text-slate-500" />
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200">Error Log</span>
-                  </div>
-                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-600" />
-                </FlatListRow>
-                {FF.notebook && onOpenNotebook ? (
-                  <FlatListRow onClick={onOpenNotebook}>
-                    <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                      <BookOpen className="h-4 w-4 shrink-0 text-slate-500" />
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200">Notebook</span>
+                {bestMoves.slice(0, 4).map((move) => (
+                  <FlatListRow key={move.title} onClick={move.action}>
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <div
+                        className={cn(
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border",
+                          move.iconBgClass,
+                        )}
+                      >
+                        <move.icon className={cn("h-4 w-4", move.iconColorClass)} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white">{move.title}</p>
+                        <p className="truncate text-xs text-slate-400">{move.subtitle}</p>
+                      </div>
                     </div>
                     <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-600" />
                   </FlatListRow>
-                ) : null}
-                <FlatListRow onClick={openNewTaskEditor}>
-                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                    <Plus className="h-4 w-4 shrink-0 text-slate-500" />
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200">Add Task</span>
-                  </div>
-                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-600" />
-                </FlatListRow>
+                ))}
               </FlatList>
+              <p className="mt-3 text-xs text-slate-500">
+                These recommendations are based on your plan and recent activity.
+              </p>
             </section>
           </div>
         </div>
