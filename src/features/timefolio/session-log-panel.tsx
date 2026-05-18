@@ -86,6 +86,7 @@ function localDateStr(isoStr: string): string {
 }
 
 type TimerStatus = "idle" | "running" | "paused";
+type TimerMode = "manual" | "auto";
 type EntryMetaDisplayState = {
   showTimeRange: boolean;
   showDuration: boolean;
@@ -198,6 +199,7 @@ function buildDayMethodAllocationRows(sessions: TfSessionLog[]): DayMethodAlloca
 
 function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps) {
   const [status, setStatus] = useState<TimerStatus>("idle");
+  const [timerMode, setTimerMode] = useState<TimerMode>("manual");
   const [method, setMethod] = useState("");
   const [notes, setNotes] = useState("");
   const [isDistraction, setIsDistraction] = useState(false);
@@ -209,24 +211,52 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
   const accumulatedRef = useRef<number>(0);
   const isAutoRunning = autoTrackerControl?.isRunning === true;
   const autoSaveableCount = autoTrackerControl?.stopSaveSelection.previewSessions.length ?? 0;
-  const hasTimerModeConflict = isAutoRunning && status !== "idle";
-  const isShowingAutoTimer = isAutoRunning && status === "idle";
-  const timerLabel = isShowingAutoTimer
-    ? autoTrackerControl?.runningElapsedLabel ?? "00:00"
-    : formatElapsed(displayMs);
-  const timerStatusLabel = isShowingAutoTimer ? "auto-tracking" : status === "idle" ? "ready" : status;
+  const isAutoActionBusy = autoTrackerControl?.isActionBusy === true;
+  const autoNeedsAttention = isAutoRunning || autoSaveableCount > 0 || isAutoActionBusy;
+  const manualNeedsAttention = status !== "idle";
+  const autoActionIsStopAndSave = isAutoRunning || autoSaveableCount > 0;
+  const showSwitchToAuto =
+    timerMode === "manual" &&
+    status === "idle" &&
+    !autoNeedsAttention &&
+    autoTrackerControl !== null;
+  const showSwitchToManual = timerMode === "auto" && !autoNeedsAttention && autoTrackerControl !== null;
+  const timerLabel =
+    timerMode === "auto" ? autoTrackerControl?.runningElapsedLabel ?? "00:00" : formatElapsed(displayMs);
+  const timerStatusLabel =
+    timerMode === "auto"
+      ? isAutoRunning
+        ? "auto-tracking"
+        : autoSaveableCount > 0
+          ? "ready to save"
+          : isAutoActionBusy
+            ? "working"
+            : "idle"
+      : status === "idle"
+        ? "ready"
+        : status;
   const autoActionLabel = autoTrackerControl?.isActionBusy
     ? isAutoRunning
       ? autoSaveableCount > 0
         ? "Stopping & Saving..."
         : "Stopping..."
       : "Starting..."
-    : isAutoRunning
+    : autoActionIsStopAndSave
       ? autoSaveableCount > 0
         ? `Stop & Save ${autoSaveableCount} ${autoSaveableCount === 1 ? "entry" : "entries"}`
         : "Stop & Save"
       : "Start New Run";
   const disableAutoStart = !isAutoRunning && status !== "idle";
+
+  useEffect(() => {
+    if (autoNeedsAttention) {
+      setTimerMode("auto");
+      return;
+    }
+    if (manualNeedsAttention) {
+      setTimerMode("manual");
+    }
+  }, [autoNeedsAttention, manualNeedsAttention]);
 
   useEffect(() => {
     if (status !== "running") return;
@@ -295,19 +325,35 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
   }
 
   return (
-    <section className="glass-panel overflow-hidden p-0">
+    <section className="glass-panel relative overflow-hidden p-0">
+      {showSwitchToAuto || showSwitchToManual ? (
+        <button
+          type="button"
+          className={cn(
+            "absolute right-4 top-4 z-10 inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/80 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-200 shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition hover:border-cyan-300/30 hover:bg-slate-900 hover:text-white",
+          )}
+          onClick={() => setTimerMode(showSwitchToAuto ? "auto" : "manual")}
+        >
+          {showSwitchToAuto ? "Switch to Auto" : "Switch to Manual"}
+        </button>
+      ) : null}
+
       <div className="grid gap-5 border-b border-[color:var(--panel-border)] bg-[radial-gradient(circle_at_50%_0%,var(--primary-start),transparent_42%)] px-5 py-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
         <div className="min-w-0 text-center lg:text-left">
           <div className="flex items-center gap-2">
             <Clock3 className="h-4 w-4 text-cyan-200" />
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Manual timer
+              {timerMode === "manual" ? "Manual Timer" : "Auto-Tracker"}
             </p>
           </div>
           <p className="mt-1 truncate text-sm font-medium text-slate-200">
-            {isShowingAutoTimer
-              ? "Auto-Tracking run in progress"
-              : method.trim() || "Start a focused study block"}
+            {timerMode === "manual"
+              ? method.trim() || "Start a focused study block"
+              : isAutoRunning
+                ? "Auto-Tracking run in progress"
+                : autoSaveableCount > 0
+                  ? `${autoSaveableCount} pending Stop & Save ${autoSaveableCount === 1 ? "entry" : "entries"}`
+                  : autoTrackerControl?.message?.text || "Auto-Tracking idle"}
           </p>
         </div>
         <div className="mx-auto min-w-[min(100%,24rem)] rounded-[24px] border border-[color:var(--panel-border)] bg-[color:var(--panel-support-bg)] px-6 py-5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_20px_60px_var(--panel-shadow)] lg:mx-0">
@@ -320,95 +366,97 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
         </div>
       </div>
 
-      <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto]">
-        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-slate-400">Method *</label>
-            <input
-              className={fieldClassName}
-              type="text"
-              value={method}
-              onChange={(e) => setMethod(e.target.value)}
-              placeholder="e.g. Active Recall"
-              disabled={status !== "idle"}
-            />
+      {timerMode === "manual" ? (
+        <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-400">Method *</label>
+              <input
+                className={fieldClassName}
+                type="text"
+                value={method}
+                onChange={(e) => setMethod(e.target.value)}
+                placeholder="e.g. Active Recall"
+                disabled={status !== "idle"}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-400">Notes</label>
+              <input
+                className={fieldClassName}
+                type="text"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Optional notes..."
+              />
+            </div>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-slate-400">Notes</label>
-            <input
-              className={fieldClassName}
-              type="text"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Optional notes..."
-            />
-          </div>
-        </div>
+          <div className="flex flex-wrap items-end gap-2 lg:justify-end">
+            <label className="flex h-10 items-center gap-2 rounded-[14px] border border-white/[0.08] bg-white/[0.025] px-3 text-xs font-medium text-slate-300">
+              <input
+                type="checkbox"
+                checked={isDistraction}
+                onChange={(e) => setIsDistraction(e.target.checked)}
+                className="accent-red-400"
+              />
+              Distraction
+            </label>
 
-        <div className="flex flex-wrap items-end gap-2 lg:justify-end">
-          <label className="flex h-10 items-center gap-2 rounded-[14px] border border-white/[0.08] bg-white/[0.025] px-3 text-xs font-medium text-slate-300">
-            <input
-              type="checkbox"
-              checked={isDistraction}
-              onChange={(e) => setIsDistraction(e.target.checked)}
-              className="accent-red-400"
-            />
-            Distraction
-          </label>
-
-          {status === "idle" && (
+            {status === "idle" && (
+              <button
+                type="button"
+                className={primaryButtonClassName}
+                onClick={handleStart}
+                disabled={!method.trim() || isAutoRunning}
+              >
+                <Play className="h-4 w-4" />
+                Start
+              </button>
+            )}
+            {status === "running" && (
+              <button type="button" className={secondaryButtonClassName} onClick={handlePause}>
+                <Pause className="h-4 w-4" />
+                Pause
+              </button>
+            )}
+            {status === "paused" && (
+              <button type="button" className={primaryButtonClassName} onClick={handleResume}>
+                <Play className="h-4 w-4" />
+                Resume
+              </button>
+            )}
+            {status !== "idle" && (
+              <button
+                type="button"
+                className={primaryButtonClassName}
+                onClick={() => {
+                  void handleStopAndSave();
+                }}
+                disabled={isSaving}
+              >
+                <Square className="h-4 w-4" />
+                {isSaving ? "Saving..." : "Stop & Save"}
+              </button>
+            )}
             <button
               type="button"
-              className={primaryButtonClassName}
-              onClick={handleStart}
-              disabled={!method.trim() || isAutoRunning}
-            >
-              <Play className="h-4 w-4" />
-              Start
-            </button>
-          )}
-          {status === "running" && (
-            <button type="button" className={secondaryButtonClassName} onClick={handlePause}>
-              <Pause className="h-4 w-4" />
-              Pause
-            </button>
-          )}
-          {status === "paused" && (
-            <button type="button" className={primaryButtonClassName} onClick={handleResume}>
-              <Play className="h-4 w-4" />
-              Resume
-            </button>
-          )}
-          {status !== "idle" && (
-            <button
-              type="button"
-              className={primaryButtonClassName}
+              className={secondaryButtonClassName}
               onClick={() => {
-                void handleStopAndSave();
+                reset();
+                onDismiss();
               }}
               disabled={isSaving}
             >
-              <Square className="h-4 w-4" />
-              {isSaving ? "Saving..." : "Stop & Save"}
+              <X className="h-4 w-4" />
+              Cancel
             </button>
-          )}
-          <button
-            type="button"
-            className={secondaryButtonClassName}
-            onClick={() => {
-              reset();
-              onDismiss();
-            }}
-            disabled={isSaving}
-          >
-            <X className="h-4 w-4" />
-            Cancel
-          </button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      {FF.autotrackerV2UserMode && autoTrackerControl ? (
+      {timerMode === "auto" && FF.autotrackerV2UserMode && autoTrackerControl ? (
         <div className="border-t border-[color:var(--panel-border)] bg-white/[0.02] px-5 py-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
@@ -435,17 +483,12 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
               type="button"
               className={isAutoRunning ? secondaryButtonClassName : primaryButtonClassName}
               disabled={autoTrackerControl.isActionBusy || disableAutoStart}
-              onClick={isAutoRunning ? autoTrackerControl.onStopAndSave : autoTrackerControl.onStart}
+              onClick={autoActionIsStopAndSave ? autoTrackerControl.onStopAndSave : autoTrackerControl.onStart}
               title={disableAutoStart ? "Stop or cancel manual timer before starting Auto-Tracking." : undefined}
             >
               {autoActionLabel}
             </button>
           </div>
-          {hasTimerModeConflict ? (
-            <p className="mt-2 text-[11px] text-amber-200">
-              Manual timer and Auto-Tracking are both active. The main timer currently shows manual mode.
-            </p>
-          ) : null}
           {autoTrackerControl.message ? (
             <p
               className={cn(
