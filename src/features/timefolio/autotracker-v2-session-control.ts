@@ -98,7 +98,10 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
   );
   const [v2LastSavedRunSummary, setV2LastSavedRunSummary] =
     useState<AutoTrackerV2LastSavedRunSummary>(null);
-  const [v2RunningStartedAtMs, setV2RunningStartedAtMs] = useState<number | null>(null);
+  const [v2RunningStartedAtMs, setV2RunningStartedAtMs] = useState<number | null>(() => {
+    const stored = localStorage.getItem("tf-at-v2-started-at-ms");
+    return stored ? Number(stored) : null;
+  });
   const [v2RunningNowMs, setV2RunningNowMs] = useState<number>(() => Date.now());
   const v2WritingPreviewSessionIdsRef = useRef<Set<string>>(new Set());
 
@@ -134,7 +137,7 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
       ? formatTimerLabel(v2RunningNowMs - v2RunningStartedAtMs)
       : null;
 
-  async function refreshSamplerState() {
+  async function refreshSamplerState(opts?: { initStartedAt?: boolean }) {
     try {
       const [samplerStatus, snapshot] = await Promise.all([
         getAutoTrackerV2NativeSamplerStatus(),
@@ -142,6 +145,17 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
       ]);
       setV2SamplerStatus(samplerStatus);
       setV2Snapshot(snapshot);
+      if (opts?.initStartedAt && samplerStatus.running) {
+        setV2RunningStartedAtMs((prev) => {
+          if (prev !== null) return prev;
+          // Sampler was already running on mount with no stored start time — fall back
+          // to first event timestamp if available, otherwise now.
+          const firstEventMs = snapshot.events[0]?.timestampMs ?? null;
+          const fallback = firstEventMs ?? Date.now();
+          localStorage.setItem("tf-at-v2-started-at-ms", String(fallback));
+          return fallback;
+        });
+      }
     } catch (error) {
       setV2UserModeMessage({
         tone: "error",
@@ -158,7 +172,7 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
       return;
     }
 
-    void refreshSamplerState();
+    void refreshSamplerState({ initStartedAt: true });
   }, []);
 
   useEffect(() => {
@@ -189,6 +203,7 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
     try {
       const samplerStatus = await startAutoTrackerV2NativeSampler();
       const startedAtMs = Date.now();
+      localStorage.setItem("tf-at-v2-started-at-ms", String(startedAtMs));
       setV2SamplerStatus(samplerStatus);
       setV2RunningStartedAtMs(startedAtMs);
       setV2RunningNowMs(startedAtMs);
@@ -235,7 +250,9 @@ export function useAutoTrackerV2SessionControl(): AutoTrackerV2SessionControl {
 
       if (isRunning) {
         const samplerStatus = await stopAutoTrackerV2NativeSampler();
+        localStorage.removeItem("tf-at-v2-started-at-ms");
         setV2SamplerStatus(samplerStatus);
+        setV2RunningStartedAtMs(null);
         stoppedSampler = true;
       }
 
