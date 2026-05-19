@@ -2,6 +2,7 @@ import { core } from "@tauri-apps/api";
 import type {
   AppState,
   BackupArtifactPreview,
+  ErrorLogEntry,
   ErrorLogInput,
   ImportMode,
   PersistenceSnapshot,
@@ -145,7 +146,7 @@ export interface DeviceMetadata {
 }
 
 export interface CloudDeleteTombstone {
-  entityType: "study_block" | "practice_test" | "weak_topic_entry";
+  entityType: "study_block" | "practice_test" | "weak_topic_entry" | "error_log_entry";
   entityId: string;
   deletedAt: string;
 }
@@ -213,6 +214,10 @@ export function getCoreEntityDeleteTombstones(
   return command<CloudDeleteTombstone[]>("get_core_entity_delete_tombstones", { after });
 }
 
+export function getErrorLogDeleteTombstones(after?: string | null): Promise<CloudDeleteTombstone[]> {
+  return command<CloudDeleteTombstone[]>("get_error_log_delete_tombstones", { after });
+}
+
 export function applyCloudStudyBlock(block: StudyBlock): Promise<void> {
   return command<void>("apply_cloud_study_block", { block });
 }
@@ -223,6 +228,10 @@ export function applyCloudPracticeTest(test: PracticeTest): Promise<void> {
 
 export function applyCloudWeakTopic(entry: WeakTopicEntry): Promise<void> {
   return command<void>("apply_cloud_weak_topic", { entry });
+}
+
+export function applyCloudErrorLogEntry(entry: ErrorLogEntry): Promise<void> {
+  return command<void>("apply_cloud_error_log_entry", { entry });
 }
 
 export function applyCloudDelete(

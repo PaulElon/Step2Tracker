@@ -12,8 +12,9 @@ use std::{fs, path::PathBuf};
 
 use persistence::{
     AppState, BackupArtifactPreview, ClientSnapshot, CloudDeleteTombstone, CloudEntityType,
-    DeviceMetadata, ErrorLogInput, ImportMode, PracticeTest, PracticeTestInput, Preferences,
-    StorageService, StudyBlock, StudyBlockInput, TrashEntityType, WeakTopicEntry, WeakTopicInput,
+    DeviceMetadata, ErrorLogEntry, ErrorLogInput, ImportMode, PracticeTest, PracticeTestInput,
+    Preferences, StorageService, StudyBlock, StudyBlockInput, TrashEntityType, WeakTopicEntry,
+    WeakTopicInput,
 };
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
@@ -198,6 +199,14 @@ fn get_core_entity_delete_tombstones(
 }
 
 #[tauri::command]
+fn get_error_log_delete_tombstones(
+    app: tauri::AppHandle,
+    after: Option<String>,
+) -> Result<Vec<CloudDeleteTombstone>, String> {
+    with_storage(&app, |service| service.get_error_log_delete_tombstones(after.as_deref()))
+}
+
+#[tauri::command]
 fn apply_cloud_study_block(app: tauri::AppHandle, block: StudyBlock) -> Result<(), String> {
     with_storage(&app, |service| service.apply_cloud_study_block(block))
 }
@@ -210,6 +219,11 @@ fn apply_cloud_practice_test(app: tauri::AppHandle, test: PracticeTest) -> Resul
 #[tauri::command]
 fn apply_cloud_weak_topic(app: tauri::AppHandle, entry: WeakTopicEntry) -> Result<(), String> {
     with_storage(&app, |service| service.apply_cloud_weak_topic(entry))
+}
+
+#[tauri::command]
+fn apply_cloud_error_log_entry(app: tauri::AppHandle, entry: ErrorLogEntry) -> Result<(), String> {
+    with_storage(&app, |service| service.apply_cloud_error_log_entry(entry))
 }
 
 #[tauri::command]
@@ -924,9 +938,11 @@ fn main() {
             get_cloud_pull_cursor,
             set_cloud_pull_cursor,
             get_core_entity_delete_tombstones,
+            get_error_log_delete_tombstones,
             apply_cloud_study_block,
             apply_cloud_practice_test,
             apply_cloud_weak_topic,
+            apply_cloud_error_log_entry,
             apply_cloud_delete,
             tf_autotracker::tf_autotracker_probe_bootstrap,
             tf_autotracker_v2_native::tf_autotracker_v2_native_probe,

@@ -126,6 +126,7 @@ pub enum CloudEntityType {
     StudyBlock,
     PracticeTest,
     WeakTopicEntry,
+    ErrorLogEntry,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -3196,6 +3197,14 @@ impl StorageService {
         Ok(tombstones)
     }
 
+    pub fn get_error_log_delete_tombstones(
+        &self,
+        after: Option<&str>,
+    ) -> StorageResult<Vec<CloudDeleteTombstone>> {
+        let connection = self.open_live_connection()?;
+        self.query_delete_tombstones(&connection, "error_log_entries", "error_log_entry", after)
+    }
+
     pub fn apply_cloud_study_block(&self, block: StudyBlock) -> StorageResult<()> {
         Self::validate_study_block_record(&block)?;
         let mut connection = self.open_live_connection()?;
@@ -3221,6 +3230,16 @@ impl StorageService {
         let mut connection = self.open_live_connection()?;
         let transaction = connection.transaction()?;
         self.persist_weak_topic(&transaction, &entry)?;
+        self.touch_saved(&transaction)?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn apply_cloud_error_log_entry(&self, entry: ErrorLogEntry) -> StorageResult<()> {
+        Self::validate_error_log_record(&entry)?;
+        let mut connection = self.open_live_connection()?;
+        let transaction = connection.transaction()?;
+        self.persist_error_log_entry(&transaction, &entry)?;
         self.touch_saved(&transaction)?;
         transaction.commit()?;
         Ok(())
@@ -3252,6 +3271,13 @@ impl StorageService {
             )?,
             CloudEntityType::WeakTopicEntry => transaction.execute(
                 "UPDATE weak_topic_entries
+                 SET deleted_at = ?1, delete_reason = 'cloud-sync'
+                 WHERE id = ?2
+                   AND (deleted_at IS NULL OR deleted_at < ?1)",
+                params![deleted_at, entity_id],
+            )?,
+            CloudEntityType::ErrorLogEntry => transaction.execute(
+                "UPDATE error_log_entries
                  SET deleted_at = ?1, delete_reason = 'cloud-sync'
                  WHERE id = ?2
                    AND (deleted_at IS NULL OR deleted_at < ?1)",
@@ -3754,6 +3780,22 @@ impl StorageService {
         validate_date(&entry.last_seen_at, "Weak topic lastSeenAt")?;
         validate_date_time(&entry.created_at, "Weak topic createdAt")?;
         validate_date_time(&entry.updated_at, "Weak topic updatedAt")?;
+        Ok(())
+    }
+
+    fn validate_error_log_record(entry: &ErrorLogEntry) -> StorageResult<()> {
+        validate_non_empty(&entry.source, "Error log source")?;
+        validate_non_empty(&entry.system, "Error log system")?;
+        validate_non_empty(&entry.topic, "Error log topic")?;
+        validate_non_empty(&entry.error_type, "Error log error type")?;
+        validate_non_empty(&entry.missed_pattern, "Error log missed pattern")?;
+        validate_non_empty(&entry.fix, "Error log fix")?;
+        validate_non_empty(&entry.priority, "Error log priority")?;
+        if !entry.entry_date.trim().is_empty() {
+            validate_date(&entry.entry_date, "Error log entry date")?;
+        }
+        validate_date_time(&entry.created_at, "Error log createdAt")?;
+        validate_date_time(&entry.updated_at, "Error log updatedAt")?;
         Ok(())
     }
 
@@ -5192,5 +5234,105 @@ mod tests {
 
         assert!(!id1.is_empty());
         assert_eq!(id1, id2);
+    }
+
+    #[test]
+    fn cloud_error_log_upsert_preserves_remote_timestamps() {
+        let (_temp, service) = test_service();
+        service.load_snapshot().expect("bootstrap snapshot");
+
+        let entry = ErrorLogEntry {
+            id: new_id(),
+            source: "UWorld".into(),
+            exam_block: "Block 1".into(),
+            system: "IM/FM".into(),
+            topic: "Cloud error".into(),
+            error_type: "Knowledge Gap".into(),
+            missed_pattern: "missed".into(),
+            fix: "fix".into(),
+            why_picked_wrong_answer: String::new(),
+            why_correct_answer_is_correct: String::new(),
+            why_tempting_wrong_answer_is_wrong: String::new(),
+            decision_rule: String::new(),
+            is_repeat_miss: false,
+            follow_up_action: String::new(),
+            is_guessed_correct: false,
+            add_to_final_sheet: false,
+            priority: "medium".into(),
+            entry_date: "2026-05-18".into(),
+            created_at: "2026-05-18T10:00:00Z".into(),
+            updated_at: "2026-05-18T12:00:00Z".into(),
+        };
+
+        service
+            .apply_cloud_error_log_entry(entry.clone())
+            .expect("apply cloud error log");
+
+        let snapshot = service.load_snapshot().expect("snapshot");
+        let saved = snapshot
+            .state
+            .error_log_entries
+            .iter()
+            .find(|row| row.id == entry.id)
+            .expect("saved error log");
+
+        assert_eq!(saved.created_at, entry.created_at);
+        assert_eq!(saved.updated_at, entry.updated_at);
+        assert_eq!(saved.topic, entry.topic);
+    }
+
+    #[test]
+    fn cloud_error_log_delete_preserves_remote_deleted_at() {
+        let (_temp, service) = test_service();
+        service.load_snapshot().expect("bootstrap snapshot");
+
+        let entry = ErrorLogEntry {
+            id: new_id(),
+            source: "NBME".into(),
+            exam_block: "Block 2".into(),
+            system: "Surgery".into(),
+            topic: "Delete me".into(),
+            error_type: "Reasoning Error".into(),
+            missed_pattern: "pattern".into(),
+            fix: "fix".into(),
+            why_picked_wrong_answer: String::new(),
+            why_correct_answer_is_correct: String::new(),
+            why_tempting_wrong_answer_is_wrong: String::new(),
+            decision_rule: String::new(),
+            is_repeat_miss: true,
+            follow_up_action: "make-anki".into(),
+            is_guessed_correct: false,
+            add_to_final_sheet: true,
+            priority: "high".into(),
+            entry_date: "2026-05-18".into(),
+            created_at: "2026-05-18T09:00:00Z".into(),
+            updated_at: "2026-05-18T10:00:00Z".into(),
+        };
+        let delete_at = "2026-05-19T00:00:00Z";
+
+        service
+            .apply_cloud_error_log_entry(entry.clone())
+            .expect("seed cloud error log");
+        service
+            .apply_cloud_delete(CloudEntityType::ErrorLogEntry, &entry.id, delete_at)
+            .expect("delete cloud error log");
+
+        let tombstones = service
+            .get_error_log_delete_tombstones(None)
+            .expect("error log tombstones");
+        assert_eq!(tombstones.len(), 1);
+        assert_eq!(tombstones[0].entity_type, "error_log_entry");
+        assert_eq!(tombstones[0].entity_id, entry.id);
+        assert_eq!(tombstones[0].deleted_at, delete_at);
+
+        let snapshot = service.load_snapshot().expect("snapshot");
+        assert!(
+            snapshot
+                .state
+                .error_log_entries
+                .iter()
+                .all(|row| row.id != entry.id),
+            "deleted cloud error log should not remain active",
+        );
     }
 }

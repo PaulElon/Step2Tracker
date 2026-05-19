@@ -3,6 +3,7 @@ import { useAppStore } from "../../state/app-store";
 import { useTimeFolioStore } from "../../state/tf-store";
 import {
   getCoreEntityDeleteTombstones,
+  getErrorLogDeleteTombstones,
   getDeviceMetadata,
   parseCloudLinkState,
   setCloudLink,
@@ -235,8 +236,17 @@ function CloudSyncSection() {
     try {
       const lastSyncedAt = await getLastSyncedAt();
       const syncStartedAt = new Date().toISOString();
-      const snapshot = await loadNativeSnapshot();
-      const deleteTombstones = await getCoreEntityDeleteTombstones(lastSyncedAt);
+      const [snapshot, coreDeleteTombstones, errorLogDeleteTombstones] = await Promise.all([
+        loadNativeSnapshot(),
+        getCoreEntityDeleteTombstones(lastSyncedAt),
+        getErrorLogDeleteTombstones(lastSyncedAt),
+      ]);
+      const deleteTombstones = [...coreDeleteTombstones, ...errorLogDeleteTombstones].sort(
+        (left, right) =>
+          left.deletedAt.localeCompare(right.deletedAt) ||
+          left.entityType.localeCompare(right.entityType) ||
+          left.entityId.localeCompare(right.entityId),
+      );
       const pushResult = await pushAllEntities(
         token,
         nativeDeviceId,

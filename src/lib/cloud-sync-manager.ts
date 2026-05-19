@@ -1,5 +1,6 @@
 import type {
   AppState,
+  ErrorLogEntry,
   PersistenceSnapshot,
   PracticeTest,
   StudyBlock,
@@ -43,6 +44,7 @@ interface CloudPullDependencies {
   applyStudyBlock?: (block: StudyBlock) => Promise<void>;
   applyPracticeTest?: (test: PracticeTest) => Promise<void>;
   applyWeakTopic?: (entry: WeakTopicEntry) => Promise<void>;
+  applyErrorLog?: (entry: ErrorLogEntry) => Promise<void>;
   applyDelete?: (
     entityType: CloudEntityType,
     entityId: string,
@@ -56,10 +58,17 @@ async function loadDefaultPullDependencies() {
     getCursor: native.getCloudPullCursor,
     setCursor: native.setCloudPullCursor,
     loadSnapshot: native.loadNativeSnapshot,
-    getDeleteTombstones: native.getCoreEntityDeleteTombstones,
+    getDeleteTombstones: async (after?: string | null) => {
+      const [coreTombstones, errorLogTombstones] = await Promise.all([
+        native.getCoreEntityDeleteTombstones(after),
+        native.getErrorLogDeleteTombstones(after),
+      ]);
+      return [...coreTombstones, ...errorLogTombstones];
+    },
     applyStudyBlock: native.applyCloudStudyBlock,
     applyPracticeTest: native.applyCloudPracticeTest,
     applyWeakTopic: native.applyCloudWeakTopic,
+    applyErrorLog: native.applyCloudErrorLogEntry,
     applyDelete: native.applyCloudDelete,
   };
 }
@@ -85,6 +94,7 @@ function indexLocalEntities(state: AppState) {
     study_block: new Map(state.studyBlocks.map((block) => [block.id, block])),
     practice_test: new Map(state.practiceTests.map((test) => [test.id, test])),
     weak_topic_entry: new Map(state.weakTopicEntries.map((entry) => [entry.id, entry])),
+    error_log_entry: new Map(state.errorLogEntries.map((entry) => [entry.id, entry])),
   };
 }
 
@@ -103,6 +113,11 @@ function indexDeleteTombstones(tombstones: CloudDeleteTombstone[]) {
     weak_topic_entry: new Map(
       tombstones
         .filter((entry) => entry.entityType === "weak_topic_entry")
+        .map((entry) => [entry.entityId, entry.deletedAt]),
+    ),
+    error_log_entry: new Map(
+      tombstones
+        .filter((entry) => entry.entityType === "error_log_entry")
         .map((entry) => [entry.entityId, entry.deletedAt]),
     ),
   };
@@ -200,6 +215,15 @@ export async function pushAllEntities(
         payload: entry as unknown as Record<string, unknown>,
         clientUpdatedAt: entry.updatedAt,
       })),
+    ...state.errorLogEntries
+      .filter((entry) => !after || entry.updatedAt >= after)
+      .map((entry) => ({
+        entityType: "error_log_entry",
+        entityId: entry.id,
+        operation: "upsert" as const,
+        payload: entry as unknown as Record<string, unknown>,
+        clientUpdatedAt: entry.updatedAt,
+      })),
     ...deleteTombstones
       .filter((entry) => !after || entry.deletedAt >= after)
       .map((entry) => ({
@@ -239,6 +263,7 @@ export async function pullFromCloud(
     !dependencies.applyStudyBlock ||
     !dependencies.applyPracticeTest ||
     !dependencies.applyWeakTopic ||
+    !dependencies.applyErrorLog ||
     !dependencies.applyDelete;
   const defaults = needsDefaults ? await loadDefaultPullDependencies() : null;
   const fetchImpl = dependencies.fetchImpl ?? fetch;
@@ -249,6 +274,7 @@ export async function pullFromCloud(
   const applyStudyBlock = dependencies.applyStudyBlock ?? defaults?.applyStudyBlock;
   const applyPracticeTest = dependencies.applyPracticeTest ?? defaults?.applyPracticeTest;
   const applyWeakTopic = dependencies.applyWeakTopic ?? defaults?.applyWeakTopic;
+  const applyErrorLog = dependencies.applyErrorLog ?? defaults?.applyErrorLog;
   const applyDelete = dependencies.applyDelete ?? defaults?.applyDelete;
   if (
     !getCursor ||
@@ -258,6 +284,7 @@ export async function pullFromCloud(
     !applyStudyBlock ||
     !applyPracticeTest ||
     !applyWeakTopic ||
+    !applyErrorLog ||
     !applyDelete
   ) {
     throw new Error("Cloud pull dependencies are unavailable.");
@@ -293,13 +320,17 @@ export async function pullFromCloud(
         ? entities.study_block.get(entry.entityId)
         : entry.entityType === "practice_test"
           ? entities.practice_test.get(entry.entityId)
-          : entities.weak_topic_entry.get(entry.entityId);
+          : entry.entityType === "weak_topic_entry"
+            ? entities.weak_topic_entry.get(entry.entityId)
+            : entities.error_log_entry.get(entry.entityId);
     const deletedAt =
       entry.entityType === "study_block"
         ? localDeletes.study_block.get(entry.entityId)
         : entry.entityType === "practice_test"
           ? localDeletes.practice_test.get(entry.entityId)
-          : localDeletes.weak_topic_entry.get(entry.entityId);
+          : entry.entityType === "weak_topic_entry"
+            ? localDeletes.weak_topic_entry.get(entry.entityId)
+            : localDeletes.error_log_entry.get(entry.entityId);
 
     if (entry.operation === "upsert") {
       if (!isObjectPayload(entry.payload)) {
@@ -322,18 +353,24 @@ export async function pullFromCloud(
         const test = entry.payload as unknown as PracticeTest;
         await applyPracticeTest(test);
         entities.practice_test.set(entry.entityId, test);
-      } else {
+      } else if (entry.entityType === "weak_topic_entry") {
         const weakTopic = entry.payload as unknown as WeakTopicEntry;
         await applyWeakTopic(weakTopic);
         entities.weak_topic_entry.set(entry.entityId, weakTopic);
+      } else {
+        const errorLog = entry.payload as unknown as ErrorLogEntry;
+        await applyErrorLog(errorLog);
+        entities.error_log_entry.set(entry.entityId, errorLog);
       }
 
       if (entry.entityType === "study_block") {
         localDeletes.study_block.delete(entry.entityId);
       } else if (entry.entityType === "practice_test") {
         localDeletes.practice_test.delete(entry.entityId);
-      } else {
+      } else if (entry.entityType === "weak_topic_entry") {
         localDeletes.weak_topic_entry.delete(entry.entityId);
+      } else {
+        localDeletes.error_log_entry.delete(entry.entityId);
       }
       applied += 1;
       upserted += 1;
@@ -356,9 +393,12 @@ export async function pullFromCloud(
     } else if (entry.entityType === "practice_test") {
       entities.practice_test.delete(entry.entityId);
       localDeletes.practice_test.set(entry.entityId, entry.clientUpdatedAt);
-    } else {
+    } else if (entry.entityType === "weak_topic_entry") {
       entities.weak_topic_entry.delete(entry.entityId);
       localDeletes.weak_topic_entry.set(entry.entityId, entry.clientUpdatedAt);
+    } else {
+      entities.error_log_entry.delete(entry.entityId);
+      localDeletes.error_log_entry.set(entry.entityId, entry.clientUpdatedAt);
     }
     applied += 1;
     deleted += 1;

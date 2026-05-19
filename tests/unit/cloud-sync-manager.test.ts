@@ -138,6 +138,52 @@ test("pushAllEntities sends recent upserts and delete tombstones and preserves t
       updatedAt: "2026-05-13T11:00:00.000Z",
     },
   ];
+  state.errorLogEntries = [
+    {
+      id: "error-old",
+      source: "UWorld",
+      examBlock: "Block 1",
+      system: "IM/FM",
+      topic: "Older error",
+      errorType: "Knowledge Gap",
+      missedPattern: "missed",
+      fix: "fix",
+      whyPickedWrongAnswer: "",
+      whyCorrectAnswerIsCorrect: "",
+      whyTemptingWrongAnswerIsWrong: "",
+      decisionRule: "",
+      isRepeatMiss: false,
+      followUpAction: "",
+      isGuessedCorrect: false,
+      addToFinalSheet: false,
+      priority: "medium",
+      entryDate: "2026-05-07",
+      createdAt: "2026-05-07T08:00:00.000Z",
+      updatedAt: "2026-05-07T09:00:00.000Z",
+    },
+    {
+      id: "error-new",
+      source: "NBME",
+      examBlock: "Block 2",
+      system: "Surgery",
+      topic: "Fresh error",
+      errorType: "Reasoning Error",
+      missedPattern: "pattern",
+      fix: "fix",
+      whyPickedWrongAnswer: "",
+      whyCorrectAnswerIsCorrect: "",
+      whyTemptingWrongAnswerIsWrong: "",
+      decisionRule: "",
+      isRepeatMiss: true,
+      followUpAction: "make-anki",
+      isGuessedCorrect: false,
+      addToFinalSheet: true,
+      priority: "high",
+      entryDate: "2026-05-13",
+      createdAt: "2026-05-13T08:00:00.000Z",
+      updatedAt: "2026-05-13T11:00:00.000Z",
+    },
+  ];
 
   const tombstones: CloudDeleteTombstone[] = [
     {
@@ -154,6 +200,11 @@ test("pushAllEntities sends recent upserts and delete tombstones and preserves t
       entityType: "weak_topic_entry",
       entityId: "weak-deleted-new",
       deletedAt: "2026-05-15T12:00:00.000Z",
+    },
+    {
+      entityType: "error_log_entry",
+      entityId: "error-deleted-new",
+      deletedAt: "2026-05-16T12:00:00.000Z",
     },
   ];
 
@@ -174,7 +225,7 @@ test("pushAllEntities sends recent upserts and delete tombstones and preserves t
     tombstones,
   );
 
-  assert.deepEqual(result, { pushed: 5, cursor: 77 });
+  assert.deepEqual(result, { pushed: 7, cursor: 77 });
   assert.equal(fetchCalls.length, 1);
   assert.equal(fetchCalls[0]?.url.endsWith("/sync/push"), true);
   assert.equal(fetchCalls[0]?.init?.method, "POST");
@@ -208,6 +259,13 @@ test("pushAllEntities sends recent upserts and delete tombstones and preserves t
       clientUpdatedAt: "2026-05-13T11:00:00.000Z",
     },
     {
+      entityType: "error_log_entry",
+      entityId: "error-new",
+      operation: "upsert",
+      payload: state.errorLogEntries[1],
+      clientUpdatedAt: "2026-05-13T11:00:00.000Z",
+    },
+    {
       entityType: "practice_test",
       entityId: "practice-deleted-new",
       operation: "delete",
@@ -220,6 +278,13 @@ test("pushAllEntities sends recent upserts and delete tombstones and preserves t
       operation: "delete",
       payload: null,
       clientUpdatedAt: "2026-05-15T12:00:00.000Z",
+    },
+    {
+      entityType: "error_log_entry",
+      entityId: "error-deleted-new",
+      operation: "delete",
+      payload: null,
+      clientUpdatedAt: "2026-05-16T12:00:00.000Z",
     },
   ]);
 });
@@ -288,11 +353,36 @@ test("pullFromCloud applies only newer upserts and persists the pull cursor", as
       updatedAt: "2026-05-13T09:00:00.000Z",
     },
   ];
+  state.errorLogEntries = [
+    {
+      id: "error-1",
+      source: "TrueLearn",
+      examBlock: "Block 3",
+      system: "Pediatrics",
+      topic: "Local error",
+      errorType: "Trap / Misread",
+      missedPattern: "local",
+      fix: "local fix",
+      whyPickedWrongAnswer: "",
+      whyCorrectAnswerIsCorrect: "",
+      whyTemptingWrongAnswerIsWrong: "",
+      decisionRule: "",
+      isRepeatMiss: false,
+      followUpAction: "",
+      isGuessedCorrect: false,
+      addToFinalSheet: false,
+      priority: "medium",
+      entryDate: "2026-05-10",
+      createdAt: "2026-05-10T08:00:00.000Z",
+      updatedAt: "2026-05-10T09:00:00.000Z",
+    },
+  ];
 
   let storedCursor: number | null = null;
   const fetchCalls: string[] = [];
   const appliedStudyBlocks: string[] = [];
   const appliedPracticeTests: string[] = [];
+  const appliedErrorLogs: string[] = [];
   globalThis.fetch = (async (url: string | URL | Request) => {
     fetchCalls.push(String(url));
     return new Response(
@@ -319,6 +409,17 @@ test("pullFromCloud applies only newer upserts and persists the pull cursor", as
               ...state.practiceTests[0],
               form: "stale",
               updatedAt: "2026-05-11T09:00:00.000Z",
+            },
+          },
+          {
+            entityType: "error_log_entry",
+            entityId: "error-1",
+            operation: "upsert",
+            clientUpdatedAt: "2026-05-14T10:00:00.000Z",
+            payload: {
+              ...state.errorLogEntries[0],
+              topic: "Cloud error",
+              updatedAt: "2026-05-14T10:00:00.000Z",
             },
           },
         ],
@@ -359,6 +460,9 @@ test("pullFromCloud applies only newer upserts and persists the pull cursor", as
     applyWeakTopic: async () => {
       throw new Error("weak topic apply should not run");
     },
+    applyErrorLog: async (entry) => {
+      appliedErrorLogs.push(entry.topic);
+    },
     applyDelete: async () => {
       throw new Error("delete apply should not run");
     },
@@ -367,11 +471,12 @@ test("pullFromCloud applies only newer upserts and persists the pull cursor", as
   assert.equal(fetchCalls[0], "https://timefolio-sync-v2.paulfreedman3.workers.dev/sync/pull?since=0&deviceId=device-123");
   assert.deepEqual(appliedStudyBlocks, ["Cloud block"]);
   assert.deepEqual(appliedPracticeTests, []);
+  assert.deepEqual(appliedErrorLogs, ["Cloud error"]);
   assert.equal(storedCursor, 88);
   assert.deepEqual(result, {
-    received: 2,
-    applied: 1,
-    upserted: 1,
+    received: 3,
+    applied: 2,
+    upserted: 2,
     deleted: 0,
     skipped: 1,
     cursor: 88,
@@ -473,6 +578,9 @@ test("pullFromCloud applies only newer deletes", async () => {
     applyWeakTopic: async () => {
       throw new Error("weak topic apply should not run");
     },
+    applyErrorLog: async () => {
+      throw new Error("error log apply should not run");
+    },
     applyDelete: async (entityType, entityId, deletedAt) => {
       deletes.push({ entityType, entityId, deletedAt });
     },
@@ -492,6 +600,106 @@ test("pullFromCloud applies only newer deletes", async () => {
     deleted: 1,
     skipped: 1,
     cursor: 41,
+  });
+});
+
+test("pullFromCloud applies newer deletes for error log entries", async () => {
+  const state = createEmptyState();
+  state.errorLogEntries = [
+    {
+      id: "error-delete",
+      source: "AMBOSS",
+      examBlock: "Block 4",
+      system: "OB/GYN",
+      topic: "Delete me",
+      errorType: "Trap Answer",
+      missedPattern: "local",
+      fix: "local fix",
+      whyPickedWrongAnswer: "",
+      whyCorrectAnswerIsCorrect: "",
+      whyTemptingWrongAnswerIsWrong: "",
+      decisionRule: "",
+      isRepeatMiss: false,
+      followUpAction: "",
+      isGuessedCorrect: false,
+      addToFinalSheet: false,
+      priority: "low",
+      entryDate: "2026-05-13",
+      createdAt: "2026-05-13T08:00:00.000Z",
+      updatedAt: "2026-05-13T09:00:00.000Z",
+    },
+  ];
+
+  const deletes: Array<{ entityType: string; entityId: string; deletedAt: string }> = [];
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        cursor: 45,
+        entries: [
+          {
+            entityType: "error_log_entry",
+            entityId: "error-delete",
+            operation: "delete",
+            payload: null,
+            clientUpdatedAt: "2026-05-14T09:00:00.000Z",
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    )) as typeof fetch;
+
+  const result = await pullFromCloud("token-123", "device-123", {
+    getCursor: async () => 10,
+    setCursor: async () => {},
+    loadSnapshot: async () => ({
+      state,
+      persistence: {
+        storagePath: "",
+        backupDirectory: "",
+        schemaVersion: 1,
+        appVersion: "test",
+        lastSavedAt: null,
+        recoveryMessage: null,
+        legacyMigrationCompletedAt: null,
+      },
+      backups: [],
+      trash: [],
+    }),
+    getDeleteTombstones: async () => [],
+    applyStudyBlock: async () => {
+      throw new Error("study block apply should not run");
+    },
+    applyPracticeTest: async () => {
+      throw new Error("practice test apply should not run");
+    },
+    applyWeakTopic: async () => {
+      throw new Error("weak topic apply should not run");
+    },
+    applyErrorLog: async () => {
+      throw new Error("error log apply should not run");
+    },
+    applyDelete: async (entityType, entityId, deletedAt) => {
+      deletes.push({ entityType, entityId, deletedAt });
+    },
+  });
+
+  assert.deepEqual(deletes, [
+    {
+      entityType: "error_log_entry",
+      entityId: "error-delete",
+      deletedAt: "2026-05-14T09:00:00.000Z",
+    },
+  ]);
+  assert.deepEqual(result, {
+    received: 1,
+    applied: 1,
+    upserted: 0,
+    deleted: 1,
+    skipped: 0,
+    cursor: 45,
   });
 });
 
@@ -563,6 +771,9 @@ test("pullFromCloud skips stale upserts when a newer local tombstone exists", as
     },
     applyWeakTopic: async () => {
       applied = true;
+    },
+    applyErrorLog: async () => {
+      throw new Error("error log apply should not run");
     },
     applyDelete: async () => {
       throw new Error("delete apply should not run");
