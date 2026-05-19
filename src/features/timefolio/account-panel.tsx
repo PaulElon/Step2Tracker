@@ -136,10 +136,31 @@ function getIdentitySubtext(account: {
 
 type CloudPhase = "loading" | "unlinked" | "connecting" | "expired" | "linked" | "syncing";
 
+function getOrCreateLocalDeviceId(): string {
+  try {
+    const stored = localStorage.getItem("tf_device_id");
+    if (stored) return stored;
+    const id =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+            const r = (Math.random() * 16) | 0;
+            return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+          });
+    localStorage.setItem("tf_device_id", id);
+    return id;
+  } catch {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+    });
+  }
+}
+
 function CloudSyncSection() {
   const [phase, setPhase] = useState<CloudPhase>("loading");
   const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
-  const [nativeDeviceId, setNativeDeviceId] = useState<string>("");
+  const [nativeDeviceId] = useState<string>(() => getOrCreateLocalDeviceId());
   const [token, setToken] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -149,13 +170,6 @@ function CloudSyncSection() {
   useEffect(() => {
     getDeviceMetadata()
       .then(async (meta) => {
-        let resolvedId = meta.deviceId;
-        if (!resolvedId) {
-          const stored = localStorage.getItem("tf_device_id");
-          resolvedId = stored ?? crypto.randomUUID();
-          localStorage.setItem("tf_device_id", resolvedId);
-        }
-        setNativeDeviceId(resolvedId);
         const link = parseCloudLinkState(meta.cloudLinkState);
         if (link) {
           setLinkedEmail(link.email);
