@@ -939,6 +939,150 @@ test("pullFromCloud ignores unsupported entity types and still advances the curs
   });
 });
 
+test("pullFromCloud coerces legacy string payloads, skips malformed rows, and still advances the cursor", async () => {
+  const state = createEmptyState();
+  state.studyBlocks = [
+    {
+      id: "study-local",
+      date: "2026-05-12",
+      day: "Tuesday",
+      durationHours: 1,
+      durationMinutes: 0,
+      completed: false,
+      order: 0,
+      startTime: "08:00",
+      endTime: "09:00",
+      isOvernight: false,
+      category: "Review",
+      task: "Local block",
+      status: "Not Started",
+      notes: "",
+      createdAt: "2026-05-12T08:00:00.000Z",
+      updatedAt: "2026-05-12T09:00:00.000Z",
+    },
+  ];
+
+  const appliedStudyBlocks: string[] = [];
+  const deletes: Array<{ entityType: string; entityId: string; deletedAt: string }> = [];
+  let storedCursor: number | null = null;
+
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        cursor: 46,
+        entries: [
+          {
+            entityType: "study_block",
+            entityId: "study-legacy",
+            operation: "upsert",
+            payload: JSON.stringify({
+              id: "study-legacy",
+              date: "2026-05-14",
+              day: "Thursday",
+              durationHours: 2,
+              durationMinutes: 0,
+              completed: true,
+              order: 1,
+              startTime: "10:00",
+              endTime: "12:00",
+              isOvernight: false,
+              category: "Test",
+              task: "Legacy cloud block",
+              status: "Completed",
+              notes: "",
+              createdAt: "2026-05-14T08:00:00.000Z",
+              updatedAt: "2026-05-14T09:00:00.000Z",
+            }),
+            clientUpdatedAt: "2026-05-14T09:00:00.000Z",
+          },
+          {
+            entityType: "study_block",
+            entityId: "study-malformed",
+            operation: "upsert",
+            payload: "{not-json",
+            clientUpdatedAt: "2026-05-14T09:05:00.000Z",
+          },
+          {
+            entityType: "preferences",
+            entityId: "prefs-user",
+            operation: "upsert",
+            payload: JSON.stringify({
+              themeId: "light",
+              dailyGoalMinutes: 300,
+            }),
+            clientUpdatedAt: "2026-05-14T09:10:00.000Z",
+          },
+          {
+            entityType: "study_block",
+            entityId: "study-delete",
+            operation: "delete",
+            payload: null,
+            clientUpdatedAt: "2026-05-14T09:15:00.000Z",
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    )) as typeof fetch;
+
+  const result = await pullFromCloud("token-123", "device-123", {
+    getCursor: async () => 14,
+    setCursor: async (value) => {
+      storedCursor = value;
+    },
+    loadSnapshot: async () => ({
+      state,
+      persistence: {
+        storagePath: "",
+        backupDirectory: "",
+        schemaVersion: 1,
+        appVersion: "test",
+        lastSavedAt: null,
+        recoveryMessage: null,
+        legacyMigrationCompletedAt: null,
+      },
+      backups: [],
+      trash: [],
+    }),
+    getDeleteTombstones: async () => [],
+    applyStudyBlock: async (block) => {
+      appliedStudyBlocks.push(block.task);
+    },
+    applyPracticeTest: async () => {
+      throw new Error("practice test apply should not run");
+    },
+    applyWeakTopic: async () => {
+      throw new Error("weak topic apply should not run");
+    },
+    applyErrorLog: async () => {
+      throw new Error("error log apply should not run");
+    },
+    applyDelete: async (entityType, entityId, deletedAt) => {
+      deletes.push({ entityType, entityId, deletedAt });
+    },
+  });
+
+  assert.deepEqual(appliedStudyBlocks, ["Legacy cloud block"]);
+  assert.deepEqual(deletes, [
+    {
+      entityType: "study_block",
+      entityId: "study-delete",
+      deletedAt: "2026-05-14T09:15:00.000Z",
+    },
+  ]);
+  assert.equal(storedCursor, 46);
+  assert.deepEqual(result, {
+    received: 4,
+    applied: 2,
+    upserted: 1,
+    deleted: 1,
+    skipped: 2,
+    cursor: 46,
+  });
+});
+
 test("pullFromCloud applies newer deletes for error log entries", async () => {
   const state = createEmptyState();
   state.errorLogEntries = [

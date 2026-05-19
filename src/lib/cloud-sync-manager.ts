@@ -21,7 +21,7 @@ interface CloudPullEntry {
   entityType: string;
   entityId: string;
   operation: CloudPullOperation;
-  payload: Record<string, unknown> | null;
+  payload: unknown;
   clientUpdatedAt: string;
 }
 
@@ -138,8 +138,24 @@ function indexDeleteTombstones(tombstones: CloudDeleteTombstone[]) {
   };
 }
 
-function isObjectPayload(payload: CloudPullEntry["payload"]): payload is Record<string, unknown> {
-  return payload !== null && typeof payload === "object";
+function isObjectPayload(payload: unknown): payload is Record<string, unknown> {
+  return payload !== null && typeof payload === "object" && !Array.isArray(payload);
+}
+
+function coerceCloudPullPayload(payload: unknown): Record<string, unknown> | null {
+  if (isObjectPayload(payload)) {
+    return payload;
+  }
+  if (typeof payload !== "string") {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(payload) as unknown;
+    return isObjectPayload(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function isSupportedCloudPullEntityType(entityType: string): entityType is CloudEntityType {
@@ -390,8 +406,10 @@ export async function pullFromCloud(
             : localDeletes.error_log_entry.get(entry.entityId);
 
     if (entry.operation === "upsert") {
-      if (!isObjectPayload(entry.payload)) {
-        throw new Error("Cloud sync pull returned an invalid upsert payload.");
+      const payload = coerceCloudPullPayload(entry.payload);
+      if (!payload) {
+        skipped += 1;
+        continue;
       }
       if (deletedAt && compareTimestamps(deletedAt, entry.clientUpdatedAt) >= 0) {
         skipped += 1;
@@ -403,19 +421,19 @@ export async function pullFromCloud(
       }
 
       if (entry.entityType === "study_block") {
-        const block = entry.payload as unknown as StudyBlock;
+        const block = payload as unknown as StudyBlock;
         await applyStudyBlock(block);
         entities.study_block.set(entry.entityId, block);
       } else if (entry.entityType === "practice_test") {
-        const test = entry.payload as unknown as PracticeTest;
+        const test = payload as unknown as PracticeTest;
         await applyPracticeTest(test);
         entities.practice_test.set(entry.entityId, test);
       } else if (entry.entityType === "weak_topic_entry") {
-        const weakTopic = entry.payload as unknown as WeakTopicEntry;
+        const weakTopic = payload as unknown as WeakTopicEntry;
         await applyWeakTopic(weakTopic);
         entities.weak_topic_entry.set(entry.entityId, weakTopic);
       } else {
-        const errorLog = entry.payload as unknown as ErrorLogEntry;
+        const errorLog = payload as unknown as ErrorLogEntry;
         await applyErrorLog(errorLog);
         entities.error_log_entry.set(entry.entityId, errorLog);
       }
