@@ -11,8 +11,9 @@ use std::process::Command;
 use std::{fs, path::PathBuf};
 
 use persistence::{
-    AppState, BackupArtifactPreview, ClientSnapshot, DeviceMetadata, ErrorLogInput, ImportMode,
-    PracticeTestInput, Preferences, StorageService, StudyBlockInput, TrashEntityType, WeakTopicInput,
+    AppState, BackupArtifactPreview, ClientSnapshot, CloudDeleteTombstone, DeviceMetadata,
+    ErrorLogInput, ImportMode, PracticeTestInput, Preferences, StorageService, StudyBlockInput,
+    TrashEntityType, WeakTopicInput,
 };
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
@@ -166,6 +167,24 @@ fn get_last_synced_at(app: tauri::AppHandle) -> Result<Option<String>, String> {
 #[tauri::command]
 fn set_last_synced_at(app: tauri::AppHandle, value: String) -> Result<(), String> {
     with_storage(&app, |service| service.set_last_synced_at(&value))
+}
+
+#[tauri::command]
+fn get_cloud_sync_cursor(app: tauri::AppHandle) -> Result<Option<i64>, String> {
+    with_storage(&app, |service| service.get_cloud_sync_cursor())
+}
+
+#[tauri::command]
+fn set_cloud_sync_cursor(app: tauri::AppHandle, value: i64) -> Result<(), String> {
+    with_storage(&app, |service| service.set_cloud_sync_cursor(value))
+}
+
+#[tauri::command]
+fn get_core_entity_delete_tombstones(
+    app: tauri::AppHandle,
+    after: Option<String>,
+) -> Result<Vec<CloudDeleteTombstone>, String> {
+    with_storage(&app, |service| service.get_core_entity_delete_tombstones(after.as_deref()))
 }
 
 #[tauri::command]
@@ -865,6 +884,9 @@ fn main() {
             clear_cloud_link,
             get_last_synced_at,
             set_last_synced_at,
+            get_cloud_sync_cursor,
+            set_cloud_sync_cursor,
+            get_core_entity_delete_tombstones,
             tf_autotracker::tf_autotracker_probe_bootstrap,
             tf_autotracker_v2_native::tf_autotracker_v2_native_probe,
             tf_autotracker_v2_native::tf_autotracker_v2_native_snapshot,

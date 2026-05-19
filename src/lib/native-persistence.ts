@@ -141,6 +141,12 @@ export interface DeviceMetadata {
   cloudLinkState: string | null;
 }
 
+export interface CloudDeleteTombstone {
+  entityType: "study_block" | "practice_test" | "weak_topic_entry";
+  entityId: string;
+  deletedAt: string;
+}
+
 export function getDeviceMetadata(): Promise<DeviceMetadata> {
   return command<DeviceMetadata>("get_device_metadata");
 }
@@ -178,4 +184,18 @@ export function getLastSyncedAt(): Promise<string | null> {
 
 export function setLastSyncedAt(value: string): Promise<void> {
   return command<void>("set_last_synced_at", { value });
+}
+
+export function getCloudSyncCursor(): Promise<number | null> {
+  return command<number | null>("get_cloud_sync_cursor");
+}
+
+export function setCloudSyncCursor(value: number): Promise<void> {
+  return command<void>("set_cloud_sync_cursor", { value });
+}
+
+export function getCoreEntityDeleteTombstones(
+  after?: string | null,
+): Promise<CloudDeleteTombstone[]> {
+  return command<CloudDeleteTombstone[]>("get_core_entity_delete_tombstones", { after });
 }

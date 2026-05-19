@@ -1,9 +1,11 @@
 import { useState, useEffect, type ReactNode } from "react";
 import { useTimeFolioStore } from "../../state/tf-store";
 import {
+  getCoreEntityDeleteTombstones,
   getDeviceMetadata,
   parseCloudLinkState,
   setCloudLink,
+  setCloudSyncCursor,
   clearCloudLink,
   loadNativeSnapshot,
   getLastSyncedAt,
@@ -231,9 +233,21 @@ function CloudSyncSection() {
       const lastSyncedAt = await getLastSyncedAt();
       const syncStartedAt = new Date().toISOString();
       const snapshot = await loadNativeSnapshot();
-      const result = await pushAllEntities(token, nativeDeviceId, snapshot.state, lastSyncedAt);
+      const deleteTombstones = await getCoreEntityDeleteTombstones(lastSyncedAt);
+      const result = await pushAllEntities(
+        token,
+        nativeDeviceId,
+        snapshot.state,
+        lastSyncedAt,
+        deleteTombstones,
+      );
+      if (result.cursor !== null) {
+        await setCloudSyncCursor(result.cursor);
+      }
       await setLastSyncedAt(syncStartedAt);
-      setStatusMsg(result.pushed === 0 ? "Already up to date." : `Synced ${result.pushed} entities.`);
+      setStatusMsg(
+        result.pushed === 0 ? "Already up to date." : `Synced ${result.pushed} entities.`,
+      );
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {

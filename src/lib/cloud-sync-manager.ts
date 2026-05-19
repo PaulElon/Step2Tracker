@@ -1,4 +1,5 @@
 import type { AppState } from "../types/models";
+import type { CloudDeleteTombstone } from "./native-persistence";
 
 const AUTH_URL = "https://timefolio-auth-v2.paulfreedman3.workers.dev";
 const SYNC_URL = "https://timefolio-sync-v2.paulfreedman3.workers.dev";
@@ -53,7 +54,8 @@ export async function pushAllEntities(
   deviceId: string,
   state: AppState,
   lastSyncedAt: string | null,
-): Promise<{ pushed: number; cursor: number }> {
+  deleteTombstones: CloudDeleteTombstone[],
+): Promise<{ pushed: number; cursor: number | null }> {
   const after = lastSyncedAt;
   const entities = [
     ...state.studyBlocks
@@ -83,9 +85,18 @@ export async function pushAllEntities(
         payload: e as unknown as Record<string, unknown>,
         clientUpdatedAt: e.updatedAt,
       })),
+    ...deleteTombstones
+      .filter((e) => !after || e.deletedAt >= after)
+      .map((e) => ({
+        entityType: e.entityType,
+        entityId: e.entityId,
+        operation: "delete" as const,
+        payload: null,
+        clientUpdatedAt: e.deletedAt,
+      })),
   ];
   if (entities.length === 0) {
-    return { pushed: 0, cursor: 0 };
+    return { pushed: 0, cursor: null };
   }
   const res = await fetch(`${SYNC_URL}/sync/push`, {
     method: "POST",

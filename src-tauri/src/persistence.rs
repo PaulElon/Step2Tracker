@@ -114,6 +114,14 @@ pub struct DeviceMetadata {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct CloudDeleteTombstone {
+    pub entity_type: String,
+    pub entity_id: String,
+    pub deleted_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct RecordCounts {
     pub study_blocks: usize,
     pub practice_tests: usize,
@@ -3115,6 +3123,55 @@ impl StorageService {
         self.set_metadata(&connection, "last_synced_at", value)
     }
 
+    pub fn get_cloud_sync_cursor(&self) -> StorageResult<Option<i64>> {
+        let connection = self.open_live_connection()?;
+        let raw = self.metadata_value(&connection, "cloud_sync_cursor")?;
+        raw.map(|value| {
+            value.parse::<i64>().map_err(|_| {
+                StorageError::Validation("Stored cloud sync cursor is invalid.".into())
+            })
+        })
+        .transpose()
+    }
+
+    pub fn set_cloud_sync_cursor(&self, value: i64) -> StorageResult<()> {
+        let connection = self.open_live_connection()?;
+        self.set_metadata(&connection, "cloud_sync_cursor", &value.to_string())
+    }
+
+    pub fn get_core_entity_delete_tombstones(
+        &self,
+        after: Option<&str>,
+    ) -> StorageResult<Vec<CloudDeleteTombstone>> {
+        let connection = self.open_live_connection()?;
+        let mut tombstones = Vec::new();
+        tombstones.extend(self.query_delete_tombstones(
+            &connection,
+            "study_blocks",
+            "study_block",
+            after,
+        )?);
+        tombstones.extend(self.query_delete_tombstones(
+            &connection,
+            "practice_tests",
+            "practice_test",
+            after,
+        )?);
+        tombstones.extend(self.query_delete_tombstones(
+            &connection,
+            "weak_topic_entries",
+            "weak_topic_entry",
+            after,
+        )?);
+        tombstones.sort_by(|left, right| {
+            left.deleted_at
+                .cmp(&right.deleted_at)
+                .then(left.entity_type.cmp(&right.entity_type))
+                .then(left.entity_id.cmp(&right.entity_id))
+        });
+        Ok(tombstones)
+    }
+
     fn reconcile_weak_topics(&self, transaction: &Transaction<'_>) -> StorageResult<()> {
         let practice_tests = self.read_practice_tests(transaction)?;
         let existing = self.reconciled_weak_topics(transaction, &practice_tests)?;
@@ -3239,6 +3296,31 @@ impl StorageService {
                     .map_err(StorageError::from)
             }
         }
+    }
+
+    fn query_delete_tombstones(
+        &self,
+        connection: &Connection,
+        table_name: &str,
+        entity_type: &str,
+        after: Option<&str>,
+    ) -> StorageResult<Vec<CloudDeleteTombstone>> {
+        let mut statement = connection.prepare(&format!(
+            "SELECT id, deleted_at
+             FROM {table_name}
+             WHERE deleted_at IS NOT NULL
+               AND (?1 IS NULL OR deleted_at >= ?1)
+             ORDER BY deleted_at ASC, id ASC"
+        ))?;
+        let rows = statement.query_map(params![after], |row| {
+            Ok(CloudDeleteTombstone {
+                entity_type: entity_type.to_string(),
+                entity_id: row.get(0)?,
+                deleted_at: row.get(1)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
     }
 
     fn soft_delete(
