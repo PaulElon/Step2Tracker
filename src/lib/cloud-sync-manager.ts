@@ -18,7 +18,7 @@ const SYNC_URL = "https://timefolio-sync-v2.paulfreedman3.workers.dev";
 type CloudPullOperation = "upsert" | "delete";
 
 interface CloudPullEntry {
-  entityType: CloudEntityType;
+  entityType: string;
   entityId: string;
   operation: CloudPullOperation;
   payload: Record<string, unknown> | null;
@@ -140,6 +140,15 @@ function indexDeleteTombstones(tombstones: CloudDeleteTombstone[]) {
 
 function isObjectPayload(payload: CloudPullEntry["payload"]): payload is Record<string, unknown> {
   return payload !== null && typeof payload === "object";
+}
+
+function isSupportedCloudPullEntityType(entityType: string): entityType is CloudEntityType {
+  return (
+    entityType === "study_block" ||
+    entityType === "practice_test" ||
+    entityType === "weak_topic_entry" ||
+    entityType === "error_log_entry"
+  );
 }
 
 function formatPullUrl(deviceId: string, since: number) {
@@ -358,6 +367,11 @@ export async function pullFromCloud(
   let skipped = 0;
 
   for (const entry of data.entries) {
+    if (!isSupportedCloudPullEntityType(entry.entityType)) {
+      skipped += 1;
+      continue;
+    }
+
     const activeEntity =
       entry.entityType === "study_block"
         ? entities.study_block.get(entry.entityId)

@@ -827,6 +827,118 @@ test("pullFromCloud applies only newer deletes", async () => {
   });
 });
 
+test("pullFromCloud ignores unsupported entity types and still advances the cursor", async () => {
+  const state = createEmptyState();
+  const appliedWeakTopics: string[] = [];
+  const deletes: Array<{ entityType: string; entityId: string; deletedAt: string }> = [];
+  let storedCursor: number | null = null;
+
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        cursor: 44,
+        entries: [
+          {
+            entityType: "preferences",
+            entityId: "prefs-user",
+            operation: "upsert",
+            payload: {
+              themeId: "light",
+              dailyGoalMinutes: 300,
+            },
+            clientUpdatedAt: "2026-05-14T08:00:00.000Z",
+          },
+          {
+            entityType: "future_entity",
+            entityId: "future-1",
+            operation: "delete",
+            payload: null,
+            clientUpdatedAt: "2026-05-14T08:10:00.000Z",
+          },
+          {
+            entityType: "session_log",
+            entityId: "session-1",
+            operation: "upsert",
+            payload: {
+              id: "session-1",
+            },
+            clientUpdatedAt: "2026-05-14T08:20:00.000Z",
+          },
+          {
+            entityType: "weak_topic_entry",
+            entityId: "weak-1",
+            operation: "upsert",
+            payload: {
+              id: "weak-1",
+              topic: "Cardio",
+              entryType: "manual",
+              priority: "High",
+              status: "Active",
+              sourceLabel: "Manual",
+              manualOccurrenceCount: 1,
+              createdAt: "2026-05-14T07:50:00.000Z",
+              updatedAt: "2026-05-14T08:30:00.000Z",
+            },
+            clientUpdatedAt: "2026-05-14T08:30:00.000Z",
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    )) as typeof fetch;
+
+  const result = await pullFromCloud("token-123", "device-123", {
+    getCursor: async () => 13,
+    setCursor: async (value) => {
+      storedCursor = value;
+    },
+    loadSnapshot: async () => ({
+      state,
+      persistence: {
+        storagePath: "",
+        backupDirectory: "",
+        schemaVersion: 1,
+        appVersion: "test",
+        lastSavedAt: null,
+        recoveryMessage: null,
+        legacyMigrationCompletedAt: null,
+      },
+      backups: [],
+      trash: [],
+    }),
+    getDeleteTombstones: async () => [],
+    applyStudyBlock: async () => {
+      throw new Error("study block apply should not run");
+    },
+    applyPracticeTest: async () => {
+      throw new Error("practice test apply should not run");
+    },
+    applyWeakTopic: async (entry) => {
+      appliedWeakTopics.push(entry.id);
+    },
+    applyErrorLog: async () => {
+      throw new Error("error log apply should not run");
+    },
+    applyDelete: async (entityType, entityId, deletedAt) => {
+      deletes.push({ entityType, entityId, deletedAt });
+    },
+  });
+
+  assert.deepEqual(appliedWeakTopics, ["weak-1"]);
+  assert.deepEqual(deletes, []);
+  assert.equal(storedCursor, 44);
+  assert.deepEqual(result, {
+    received: 4,
+    applied: 1,
+    upserted: 1,
+    deleted: 0,
+    skipped: 3,
+    cursor: 44,
+  });
+});
+
 test("pullFromCloud applies newer deletes for error log entries", async () => {
   const state = createEmptyState();
   state.errorLogEntries = [
