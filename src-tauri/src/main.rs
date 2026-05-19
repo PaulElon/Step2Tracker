@@ -154,6 +154,16 @@ fn clear_cloud_link(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_last_synced_at(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    with_storage(&app, |service| service.get_last_synced_at())
+}
+
+#[tauri::command]
+fn set_last_synced_at(app: tauri::AppHandle, value: String) -> Result<(), String> {
+    with_storage(&app, |service| service.set_last_synced_at(&value))
+}
+
+#[tauri::command]
 fn launch_path(path: String) -> Result<(), String> {
     let path = path.trim().to_string();
     if path.is_empty() {
@@ -848,6 +858,8 @@ fn main() {
             get_device_metadata,
             set_cloud_link,
             clear_cloud_link,
+            get_last_synced_at,
+            set_last_synced_at,
             tf_autotracker::tf_autotracker_probe_bootstrap,
             tf_autotracker_v2_native::tf_autotracker_v2_native_probe,
             tf_autotracker_v2_native::tf_autotracker_v2_native_snapshot,

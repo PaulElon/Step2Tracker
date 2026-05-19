@@ -37,30 +37,41 @@ export async function pushAllEntities(
   token: string,
   deviceId: string,
   state: AppState,
-): Promise<{ pushed: number }> {
+  lastSyncedAt: string | null,
+): Promise<{ pushed: number; cursor: number }> {
+  const after = lastSyncedAt;
   const entities = [
-    ...state.studyBlocks.map((e) => ({
-      entityType: "study_block",
-      entityId: e.id,
-      operation: "upsert" as const,
-      payload: e as unknown as Record<string, unknown>,
-      clientUpdatedAt: e.updatedAt,
-    })),
-    ...state.practiceTests.map((e) => ({
-      entityType: "practice_test",
-      entityId: e.id,
-      operation: "upsert" as const,
-      payload: e as unknown as Record<string, unknown>,
-      clientUpdatedAt: e.updatedAt,
-    })),
-    ...state.weakTopicEntries.map((e) => ({
-      entityType: "weak_topic_entry",
-      entityId: e.id,
-      operation: "upsert" as const,
-      payload: e as unknown as Record<string, unknown>,
-      clientUpdatedAt: e.updatedAt,
-    })),
+    ...state.studyBlocks
+      .filter((e) => !after || e.updatedAt >= after)
+      .map((e) => ({
+        entityType: "study_block",
+        entityId: e.id,
+        operation: "upsert" as const,
+        payload: e as unknown as Record<string, unknown>,
+        clientUpdatedAt: e.updatedAt,
+      })),
+    ...state.practiceTests
+      .filter((e) => !after || e.updatedAt >= after)
+      .map((e) => ({
+        entityType: "practice_test",
+        entityId: e.id,
+        operation: "upsert" as const,
+        payload: e as unknown as Record<string, unknown>,
+        clientUpdatedAt: e.updatedAt,
+      })),
+    ...state.weakTopicEntries
+      .filter((e) => !after || e.updatedAt >= after)
+      .map((e) => ({
+        entityType: "weak_topic_entry",
+        entityId: e.id,
+        operation: "upsert" as const,
+        payload: e as unknown as Record<string, unknown>,
+        clientUpdatedAt: e.updatedAt,
+      })),
   ];
+  if (entities.length === 0) {
+    return { pushed: 0, cursor: 0 };
+  }
   const res = await fetch(`${SYNC_URL}/sync/push`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -70,5 +81,6 @@ export async function pushAllEntities(
     const body = await res.json().catch(() => ({}));
     throw new Error((body as { error?: string }).error ?? `Sync push failed (${res.status})`);
   }
-  return { pushed: entities.length };
+  const data = (await res.json()) as { cursor: number };
+  return { pushed: entities.length, cursor: data.cursor };
 }

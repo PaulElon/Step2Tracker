@@ -166,3 +166,11 @@ export function setCloudLink(cloudUserId: string, email: string): Promise<void> 
 export function clearCloudLink(): Promise<void> {
   return command<void>("clear_cloud_link");
 }
+
+export function getLastSyncedAt(): Promise<string | null> {
+  return command<string | null>("get_last_synced_at");
+}
+
+export function setLastSyncedAt(value: string): Promise<void> {
+  return command<void>("set_last_synced_at", { value });
+}

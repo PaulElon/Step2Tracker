@@ -3098,6 +3098,16 @@ impl StorageService {
         Ok(())
     }
 
+    pub fn get_last_synced_at(&self) -> StorageResult<Option<String>> {
+        let connection = self.open_live_connection()?;
+        self.metadata_value(&connection, "last_synced_at")
+    }
+
+    pub fn set_last_synced_at(&self, value: &str) -> StorageResult<()> {
+        let connection = self.open_live_connection()?;
+        self.set_metadata(&connection, "last_synced_at", value)
+    }
+
     fn reconcile_weak_topics(&self, transaction: &Transaction<'_>) -> StorageResult<()> {
         let practice_tests = self.read_practice_tests(transaction)?;
         let existing = self.reconciled_weak_topics(transaction, &practice_tests)?;

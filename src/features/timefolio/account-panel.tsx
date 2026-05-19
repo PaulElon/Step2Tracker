@@ -6,6 +6,8 @@ import {
   setCloudLink,
   clearCloudLink,
   loadNativeSnapshot,
+  getLastSyncedAt,
+  setLastSyncedAt,
 } from "../../lib/native-persistence";
 import { loginToCloud, registerDevice, pushAllEntities } from "../../lib/cloud-sync-manager";
 
@@ -186,9 +188,12 @@ function CloudSyncSection() {
     setErrorMsg(null);
     setStatusMsg(null);
     try {
+      const lastSyncedAt = await getLastSyncedAt();
+      const syncStartedAt = new Date().toISOString();
       const snapshot = await loadNativeSnapshot();
-      const result = await pushAllEntities(token, nativeDeviceId, snapshot.state);
-      setStatusMsg(`Synced ${result.pushed} entities.`);
+      const result = await pushAllEntities(token, nativeDeviceId, snapshot.state, lastSyncedAt);
+      await setLastSyncedAt(syncStartedAt);
+      setStatusMsg(result.pushed === 0 ? "Already up to date." : `Synced ${result.pushed} entities.`);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
