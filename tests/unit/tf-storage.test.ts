@@ -7,8 +7,10 @@ import {
   deleteTfSessionLog,
   getEmptyTfAppState,
   loadTfState,
+  normalizeTfAppState,
   saveTfState,
   TF_STORAGE_KEY,
+  TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION,
   upsertTfSessionLog,
 } from "../../src/lib/tf-storage.ts";
 import { addDeletedNativeId, getDeletedNativeIds } from "../../src/lib/tf-deleted-native-ids.ts";
@@ -102,6 +104,12 @@ test("upserted session logs stamp updatedAt, clear matching tombstones, and surv
   assert.equal(deleted.sessionLogs.length, 0);
   assert.equal(deleted.sessionLogTombstones[0]?.id, "manual-1");
   assert.ok(deleted.sessionLogTombstones[0]?.deletedAt);
+  assert.equal(
+    deleted.sessionLogTombstones[0]?.schemaVersion,
+    TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION,
+  );
+  assert.equal(deleted.sessionLogTombstones[0]?.syncEligible, true);
+  assert.equal(deleted.sessionLogTombstones[0]?.syncSource, "manual");
 
   const edited = upsertTfSessionLog(deleted, {
     ...buildSession("manual-1", "Manual Review"),
@@ -169,6 +177,93 @@ test("delete session log survives a save/load round trip and preserves unrelated
   assert.equal(loaded.sessionLogs[0]?.method, "Manual Review");
   assert.equal(loaded.sessionLogTombstones[0]?.id, "auto-1");
   assert.ok(loaded.sessionLogTombstones[0]?.deletedAt);
+  assert.equal(
+    loaded.sessionLogTombstones[0]?.schemaVersion,
+    TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION,
+  );
+  assert.equal(loaded.sessionLogTombstones[0]?.syncEligible, false);
+  assert.equal(loaded.sessionLogTombstones[0]?.syncSource, undefined);
+});
+
+test("delete session log stamps sync eligibility from the live row before removal", () => {
+  const safeDeleted = deleteTfSessionLog(
+    {
+      ...getEmptyTfAppState(),
+      sessionLogs: [buildSession("manual-1", "Manual Review")],
+    },
+    "manual-1",
+  );
+
+  assert.equal(safeDeleted.sessionLogTombstones[0]?.schemaVersion, TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION);
+  assert.equal(safeDeleted.sessionLogTombstones[0]?.syncEligible, true);
+  assert.equal(safeDeleted.sessionLogTombstones[0]?.syncSource, "manual");
+
+  const unsafeCases: Array<{ name: string; session: TfSessionLog }> = [
+    {
+      name: "native",
+      session: buildSession("nat-device-1-span-1", "UWorld"),
+    },
+    {
+      name: "auto-method",
+      session: buildSession("auto-1", "UWorld [Auto]"),
+    },
+    {
+      name: "live",
+      session: {
+        ...buildSession("live-1", "Manual Review"),
+        isLive: true,
+      },
+    },
+    {
+      name: "unsafe-notes",
+      session: {
+        ...buildSession("manual-unsafe", "Manual Review"),
+        notes: "browserUrl=https://apps.uworld.com browserTitle=UWorld",
+      },
+    },
+  ];
+
+  for (const testCase of unsafeCases) {
+    const deleted = deleteTfSessionLog(
+      {
+        ...getEmptyTfAppState(),
+        sessionLogs: [testCase.session],
+      },
+      testCase.session.id,
+    );
+
+    assert.equal(
+      deleted.sessionLogTombstones[0]?.schemaVersion,
+      TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION,
+      `${testCase.name} tombstone should keep the metadata schema`,
+    );
+    assert.equal(
+      deleted.sessionLogTombstones[0]?.syncEligible,
+      false,
+      `${testCase.name} tombstone should be sync-ineligible`,
+    );
+    assert.equal(
+      deleted.sessionLogTombstones[0]?.syncSource,
+      undefined,
+      `${testCase.name} tombstone should not claim a safe source`,
+    );
+  }
+});
+
+test("legacy tombstones without eligibility metadata stay sync-ineligible after normalization", () => {
+  const normalized = normalizeTfAppState({
+    ...getEmptyTfAppState(),
+    sessionLogTombstones: [
+      {
+        id: "legacy-1",
+        deletedAt: "2026-05-06T13:00:00.000Z",
+      },
+    ],
+  });
+
+  assert.equal(normalized.sessionLogTombstones[0]?.schemaVersion, undefined);
+  assert.notEqual(normalized.sessionLogTombstones[0]?.syncEligible, true);
+  assert.equal(normalized.sessionLogTombstones[0]?.syncSource, undefined);
 });
 
 test("native load wins over stale local fallback and refreshes it", async () => {
@@ -304,6 +399,50 @@ test("native deletion suppression still prevents nat-* rows from being re-import
   );
 
   assert.equal(deletedState.sessionLogTombstones[0]?.id, nativeId);
+  assert.equal(deletedState.sessionLogTombstones[0]?.syncEligible, false);
   assert.equal(reconciled.newEntries.length, 0);
   assert.equal(reconciled.skipped, 1);
+});
+
+test("native persistence api keeps tombstone eligibility metadata on save and load", async () => {
+  const localStorage = installBrowserStorage();
+  const nativeState: TfAppState = {
+    ...getEmptyTfAppState(),
+    sessionLogTombstones: [
+      {
+        id: "manual-1",
+        deletedAt: "2026-05-06T13:00:00.000Z",
+        schemaVersion: TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION,
+        syncEligible: true,
+        syncSource: "manual",
+      },
+      {
+        id: "legacy-1",
+        deletedAt: "2026-05-06T12:00:00.000Z",
+      },
+    ],
+  };
+
+  const api = createTfPersistenceApi({
+    isNativeRuntime: () => true,
+    localStorage,
+    loadNativeState: async () => nativeState,
+    saveNativeState: async (state) => state,
+    resetNativeState: async () => getEmptyTfAppState(),
+  });
+
+  const loaded = await api.load();
+  assert.equal(loaded.sessionLogTombstones[0]?.syncEligible, true);
+  assert.equal(loaded.sessionLogTombstones[0]?.syncSource, "manual");
+  assert.notEqual(loaded.sessionLogTombstones[1]?.syncEligible, true);
+
+  const saved = await api.save(nativeState);
+  assert.equal(saved.sessionLogTombstones[0]?.schemaVersion, TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION);
+  assert.equal(saved.sessionLogTombstones[0]?.syncEligible, true);
+  assert.equal(saved.sessionLogTombstones[0]?.syncSource, "manual");
+
+  const persisted = JSON.parse(localStorage.getItem(TF_STORAGE_KEY) ?? "null") as TfAppState;
+  assert.equal(persisted.sessionLogTombstones[0]?.syncEligible, true);
+  assert.equal(persisted.sessionLogTombstones[0]?.syncSource, "manual");
+  assert.equal(persisted.sessionLogTombstones[1]?.syncEligible, undefined);
 });

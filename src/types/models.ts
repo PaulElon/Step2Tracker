@@ -427,6 +427,9 @@ export interface TfSessionLog {
 export interface TfSessionLogTombstone {
   id: string;
   deletedAt: string;
+  schemaVersion?: 1;
+  syncEligible?: boolean;
+  syncSource?: "manual" | "imported";
 }
 
 export interface TfSummaryPayload {

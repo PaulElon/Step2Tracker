@@ -15,6 +15,7 @@ import type {
   TfTrackerRuleInput,
   TfTrackerRuleKind,
 } from "../types/models";
+import { classifyTfSessionLogForCanonicalExport } from "./tf-session-log-canonical-export";
 import {
   loadNativeTfState,
   saveNativeTfState,
@@ -29,6 +30,7 @@ export const TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION = 1;
 export const TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT = 2_000;
 export const TF_AUTOTRACKER_V2_DEV_WRITTEN_ID_LIMIT = 2_000;
 export const TF_SESSION_LOG_TOMBSTONE_LIMIT = 2_000;
+export const TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION = 1;
 const TF_FALLBACK_SESSION_UPDATED_AT = "1970-01-01T00:00:00.000Z";
 
 export interface QueuedTfStateSaveResult {
@@ -360,9 +362,29 @@ function normalizeSessionLogTombstone(entry: unknown): TfSessionLogTombstone | n
     return null;
   }
 
+  const schemaVersion =
+    safeNumber(tombstone.schemaVersion, 0) === TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION
+      ? TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION
+      : undefined;
+  const syncSourceValue = safeString(tombstone.syncSource).trim();
+  const syncSource =
+    syncSourceValue === "manual" || syncSourceValue === "imported" ? syncSourceValue : undefined;
+  const rawSyncEligible =
+    typeof tombstone.syncEligible === "boolean" ? tombstone.syncEligible : undefined;
+  const hasEligibilityMetadata =
+    schemaVersion === TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION ||
+    rawSyncEligible !== undefined ||
+    syncSource !== undefined;
+  const syncEligible = hasEligibilityMetadata
+    ? rawSyncEligible === true && syncSource !== undefined
+    : undefined;
+
   return {
     id,
     deletedAt: safeTimestampString(tombstone.deletedAt) ?? TF_FALLBACK_SESSION_UPDATED_AT,
+    ...(schemaVersion === TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION ? { schemaVersion } : {}),
+    ...(syncEligible !== undefined ? { syncEligible } : {}),
+    ...(syncEligible === true && syncSource ? { syncSource } : {}),
   };
 }
 
@@ -871,6 +893,39 @@ function sortSessionLogTombstonesNewestFirst(
     .slice(0, TF_SESSION_LOG_TOMBSTONE_LIMIT);
 }
 
+function createSessionLogTombstone(
+  id: string,
+  deletedAt: string,
+  session: TfSessionLog | undefined,
+): TfSessionLogTombstone {
+  if (!session) {
+    return {
+      id,
+      deletedAt,
+      schemaVersion: TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION,
+      syncEligible: false,
+    };
+  }
+
+  const classification = classifyTfSessionLogForCanonicalExport(session);
+  if (classification.exportable && classification.entry) {
+    return {
+      id,
+      deletedAt,
+      schemaVersion: TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION,
+      syncEligible: true,
+      syncSource: classification.entry.source,
+    };
+  }
+
+  return {
+    id,
+    deletedAt,
+    schemaVersion: TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION,
+    syncEligible: false,
+  };
+}
+
 export function upsertTfSessionLog(state: TfAppState, session: TfSessionLog): TfAppState {
   const normalizedSession = normalizeSession({
     ...session,
@@ -896,11 +951,12 @@ export function upsertTfSessionLog(state: TfAppState, session: TfSessionLog): Tf
 
 export function deleteTfSessionLog(state: TfAppState, id: string): TfAppState {
   const deletedAt = new Date().toISOString();
+  const deletedSession = state.sessionLogs.find((session) => session.id === id);
   return normalizeTfAppState({
     ...state,
     sessionLogs: state.sessionLogs.filter((s) => s.id !== id),
     sessionLogTombstones: sortSessionLogTombstonesNewestFirst([
-      { id, deletedAt },
+      createSessionLogTombstone(id, deletedAt, deletedSession),
       ...state.sessionLogTombstones.filter((tombstone) => tombstone.id !== id),
     ]),
   });

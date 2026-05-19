@@ -55,6 +55,12 @@ impl Default for TfSessionLog {
 pub struct TfSessionLogTombstone {
     pub id: String,
     pub deleted_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schema_version: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_eligible: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_source: Option<TfSessionLogTombstoneSyncSource>,
 }
 
 impl Default for TfSessionLogTombstone {
@@ -62,8 +68,18 @@ impl Default for TfSessionLogTombstone {
         Self {
             id: String::new(),
             deleted_at: TF_FALLBACK_SESSION_UPDATED_AT.to_owned(),
+            schema_version: None,
+            sync_eligible: None,
+            sync_source: None,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TfSessionLogTombstoneSyncSource {
+    Manual,
+    Imported,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -419,10 +435,34 @@ fn normalize_session_log_tombstone(value: &Value) -> Option<TfSessionLogTombston
         return None;
     }
 
+    let schema_version = object
+        .get("schemaVersion")
+        .and_then(Value::as_u64)
+        .filter(|value| *value == 1)
+        .map(|value| value as u8);
+    let sync_source = match object.get("syncSource").and_then(Value::as_str) {
+        Some("manual") => Some(TfSessionLogTombstoneSyncSource::Manual),
+        Some("imported") => Some(TfSessionLogTombstoneSyncSource::Imported),
+        _ => None,
+    };
+    let raw_sync_eligible = object.get("syncEligible").and_then(Value::as_bool);
+    let has_eligibility_metadata =
+        schema_version.is_some() || raw_sync_eligible.is_some() || sync_source.is_some();
+    let sync_eligible = has_eligibility_metadata
+        .then_some(raw_sync_eligible.unwrap_or(false) && sync_source.is_some());
+    let sync_source = if sync_eligible == Some(true) {
+        sync_source
+    } else {
+        None
+    };
+
     Some(TfSessionLogTombstone {
         id,
         deleted_at: safe_nonempty_string(object.get("deletedAt"))
             .unwrap_or_else(|| TF_FALLBACK_SESSION_UPDATED_AT.to_owned()),
+        schema_version,
+        sync_eligible,
+        sync_source,
     })
 }
 
@@ -616,5 +656,62 @@ mod tests {
 
         let parsed = serde_json::from_value::<TfAppState>(value);
         assert!(parsed.is_ok(), "expected native TimeFolio payload with tracker rule objects to deserialize");
+    }
+
+    #[test]
+    fn normalizes_session_log_tombstone_sync_metadata() {
+        let normalized = normalize_tf_app_state(json!({
+            "tfVersion": 1,
+            "sessionLogs": [],
+            "sessionLogTombstones": [
+                {
+                    "id": "manual-1",
+                    "deletedAt": "2026-05-06T13:00:00.000Z",
+                    "schemaVersion": 1,
+                    "syncEligible": true,
+                    "syncSource": "manual"
+                },
+                {
+                    "id": "auto-1",
+                    "deletedAt": "2026-05-06T12:00:00.000Z",
+                    "schemaVersion": 1,
+                    "syncEligible": false
+                },
+                {
+                    "id": "legacy-1",
+                    "deletedAt": "2026-05-06T11:00:00.000Z"
+                }
+            ],
+            "summaries": [],
+            "trackerPrefs": {
+                "customAutoApps": [],
+                "customAutoWebsites": [],
+                "customDistractionApps": [],
+                "customDistractionWebsites": []
+            },
+            "account": null
+        }));
+
+        assert_eq!(normalized.session_log_tombstones.len(), 3);
+        assert_eq!(normalized.session_log_tombstones[0].schema_version, Some(1));
+        assert_eq!(normalized.session_log_tombstones[0].sync_eligible, Some(true));
+        assert_eq!(
+            normalized.session_log_tombstones[0].sync_source,
+            Some(TfSessionLogTombstoneSyncSource::Manual)
+        );
+
+        assert_eq!(normalized.session_log_tombstones[1].schema_version, Some(1));
+        assert_eq!(normalized.session_log_tombstones[1].sync_eligible, Some(false));
+        assert_eq!(normalized.session_log_tombstones[1].sync_source, None);
+
+        assert_eq!(normalized.session_log_tombstones[2].schema_version, None);
+        assert_eq!(normalized.session_log_tombstones[2].sync_eligible, None);
+        assert_eq!(normalized.session_log_tombstones[2].sync_source, None);
+
+        let serialized =
+            serde_json::to_value(&normalized.session_log_tombstones).expect("serialize tombstones");
+        assert_eq!(serialized[0]["syncSource"], "manual");
+        assert_eq!(serialized[1]["syncEligible"], false);
+        assert!(serialized[2].get("syncEligible").is_none());
     }
 }
