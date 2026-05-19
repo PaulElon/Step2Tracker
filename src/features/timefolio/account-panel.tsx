@@ -149,7 +149,13 @@ function CloudSyncSection() {
   useEffect(() => {
     getDeviceMetadata()
       .then(async (meta) => {
-        setNativeDeviceId(meta.deviceId);
+        let resolvedId = meta.deviceId;
+        if (!resolvedId) {
+          const stored = localStorage.getItem("tf_device_id");
+          resolvedId = stored ?? crypto.randomUUID();
+          localStorage.setItem("tf_device_id", resolvedId);
+        }
+        setNativeDeviceId(resolvedId);
         const link = parseCloudLinkState(meta.cloudLinkState);
         if (link) {
           setLinkedEmail(link.email);

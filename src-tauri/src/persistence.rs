@@ -3080,9 +3080,11 @@ impl StorageService {
     }
 
     pub fn get_device_metadata(&self) -> StorageResult<DeviceMetadata> {
-        let connection = self.open_live_connection()?;
-        let device_id = self.metadata_value(&connection, "device_id")?.unwrap_or_default();
-        let cloud_link_state = self.metadata_value(&connection, "cloud_link_state")?;
+        let mut connection = self.open_live_connection()?;
+        let transaction = connection.transaction()?;
+        let device_id = self.get_or_create_device_id(&transaction)?;
+        let cloud_link_state = self.metadata_value(&*transaction, "cloud_link_state")?;
+        transaction.commit()?;
         Ok(DeviceMetadata { device_id, cloud_link_state })
     }
 
