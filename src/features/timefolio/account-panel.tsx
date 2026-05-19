@@ -9,7 +9,12 @@ import {
   getLastSyncedAt,
   setLastSyncedAt,
 } from "../../lib/native-persistence";
-import { loginToCloud, registerDevice, pushAllEntities } from "../../lib/cloud-sync-manager";
+import {
+  loginToCloud,
+  refreshCloudToken,
+  registerDevice,
+  pushAllEntities,
+} from "../../lib/cloud-sync-manager";
 
 function PanelShell({
   title,
@@ -129,7 +134,7 @@ function getIdentitySubtext(account: {
   return "No local account snapshot is present.";
 }
 
-type CloudPhase = "loading" | "unlinked" | "connecting" | "linked" | "syncing";
+type CloudPhase = "loading" | "unlinked" | "connecting" | "expired" | "linked" | "syncing";
 
 function CloudSyncSection() {
   const [phase, setPhase] = useState<CloudPhase>("loading");
@@ -143,12 +148,26 @@ function CloudSyncSection() {
 
   useEffect(() => {
     getDeviceMetadata()
-      .then((meta) => {
+      .then(async (meta) => {
         setNativeDeviceId(meta.deviceId);
         const link = parseCloudLinkState(meta.cloudLinkState);
         if (link) {
           setLinkedEmail(link.email);
-          setPhase("linked");
+          if (link.cloudRefreshToken) {
+            try {
+              const refreshed = await refreshCloudToken(link.cloudRefreshToken);
+              await setCloudLink(link.cloudUserId, link.email, refreshed.refreshToken);
+              setToken(refreshed.token);
+              setPhase("linked");
+            } catch {
+              await setCloudLink(link.cloudUserId, link.email, "");
+              setToken(null);
+              setPhase("expired");
+            }
+          } else {
+            setToken(null);
+            setPhase("expired");
+          }
         } else {
           setPhase("unlinked");
         }
@@ -168,9 +187,10 @@ function CloudSyncSection() {
     try {
       const auth = await loginToCloud(email, password);
       await registerDevice(auth.token, nativeDeviceId);
-      await setCloudLink(auth.cloudUserId, email);
+      await setCloudLink(auth.cloudUserId, email, auth.refreshToken);
       setToken(auth.token);
       setLinkedEmail(email);
+      setEmail("");
       setPassword("");
       setPhase("linked");
     } catch (err: unknown) {
@@ -205,13 +225,33 @@ function CloudSyncSection() {
     await clearCloudLink();
     setToken(null);
     setLinkedEmail(null);
+    setEmail("");
     setPassword("");
     setStatusMsg(null);
     setErrorMsg(null);
     setPhase("unlinked");
   }
 
+  async function handleReconnect(e: { preventDefault(): void }) {
+    e.preventDefault();
+    if (!linkedEmail || !password) return;
+    setPhase("connecting");
+    setErrorMsg(null);
+    setStatusMsg(null);
+    try {
+      const auth = await loginToCloud(linkedEmail, password);
+      await setCloudLink(auth.cloudUserId, linkedEmail, auth.refreshToken);
+      setToken(auth.token);
+      setPassword("");
+      setPhase("linked");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+      setPhase("expired");
+    }
+  }
+
   const isLinked = phase === "linked" || phase === "syncing";
+  const isReconnectMode = phase === "expired" || (phase === "connecting" && linkedEmail !== null && email === "");
   const isBusy = phase === "connecting" || phase === "syncing" || phase === "loading";
 
   return (
@@ -261,7 +301,45 @@ function CloudSyncSection() {
         </div>
       )}
 
-      {(phase === "unlinked" || phase === "connecting") && (
+      {isReconnectMode && (
+        <div className="flex flex-col gap-3">
+          <DetailCard label="Connected as" value={linkedEmail ?? "Unknown account"} />
+          <StatusBanner
+            tone="info"
+            title="Session expired"
+            message="Re-enter your password to reconnect."
+          />
+          <form onSubmit={(e) => void handleReconnect(e)} className="flex flex-col gap-3">
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={isBusy}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            >
+              {phase === "connecting" ? "Reconnecting…" : "Reconnect"}
+            </button>
+          </form>
+          <div>
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => void handleDisconnect()}
+              className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-300 hover:border-slate-500 hover:text-slate-100 disabled:opacity-50"
+            >
+              Disconnect
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(phase === "unlinked" || (phase === "connecting" && !isReconnectMode)) && (
         <form onSubmit={(e) => void handleConnect(e)} className="flex flex-col gap-3">
           <input
             type="email"

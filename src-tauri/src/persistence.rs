@@ -3086,9 +3086,14 @@ impl StorageService {
         Ok(DeviceMetadata { device_id, cloud_link_state })
     }
 
-    pub fn set_cloud_link(&self, cloud_user_id: &str, email: &str) -> StorageResult<()> {
+    pub fn set_cloud_link(&self, cloud_user_id: &str, email: &str, refresh_token: &str) -> StorageResult<()> {
         let connection = self.open_live_connection()?;
-        let value = serde_json::json!({ "cloudUserId": cloud_user_id, "email": email }).to_string();
+        let value = serde_json::json!({
+            "cloudUserId": cloud_user_id,
+            "email": email,
+            "cloudRefreshToken": refresh_token
+        })
+        .to_string();
         self.set_metadata(&connection, "cloud_link_state", &value)
     }
 

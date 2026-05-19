@@ -144,8 +144,13 @@ fn get_device_metadata(app: tauri::AppHandle) -> Result<DeviceMetadata, String> 
 }
 
 #[tauri::command]
-fn set_cloud_link(app: tauri::AppHandle, cloud_user_id: String, email: String) -> Result<(), String> {
-    with_storage(&app, |service| service.set_cloud_link(&cloud_user_id, &email))
+fn set_cloud_link(
+    app: tauri::AppHandle,
+    cloud_user_id: String,
+    email: String,
+    refresh_token: String,
+) -> Result<(), String> {
+    with_storage(&app, |service| service.set_cloud_link(&cloud_user_id, &email, &refresh_token))
 }
 
 #[tauri::command]

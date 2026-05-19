@@ -19,6 +19,21 @@ export async function loginToCloud(
   return res.json() as Promise<{ cloudUserId: string; token: string; refreshToken: string }>;
 }
 
+export async function refreshCloudToken(
+  refreshToken: string,
+): Promise<{ token: string; refreshToken: string }> {
+  const res = await fetch(`${AUTH_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? `Refresh failed (${res.status})`);
+  }
+  return res.json() as Promise<{ token: string; refreshToken: string }>;
+}
+
 export async function registerDevice(token: string, deviceId: string): Promise<void> {
   const res = await fetch(`${SYNC_URL}/sync/register-device`, {
     method: "POST",

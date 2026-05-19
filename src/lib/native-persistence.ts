@@ -148,6 +148,7 @@ export function getDeviceMetadata(): Promise<DeviceMetadata> {
 export interface CloudLinkData {
   cloudUserId: string;
   email: string;
+  cloudRefreshToken?: string;
 }
 
 export function parseCloudLinkState(raw: string | null): CloudLinkData | null {
@@ -159,8 +160,12 @@ export function parseCloudLinkState(raw: string | null): CloudLinkData | null {
   }
 }
 
-export function setCloudLink(cloudUserId: string, email: string): Promise<void> {
-  return command<void>("set_cloud_link", { cloudUserId, email });
+export function setCloudLink(
+  cloudUserId: string,
+  email: string,
+  refreshToken: string,
+): Promise<void> {
+  return command<void>("set_cloud_link", { cloudUserId, email, refreshToken });
 }
 
 export function clearCloudLink(): Promise<void> {
