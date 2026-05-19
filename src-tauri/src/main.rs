@@ -11,9 +11,9 @@ use std::process::Command;
 use std::{fs, path::PathBuf};
 
 use persistence::{
-    AppState, BackupArtifactPreview, ClientSnapshot, CloudDeleteTombstone, DeviceMetadata,
-    ErrorLogInput, ImportMode, PracticeTestInput, Preferences, StorageService, StudyBlockInput,
-    TrashEntityType, WeakTopicInput,
+    AppState, BackupArtifactPreview, ClientSnapshot, CloudDeleteTombstone, CloudEntityType,
+    DeviceMetadata, ErrorLogInput, ImportMode, PracticeTest, PracticeTestInput, Preferences,
+    StorageService, StudyBlock, StudyBlockInput, TrashEntityType, WeakTopicEntry, WeakTopicInput,
 };
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
@@ -180,11 +180,46 @@ fn set_cloud_sync_cursor(app: tauri::AppHandle, value: i64) -> Result<(), String
 }
 
 #[tauri::command]
+fn get_cloud_pull_cursor(app: tauri::AppHandle) -> Result<Option<i64>, String> {
+    with_storage(&app, |service| service.get_cloud_pull_cursor())
+}
+
+#[tauri::command]
+fn set_cloud_pull_cursor(app: tauri::AppHandle, value: i64) -> Result<(), String> {
+    with_storage(&app, |service| service.set_cloud_pull_cursor(value))
+}
+
+#[tauri::command]
 fn get_core_entity_delete_tombstones(
     app: tauri::AppHandle,
     after: Option<String>,
 ) -> Result<Vec<CloudDeleteTombstone>, String> {
     with_storage(&app, |service| service.get_core_entity_delete_tombstones(after.as_deref()))
+}
+
+#[tauri::command]
+fn apply_cloud_study_block(app: tauri::AppHandle, block: StudyBlock) -> Result<(), String> {
+    with_storage(&app, |service| service.apply_cloud_study_block(block))
+}
+
+#[tauri::command]
+fn apply_cloud_practice_test(app: tauri::AppHandle, test: PracticeTest) -> Result<(), String> {
+    with_storage(&app, |service| service.apply_cloud_practice_test(test))
+}
+
+#[tauri::command]
+fn apply_cloud_weak_topic(app: tauri::AppHandle, entry: WeakTopicEntry) -> Result<(), String> {
+    with_storage(&app, |service| service.apply_cloud_weak_topic(entry))
+}
+
+#[tauri::command]
+fn apply_cloud_delete(
+    app: tauri::AppHandle,
+    entity_type: CloudEntityType,
+    entity_id: String,
+    deleted_at: String,
+) -> Result<(), String> {
+    with_storage(&app, |service| service.apply_cloud_delete(entity_type, &entity_id, &deleted_at))
 }
 
 #[tauri::command]
@@ -886,7 +921,13 @@ fn main() {
             set_last_synced_at,
             get_cloud_sync_cursor,
             set_cloud_sync_cursor,
+            get_cloud_pull_cursor,
+            set_cloud_pull_cursor,
             get_core_entity_delete_tombstones,
+            apply_cloud_study_block,
+            apply_cloud_practice_test,
+            apply_cloud_weak_topic,
+            apply_cloud_delete,
             tf_autotracker::tf_autotracker_probe_bootstrap,
             tf_autotracker_v2_native::tf_autotracker_v2_native_probe,
             tf_autotracker_v2_native::tf_autotracker_v2_native_snapshot,

@@ -6,10 +6,13 @@ import type {
   ImportMode,
   PersistenceSnapshot,
   Preferences,
+  PracticeTest,
   PracticeTestInput,
+  StudyBlock,
   StudyBlockInput,
   TfAppState,
   TrashEntityType,
+  WeakTopicEntry,
   WeakTopicInput,
 } from "../types/models";
 
@@ -147,6 +150,8 @@ export interface CloudDeleteTombstone {
   deletedAt: string;
 }
 
+export type CloudEntityType = CloudDeleteTombstone["entityType"];
+
 export function getDeviceMetadata(): Promise<DeviceMetadata> {
   return command<DeviceMetadata>("get_device_metadata");
 }
@@ -194,8 +199,36 @@ export function setCloudSyncCursor(value: number): Promise<void> {
   return command<void>("set_cloud_sync_cursor", { value });
 }
 
+export function getCloudPullCursor(): Promise<number | null> {
+  return command<number | null>("get_cloud_pull_cursor");
+}
+
+export function setCloudPullCursor(value: number): Promise<void> {
+  return command<void>("set_cloud_pull_cursor", { value });
+}
+
 export function getCoreEntityDeleteTombstones(
   after?: string | null,
 ): Promise<CloudDeleteTombstone[]> {
   return command<CloudDeleteTombstone[]>("get_core_entity_delete_tombstones", { after });
+}
+
+export function applyCloudStudyBlock(block: StudyBlock): Promise<void> {
+  return command<void>("apply_cloud_study_block", { block });
+}
+
+export function applyCloudPracticeTest(test: PracticeTest): Promise<void> {
+  return command<void>("apply_cloud_practice_test", { test });
+}
+
+export function applyCloudWeakTopic(entry: WeakTopicEntry): Promise<void> {
+  return command<void>("apply_cloud_weak_topic", { entry });
+}
+
+export function applyCloudDelete(
+  entityType: CloudEntityType,
+  entityId: string,
+  deletedAt: string,
+): Promise<void> {
+  return command<void>("apply_cloud_delete", { entityType, entityId, deletedAt });
 }

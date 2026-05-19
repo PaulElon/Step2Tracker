@@ -120,6 +120,14 @@ pub struct CloudDeleteTombstone {
     pub deleted_at: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum CloudEntityType {
+    StudyBlock,
+    PracticeTest,
+    WeakTopicEntry,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordCounts {
@@ -3139,6 +3147,22 @@ impl StorageService {
         self.set_metadata(&connection, "cloud_sync_cursor", &value.to_string())
     }
 
+    pub fn get_cloud_pull_cursor(&self) -> StorageResult<Option<i64>> {
+        let connection = self.open_live_connection()?;
+        let raw = self.metadata_value(&connection, "cloud_pull_cursor")?;
+        raw.map(|value| {
+            value.parse::<i64>().map_err(|_| {
+                StorageError::Validation("Stored cloud pull cursor is invalid.".into())
+            })
+        })
+        .transpose()
+    }
+
+    pub fn set_cloud_pull_cursor(&self, value: i64) -> StorageResult<()> {
+        let connection = self.open_live_connection()?;
+        self.set_metadata(&connection, "cloud_pull_cursor", &value.to_string())
+    }
+
     pub fn get_core_entity_delete_tombstones(
         &self,
         after: Option<&str>,
@@ -3170,6 +3194,75 @@ impl StorageService {
                 .then(left.entity_id.cmp(&right.entity_id))
         });
         Ok(tombstones)
+    }
+
+    pub fn apply_cloud_study_block(&self, block: StudyBlock) -> StorageResult<()> {
+        Self::validate_study_block_record(&block)?;
+        let mut connection = self.open_live_connection()?;
+        let transaction = connection.transaction()?;
+        self.persist_study_block(&transaction, &block, None)?;
+        self.touch_saved(&transaction)?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn apply_cloud_practice_test(&self, test: PracticeTest) -> StorageResult<()> {
+        Self::validate_practice_test_record(&test)?;
+        let mut connection = self.open_live_connection()?;
+        let transaction = connection.transaction()?;
+        self.persist_practice_test(&transaction, &test)?;
+        self.touch_saved(&transaction)?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn apply_cloud_weak_topic(&self, entry: WeakTopicEntry) -> StorageResult<()> {
+        Self::validate_weak_topic_record(&entry)?;
+        let mut connection = self.open_live_connection()?;
+        let transaction = connection.transaction()?;
+        self.persist_weak_topic(&transaction, &entry)?;
+        self.touch_saved(&transaction)?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn apply_cloud_delete(
+        &self,
+        entity_type: CloudEntityType,
+        entity_id: &str,
+        deleted_at: &str,
+    ) -> StorageResult<()> {
+        validate_date_time(deleted_at, "Cloud delete timestamp")?;
+        let mut connection = self.open_live_connection()?;
+        let transaction = connection.transaction()?;
+        let updated = match entity_type {
+            CloudEntityType::StudyBlock => transaction.execute(
+                "UPDATE study_blocks
+                 SET deleted_at = ?1, delete_reason = 'cloud-sync'
+                 WHERE id = ?2
+                   AND (deleted_at IS NULL OR deleted_at < ?1)",
+                params![deleted_at, entity_id],
+            )?,
+            CloudEntityType::PracticeTest => transaction.execute(
+                "UPDATE practice_tests
+                 SET deleted_at = ?1, delete_reason = 'cloud-sync'
+                 WHERE id = ?2
+                   AND (deleted_at IS NULL OR deleted_at < ?1)",
+                params![deleted_at, entity_id],
+            )?,
+            CloudEntityType::WeakTopicEntry => transaction.execute(
+                "UPDATE weak_topic_entries
+                 SET deleted_at = ?1, delete_reason = 'cloud-sync'
+                 WHERE id = ?2
+                   AND (deleted_at IS NULL OR deleted_at < ?1)",
+                params![deleted_at, entity_id],
+            )?,
+        };
+        if updated > 0 {
+            self.touch_saved(&transaction)?;
+        }
+        transaction.commit()?;
+        Ok(())
     }
 
     fn reconcile_weak_topics(&self, transaction: &Transaction<'_>) -> StorageResult<()> {
@@ -3625,40 +3718,55 @@ impl StorageService {
         })
     }
 
+    fn validate_study_block_record(block: &StudyBlock) -> StorageResult<()> {
+        validate_date(&block.date, "Study block date")?;
+        if !block.start_time.trim().is_empty() || !block.end_time.trim().is_empty() {
+            validate_time(&block.start_time, "Study block start time")?;
+            validate_time(&block.end_time, "Study block end time")?;
+            validate_time_range(&block.start_time, &block.end_time, block.is_overnight)?;
+        }
+        validate_non_empty(&block.task, "Study block task")?;
+        validate_non_negative_integer(block.duration_hours, "Study block durationHours")?;
+        validate_non_negative_integer(block.duration_minutes, "Study block durationMinutes")?;
+        validate_study_task_category(&block.category)?;
+        validate_date_time(&block.created_at, "Study block createdAt")?;
+        validate_date_time(&block.updated_at, "Study block updatedAt")?;
+        Ok(())
+    }
+
+    fn validate_practice_test_record(test: &PracticeTest) -> StorageResult<()> {
+        validate_date(&test.date, "Practice test date")?;
+        if test.question_count <= 0
+            || !(0.0..=100.0).contains(&test.score_percent)
+            || test.minutes_spent < 0
+        {
+            return Err(StorageError::Validation(
+                "Practice test values are outside the allowed range.".into(),
+            ));
+        }
+        validate_date_time(&test.created_at, "Practice test createdAt")?;
+        validate_date_time(&test.updated_at, "Practice test updatedAt")?;
+        Ok(())
+    }
+
+    fn validate_weak_topic_record(entry: &WeakTopicEntry) -> StorageResult<()> {
+        validate_non_empty(&entry.topic, "Weak topic")?;
+        validate_date(&entry.last_seen_at, "Weak topic lastSeenAt")?;
+        validate_date_time(&entry.created_at, "Weak topic createdAt")?;
+        validate_date_time(&entry.updated_at, "Weak topic updatedAt")?;
+        Ok(())
+    }
+
     fn validate_app_state(&self, state: &AppState) -> StorageResult<()> {
         self.validate_preferences(&state.preferences)?;
         for block in &state.study_blocks {
-            validate_date(&block.date, "Study block date")?;
-            if !block.start_time.trim().is_empty() || !block.end_time.trim().is_empty() {
-                validate_time(&block.start_time, "Study block start time")?;
-                validate_time(&block.end_time, "Study block end time")?;
-                validate_time_range(&block.start_time, &block.end_time, block.is_overnight)?;
-            }
-            validate_non_empty(&block.task, "Study block task")?;
-            validate_non_negative_integer(block.duration_hours, "Study block durationHours")?;
-            validate_non_negative_integer(block.duration_minutes, "Study block durationMinutes")?;
-            validate_study_task_category(&block.category)?;
-            validate_date_time(&block.created_at, "Study block createdAt")?;
-            validate_date_time(&block.updated_at, "Study block updatedAt")?;
+            Self::validate_study_block_record(block)?;
         }
         for test in &state.practice_tests {
-            validate_date(&test.date, "Practice test date")?;
-            if test.question_count <= 0
-                || !(0.0..=100.0).contains(&test.score_percent)
-                || test.minutes_spent < 0
-            {
-                return Err(StorageError::Validation(
-                    "Practice test values are outside the allowed range.".into(),
-                ));
-            }
-            validate_date_time(&test.created_at, "Practice test createdAt")?;
-            validate_date_time(&test.updated_at, "Practice test updatedAt")?;
+            Self::validate_practice_test_record(test)?;
         }
         for entry in &state.weak_topic_entries {
-            validate_non_empty(&entry.topic, "Weak topic")?;
-            validate_date(&entry.last_seen_at, "Weak topic lastSeenAt")?;
-            validate_date_time(&entry.created_at, "Weak topic createdAt")?;
-            validate_date_time(&entry.updated_at, "Weak topic updatedAt")?;
+            Self::validate_weak_topic_record(entry)?;
         }
         Ok(())
     }

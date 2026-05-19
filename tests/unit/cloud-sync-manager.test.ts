@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { pushAllEntities } from "../../src/lib/cloud-sync-manager.ts";
+import { pullFromCloud, pushAllEntities } from "../../src/lib/cloud-sync-manager.ts";
 import type { CloudDeleteTombstone } from "../../src/lib/native-persistence.ts";
 import type { AppState } from "../../src/types/models.ts";
 
@@ -247,4 +247,335 @@ test("pushAllEntities skips the network request when no entity changed after the
 
   assert.deepEqual(result, { pushed: 0, cursor: null });
   assert.equal(fetchCalled, false);
+});
+
+test("pullFromCloud applies only newer upserts and persists the pull cursor", async () => {
+  const state = createEmptyState();
+  state.studyBlocks = [
+    {
+      id: "study-1",
+      date: "2026-05-10",
+      day: "Sunday",
+      durationHours: 1,
+      durationMinutes: 30,
+      completed: false,
+      order: 0,
+      startTime: "08:00",
+      endTime: "09:30",
+      isOvernight: false,
+      category: "Review",
+      task: "Local block",
+      status: "Not Started",
+      notes: "",
+      createdAt: "2026-05-10T08:00:00.000Z",
+      updatedAt: "2026-05-10T09:30:00.000Z",
+    },
+  ];
+  state.practiceTests = [
+    {
+      id: "test-1",
+      date: "2026-05-12",
+      source: "NBME",
+      form: "11",
+      questionCount: 200,
+      scorePercent: 78,
+      weakTopics: ["Cardio"],
+      strongTopics: ["GI"],
+      reflections: "",
+      actionPlan: "",
+      minutesSpent: 180,
+      createdAt: "2026-05-12T08:00:00.000Z",
+      updatedAt: "2026-05-13T09:00:00.000Z",
+    },
+  ];
+
+  let storedCursor: number | null = null;
+  const fetchCalls: string[] = [];
+  const appliedStudyBlocks: string[] = [];
+  const appliedPracticeTests: string[] = [];
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    fetchCalls.push(String(url));
+    return new Response(
+      JSON.stringify({
+        cursor: 88,
+        entries: [
+          {
+            entityType: "study_block",
+            entityId: "study-1",
+            operation: "upsert",
+            clientUpdatedAt: "2026-05-14T09:30:00.000Z",
+            payload: {
+              ...state.studyBlocks[0],
+              task: "Cloud block",
+              updatedAt: "2026-05-14T09:30:00.000Z",
+            },
+          },
+          {
+            entityType: "practice_test",
+            entityId: "test-1",
+            operation: "upsert",
+            clientUpdatedAt: "2026-05-11T09:00:00.000Z",
+            payload: {
+              ...state.practiceTests[0],
+              form: "stale",
+              updatedAt: "2026-05-11T09:00:00.000Z",
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }) as typeof fetch;
+
+  const result = await pullFromCloud("token-123", "device-123", {
+    getCursor: async () => null,
+    setCursor: async (value) => {
+      storedCursor = value;
+    },
+    loadSnapshot: async () => ({
+      state,
+      persistence: {
+        storagePath: "",
+        backupDirectory: "",
+        schemaVersion: 1,
+        appVersion: "test",
+        lastSavedAt: null,
+        recoveryMessage: null,
+        legacyMigrationCompletedAt: null,
+      },
+      backups: [],
+      trash: [],
+    }),
+    getDeleteTombstones: async () => [],
+    applyStudyBlock: async (block) => {
+      appliedStudyBlocks.push(block.task);
+    },
+    applyPracticeTest: async (practiceTest) => {
+      appliedPracticeTests.push(practiceTest.form);
+    },
+    applyWeakTopic: async () => {
+      throw new Error("weak topic apply should not run");
+    },
+    applyDelete: async () => {
+      throw new Error("delete apply should not run");
+    },
+  });
+
+  assert.equal(fetchCalls[0], "https://timefolio-sync-v2.paulfreedman3.workers.dev/sync/pull?since=0&deviceId=device-123");
+  assert.deepEqual(appliedStudyBlocks, ["Cloud block"]);
+  assert.deepEqual(appliedPracticeTests, []);
+  assert.equal(storedCursor, 88);
+  assert.deepEqual(result, {
+    received: 2,
+    applied: 1,
+    upserted: 1,
+    deleted: 0,
+    skipped: 1,
+    cursor: 88,
+  });
+});
+
+test("pullFromCloud applies only newer deletes", async () => {
+  const state = createEmptyState();
+  state.studyBlocks = [
+    {
+      id: "study-delete",
+      date: "2026-05-10",
+      day: "Sunday",
+      durationHours: 1,
+      durationMinutes: 0,
+      completed: false,
+      order: 0,
+      startTime: "08:00",
+      endTime: "09:00",
+      isOvernight: false,
+      category: "Review",
+      task: "Delete me",
+      status: "Not Started",
+      notes: "",
+      createdAt: "2026-05-10T08:00:00.000Z",
+      updatedAt: "2026-05-10T09:00:00.000Z",
+    },
+  ];
+  state.practiceTests = [
+    {
+      id: "test-keep",
+      date: "2026-05-12",
+      source: "NBME",
+      form: "12",
+      questionCount: 200,
+      scorePercent: 80,
+      weakTopics: ["Cardio"],
+      strongTopics: ["GI"],
+      reflections: "",
+      actionPlan: "",
+      minutesSpent: 180,
+      createdAt: "2026-05-12T08:00:00.000Z",
+      updatedAt: "2026-05-14T09:00:00.000Z",
+    },
+  ];
+
+  const deletes: Array<{ entityType: string; entityId: string; deletedAt: string }> = [];
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        cursor: 41,
+        entries: [
+          {
+            entityType: "study_block",
+            entityId: "study-delete",
+            operation: "delete",
+            payload: null,
+            clientUpdatedAt: "2026-05-11T09:00:00.000Z",
+          },
+          {
+            entityType: "practice_test",
+            entityId: "test-keep",
+            operation: "delete",
+            payload: null,
+            clientUpdatedAt: "2026-05-13T09:00:00.000Z",
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    )) as typeof fetch;
+
+  const result = await pullFromCloud("token-123", "device-123", {
+    getCursor: async () => 9,
+    setCursor: async () => {},
+    loadSnapshot: async () => ({
+      state,
+      persistence: {
+        storagePath: "",
+        backupDirectory: "",
+        schemaVersion: 1,
+        appVersion: "test",
+        lastSavedAt: null,
+        recoveryMessage: null,
+        legacyMigrationCompletedAt: null,
+      },
+      backups: [],
+      trash: [],
+    }),
+    getDeleteTombstones: async () => [],
+    applyStudyBlock: async () => {
+      throw new Error("study block apply should not run");
+    },
+    applyPracticeTest: async () => {
+      throw new Error("practice test apply should not run");
+    },
+    applyWeakTopic: async () => {
+      throw new Error("weak topic apply should not run");
+    },
+    applyDelete: async (entityType, entityId, deletedAt) => {
+      deletes.push({ entityType, entityId, deletedAt });
+    },
+  });
+
+  assert.deepEqual(deletes, [
+    {
+      entityType: "study_block",
+      entityId: "study-delete",
+      deletedAt: "2026-05-11T09:00:00.000Z",
+    },
+  ]);
+  assert.deepEqual(result, {
+    received: 2,
+    applied: 1,
+    upserted: 0,
+    deleted: 1,
+    skipped: 1,
+    cursor: 41,
+  });
+});
+
+test("pullFromCloud skips stale upserts when a newer local tombstone exists", async () => {
+  const state = createEmptyState();
+  const tombstones: CloudDeleteTombstone[] = [
+    {
+      entityType: "weak_topic_entry",
+      entityId: "weak-1",
+      deletedAt: "2026-05-15T12:00:00.000Z",
+    },
+  ];
+
+  let applied = false;
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        cursor: 52,
+        entries: [
+          {
+            entityType: "weak_topic_entry",
+            entityId: "weak-1",
+            operation: "upsert",
+            clientUpdatedAt: "2026-05-14T12:00:00.000Z",
+            payload: {
+              id: "weak-1",
+              topic: "Cardio",
+              entryType: "manual",
+              priority: "High",
+              status: "Active",
+              notes: "",
+              lastSeenAt: "2026-05-14",
+              sourceLabel: "Manual",
+              createdAt: "2026-05-14T11:00:00.000Z",
+              updatedAt: "2026-05-14T12:00:00.000Z",
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    )) as typeof fetch;
+
+  const result = await pullFromCloud("token-123", "device-123", {
+    getCursor: async () => 12,
+    setCursor: async () => {},
+    loadSnapshot: async () => ({
+      state,
+      persistence: {
+        storagePath: "",
+        backupDirectory: "",
+        schemaVersion: 1,
+        appVersion: "test",
+        lastSavedAt: null,
+        recoveryMessage: null,
+        legacyMigrationCompletedAt: null,
+      },
+      backups: [],
+      trash: [],
+    }),
+    getDeleteTombstones: async () => tombstones,
+    applyStudyBlock: async () => {
+      throw new Error("study block apply should not run");
+    },
+    applyPracticeTest: async () => {
+      throw new Error("practice test apply should not run");
+    },
+    applyWeakTopic: async () => {
+      applied = true;
+    },
+    applyDelete: async () => {
+      throw new Error("delete apply should not run");
+    },
+  });
+
+  assert.equal(applied, false);
+  assert.deepEqual(result, {
+    received: 1,
+    applied: 0,
+    upserted: 0,
+    deleted: 0,
+    skipped: 1,
+    cursor: 52,
+  });
 });

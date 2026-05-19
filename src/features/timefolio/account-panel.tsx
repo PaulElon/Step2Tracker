@@ -1,4 +1,5 @@
 import { useState, useEffect, type ReactNode } from "react";
+import { useAppStore } from "../../state/app-store";
 import { useTimeFolioStore } from "../../state/tf-store";
 import {
   getCoreEntityDeleteTombstones,
@@ -13,6 +14,7 @@ import {
 } from "../../lib/native-persistence";
 import {
   loginToCloud,
+  pullFromCloud,
   refreshCloudToken,
   registerDevice,
   pushAllEntities,
@@ -160,6 +162,7 @@ function getOrCreateLocalDeviceId(): string {
 }
 
 function CloudSyncSection() {
+  const { reload } = useAppStore();
   const [phase, setPhase] = useState<CloudPhase>("loading");
   const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
   const [nativeDeviceId] = useState<string>(() => getOrCreateLocalDeviceId());
@@ -234,20 +237,33 @@ function CloudSyncSection() {
       const syncStartedAt = new Date().toISOString();
       const snapshot = await loadNativeSnapshot();
       const deleteTombstones = await getCoreEntityDeleteTombstones(lastSyncedAt);
-      const result = await pushAllEntities(
+      const pushResult = await pushAllEntities(
         token,
         nativeDeviceId,
         snapshot.state,
         lastSyncedAt,
         deleteTombstones,
       );
-      if (result.cursor !== null) {
-        await setCloudSyncCursor(result.cursor);
+      if (pushResult.cursor !== null) {
+        await setCloudSyncCursor(pushResult.cursor);
+      }
+      const pullResult = await pullFromCloud(token, nativeDeviceId);
+      if (pullResult.applied > 0) {
+        const reloaded = await reload();
+        if (!reloaded) {
+          throw new Error("Pulled cloud changes but failed to refresh local state.");
+        }
       }
       await setLastSyncedAt(syncStartedAt);
-      setStatusMsg(
-        result.pushed === 0 ? "Already up to date." : `Synced ${result.pushed} entities.`,
-      );
+      if (pushResult.pushed === 0 && pullResult.applied === 0) {
+        setStatusMsg("Already up to date.");
+      } else if (pushResult.pushed > 0 && pullResult.applied > 0) {
+        setStatusMsg(`Pushed ${pushResult.pushed} and pulled ${pullResult.applied} changes.`);
+      } else if (pushResult.pushed > 0) {
+        setStatusMsg(`Pushed ${pushResult.pushed} changes.`);
+      } else {
+        setStatusMsg(`Pulled ${pullResult.applied} changes.`);
+      }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
@@ -289,7 +305,7 @@ function CloudSyncSection() {
   const isBusy = phase === "connecting" || phase === "syncing" || phase === "loading";
 
   return (
-    <SectionCard title="Cloud sync" description="Connect your cloud account to push local data to the sync server.">
+    <SectionCard title="Cloud sync" description="Connect your cloud account to push local changes and pull remote updates.">
       {errorMsg && (
         <div className="mb-4">
           <StatusBanner tone="error" title="Error" message={errorMsg} />

@@ -60,6 +60,7 @@ interface AppStoreValue {
   persistenceStatus: PersistenceStatus;
   persistenceError: string | null;
   lastSavedAt: string | null;
+  reload: () => Promise<boolean>;
   setActiveSection: (section: SectionId) => Promise<boolean>;
   setThemeId: (themeId: ThemeId) => Promise<boolean>;
   updatePlannerFilters: (patch: Partial<PlannerFilters>) => Promise<boolean>;
@@ -172,6 +173,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return enqueueSnapshotOperation(() => saveNativePreferences(nextPreferences));
   }
 
+  function reload() {
+    return enqueueSnapshotOperation(async () => {
+      const snapshot = await loadNativeSnapshot();
+      return {
+        ...snapshot,
+        state: normalizeAppState(snapshot.state),
+      };
+    });
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -232,6 +243,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     persistenceStatus,
     persistenceError,
     lastSavedAt,
+    reload,
     setActiveSection: (section) =>
       savePreferences({
         ...stateRef.current.preferences,
