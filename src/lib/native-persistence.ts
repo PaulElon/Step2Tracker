@@ -135,3 +135,34 @@ export function resetNativeTfState(): Promise<TfAppState> {
 export function probeNativeAutoTrackerBootstrap(): Promise<NativeAutoTrackerBootstrapProbe> {
   return command<NativeAutoTrackerBootstrapProbe>("tf_autotracker_probe_bootstrap");
 }
+
+export interface DeviceMetadata {
+  deviceId: string;
+  cloudLinkState: string | null;
+}
+
+export function getDeviceMetadata(): Promise<DeviceMetadata> {
+  return command<DeviceMetadata>("get_device_metadata");
+}
+
+export interface CloudLinkData {
+  cloudUserId: string;
+  email: string;
+}
+
+export function parseCloudLinkState(raw: string | null): CloudLinkData | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as CloudLinkData;
+  } catch {
+    return null;
+  }
+}
+
+export function setCloudLink(cloudUserId: string, email: string): Promise<void> {
+  return command<void>("set_cloud_link", { cloudUserId, email });
+}
+
+export function clearCloudLink(): Promise<void> {
+  return command<void>("clear_cloud_link");
+}

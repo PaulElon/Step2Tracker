@@ -1,5 +1,13 @@
-import type { ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useTimeFolioStore } from "../../state/tf-store";
+import {
+  getDeviceMetadata,
+  parseCloudLinkState,
+  setCloudLink,
+  clearCloudLink,
+  loadNativeSnapshot,
+} from "../../lib/native-persistence";
+import { loginToCloud, registerDevice, pushAllEntities } from "../../lib/cloud-sync-manager";
 
 function PanelShell({
   title,
@@ -119,6 +127,166 @@ function getIdentitySubtext(account: {
   return "No local account snapshot is present.";
 }
 
+type CloudPhase = "loading" | "unlinked" | "connecting" | "linked" | "syncing";
+
+function CloudSyncSection() {
+  const [phase, setPhase] = useState<CloudPhase>("loading");
+  const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
+  const [nativeDeviceId, setNativeDeviceId] = useState<string>("");
+  const [token, setToken] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    getDeviceMetadata()
+      .then((meta) => {
+        setNativeDeviceId(meta.deviceId);
+        const link = parseCloudLinkState(meta.cloudLinkState);
+        if (link) {
+          setLinkedEmail(link.email);
+          setPhase("linked");
+        } else {
+          setPhase("unlinked");
+        }
+      })
+      .catch((err: unknown) => {
+        setErrorMsg(err instanceof Error ? err.message : String(err));
+        setPhase("unlinked");
+      });
+  }, []);
+
+  async function handleConnect(e: { preventDefault(): void }) {
+    e.preventDefault();
+    if (!email || !password) return;
+    setPhase("connecting");
+    setErrorMsg(null);
+    setStatusMsg(null);
+    try {
+      const auth = await loginToCloud(email, password);
+      await registerDevice(auth.token, nativeDeviceId);
+      await setCloudLink(auth.cloudUserId, email);
+      setToken(auth.token);
+      setLinkedEmail(email);
+      setPassword("");
+      setPhase("linked");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+      setPhase("unlinked");
+    }
+  }
+
+  async function handleSync() {
+    if (!token) {
+      setErrorMsg("Session expired. Disconnect and reconnect to sync.");
+      return;
+    }
+    setPhase("syncing");
+    setErrorMsg(null);
+    setStatusMsg(null);
+    try {
+      const snapshot = await loadNativeSnapshot();
+      const result = await pushAllEntities(token, nativeDeviceId, snapshot.state);
+      setStatusMsg(`Synced ${result.pushed} entities.`);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPhase("linked");
+    }
+  }
+
+  async function handleDisconnect() {
+    await clearCloudLink();
+    setToken(null);
+    setLinkedEmail(null);
+    setPassword("");
+    setStatusMsg(null);
+    setErrorMsg(null);
+    setPhase("unlinked");
+  }
+
+  const isLinked = phase === "linked" || phase === "syncing";
+  const isBusy = phase === "connecting" || phase === "syncing" || phase === "loading";
+
+  return (
+    <SectionCard title="Cloud sync" description="Connect your cloud account to push local data to the sync server.">
+      {errorMsg && (
+        <div className="mb-4">
+          <StatusBanner tone="error" title="Error" message={errorMsg} />
+        </div>
+      )}
+      {statusMsg && (
+        <div className="mb-4">
+          <StatusBanner tone="info" title="Done" message={statusMsg} />
+        </div>
+      )}
+
+      {phase === "loading" && (
+        <p className="text-sm text-slate-400">Loading cloud link state…</p>
+      )}
+
+      {isLinked && (
+        <div className="flex flex-col gap-3">
+          <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-4">
+            <div className="text-[11px] font-medium text-slate-500">Connected as</div>
+            <div className="mt-2 text-sm font-semibold text-slate-100">{linkedEmail}</div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={isBusy || !token}
+              onClick={() => void handleSync()}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            >
+              {phase === "syncing" ? "Syncing…" : "Sync now"}
+            </button>
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => void handleDisconnect()}
+              className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-300 hover:border-slate-500 hover:text-slate-100 disabled:opacity-50"
+            >
+              Disconnect
+            </button>
+          </div>
+          {!token && (
+            <p className="text-xs text-slate-500">Session expired — disconnect and reconnect to enable sync.</p>
+          )}
+        </div>
+      )}
+
+      {(phase === "unlinked" || phase === "connecting") && (
+        <form onSubmit={(e) => void handleConnect(e)} className="flex flex-col gap-3">
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={isBusy}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+          >
+            {phase === "connecting" ? "Connecting…" : "Connect"}
+          </button>
+        </form>
+      )}
+    </SectionCard>
+  );
+}
+
 function AccountContent() {
   const { state, isLoading, error } = useTimeFolioStore();
   const account = state.account;
@@ -210,6 +378,8 @@ function AccountContent() {
           <li>Auto-Tracker availability checks</li>
         </ul>
       </SectionCard>
+
+      <CloudSyncSection />
     </div>
   );
 }

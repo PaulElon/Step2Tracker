@@ -105,6 +105,13 @@ pub struct BackupMetadata {
     pub counts: RecordCounts,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceMetadata {
+    pub device_id: String,
+    pub cloud_link_state: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordCounts {
@@ -1536,7 +1543,17 @@ impl StorageService {
             );
             ",
         )?;
+        self.get_or_create_device_id(transaction)?;
         Ok(())
+    }
+
+    fn get_or_create_device_id(&self, transaction: &Transaction<'_>) -> StorageResult<String> {
+        if let Some(id) = self.metadata_value(&**transaction, "device_id")? {
+            return Ok(id);
+        }
+        let id = Uuid::new_v4().to_string();
+        self.set_metadata_tx(transaction, "device_id", &id)?;
+        Ok(id)
     }
 
     fn ensure_study_block_task_columns(&self, transaction: &Transaction<'_>) -> StorageResult<()> {
@@ -3060,6 +3077,25 @@ impl StorageService {
         )?;
         transaction.commit()?;
         self.load_snapshot()
+    }
+
+    pub fn get_device_metadata(&self) -> StorageResult<DeviceMetadata> {
+        let connection = self.open_live_connection()?;
+        let device_id = self.metadata_value(&connection, "device_id")?.unwrap_or_default();
+        let cloud_link_state = self.metadata_value(&connection, "cloud_link_state")?;
+        Ok(DeviceMetadata { device_id, cloud_link_state })
+    }
+
+    pub fn set_cloud_link(&self, cloud_user_id: &str, email: &str) -> StorageResult<()> {
+        let connection = self.open_live_connection()?;
+        let value = serde_json::json!({ "cloudUserId": cloud_user_id, "email": email }).to_string();
+        self.set_metadata(&connection, "cloud_link_state", &value)
+    }
+
+    pub fn clear_cloud_link(&self) -> StorageResult<()> {
+        let connection = self.open_live_connection()?;
+        connection.execute("DELETE FROM app_metadata WHERE key = ?1", params!["cloud_link_state"])?;
+        Ok(())
     }
 
     fn reconcile_weak_topics(&self, transaction: &Transaction<'_>) -> StorageResult<()> {
@@ -4936,5 +4972,18 @@ mod tests {
 
         // caller's prefs must not have been mutated
         assert!(prefs.notebook_documents.is_empty());
+    }
+
+    #[test]
+    fn device_id_is_stable_across_opens() {
+        let (temp_dir, service1) = test_service();
+        service1.load_snapshot().expect("bootstrap");
+        let id1 = service1.get_device_metadata().expect("meta 1").device_id;
+
+        let service2 = StorageService::new(temp_dir.path().to_path_buf(), "test-app");
+        let id2 = service2.get_device_metadata().expect("meta 2").device_id;
+
+        assert!(!id1.is_empty());
+        assert_eq!(id1, id2);
     }
 }

@@ -11,8 +11,8 @@ use std::process::Command;
 use std::{fs, path::PathBuf};
 
 use persistence::{
-    AppState, BackupArtifactPreview, ClientSnapshot, ErrorLogInput, ImportMode, PracticeTestInput, Preferences,
-    StorageService, StudyBlockInput, TrashEntityType, WeakTopicInput,
+    AppState, BackupArtifactPreview, ClientSnapshot, DeviceMetadata, ErrorLogInput, ImportMode,
+    PracticeTestInput, Preferences, StorageService, StudyBlockInput, TrashEntityType, WeakTopicInput,
 };
 use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
@@ -136,6 +136,21 @@ fn upsert_error_log_entry(app: tauri::AppHandle, entry: ErrorLogInput) -> Result
 #[tauri::command]
 fn trash_error_log_entry(app: tauri::AppHandle, id: String) -> Result<ClientSnapshot, String> {
     with_storage(&app, |service| service.trash_error_log_entry(id))
+}
+
+#[tauri::command]
+fn get_device_metadata(app: tauri::AppHandle) -> Result<DeviceMetadata, String> {
+    with_storage(&app, |service| service.get_device_metadata())
+}
+
+#[tauri::command]
+fn set_cloud_link(app: tauri::AppHandle, cloud_user_id: String, email: String) -> Result<(), String> {
+    with_storage(&app, |service| service.set_cloud_link(&cloud_user_id, &email))
+}
+
+#[tauri::command]
+fn clear_cloud_link(app: tauri::AppHandle) -> Result<(), String> {
+    with_storage(&app, |service| service.clear_cloud_link())
 }
 
 #[tauri::command]
@@ -830,6 +845,9 @@ fn main() {
             migrate_legacy_browser_state,
             upsert_error_log_entry,
             trash_error_log_entry,
+            get_device_metadata,
+            set_cloud_link,
+            clear_cloud_link,
             tf_autotracker::tf_autotracker_probe_bootstrap,
             tf_autotracker_v2_native::tf_autotracker_v2_native_probe,
             tf_autotracker_v2_native::tf_autotracker_v2_native_snapshot,
