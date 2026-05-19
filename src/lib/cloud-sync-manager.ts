@@ -4,8 +4,11 @@ import type {
   PersistenceSnapshot,
   PracticeTest,
   StudyBlock,
+  TfAppState,
   WeakTopicEntry,
 } from "../types/models";
+// @ts-expect-error TS5097: node --test needs the explicit .ts specifier in this runtime path.
+import { buildCanonicalSessionLogExport } from "./tf-session-log-canonical-export.ts";
 import type { CloudDeleteTombstone, CloudEntityType } from "./native-persistence";
 
 const AUTH_URL = "https://timefolio-auth-v2.paulfreedman3.workers.dev";
@@ -52,8 +55,12 @@ interface CloudPullDependencies {
   ) => Promise<void>;
 }
 
+interface CloudPushDependencies {
+  loadTfState?: () => Promise<TfAppState>;
+}
+
 async function loadDefaultPullDependencies() {
-  const native = await import("./native-persistence");
+  const native = await import(new URL("./native-persistence.ts", import.meta.url).href);
   return {
     getCursor: native.getCloudPullCursor,
     setCursor: native.setCloudPullCursor,
@@ -70,6 +77,13 @@ async function loadDefaultPullDependencies() {
     applyWeakTopic: native.applyCloudWeakTopic,
     applyErrorLog: native.applyCloudErrorLogEntry,
     applyDelete: native.applyCloudDelete,
+  };
+}
+
+async function loadDefaultPushDependencies(): Promise<Required<CloudPushDependencies>> {
+  const native = await import(new URL("./native-persistence.ts", import.meta.url).href);
+  return {
+    loadTfState: native.loadNativeTfState,
   };
 }
 
@@ -185,8 +199,13 @@ export async function pushAllEntities(
   state: AppState,
   lastSyncedAt: string | null,
   deleteTombstones: CloudDeleteTombstone[],
+  dependencies: CloudPushDependencies = {},
 ): Promise<{ pushed: number; cursor: number | null }> {
   const after = lastSyncedAt;
+  const { loadTfState } = dependencies.loadTfState
+    ? { loadTfState: dependencies.loadTfState }
+    : await loadDefaultPushDependencies();
+  const canonicalSessionLogs = buildCanonicalSessionLogExport((await loadTfState()).sessionLogs);
   const entities = [
     ...state.studyBlocks
       .filter((entry) => !after || entry.updatedAt >= after)
@@ -219,6 +238,15 @@ export async function pushAllEntities(
       .filter((entry) => !after || entry.updatedAt >= after)
       .map((entry) => ({
         entityType: "error_log_entry",
+        entityId: entry.id,
+        operation: "upsert" as const,
+        payload: entry as unknown as Record<string, unknown>,
+        clientUpdatedAt: entry.updatedAt,
+      })),
+    ...canonicalSessionLogs
+      .filter((entry) => !after || entry.updatedAt >= after)
+      .map((entry) => ({
+        entityType: "session_log",
         entityId: entry.id,
         operation: "upsert" as const,
         payload: entry as unknown as Record<string, unknown>,

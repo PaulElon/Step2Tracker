@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { pullFromCloud, pushAllEntities } from "../../src/lib/cloud-sync-manager.ts";
 import type { CloudDeleteTombstone } from "../../src/lib/native-persistence.ts";
-import type { AppState } from "../../src/types/models.ts";
+import type { AppState, TfAppState, TfSessionLog } from "../../src/types/models.ts";
 
 const previousFetch = globalThis.fetch;
 
@@ -50,6 +50,38 @@ function createEmptyState(): AppState {
         showBestFitRSquared: false,
       },
     },
+  };
+}
+
+function createEmptyTfState(): TfAppState {
+  return {
+    tfVersion: 1,
+    sessionLogs: [],
+    sessionLogTombstones: [],
+    summaries: [],
+    trackerPrefs: {
+      customAutoApps: [],
+      customAutoWebsites: [],
+      customDistractionApps: [],
+      customDistractionWebsites: [],
+    },
+    account: null,
+  };
+}
+
+function buildSessionLog(overrides: Partial<TfSessionLog> = {}): TfSessionLog {
+  return {
+    id: overrides.id ?? "manual-1",
+    date: overrides.date ?? "2026-05-12",
+    method: overrides.method ?? "Manual Review",
+    methodKey: overrides.methodKey ?? "manual-review",
+    hours: overrides.hours ?? 1.5,
+    startISO: overrides.startISO ?? "2026-05-12T10:00:00.000Z",
+    endISO: overrides.endISO ?? "2026-05-12T11:30:00.000Z",
+    notes: overrides.notes ?? "Focused review.",
+    isDistraction: overrides.isDistraction ?? false,
+    isLive: overrides.isLive ?? false,
+    updatedAt: overrides.updatedAt ?? "2026-05-12T11:35:00.000Z",
   };
 }
 
@@ -223,6 +255,9 @@ test("pushAllEntities sends recent upserts and delete tombstones and preserves t
     state,
     "2026-05-10T00:00:00.000Z",
     tombstones,
+    {
+      loadTfState: async () => createEmptyTfState(),
+    },
   );
 
   assert.deepEqual(result, { pushed: 7, cursor: 77 });
@@ -308,10 +343,100 @@ test("pushAllEntities skips the network request when no entity changed after the
         deletedAt: "2026-05-08T12:00:00.000Z",
       },
     ],
+    {
+      loadTfState: async () => createEmptyTfState(),
+    },
   );
 
   assert.deepEqual(result, { pushed: 0, cursor: null });
   assert.equal(fetchCalled, false);
+});
+
+test("pushAllEntities adds canonical safe session_log upserts and skips unsafe or old rows", async () => {
+  const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    fetchCalls.push({ url: String(url), init });
+    return new Response(JSON.stringify({ cursor: 91 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  const tfState = createEmptyTfState();
+  tfState.sessionLogs = [
+    buildSessionLog({
+      id: "manual-safe-new",
+      method: "Manual Review",
+      notes: "Focused renal review.",
+      updatedAt: "2026-05-12T11:35:00.000Z",
+      startISO: "2026-05-12T10:00:00.000Z",
+      endISO: "2026-05-12T11:30:00.000Z",
+    }),
+    buildSessionLog({
+      id: "manual-safe-old",
+      updatedAt: "2026-05-09T11:35:00.000Z",
+    }),
+    buildSessionLog({
+      id: "nat-device-1-span-1",
+      method: "UWorld",
+      notes: "Focused review.",
+    }),
+    buildSessionLog({
+      id: "manual-unsafe-notes",
+      notes: "browserUrl=https://apps.uworld.com browserTitle=UWorld",
+    }),
+    buildSessionLog({
+      id: "manual-live",
+      isLive: true,
+    }),
+    buildSessionLog({
+      id: "auto-derived",
+      method: "Question Bank [Auto]",
+    }),
+  ];
+
+  const result = await pushAllEntities(
+    "token-123",
+    "device-123",
+    createEmptyState(),
+    "2026-05-10T00:00:00.000Z",
+    [],
+    {
+      loadTfState: async () => tfState,
+    },
+  );
+
+  assert.deepEqual(result, { pushed: 1, cursor: 91 });
+  assert.equal(fetchCalls.length, 1);
+
+  const body = JSON.parse(String(fetchCalls[0]?.init?.body)) as {
+    deviceId: string;
+    entities: Array<Record<string, unknown>>;
+  };
+
+  assert.equal(body.deviceId, "device-123");
+  assert.deepEqual(body.entities, [
+    {
+      entityType: "session_log",
+      entityId: "manual-safe-new",
+      operation: "upsert",
+      payload: {
+        schemaVersion: 1,
+        id: "manual-safe-new",
+        date: "2026-05-12",
+        title: "Manual Review",
+        category: "manual-review",
+        source: "manual",
+        durationMinutes: 90,
+        startAt: "2026-05-12T10:00:00.000Z",
+        endAt: "2026-05-12T11:30:00.000Z",
+        notes: "Focused renal review.",
+        isDistraction: false,
+        updatedAt: "2026-05-12T11:35:00.000Z",
+      },
+      clientUpdatedAt: "2026-05-12T11:35:00.000Z",
+    },
+  ]);
 });
 
 test("pullFromCloud applies only newer upserts and persists the pull cursor", async () => {

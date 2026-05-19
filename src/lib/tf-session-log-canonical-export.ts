@@ -1,4 +1,5 @@
-import { methodKeyFromLabel, splitAutoSessionMethodLabel } from "./tf-session-adapters";
+// @ts-expect-error TS5097: node --test needs the explicit .ts specifier in this runtime path.
+import { methodKeyFromLabel, splitAutoSessionMethodLabel } from "./tf-session-adapters.ts";
 import type { TfSessionLog } from "../types/models";
 
 export interface CanonicalSessionLogEntry {
