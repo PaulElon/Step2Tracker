@@ -1,7 +1,7 @@
 {
   "productName": "TimeFolio",
   "mainBinaryName": "TimeFolio",
-  "version": "0.0.178",
+  "version": "0.0.188",
   "identifier": "com.paul.step2ckcommandcenter",
   "build": {
     "beforeDevCommand": "npm run dev",
