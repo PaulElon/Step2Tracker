@@ -1,6 +1,8 @@
 import { createContext, startTransition, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { createDemoAppState } from "../data/demo-data";
 import { getTodayKey } from "../lib/datetime";
+import { loadDemoMode, saveDemoMode } from "../lib/demo-state";
 import {
   duplicateNativeStudyBlock,
   exportNativeBackupArtifact,
@@ -53,6 +55,9 @@ import type {
 type PersistenceStatus = "booting" | "ready" | "error";
 
 interface AppStoreValue {
+  isDemoMode: boolean;
+  activateDemo: () => void;
+  exitDemo: () => Promise<void>;
   state: AppState;
   backups: BackupMetadata[];
   trashItems: TrashItem[];
@@ -116,12 +121,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [persistenceStatus, setPersistenceStatus] = useState<PersistenceStatus>("booting");
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(() => loadDemoMode());
   const stateRef = useRef(state);
+  const isDemoModeRef = useRef(isDemoMode);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  useEffect(() => {
+    isDemoModeRef.current = isDemoMode;
+  }, [isDemoMode]);
 
   function applySnapshot(snapshot: {
     state: AppState;
@@ -148,6 +159,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }>,
     options: { alertOnError?: boolean } = {},
   ) {
+    if (isDemoModeRef.current) {
+      return Promise.resolve(false);
+    }
     const { alertOnError = true } = options;
     const next = queueRef.current.then(async () => {
       try {
@@ -169,6 +183,30 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return next;
   }
 
+  function activateDemo() {
+    saveDemoMode(true);
+    isDemoModeRef.current = true;
+    const demoState = createDemoAppState();
+    stateRef.current = demoState;
+    startTransition(() => {
+      setIsDemoMode(true);
+      setState(demoState);
+      setBackups([]);
+      setTrashItems([]);
+      setPersistenceSummary(null);
+      setPersistenceStatus("ready");
+      setPersistenceError(null);
+      setLastSavedAt(null);
+    });
+  }
+
+  async function exitDemo() {
+    saveDemoMode(false);
+    isDemoModeRef.current = false;
+    setIsDemoMode(false);
+    await reload();
+  }
+
   function savePreferences(nextPreferences: AppState["preferences"]) {
     return enqueueSnapshotOperation(() => saveNativePreferences(nextPreferences));
   }
@@ -184,6 +222,21 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    if (isDemoModeRef.current) {
+      const demoState = createDemoAppState();
+      stateRef.current = demoState;
+      startTransition(() => {
+        setState(demoState);
+        setBackups([]);
+        setTrashItems([]);
+        setPersistenceSummary(null);
+        setPersistenceStatus("ready");
+        setPersistenceError(null);
+        setLastSavedAt(null);
+      });
+      return;
+    }
+
     let cancelled = false;
 
     void (async () => {
@@ -236,6 +289,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value: AppStoreValue = {
+    isDemoMode,
+    activateDemo,
+    exitDemo,
     state,
     backups,
     trashItems,
