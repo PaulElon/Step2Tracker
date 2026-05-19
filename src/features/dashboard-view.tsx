@@ -217,14 +217,14 @@ function TodayTimeLogSummary({
 
   if (totalSessions === 0) {
     return (
-      <div className="mt-3 border-t border-white/[0.06] pt-3 space-y-4">
+      <div className="mt-3 flex flex-1 flex-col border-t border-white/[0.06] pt-3">
         <div>
           <p className="text-[11px] text-slate-500">Today’s time log</p>
           <p className="mt-1 text-sm text-slate-300">No study sessions logged yet.</p>
           <p className="mt-1 text-xs text-slate-500">Open the timer when you start a block.</p>
         </div>
 
-        <div>
+        <div className="mt-auto pt-5">
           <p className="text-[11px] text-slate-500">Allowed vs distractions</p>
           <div className="mt-3">
             <div className="flex h-2.5 overflow-hidden rounded-full bg-white/[0.06]">
@@ -248,7 +248,7 @@ function TodayTimeLogSummary({
   }
 
   return (
-    <div className="mt-3 border-t border-white/[0.06] pt-3 space-y-5">
+    <div className="mt-3 flex flex-1 flex-col border-t border-white/[0.06] pt-3">
       <div>
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -287,7 +287,7 @@ function TodayTimeLogSummary({
         ) : null}
       </div>
 
-      <div>
+      <div className="mt-auto pt-6">
         <p className="text-[11px] text-slate-500">Allowed vs distractions</p>
         <div className="mt-3">
           <div className="flex h-3 overflow-hidden rounded-full bg-white/[0.06]">
