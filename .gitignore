@@ -28,3 +28,4 @@ src-tauri/*.sqlite3
 *.sln
 *.sw?
 .claude/
+.playwright-mcp/
