@@ -421,6 +421,12 @@ export interface TfSessionLog {
   notes: string;
   isDistraction: boolean;
   isLive: boolean;
+  updatedAt?: string;
+}
+
+export interface TfSessionLogTombstone {
+  id: string;
+  deletedAt: string;
 }
 
 export interface TfSummaryPayload {
@@ -559,6 +565,7 @@ export interface TfAutoTrackerV2DevPersistedState {
 export interface TfAppState {
   tfVersion: number;
   sessionLogs: TfSessionLog[];
+  sessionLogTombstones: TfSessionLogTombstone[];
   summaries: TfSummaryPayload[];
   trackerPrefs: TfTrackerPrefs;
   account: TfAccountState | null;

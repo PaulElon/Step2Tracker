@@ -7,6 +7,11 @@ use tauri::Manager;
 const TF_PERSISTENCE_DIR: &str = "timefolio-persistence";
 const TF_STATE_FILE: &str = "tf-state.json";
 const TF_STATE_VERSION: i64 = 1;
+const TF_FALLBACK_SESSION_UPDATED_AT: &str = "1970-01-01T00:00:00.000Z";
+
+fn default_session_updated_at() -> String {
+    TF_FALLBACK_SESSION_UPDATED_AT.to_owned()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,6 +28,8 @@ pub struct TfSessionLog {
     pub notes: String,
     pub is_distraction: bool,
     pub is_live: bool,
+    #[serde(default = "default_session_updated_at")]
+    pub updated_at: String,
 }
 
 impl Default for TfSessionLog {
@@ -38,6 +45,23 @@ impl Default for TfSessionLog {
             notes: String::new(),
             is_distraction: false,
             is_live: false,
+            updated_at: TF_FALLBACK_SESSION_UPDATED_AT.to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TfSessionLogTombstone {
+    pub id: String,
+    pub deleted_at: String,
+}
+
+impl Default for TfSessionLogTombstone {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            deleted_at: TF_FALLBACK_SESSION_UPDATED_AT.to_owned(),
         }
     }
 }
@@ -150,6 +174,8 @@ impl Default for TfAccountState {
 pub struct TfAppState {
     pub tf_version: i64,
     pub session_logs: Vec<TfSessionLog>,
+    #[serde(default)]
+    pub session_log_tombstones: Vec<TfSessionLogTombstone>,
     pub summaries: Vec<TfSummaryPayload>,
     pub tracker_prefs: TfTrackerPrefs,
     pub account: Option<TfAccountState>,
@@ -160,6 +186,7 @@ impl Default for TfAppState {
         Self {
             tf_version: TF_STATE_VERSION,
             session_logs: Vec::new(),
+            session_log_tombstones: Vec::new(),
             summaries: Vec::new(),
             tracker_prefs: TfTrackerPrefs::default(),
             account: None,
@@ -187,6 +214,14 @@ fn safe_string(value: Option<&Value>) -> String {
 
 fn safe_optional_string(value: Option<&Value>) -> Option<String> {
     value.and_then(Value::as_str).map(ToOwned::to_owned)
+}
+
+fn safe_nonempty_string(value: Option<&Value>) -> Option<String> {
+    value
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .map(ToOwned::to_owned)
 }
 
 fn safe_bool(value: Option<&Value>) -> bool {
@@ -333,6 +368,23 @@ fn normalize_tracker_rule_array(value: Option<&Value>, kind: TfTrackerRuleKind) 
     }
 }
 
+fn derive_fallback_session_updated_at(date: &str, start_iso: &str, end_iso: &str) -> String {
+    safe_nonempty_string(Some(&Value::String(end_iso.to_owned())))
+        .or_else(|| safe_nonempty_string(Some(&Value::String(start_iso.to_owned()))))
+        .or_else(|| {
+            let trimmed = date.trim();
+            if trimmed.len() == 10
+                && trimmed.as_bytes().get(4) == Some(&b'-')
+                && trimmed.as_bytes().get(7) == Some(&b'-')
+            {
+                Some(format!("{trimmed}T00:00:00.000Z"))
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| TF_FALLBACK_SESSION_UPDATED_AT.to_owned())
+}
+
 fn normalize_session(value: &Value) -> Option<TfSessionLog> {
     let object = value.as_object()?;
     let id = safe_string(object.get("id"));
@@ -340,17 +392,37 @@ fn normalize_session(value: &Value) -> Option<TfSessionLog> {
         return None;
     }
 
+    let date = safe_string(object.get("date"));
+    let start_iso = safe_string(object.get("startISO"));
+    let end_iso = safe_string(object.get("endISO"));
+
     Some(TfSessionLog {
         id,
-        date: safe_string(object.get("date")),
+        date: date.clone(),
         method: safe_string(object.get("method")),
         method_key: safe_string(object.get("methodKey")),
         hours: safe_f64(object.get("hours")),
-        start_iso: safe_string(object.get("startISO")),
-        end_iso: safe_string(object.get("endISO")),
+        start_iso: start_iso.clone(),
+        end_iso: end_iso.clone(),
         notes: safe_string(object.get("notes")),
         is_distraction: safe_bool(object.get("isDistraction")),
         is_live: safe_bool(object.get("isLive")),
+        updated_at: safe_nonempty_string(object.get("updatedAt"))
+            .unwrap_or_else(|| derive_fallback_session_updated_at(&date, &start_iso, &end_iso)),
+    })
+}
+
+fn normalize_session_log_tombstone(value: &Value) -> Option<TfSessionLogTombstone> {
+    let object = value.as_object()?;
+    let id = safe_string(object.get("id")).trim().to_owned();
+    if id.is_empty() {
+        return None;
+    }
+
+    Some(TfSessionLogTombstone {
+        id,
+        deleted_at: safe_nonempty_string(object.get("deletedAt"))
+            .unwrap_or_else(|| TF_FALLBACK_SESSION_UPDATED_AT.to_owned()),
     })
 }
 
@@ -446,6 +518,12 @@ fn normalize_tf_app_state(value: Value) -> TfAppState {
         .map(|entries| entries.iter().filter_map(normalize_session).collect())
         .unwrap_or_default();
 
+    let session_log_tombstones = object
+        .get("sessionLogTombstones")
+        .and_then(Value::as_array)
+        .map(|entries| entries.iter().filter_map(normalize_session_log_tombstone).collect())
+        .unwrap_or_default();
+
     let summaries = object
         .get("summaries")
         .and_then(Value::as_array)
@@ -455,6 +533,7 @@ fn normalize_tf_app_state(value: Value) -> TfAppState {
     TfAppState {
         tf_version: safe_i64(object.get("tfVersion"), TF_STATE_VERSION),
         session_logs,
+        session_log_tombstones,
         summaries,
         tracker_prefs: normalize_tracker_prefs(object.get("trackerPrefs")),
         account: normalize_account(object.get("account")),

@@ -1,6 +1,7 @@
 import type {
   TfAppState,
   TfSessionLog,
+  TfSessionLogTombstone,
   TfSummaryPayload,
   TfTrackerPrefs,
   TfAccountState,
@@ -27,6 +28,8 @@ export const TF_AUTOTRACKER_V2_DEV_STATE_STORAGE_KEY =
 export const TF_AUTOTRACKER_V2_DEV_STATE_SCHEMA_VERSION = 1;
 export const TF_AUTOTRACKER_V2_DEV_EVENT_LIMIT = 2_000;
 export const TF_AUTOTRACKER_V2_DEV_WRITTEN_ID_LIMIT = 2_000;
+export const TF_SESSION_LOG_TOMBSTONE_LIMIT = 2_000;
+const TF_FALLBACK_SESSION_UPDATED_AT = "1970-01-01T00:00:00.000Z";
 
 export interface QueuedTfStateSaveResult {
   saved: TfAppState;
@@ -81,6 +84,7 @@ export function getEmptyTfAppState(): TfAppState {
   return {
     tfVersion: TF_STATE_VERSION,
     sessionLogs: [],
+    sessionLogTombstones: [],
     summaries: [],
     trackerPrefs: {
       customAutoApps: [],
@@ -121,6 +125,32 @@ function safeNullableString(v: unknown): string | null {
 function safeNullableNumber(v: unknown): number | null {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+function safeTimestampString(v: unknown): string | null {
+  if (typeof v !== "string") {
+    return null;
+  }
+  const trimmed = v.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function deriveFallbackSessionUpdatedAt(
+  session: Pick<TfSessionLog, "date" | "startISO" | "endISO">,
+): string {
+  return (
+    safeTimestampString(session.endISO) ??
+    safeTimestampString(session.startISO) ??
+    (/^\d{4}-\d{2}-\d{2}$/u.test(session.date.trim())
+      ? `${session.date.trim()}T00:00:00.000Z`
+      : TF_FALLBACK_SESSION_UPDATED_AT)
+  );
+}
+
+function normalizeSessionUpdatedAt(
+  session: Pick<TfSessionLog, "date" | "startISO" | "endISO"> & { updatedAt?: string },
+): string {
+  return safeTimestampString(session.updatedAt) ?? deriveFallbackSessionUpdatedAt(session);
 }
 
 const TRACKER_RULE_NAME_OVERRIDES: Record<string, string> = {
@@ -298,7 +328,7 @@ function normalizeSession(entry: unknown): TfSessionLog | null {
   const e = entry as Record<string, unknown>;
   const id = safeString(e.id);
   if (!id) return null;
-  return {
+  const normalized: TfSessionLog = {
     id,
     date: safeString(e.date),
     method: safeString(e.method),
@@ -310,6 +340,48 @@ function normalizeSession(entry: unknown): TfSessionLog | null {
     isDistraction: safeBoolean(e.isDistraction),
     isLive: safeBoolean(e.isLive),
   };
+  normalized.updatedAt = normalizeSessionUpdatedAt({
+    date: normalized.date,
+    startISO: normalized.startISO,
+    endISO: normalized.endISO,
+    updatedAt: safeTimestampString(e.updatedAt) ?? undefined,
+  });
+  return normalized;
+}
+
+function normalizeSessionLogTombstone(entry: unknown): TfSessionLogTombstone | null {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const tombstone = entry as Record<string, unknown>;
+  const id = safeString(tombstone.id).trim();
+  if (!id) {
+    return null;
+  }
+
+  return {
+    id,
+    deletedAt: safeTimestampString(tombstone.deletedAt) ?? TF_FALLBACK_SESSION_UPDATED_AT,
+  };
+}
+
+function normalizeSessionLogTombstones(value: unknown): TfSessionLogTombstone[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const byId = new Map<string, TfSessionLogTombstone>();
+  for (const entry of value) {
+    const normalized = normalizeSessionLogTombstone(entry);
+    if (normalized) {
+      byId.set(normalized.id, normalized);
+    }
+  }
+
+  return [...byId.values()]
+    .sort((a, b) => b.deletedAt.localeCompare(a.deletedAt))
+    .slice(0, TF_SESSION_LOG_TOMBSTONE_LIMIT);
 }
 
 function normalizeSummary(entry: unknown): TfSummaryPayload | null {
@@ -383,6 +455,7 @@ export function normalizeTfAppState(input: unknown): TfAppState {
     return {
       tfVersion: safeNumber(raw.tfVersion, TF_STATE_VERSION),
       sessionLogs,
+      sessionLogTombstones: normalizeSessionLogTombstones(raw.sessionLogTombstones),
       summaries,
       trackerPrefs: normalizeTrackerPrefs(raw.trackerPrefs),
       account: normalizeAccount(raw.account),
@@ -790,21 +863,45 @@ function sortSessionsNewestFirst(sessions: TfSessionLog[]): TfSessionLog[] {
   });
 }
 
+function sortSessionLogTombstonesNewestFirst(
+  tombstones: TfSessionLogTombstone[],
+): TfSessionLogTombstone[] {
+  return [...tombstones]
+    .sort((a, b) => b.deletedAt.localeCompare(a.deletedAt))
+    .slice(0, TF_SESSION_LOG_TOMBSTONE_LIMIT);
+}
+
 export function upsertTfSessionLog(state: TfAppState, session: TfSessionLog): TfAppState {
-  const existing = state.sessionLogs.findIndex((s) => s.id === session.id);
+  const normalizedSession = normalizeSession({
+    ...session,
+    updatedAt: new Date().toISOString(),
+  });
+  if (!normalizedSession) {
+    return normalizeTfAppState(state);
+  }
+
+  const existing = state.sessionLogs.findIndex((s) => s.id === normalizedSession.id);
   const updated =
     existing >= 0
-      ? state.sessionLogs.map((s, i) => (i === existing ? session : s))
-      : [...state.sessionLogs, session];
+      ? state.sessionLogs.map((s, i) => (i === existing ? normalizedSession : s))
+      : [...state.sessionLogs, normalizedSession];
   return normalizeTfAppState({
     ...state,
     sessionLogs: sortSessionsNewestFirst(updated),
+    sessionLogTombstones: state.sessionLogTombstones.filter(
+      (tombstone) => tombstone.id !== normalizedSession.id,
+    ),
   });
 }
 
 export function deleteTfSessionLog(state: TfAppState, id: string): TfAppState {
+  const deletedAt = new Date().toISOString();
   return normalizeTfAppState({
     ...state,
     sessionLogs: state.sessionLogs.filter((s) => s.id !== id),
+    sessionLogTombstones: sortSessionLogTombstonesNewestFirst([
+      { id, deletedAt },
+      ...state.sessionLogTombstones.filter((tombstone) => tombstone.id !== id),
+    ]),
   });
 }
