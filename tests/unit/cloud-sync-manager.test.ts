@@ -3,7 +3,12 @@ import test from "node:test";
 
 import { pullFromCloud, pushAllEntities } from "../../src/lib/cloud-sync-manager.ts";
 import type { CloudDeleteTombstone } from "../../src/lib/native-persistence.ts";
-import type { AppState, TfAppState, TfSessionLog } from "../../src/types/models.ts";
+import type {
+  AppState,
+  TfAppState,
+  TfSessionLog,
+  TfSessionLogTombstone,
+} from "../../src/types/models.ts";
 
 const previousFetch = globalThis.fetch;
 
@@ -82,6 +87,18 @@ function buildSessionLog(overrides: Partial<TfSessionLog> = {}): TfSessionLog {
     isDistraction: overrides.isDistraction ?? false,
     isLive: overrides.isLive ?? false,
     updatedAt: overrides.updatedAt ?? "2026-05-12T11:35:00.000Z",
+  };
+}
+
+function buildSessionTombstone(
+  overrides: Partial<TfSessionLogTombstone> & Pick<TfSessionLogTombstone, "id" | "deletedAt">,
+): TfSessionLogTombstone {
+  return {
+    id: overrides.id,
+    deletedAt: overrides.deletedAt,
+    ...(overrides.schemaVersion !== undefined ? { schemaVersion: overrides.schemaVersion } : {}),
+    ...(overrides.syncEligible !== undefined ? { syncEligible: overrides.syncEligible } : {}),
+    ...(overrides.syncSource !== undefined ? { syncSource: overrides.syncSource } : {}),
   };
 }
 
@@ -435,6 +452,88 @@ test("pushAllEntities adds canonical safe session_log upserts and skips unsafe o
         updatedAt: "2026-05-12T11:35:00.000Z",
       },
       clientUpdatedAt: "2026-05-12T11:35:00.000Z",
+    },
+  ]);
+});
+
+test("pushAllEntities pushes only eligible session_log deletes after the watermark", async () => {
+  const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    fetchCalls.push({ url: String(url), init });
+    return new Response(JSON.stringify({ cursor: 92 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  const tfState = createEmptyTfState();
+  tfState.sessionLogTombstones = [
+    buildSessionTombstone({
+      id: "session-safe-manual-new",
+      deletedAt: "2026-05-12T12:00:00.000Z",
+      schemaVersion: 1,
+      syncEligible: true,
+      syncSource: "manual",
+    }),
+    buildSessionTombstone({
+      id: "session-safe-imported-new",
+      deletedAt: "2026-05-13T12:00:00.000Z",
+      schemaVersion: 1,
+      syncEligible: true,
+      syncSource: "imported",
+    }),
+    buildSessionTombstone({
+      id: "session-unsafe-live",
+      deletedAt: "2026-05-14T12:00:00.000Z",
+      schemaVersion: 1,
+      syncEligible: false,
+    }),
+    buildSessionTombstone({
+      id: "session-legacy",
+      deletedAt: "2026-05-15T12:00:00.000Z",
+    }),
+    buildSessionTombstone({
+      id: "session-safe-manual-old",
+      deletedAt: "2026-05-09T12:00:00.000Z",
+      schemaVersion: 1,
+      syncEligible: true,
+      syncSource: "manual",
+    }),
+  ];
+
+  const result = await pushAllEntities(
+    "token-123",
+    "device-123",
+    createEmptyState(),
+    "2026-05-10T00:00:00.000Z",
+    [],
+    {
+      loadTfState: async () => tfState,
+    },
+  );
+
+  assert.deepEqual(result, { pushed: 2, cursor: 92 });
+  assert.equal(fetchCalls.length, 1);
+
+  const body = JSON.parse(String(fetchCalls[0]?.init?.body)) as {
+    deviceId: string;
+    entities: Array<Record<string, unknown>>;
+  };
+
+  assert.deepEqual(body.entities, [
+    {
+      entityType: "session_log",
+      entityId: "session-safe-manual-new",
+      operation: "delete",
+      payload: null,
+      clientUpdatedAt: "2026-05-12T12:00:00.000Z",
+    },
+    {
+      entityType: "session_log",
+      entityId: "session-safe-imported-new",
+      operation: "delete",
+      payload: null,
+      clientUpdatedAt: "2026-05-13T12:00:00.000Z",
     },
   ]);
 });

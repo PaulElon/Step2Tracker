@@ -5,6 +5,7 @@ import type {
   PracticeTest,
   StudyBlock,
   TfAppState,
+  TfSessionLogTombstone,
   WeakTopicEntry,
 } from "../types/models";
 // @ts-expect-error TS5097: node --test needs the explicit .ts specifier in this runtime path.
@@ -205,7 +206,14 @@ export async function pushAllEntities(
   const { loadTfState } = dependencies.loadTfState
     ? { loadTfState: dependencies.loadTfState }
     : await loadDefaultPushDependencies();
-  const canonicalSessionLogs = buildCanonicalSessionLogExport((await loadTfState()).sessionLogs);
+  const tfState = await loadTfState();
+  const canonicalSessionLogs = buildCanonicalSessionLogExport(tfState.sessionLogs);
+  const sessionLogDeleteTombstones = tfState.sessionLogTombstones.filter(
+    (entry): entry is TfSessionLogTombstone =>
+      entry.syncEligible === true &&
+      (entry.syncSource === "manual" || entry.syncSource === "imported") &&
+      (!after || entry.deletedAt >= after),
+  );
   const entities = [
     ...state.studyBlocks
       .filter((entry) => !after || entry.updatedAt >= after)
@@ -252,6 +260,13 @@ export async function pushAllEntities(
         payload: entry as unknown as Record<string, unknown>,
         clientUpdatedAt: entry.updatedAt,
       })),
+    ...sessionLogDeleteTombstones.map((entry) => ({
+      entityType: "session_log",
+      entityId: entry.id,
+      operation: "delete" as const,
+      payload: null,
+      clientUpdatedAt: entry.deletedAt,
+    })),
     ...deleteTombstones
       .filter((entry) => !after || entry.deletedAt >= after)
       .map((entry) => ({
