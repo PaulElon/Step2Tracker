@@ -1,4 +1,4 @@
-import bootstrapSchedule from "../data/bootstrap-schedule.json";
+import bootstrapSchedule from "../data/bootstrap-schedule.json" with { type: "json" };
 import { getPracticeTestLabel, resolvePracticeTestSource } from "./practice-tests";
 import { compareStudyBlocks, getDayName, getTodayKey, minutesBetween, parseTimeToMinutes } from "./datetime";
 import type {
@@ -1389,6 +1389,7 @@ export function matchesBootstrapSeed(state: AppState) {
     })),
     practiceTests: value.practiceTests,
     weakTopicEntries: value.weakTopicEntries,
+    errorLogEntries: value.errorLogEntries,
     preferences: value.preferences,
   });
 
