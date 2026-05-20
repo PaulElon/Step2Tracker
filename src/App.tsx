@@ -42,6 +42,7 @@ import {
   type TutorialStepId,
 } from "./lib/tutorial-state";
 import { FF } from "./lib/feature-flags";
+import { matchesBootstrapSeed } from "./lib/storage";
 import { primaryButtonClassName, secondaryButtonClassName } from "./lib/ui";
 import { useAppStore } from "./state/app-store";
 import type {
@@ -124,6 +125,16 @@ function tutorialStatesEqual(left: TutorialState, right: TutorialState): boolean
     left.currentStepId === right.currentStepId &&
     left.completedStepIds.length === right.completedStepIds.length &&
     left.completedStepIds.every((stepId, index) => stepId === right.completedStepIds[index])
+  );
+}
+
+function isInitialTutorialState(state: TutorialState): boolean {
+  return (
+    !state.active &&
+    !state.completed &&
+    !state.skipped &&
+    state.currentStepId === null &&
+    state.completedStepIds.length === 0
   );
 }
 
@@ -583,6 +594,7 @@ export default function App() {
     ),
   );
   const reminderDispatchRef = useRef(new Set<string>());
+  const autoStartTutorialRef = useRef(false);
   const activeSection = state.preferences.activeSection;
   const resolvedSection = resolveAppSection(activeSection, {
     notebookEnabled: FF.notebook,
@@ -602,6 +614,12 @@ export default function App() {
     timefolioEnabled: FF.timefolio,
   });
   const tutorialStepIdsKey = availableTutorialSteps.map((step) => step.id).join(":");
+  const shouldAutoStartTutorial =
+    persistenceStatus === "ready" &&
+    !isDemoMode &&
+    availableTutorialSteps.length > 0 &&
+    matchesBootstrapSeed(state) &&
+    isInitialTutorialState(tutorialState);
   const totalMinutes = sumStudyMinutes(state.studyBlocks);
   const dateRange = getDateRange(state.studyBlocks);
   const persistenceCopy =
@@ -705,6 +723,17 @@ export default function App() {
     tutorialState.active,
     tutorialState.currentStepId,
   ]);
+
+  useEffect(() => {
+    if (!shouldAutoStartTutorial || autoStartTutorialRef.current) {
+      return;
+    }
+
+    autoStartTutorialRef.current = true;
+    const nextState = createStartedTutorialState(availableTutorialSteps);
+    setTutorialState(nextState);
+    saveTutorialState(nextState);
+  }, [availableTutorialSteps, shouldAutoStartTutorial]);
 
   useEffect(() => {
     let cancelled = false;
