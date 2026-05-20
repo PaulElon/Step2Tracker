@@ -39,6 +39,7 @@ import { TrackerSettingsPanel } from "./timefolio/tracker-settings-panel";
 import { themeList } from "../lib/themes";
 import { cn, fieldClassName, secondaryButtonClassName } from "../lib/ui";
 import type { BackupArtifactPreview, PersistenceSummary, ResourceLink, ThemeId } from "../types/models";
+import { useAppStore } from "../state/app-store";
 
 function generateId(prefix: string) {
   return globalThis.crypto?.randomUUID?.() ?? `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -866,6 +867,50 @@ function AboutPanel() {
   );
 }
 
+function DemoPanel() {
+  const { isDemoMode, activateDemo, exitDemo } = useAppStore();
+
+  return (
+    <Panel
+      title="Demo Mode"
+      subtitle="Explore TimeFolio with sample data — your real data is untouched."
+    >
+      <div className="flex flex-col gap-3">
+        <p className="text-xs leading-5 text-slate-400">
+          Demo mode loads a set of sample study tasks, practice tests, and weak topics so you can explore every
+          feature without affecting your real data. Nothing is written to local storage while demo mode is active.
+        </p>
+        {isDemoMode ? (
+          <div className="rounded-[14px] border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            Demo mode is currently active. All data shown is sample data.
+          </div>
+        ) : null}
+        <div>
+          {isDemoMode ? (
+            <button
+              type="button"
+              className={secondaryButtonClassName}
+              onClick={() => {
+                void exitDemo();
+              }}
+            >
+              Exit Demo Mode
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={secondaryButtonClassName}
+              onClick={activateDemo}
+            >
+              Try Demo Mode
+            </button>
+          )}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
 type SettingsSection =
   | "appearance"
   | "defaults"
@@ -1509,7 +1554,12 @@ export function SettingsView({
             </div>
           ) : null}
 
-          {activeSection === "about" ? <AboutPanel /> : null}
+          {activeSection === "about" ? (
+            <div className="space-y-4">
+              <AboutPanel />
+              <DemoPanel />
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

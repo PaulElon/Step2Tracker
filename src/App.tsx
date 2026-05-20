@@ -9,6 +9,7 @@ import { startTransition, useEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { DemoBanner } from "./components/demo-banner";
 import { ModalShell } from "./components/modal-shell";
 import { MobileNav, NavigationButton } from "./components/ui";
 import { getDesktopNavigationGroups, getMobileNavigationItems, resolveAppSection } from "./features/app-navigation";
@@ -441,6 +442,7 @@ function SidebarCountdown() {
 
 export default function App() {
   const {
+    isDemoMode,
     state,
     backups,
     trashItems,
@@ -868,10 +870,16 @@ export default function App() {
       sectionContent = null;
   }
 
+  const bannerCount = (isDemoMode ? 1 : 0) + (updateAvailable ? 1 : 0);
+
   return (
     <>
+      <DemoBanner />
       {updateAvailable ? (
-        <div className="fixed inset-x-0 top-0 z-[9999] flex items-center justify-between gap-4 bg-cyan-500 px-6 py-3">
+        <div
+          className="fixed inset-x-0 z-[9998] flex items-center justify-between gap-4 bg-cyan-500 px-6 py-3"
+          style={{ top: isDemoMode ? "3rem" : 0 }}
+        >
           <span className="text-sm font-semibold text-white">
             Version {updateAvailable} is available
           </span>
@@ -886,7 +894,7 @@ export default function App() {
           </button>
         </div>
       ) : null}
-    <div className={`relative h-screen overflow-hidden${updateAvailable ? " pt-12" : ""}`}>
+    <div className={`relative h-screen overflow-hidden${bannerCount > 0 ? ` pt-${bannerCount === 2 ? "24" : "12"}` : ""}`}>
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(89,240,222,0.12),transparent_28%),radial-gradient(circle_at_top_right,rgba(104,200,255,0.10),transparent_26%),radial-gradient(circle_at_bottom_left,rgba(92,116,255,0.08),transparent_24%)]" />
 
       <input
