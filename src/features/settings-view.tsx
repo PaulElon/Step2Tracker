@@ -488,7 +488,7 @@ function ChangePasswordPanel() {
   const [isBusy, setIsBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault();
     if (!authSession.account) return;
 
