@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createDemoAppState } from "../../src/data/demo-data.ts";
+import { createDemoAppState, createDemoTfAppState } from "../../src/data/demo-data.ts";
 
 // Must match APP_STATE_VERSION from src/lib/storage.ts
 const EXPECTED_VERSION = 6;
@@ -81,4 +81,24 @@ test("createDemoAppState is stable across two calls (same relative structure)", 
     a.practiceTests.map((pt) => pt.id),
     b.practiceTests.map((pt) => pt.id),
   );
+});
+
+test("createDemoTfAppState returns sample session logs without tracker tombstones or summaries", () => {
+  const state = createDemoTfAppState();
+  assert.equal(state.tfVersion, 1);
+  assert.equal(state.sessionLogs.length, 8);
+  assert.equal(state.sessionLogTombstones.length, 0);
+  assert.equal(state.summaries.length, 0);
+});
+
+test("createDemoTfAppState uses stable manual sample session IDs", () => {
+  const state = createDemoTfAppState();
+  for (let i = 1; i <= 8; i++) {
+    assert.ok(
+      state.sessionLogs.some((session) => session.id === `demo-session-${i}`),
+      `missing demo-session-${i}`,
+    );
+  }
+
+  assert.ok(state.sessionLogs.every((session) => !session.id.startsWith("nat-")));
 });

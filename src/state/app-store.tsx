@@ -208,6 +208,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }
 
   function savePreferences(nextPreferences: AppState["preferences"]) {
+    if (isDemoModeRef.current) {
+      const nextState = normalizeAppState({
+        ...stateRef.current,
+        preferences: nextPreferences,
+      });
+      stateRef.current = nextState;
+      startTransition(() => {
+        setState(nextState);
+      });
+      return Promise.resolve(true);
+    }
+
     return enqueueSnapshotOperation(() => saveNativePreferences(nextPreferences));
   }
 

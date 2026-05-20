@@ -870,20 +870,56 @@ function AboutPanel() {
 
 function DemoPanel() {
   const { isDemoMode, activateDemo, exitDemo } = useAppStore();
+  const [showLoadConfirmation, setShowLoadConfirmation] = useState(false);
+
+  useEffect(() => {
+    if (isDemoMode) {
+      setShowLoadConfirmation(false);
+    }
+  }, [isDemoMode]);
 
   return (
     <Panel
-      title="Demo Mode"
-      subtitle="Explore TimeFolio with sample data — your real data is untouched."
+      title="Demo Workspace"
+      subtitle="Load a sample workspace without touching your real local or synced data."
     >
       <div className="flex flex-col gap-3">
         <p className="text-xs leading-5 text-slate-400">
-          Demo mode loads a set of sample study tasks, practice tests, and weak topics so you can explore every
-          feature without affecting your real data. Nothing is written to local storage while demo mode is active.
+          Demo workspace loads a today schedule, study blocks, practice tests, weak topics, error log entries, and
+          sample TimeFolio session logs. It never reuses Auto-Tracker raw data, and removing it returns you to your
+          real workspace.
         </p>
         {isDemoMode ? (
           <div className="rounded-[14px] border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-            Demo mode is currently active. All data shown is sample data.
+            Demo workspace is active. All data on screen is sample data only.
+          </div>
+        ) : null}
+        {!isDemoMode && showLoadConfirmation ? (
+          <div className="rounded-[18px] border border-cyan-400/20 bg-cyan-400/10 px-4 py-4 text-sm text-slate-100">
+            <p className="font-medium text-white">Load demo workspace?</p>
+            <p className="mt-2 text-xs leading-5 text-slate-300">
+              This swaps the live view to sample data only. Your real database stays untouched and comes back when you
+              remove the demo workspace.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className={secondaryButtonClassName}
+                onClick={() => setShowLoadConfirmation(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={primaryButtonClassName}
+                onClick={() => {
+                  setShowLoadConfirmation(false);
+                  activateDemo();
+                }}
+              >
+                Load Demo Workspace
+              </button>
+            </div>
           </div>
         ) : null}
         <div>
@@ -895,15 +931,15 @@ function DemoPanel() {
                 void exitDemo();
               }}
             >
-              Exit Demo Mode
+              Remove Demo Workspace
             </button>
           ) : (
             <button
               type="button"
               className={secondaryButtonClassName}
-              onClick={activateDemo}
+              onClick={() => setShowLoadConfirmation(true)}
             >
-              Try Demo Mode
+              Load Demo Workspace
             </button>
           )}
         </div>
@@ -956,7 +992,7 @@ function TutorialPanel({
             onClick={onStartTutorial}
             disabled={isDemoMode}
           >
-            Start Tutorial
+            Restart Tutorial
           </button>
           <button
             type="button"
@@ -964,7 +1000,7 @@ function TutorialPanel({
             onClick={onResetTutorial}
             disabled={isDemoMode}
           >
-            Reset Tutorial
+            Clear Tutorial Progress
           </button>
         </div>
       </div>

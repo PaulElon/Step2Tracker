@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { createDemoTfAppState } from "../data/demo-data";
 import {
   createQueuedTfStateSaver,
   deleteTfSessionLog,
@@ -19,6 +20,7 @@ import {
   removeDeletedNativeId,
 } from "../lib/tf-deleted-native-ids";
 import type { TfAppState, TfSessionLog } from "../types/models";
+import { useAppStore } from "./app-store";
 
 interface TimeFolioStoreValue {
   state: TfAppState;
@@ -43,6 +45,7 @@ function toErrorString(err: unknown): string {
 }
 
 export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
+  const { isDemoMode } = useAppStore();
   const [state, setState] = useState<TfAppState>(() => getEmptyTfAppState());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +89,10 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
       const next = mutate(previous);
       applyState(next);
 
+      if (isDemoMode) {
+        return next;
+      }
+
       try {
         return await persistQueuedState(next);
       } catch (err) {
@@ -98,12 +105,19 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     },
-    [applyState, persistQueuedState],
+    [applyState, isDemoMode, persistQueuedState],
   );
 
   const reload = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+
+    if (isDemoMode) {
+      applyState(createDemoTfAppState());
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const loaded = await loadTfState();
       applyState(loaded);
@@ -116,7 +130,7 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       }
     }
-  }, [applyState]);
+  }, [applyState, isDemoMode]);
 
   useEffect(() => {
     void reload();
@@ -155,6 +169,10 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
 
   const importNativeSpans = useCallback(
     async (spans: NativeTrackerSpanInput[]) => {
+      if (isDemoMode) {
+        return { imported: 0, skipped: spans.length, ackKeys: [] };
+      }
+
       setError(null);
       try {
         const currentState = stateRef.current;
@@ -179,7 +197,7 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     },
-    [commitStateChange],
+    [commitStateChange, isDemoMode],
   );
 
   const value: TimeFolioStoreValue = {

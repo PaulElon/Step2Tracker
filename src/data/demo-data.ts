@@ -3,6 +3,8 @@ import type {
   ErrorLogEntry,
   PracticeTest,
   StudyBlock,
+  TfAppState,
+  TfSessionLog,
   WeakTopicEntry,
 } from "../types/models";
 
@@ -33,6 +35,10 @@ function getDayName(dateKey: string): string {
 
 function iso(dateKey: string): string {
   return `${dateKey}T12:00:00.000Z`;
+}
+
+function dateTimeIso(dateKey: string, hour: number, minute: number): string {
+  return `${dateKey}T${pad(hour)}:${pad(minute)}:00.000Z`;
 }
 
 export function createDemoAppState(): AppState {
@@ -863,5 +869,134 @@ export function createDemoAppState(): AppState {
     weakTopicEntries,
     errorLogEntries,
     preferences,
+  };
+}
+
+export function createDemoTfAppState(): TfAppState {
+  const today = formatDateKey(new Date());
+
+  function d(offset: number): string {
+    return addDays(today, offset);
+  }
+
+  const sessionLogs: TfSessionLog[] = [
+    {
+      id: "demo-session-1",
+      date: d(-8),
+      method: "NBME Review",
+      methodKey: "nbme-review",
+      hours: 2.5,
+      startISO: dateTimeIso(d(-8), 13, 0),
+      endISO: dateTimeIso(d(-8), 15, 30),
+      notes: "Reviewed renal and endocrine misses after NBME 9.",
+      isDistraction: false,
+      isLive: false,
+      updatedAt: dateTimeIso(d(-8), 15, 30),
+    },
+    {
+      id: "demo-session-2",
+      date: d(-7),
+      method: "UWorld Review",
+      methodKey: "uworld-review",
+      hours: 1.5,
+      startISO: dateTimeIso(d(-7), 9, 0),
+      endISO: dateTimeIso(d(-7), 10, 30),
+      notes: "Focused on ACS algorithms and diuretic physiology.",
+      isDistraction: false,
+      isLive: false,
+      updatedAt: dateTimeIso(d(-7), 10, 30),
+    },
+    {
+      id: "demo-session-3",
+      date: d(-7),
+      method: "Phone Scroll",
+      methodKey: "phone-scroll",
+      hours: 0.25,
+      startISO: dateTimeIso(d(-7), 10, 35),
+      endISO: dateTimeIso(d(-7), 10, 50),
+      notes: "Captured as distraction time between review blocks.",
+      isDistraction: true,
+      isLive: false,
+      updatedAt: dateTimeIso(d(-7), 10, 50),
+    },
+    {
+      id: "demo-session-4",
+      date: d(-5),
+      method: "Anki",
+      methodKey: "anki",
+      hours: 1,
+      startISO: dateTimeIso(d(-5), 7, 30),
+      endISO: dateTimeIso(d(-5), 8, 30),
+      notes: "Cardio and renal decks before the day started.",
+      isDistraction: false,
+      isLive: false,
+      updatedAt: dateTimeIso(d(-5), 8, 30),
+    },
+    {
+      id: "demo-session-5",
+      date: d(-4),
+      method: "Deep Review",
+      methodKey: "deep-review",
+      hours: 2,
+      startISO: dateTimeIso(d(-4), 14, 0),
+      endISO: dateTimeIso(d(-4), 16, 0),
+      notes: "Rebuilt endocrine decision trees and weak-topic notes.",
+      isDistraction: false,
+      isLive: false,
+      updatedAt: dateTimeIso(d(-4), 16, 0),
+    },
+    {
+      id: "demo-session-6",
+      date: d(-2),
+      method: "Sketchy Review",
+      methodKey: "sketchy-review",
+      hours: 1.25,
+      startISO: dateTimeIso(d(-2), 11, 15),
+      endISO: dateTimeIso(d(-2), 12, 30),
+      notes: "Reviewed antiarrhythmics and pulmonary antimicrobials.",
+      isDistraction: false,
+      isLive: false,
+      updatedAt: dateTimeIso(d(-2), 12, 30),
+    },
+    {
+      id: "demo-session-7",
+      date: d(-1),
+      method: "Question Review",
+      methodKey: "question-review",
+      hours: 1.75,
+      startISO: dateTimeIso(d(-1), 16, 0),
+      endISO: dateTimeIso(d(-1), 17, 45),
+      notes: "Closed the loop on repeat misses from GI and ethics blocks.",
+      isDistraction: false,
+      isLive: false,
+      updatedAt: dateTimeIso(d(-1), 17, 45),
+    },
+    {
+      id: "demo-session-8",
+      date: today,
+      method: "Planned Focus Block",
+      methodKey: "planned-focus-block",
+      hours: 1.5,
+      startISO: dateTimeIso(today, 8, 0),
+      endISO: dateTimeIso(today, 9, 30),
+      notes: "Sample session aligned with today's plan for tutorial walkthroughs.",
+      isDistraction: false,
+      isLive: false,
+      updatedAt: dateTimeIso(today, 9, 30),
+    },
+  ];
+
+  return {
+    tfVersion: 1,
+    sessionLogs,
+    sessionLogTombstones: [],
+    summaries: [],
+    trackerPrefs: {
+      customAutoApps: [],
+      customAutoWebsites: [],
+      customDistractionApps: [],
+      customDistractionWebsites: [],
+    },
+    account: null,
   };
 }
