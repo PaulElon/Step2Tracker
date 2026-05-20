@@ -11,6 +11,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { DemoBanner } from "./components/demo-banner";
 import { ModalShell } from "./components/modal-shell";
+import { TutorialOverlay } from "./components/tutorial-overlay";
 import { MobileNav, NavigationButton } from "./components/ui";
 import { getDesktopNavigationGroups, getMobileNavigationItems, resolveAppSection } from "./features/app-navigation";
 import { DashboardView } from "./features/dashboard-view";
@@ -31,6 +32,15 @@ import {
   sendNativeReminder,
   sendReminderNotification,
 } from "./lib/reminders";
+import {
+  TUTORIAL_STEPS,
+  loadTutorialState,
+  resetTutorialState,
+  saveTutorialState,
+  type TutorialState,
+  type TutorialStep,
+  type TutorialStepId,
+} from "./lib/tutorial-state";
 import { FF } from "./lib/feature-flags";
 import { primaryButtonClassName, secondaryButtonClassName } from "./lib/ui";
 import { useAppStore } from "./state/app-store";
@@ -40,8 +50,101 @@ import type {
   ExamDisplayMode,
   ExamTimer,
   PersistenceSummary,
+  SectionId,
   TrashItem,
 } from "./types/models";
+
+const EMPTY_TUTORIAL_STATE: TutorialState = {
+  active: false,
+  completed: false,
+  skipped: false,
+  currentStepId: null,
+  completedStepIds: [],
+};
+
+const TUTORIAL_NAV_STEP_BY_SECTION: Partial<Record<SectionId, TutorialStepId>> = {
+  dashboard: "today",
+  planner: "planner",
+  weakTopics: "weakTopics",
+  tests: "practiceTests",
+  errorLog: "errorLog",
+  sessionLog: "timefolio",
+  settings: "settings",
+  notebook: "notebook",
+};
+
+function getAvailableTutorialSteps({
+  notebookEnabled,
+  timefolioEnabled,
+}: {
+  notebookEnabled: boolean;
+  timefolioEnabled: boolean;
+}): TutorialStep[] {
+  return TUTORIAL_STEPS.filter((step) => {
+    if (step.notebookOnly && !notebookEnabled) {
+      return false;
+    }
+
+    if (step.id === "timefolio" && !timefolioEnabled) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function normalizeTutorialState(state: TutorialState, steps: TutorialStep[]): TutorialState {
+  if (steps.length === 0) {
+    return { ...EMPTY_TUTORIAL_STATE };
+  }
+
+  const stepIds = new Set(steps.map((step) => step.id));
+  const completedStepIds = state.completedStepIds.filter((stepId) => stepIds.has(stepId));
+  const currentStepId =
+    state.currentStepId && stepIds.has(state.currentStepId)
+      ? state.currentStepId
+      : state.active
+        ? steps[0]?.id ?? null
+        : null;
+
+  return {
+    active: currentStepId ? state.active : false,
+    completed: state.completed,
+    skipped: state.skipped,
+    currentStepId,
+    completedStepIds,
+  };
+}
+
+function tutorialStatesEqual(left: TutorialState, right: TutorialState): boolean {
+  return (
+    left.active === right.active &&
+    left.completed === right.completed &&
+    left.skipped === right.skipped &&
+    left.currentStepId === right.currentStepId &&
+    left.completedStepIds.length === right.completedStepIds.length &&
+    left.completedStepIds.every((stepId, index) => stepId === right.completedStepIds[index])
+  );
+}
+
+function createStartedTutorialState(steps: TutorialStep[]): TutorialState {
+  const firstStep = steps[0];
+  if (!firstStep) {
+    return { ...EMPTY_TUTORIAL_STATE };
+  }
+
+  return {
+    active: true,
+    completed: false,
+    skipped: false,
+    currentStepId: firstStep.id,
+    completedStepIds: [],
+  };
+}
+
+function resolveTutorialStepForSection(sectionId: SectionId): TutorialStepId | null {
+  return TUTORIAL_NAV_STEP_BY_SECTION[sectionId] ?? null;
+}
 
 function formatCountsLine(counts: BackupMetadata["counts"]) {
   return `${counts.studyBlocks} tasks · ${counts.practiceTests} tests · ${counts.weakTopicEntries} topics`;
@@ -470,6 +573,15 @@ export default function App() {
   const [pendingArtifactPreview, setPendingArtifactPreview] = useState<BackupArtifactPreview | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("unsupported");
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
+  const [tutorialState, setTutorialState] = useState<TutorialState>(() =>
+    normalizeTutorialState(
+      loadTutorialState(),
+      getAvailableTutorialSteps({
+        notebookEnabled: FF.notebook,
+        timefolioEnabled: FF.timefolio,
+      }),
+    ),
+  );
   const reminderDispatchRef = useRef(new Set<string>());
   const activeSection = state.preferences.activeSection;
   const resolvedSection = resolveAppSection(activeSection, {
@@ -485,6 +597,11 @@ export default function App() {
     notebookEnabled: FF.notebook,
     timefolioEnabled: FF.timefolio,
   });
+  const availableTutorialSteps = getAvailableTutorialSteps({
+    notebookEnabled: FF.notebook,
+    timefolioEnabled: FF.timefolio,
+  });
+  const tutorialStepIdsKey = availableTutorialSteps.map((step) => step.id).join(":");
   const totalMinutes = sumStudyMinutes(state.studyBlocks);
   const dateRange = getDateRange(state.studyBlocks);
   const persistenceCopy =
@@ -547,6 +664,47 @@ export default function App() {
       void setActiveSection("dashboard");
     }
   }, [activeSection, setActiveSection]);
+
+  useEffect(() => {
+    const normalizedState = normalizeTutorialState(tutorialState, availableTutorialSteps);
+    if (!tutorialStatesEqual(tutorialState, normalizedState)) {
+      setTutorialState(normalizedState);
+      saveTutorialState(normalizedState);
+    }
+  }, [tutorialState, tutorialStepIdsKey, availableTutorialSteps]);
+
+  useEffect(() => {
+    if (!tutorialState.active || !tutorialState.currentStepId || isDemoMode) {
+      return;
+    }
+
+    const currentStep = availableTutorialSteps.find((step) => step.id === tutorialState.currentStepId);
+    if (!currentStep) {
+      return;
+    }
+
+    const targetSection = resolveAppSection(currentStep.sectionId, {
+      notebookEnabled: FF.notebook,
+      timefolioEnabled: FF.timefolio,
+    });
+
+    if (!portfolioOverviewActive && activeSection === targetSection) {
+      return;
+    }
+
+    startTransition(() => {
+      setPortfolioOverviewActive(false);
+      void setActiveSection(targetSection);
+    });
+  }, [
+    activeSection,
+    availableTutorialSteps,
+    isDemoMode,
+    portfolioOverviewActive,
+    setActiveSection,
+    tutorialState.active,
+    tutorialState.currentStepId,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -782,6 +940,100 @@ export default function App() {
     await restoreTrashItem(item.entityType, item.id);
   }
 
+  function persistTutorialState(nextState: TutorialState) {
+    setTutorialState(nextState);
+    saveTutorialState(nextState);
+  }
+
+  function handleStartTutorial() {
+    if (isDemoMode) {
+      return;
+    }
+
+    persistTutorialState(createStartedTutorialState(availableTutorialSteps));
+  }
+
+  function handleResetTutorial() {
+    if (isDemoMode) {
+      return;
+    }
+
+    setTutorialState(resetTutorialState());
+  }
+
+  function handleTutorialBack() {
+    if (!tutorialState.active || !tutorialState.currentStepId) {
+      return;
+    }
+
+    const currentIndex = availableTutorialSteps.findIndex((step) => step.id === tutorialState.currentStepId);
+    if (currentIndex <= 0) {
+      return;
+    }
+
+    const previousStep = availableTutorialSteps[currentIndex - 1];
+    persistTutorialState({
+      active: true,
+      completed: false,
+      skipped: false,
+      currentStepId: previousStep.id,
+      completedStepIds: availableTutorialSteps.slice(0, currentIndex - 1).map((step) => step.id),
+    });
+  }
+
+  function handleTutorialNext() {
+    if (!tutorialState.active || !tutorialState.currentStepId) {
+      return;
+    }
+
+    const currentIndex = availableTutorialSteps.findIndex((step) => step.id === tutorialState.currentStepId);
+    if (currentIndex < 0) {
+      return;
+    }
+
+    const nextStep = availableTutorialSteps[currentIndex + 1];
+    if (!nextStep) {
+      handleTutorialFinish();
+      return;
+    }
+
+    persistTutorialState({
+      active: true,
+      completed: false,
+      skipped: false,
+      currentStepId: nextStep.id,
+      completedStepIds: availableTutorialSteps.slice(0, currentIndex + 1).map((step) => step.id),
+    });
+  }
+
+  function handleTutorialSkip() {
+    if (isDemoMode) {
+      return;
+    }
+
+    persistTutorialState({
+      ...tutorialState,
+      active: false,
+      completed: false,
+      skipped: true,
+      currentStepId: null,
+    });
+  }
+
+  function handleTutorialFinish() {
+    if (isDemoMode) {
+      return;
+    }
+
+    persistTutorialState({
+      active: false,
+      completed: true,
+      skipped: false,
+      currentStepId: null,
+      completedStepIds: availableTutorialSteps.map((step) => step.id),
+    });
+  }
+
   let sectionContent: JSX.Element | null;
   if (portfolioActive || portfolioOverviewActive) {
     sectionContent = (
@@ -819,6 +1071,7 @@ export default function App() {
           enhancedThemeIds={state.preferences.enhancedThemeIds}
           customCategories={state.preferences.customCategories}
           resourceLinks={state.preferences.resourceLinks}
+          tutorialState={tutorialState}
           onThemeChange={(themeId) => {
             startTransition(() => {
               void setThemeId(themeId);
@@ -844,6 +1097,8 @@ export default function App() {
           onPreviewBackupImport={(raw) => previewBackupArtifact(raw)}
           onRestoreBackupImport={(raw) => restoreBackupArtifact(raw, { alertOnError: false })}
           onOpenRecoveryCenter={() => setShowRecoveryCenter(true)}
+          onStartTutorial={handleStartTutorial}
+          onResetTutorial={handleResetTutorial}
           onSetCustomCategories={(categories) => {
             startTransition(() => {
               void setCustomCategories(categories);
@@ -930,6 +1185,8 @@ export default function App() {
                     const isActive = isOverview
                       ? portfolioOverviewActive
                       : !portfolioOverviewActive && resolvedSection === item.id;
+                    const tutorialStepId =
+                      item.id === "portfolioOverview" ? null : resolveTutorialStepForSection(item.id);
 
                     return (
                       <NavigationButton
@@ -937,6 +1194,20 @@ export default function App() {
                         active={isActive}
                         icon={item.icon}
                         label={item.label}
+                        className={
+                          tutorialStepId
+                            ? tutorialState.active && tutorialState.currentStepId === tutorialStepId
+                              ? "tutorial-nav-target tutorial-nav-target-active"
+                              : "tutorial-nav-target"
+                            : undefined
+                        }
+                        buttonProps={
+                          tutorialStepId
+                            ? {
+                                "data-tutorial-step": tutorialStepId,
+                              }
+                            : undefined
+                        }
                         onClick={() => {
                           startTransition(() => {
                             if (isOverview) {
@@ -973,6 +1244,20 @@ export default function App() {
           <MobileNav
             items={mobileNavigationItems}
             activeSection={resolvedSection}
+            getItemButtonProps={(section) => {
+              const tutorialStepId = resolveTutorialStepForSection(section);
+              if (!tutorialStepId) {
+                return undefined;
+              }
+
+              return {
+                className:
+                  tutorialState.active && tutorialState.currentStepId === tutorialStepId
+                    ? "tutorial-nav-target tutorial-nav-target-active"
+                    : "tutorial-nav-target",
+                "data-tutorial-step": tutorialStepId,
+              };
+            }}
             onSelect={(section) => {
               startTransition(() => {
                 setPortfolioOverviewActive(false);
@@ -1004,6 +1289,17 @@ export default function App() {
           onRestoreTrashItem={(item) => {
             void handleRestoreTrashItem(item);
           }}
+        />
+      ) : null}
+
+      {!isDemoMode ? (
+        <TutorialOverlay
+          tutorialState={tutorialState}
+          steps={availableTutorialSteps}
+          onBack={handleTutorialBack}
+          onNext={handleTutorialNext}
+          onSkip={handleTutorialSkip}
+          onFinish={handleTutorialFinish}
         />
       ) : null}
     </div>

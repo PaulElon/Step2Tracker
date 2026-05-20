@@ -37,7 +37,8 @@ import { TimeFolioStoreProvider } from "../state/tf-store";
 import { AccountPanel } from "./timefolio/account-panel";
 import { TrackerSettingsPanel } from "./timefolio/tracker-settings-panel";
 import { themeList } from "../lib/themes";
-import { cn, fieldClassName, secondaryButtonClassName } from "../lib/ui";
+import type { TutorialState } from "../lib/tutorial-state";
+import { cn, fieldClassName, primaryButtonClassName, secondaryButtonClassName } from "../lib/ui";
 import type { BackupArtifactPreview, PersistenceSummary, ResourceLink, ThemeId } from "../types/models";
 import { useAppStore } from "../state/app-store";
 
@@ -911,6 +912,66 @@ function DemoPanel() {
   );
 }
 
+function TutorialPanel({
+  tutorialState,
+  onStartTutorial,
+  onResetTutorial,
+}: {
+  tutorialState: TutorialState;
+  onStartTutorial: () => void;
+  onResetTutorial: () => void;
+}) {
+  const { isDemoMode } = useAppStore();
+
+  const statusLine = tutorialState.active
+    ? "Tutorial in progress."
+    : tutorialState.completed
+      ? "Tutorial completed on this Mac."
+      : tutorialState.skipped
+        ? "Tutorial skipped. You can restart it any time."
+        : "Tutorial not started yet.";
+
+  return (
+    <Panel
+      title="Tutorial"
+      subtitle="Walk through the main desktop sections with a guided overlay."
+    >
+      <div className="flex flex-col gap-3">
+        <p className="text-xs leading-5 text-slate-400">
+          Tutorial progress is stored locally in this desktop app only. It does not touch demo data, sync, or your
+          main study records.
+        </p>
+        <div className="rounded-[14px] border border-white/10 bg-slate-950/45 px-3 py-2 text-xs text-slate-200">
+          {statusLine}
+        </div>
+        {isDemoMode ? (
+          <div className="rounded-[14px] border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            Exit demo mode before starting or resetting the tutorial. Demo mode avoids local tutorial writes.
+          </div>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={primaryButtonClassName}
+            onClick={onStartTutorial}
+            disabled={isDemoMode}
+          >
+            Start Tutorial
+          </button>
+          <button
+            type="button"
+            className={secondaryButtonClassName}
+            onClick={onResetTutorial}
+            disabled={isDemoMode}
+          >
+            Reset Tutorial
+          </button>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
 type SettingsSection =
   | "appearance"
   | "defaults"
@@ -949,6 +1010,7 @@ export function SettingsView({
   enhancedThemeIds,
   customCategories,
   resourceLinks,
+  tutorialState,
   onThemeChange,
   onToggleThemeEnhanced,
   onDailyGoalMinutesChange,
@@ -958,6 +1020,8 @@ export function SettingsView({
   onPreviewBackupImport,
   onRestoreBackupImport,
   onOpenRecoveryCenter,
+  onStartTutorial,
+  onResetTutorial,
   onSetCustomCategories,
   onSetResourceLinks,
   studyStorageCounts,
@@ -970,6 +1034,7 @@ export function SettingsView({
   enhancedThemeIds: string[];
   customCategories: string[];
   resourceLinks: ResourceLink[];
+  tutorialState: TutorialState;
   onThemeChange: (themeId: ThemeId) => void;
   onToggleThemeEnhanced: (themeId: ThemeId) => void;
   onDailyGoalMinutesChange: (hours: number) => void;
@@ -979,6 +1044,8 @@ export function SettingsView({
   onPreviewBackupImport: (raw: string) => Promise<BackupArtifactPreview>;
   onRestoreBackupImport: (raw: string) => Promise<boolean>;
   onOpenRecoveryCenter: () => void;
+  onStartTutorial: () => void;
+  onResetTutorial: () => void;
   onSetCustomCategories: (categories: string[]) => void;
   onSetResourceLinks: (links: ResourceLink[]) => void;
   studyStorageCounts: {
@@ -1557,6 +1624,11 @@ export function SettingsView({
           {activeSection === "about" ? (
             <div className="space-y-4">
               <AboutPanel />
+              <TutorialPanel
+                tutorialState={tutorialState}
+                onStartTutorial={onStartTutorial}
+                onResetTutorial={onResetTutorial}
+              />
               <DemoPanel />
             </div>
           ) : null}

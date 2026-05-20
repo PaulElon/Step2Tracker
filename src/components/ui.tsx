@@ -1,7 +1,10 @@
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "../lib/ui";
 import type { SectionId, StudyStatus } from "../types/models";
+
+type NavigationButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "type"> &
+  Partial<Record<`data-${string}`, string>>;
 
 const statusClassNames: Record<StudyStatus, string> = {
   "Not Started": "border-slate-400/20 bg-slate-400/10 text-slate-200",
@@ -145,21 +148,30 @@ export function NavigationButton({
   label,
   active,
   onClick,
+  className,
+  buttonProps,
 }: {
   icon: LucideIcon;
   label: string;
   active: boolean;
   onClick: () => void;
+  className?: string;
+  buttonProps?: NavigationButtonProps;
 }) {
+  const { className: buttonClassName, ...restButtonProps } = buttonProps ?? {};
+
   return (
     <button
       type="button"
       onClick={onClick}
+      {...restButtonProps}
       className={cn(
         "group flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-left transition-colors",
         active
           ? "bg-white/[0.06] text-white"
           : "text-slate-400 hover:bg-white/[0.03] hover:text-slate-200",
+        className,
+        buttonClassName,
       )}
     >
       <Icon
@@ -177,6 +189,7 @@ export function MobileNav({
   items,
   activeSection,
   onSelect,
+  getItemButtonProps,
 }: {
   items: Array<{
     id: SectionId;
@@ -185,22 +198,30 @@ export function MobileNav({
   }>;
   activeSection: SectionId;
   onSelect: (section: SectionId) => void;
+  getItemButtonProps?: (
+    section: SectionId,
+  ) => NavigationButtonProps | undefined;
 }) {
   return (
     <div className="glass-panel flex gap-1.5 overflow-x-auto p-1.5 min-[1680px]:hidden">
       {items.map((item) => {
         const Icon = item.icon;
         const active = item.id === activeSection;
+        const buttonProps = getItemButtonProps?.(item.id);
+        const { className: buttonClassName, ...restButtonProps } = buttonProps ?? {};
+
         return (
           <button
             key={item.id}
             type="button"
             onClick={() => onSelect(item.id)}
+            {...restButtonProps}
             className={cn(
               "flex min-w-[104px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-[13px] font-medium transition-colors",
               active
                 ? "bg-white/[0.06] text-white"
                 : "bg-transparent text-slate-400 hover:bg-white/[0.03] hover:text-slate-200",
+              buttonClassName,
             )}
           >
             <Icon
