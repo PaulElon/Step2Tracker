@@ -746,6 +746,7 @@ export function PlannerView() {
   const categoryFilterId = `${id}-category-filter`;
   const selectedDate = state.preferences.plannerFocusDate;
   const plannerMode = state.preferences.plannerMode;
+  const isLightBackgroundTheme = state.preferences.themeId === "light" || state.preferences.themeId === "maggiepink";
   const weekStart = startOfWeek(selectedDate, 1);
   const weekDates = getWeekDates(selectedDate);
   const monthDates = getMonthGridDates(selectedDate, 1);
@@ -1193,7 +1194,14 @@ export function PlannerView() {
           </div>
 
           {plannerMode === "week" ? (
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-hidden sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 xl:gap-0 xl:rounded-[16px] xl:border xl:border-white/10 xl:bg-slate-950/40">
+            <div
+              className={cn(
+                "grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-hidden sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 xl:gap-0 xl:rounded-[16px]",
+                isLightBackgroundTheme
+                  ? "xl:border xl:border-[color:var(--panel-border)] xl:bg-[color:var(--panel-bg)]"
+                  : "xl:border xl:border-white/10 xl:bg-slate-950/40",
+              )}
+            >
               {weekDates.map((date, index) => {
                 const dayTasks = (tasksByDate.get(date) ?? []).slice().sort(compareStudyBlocks);
                 const dayMinutes = dayTasks.reduce((sum, task) => sum + getStudyBlockMinutes(task), 0);
@@ -1209,19 +1217,31 @@ export function PlannerView() {
                     type="button"
                     onClick={() => handlePlannerFocusDate(date)}
                     className={cn(
-                      "group flex min-h-[14rem] min-w-0 flex-col overflow-hidden rounded-[14px] border border-white/8 bg-slate-950/35 text-left transition xl:min-h-0 xl:rounded-none xl:border-0 xl:border-l xl:border-white/10",
+                      "group flex min-h-[14rem] min-w-0 flex-col overflow-hidden rounded-[14px] text-left transition xl:min-h-0 xl:rounded-none xl:border-0 xl:border-l",
+                      isLightBackgroundTheme
+                        ? "border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] xl:border-l-[color:var(--panel-border)]"
+                        : "border border-white/8 bg-slate-950/35 xl:border-l-white/10",
                       index === 0 ? "xl:border-l-0" : "",
                       isSelected
                         ? "ring-1 ring-inset ring-cyan-300/40"
-                        : isTodayDate
-                        ? "hover:bg-white/[0.03]"
+                        : isLightBackgroundTheme
+                        ? "hover:bg-[color:var(--surface-muted)]"
                         : "hover:bg-white/[0.03]",
                     )}
                   >
                     <div
                       className={cn(
-                        "flex items-center justify-between gap-2 border-b border-white/8 px-3 py-2.5",
-                        isSelected ? "bg-cyan-300/12" : isTodayDate ? "bg-white/[0.04]" : "",
+                        "flex items-center justify-between gap-2 px-3 py-2.5",
+                        isLightBackgroundTheme ? "border-b border-[color:var(--panel-border)]" : "border-b border-white/8",
+                        isSelected
+                          ? "bg-cyan-300/12"
+                          : isLightBackgroundTheme
+                          ? isTodayDate
+                            ? "bg-[color:var(--surface-muted)]"
+                            : ""
+                          : isTodayDate
+                          ? "bg-white/[0.04]"
+                          : "",
                       )}
                     >
                       <div className="min-w-0">
@@ -1255,7 +1275,12 @@ export function PlannerView() {
                       </div>
                     </div>
 
-                    <div className="h-[3px] w-full overflow-hidden bg-white/[0.04]">
+                    <div
+                      className={cn(
+                        "h-[3px] w-full overflow-hidden",
+                        isLightBackgroundTheme ? "bg-[color:var(--surface-muted)]" : "bg-white/[0.04]",
+                      )}
+                    >
                       <div
                         className={cn("h-full transition-[width]", intensity.barClassName)}
                         style={{ width: `${widthPercent}%` }}
