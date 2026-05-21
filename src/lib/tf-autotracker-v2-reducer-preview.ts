@@ -8,6 +8,7 @@ import {
   type AutoTrackerV2SessionMachineState,
   type AutoTrackerV2Target,
 } from "./tf-autotracker-v2-session-machine.js";
+import { formatDateKey } from "./datetime.js";
 import type {
   AutoTrackerV2NativeRecoveryDiagnostics,
   AutoTrackerV2NativeRecoveryState,
@@ -968,7 +969,7 @@ export function mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
 
   return {
     id: sessionLogId,
-    date: startISO.slice(0, 10),
+    date: formatDateKey(new Date(previewSession.startedAtMs)),
     method,
     methodKey,
     hours: roundHours(previewSession.durationMs / 3_600_000),

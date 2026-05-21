@@ -12,10 +12,22 @@ import {
   X,
 } from "lucide-react";
 import { FF } from "../../lib/feature-flags";
-import { formatLongDate, formatMinutes, formatShortMinutes, formatTimerLabel, getTodayKey } from "../../lib/datetime";
+import {
+  combineLocalDateAndTimeToIso,
+  formatLongDate,
+  formatMinutes,
+  formatShortMinutes,
+  formatTimerLabel,
+  getLocalDateKeyFromIso,
+  getTodayKey,
+} from "../../lib/datetime";
 import { useTimeFolioStore } from "../../state/tf-store";
 import { cn, fieldClassName, primaryButtonClassName, secondaryButtonClassName } from "../../lib/ui";
-import { splitAutoSessionMethodLabel } from "../../lib/tf-session-adapters";
+import {
+  getSessionLogDateKey,
+  hasMeaningfulSessionLogStartTimestamp,
+  splitAutoSessionMethodLabel,
+} from "../../lib/tf-session-adapters";
 import type { TfSessionLog } from "../../types/models";
 import { QuietPanel } from "../../components/ui";
 import { useAutoTrackerV2SessionControl, type AutoTrackerV2SessionControl } from "./autotracker-v2-session-control";
@@ -24,6 +36,7 @@ function createEmptyForm() {
   return {
     method: "",
     date: getTodayKey(),
+    startTime: "",
     minutes: "",
     notes: "",
     isDistraction: false,
@@ -48,15 +61,21 @@ function toMethodKey(method: string): string {
 
 function buildSession(form: FormState, id: string): TfSessionLog {
   const parsedMinutes = Number(form.minutes);
-  const startISO = `${form.date}T00:00:00.000Z`;
+  const startISO = form.startTime.trim()
+    ? combineLocalDateAndTimeToIso(form.date, form.startTime)
+    : null;
+  const endISO =
+    startISO && Number.isFinite(parsedMinutes)
+      ? new Date(Date.parse(startISO) + parsedMinutes * 60_000).toISOString()
+      : "";
   return {
     id,
-    date: form.date,
+    date: startISO ? (getLocalDateKeyFromIso(startISO) ?? form.date) : form.date,
     method: form.method.trim(),
     methodKey: toMethodKey(form.method),
     hours: Number.isFinite(parsedMinutes) ? parsedMinutes / 60 : 0,
-    startISO,
-    endISO: startISO,
+    startISO: startISO ?? "",
+    endISO,
     notes: form.notes.trim(),
     isDistraction: form.isDistraction,
     isLive: false,
@@ -73,22 +92,41 @@ function validateSessionForm(form: FormState): string | null {
   if (minutes < 1) return "Minutes must be at least 1.";
   if (minutes > 1440) return "Minutes must be 1440 or less.";
 
+  if (form.startTime.trim() && !combineLocalDateAndTimeToIso(form.date, form.startTime)) {
+    return "Start time must be a valid local time.";
+  }
+
   return null;
 }
 
 function sessionToForm(s: TfSessionLog): FormState {
+  const resolvedDate = getSessionLogDateKey(s) || s.date;
   return {
     method: s.method,
-    date: s.date,
+    date: resolvedDate,
+    startTime: getStartTimeInputValue(s, resolvedDate),
     minutes: String(Math.round(s.hours * 60)),
     notes: s.notes,
     isDistraction: s.isDistraction,
   };
 }
 
-function localDateStr(isoStr: string): string {
-  const d = new Date(isoStr);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function getStartTimeInputValue(session: TfSessionLog, dateKey: string): string {
+  if (!hasMeaningfulSessionLogStartTimestamp(session)) {
+    return "";
+  }
+
+  const start = new Date(session.startISO);
+  if (Number.isNaN(start.getTime())) {
+    return "";
+  }
+
+  const localDateKey = getLocalDateKeyFromIso(session.startISO);
+  if (!localDateKey || localDateKey !== dateKey) {
+    return "";
+  }
+
+  return `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`;
 }
 
 type TimerStatus = "idle" | "running" | "paused";
@@ -126,6 +164,9 @@ function formatClockTimeLabel(isoValue: string): string | null {
 }
 
 function formatSessionTimeRange(session: TfSessionLog): string | null {
+  if (!hasMeaningfulSessionLogStartTimestamp(session)) {
+    return null;
+  }
   const startLabel = formatClockTimeLabel(session.startISO);
   const endLabel = formatClockTimeLabel(session.endISO);
   if (!startLabel || !endLabel) {
@@ -344,7 +385,7 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
     try {
       const session: TfSessionLog = {
         id: `tf-session-${endMs}`,
-        date: localDateStr(startISORef.current),
+        date: getLocalDateKeyFromIso(startISORef.current) ?? getTodayKey(),
         method: method.trim(),
         methodKey: toMethodKey(method),
         hours: minutes / 60,
@@ -616,7 +657,7 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
           />
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <div className="flex flex-1 flex-col gap-1">
             <label className="text-xs text-slate-400">Date *</label>
             <input
@@ -625,6 +666,16 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
               value={form.date}
               onChange={(e) => set("date", e.target.value)}
               required
+              disabled={isSaving}
+            />
+          </div>
+          <div className="flex flex-1 flex-col gap-1">
+            <label className="text-xs text-slate-400">Start time</label>
+            <input
+              className={fieldClassName}
+              type="time"
+              value={form.startTime}
+              onChange={(e) => set("startTime", e.target.value)}
               disabled={isSaving}
             />
           </div>
@@ -721,11 +772,11 @@ export function SessionLogPanel({
   const undoCountdownValueRef = useRef<number | null>(null);
   const deleteNoticeTokenRef = useRef(0);
 
-  const sessions = [...state.sessionLogs].sort(
-    (a, b) => new Date(b.startISO).getTime() - new Date(a.startISO).getTime()
+  const sessions = [...state.sessionLogs].sort((a, b) =>
+    (b.startISO || b.date).localeCompare(a.startISO || a.date),
   );
   const todayKey = getTodayKey();
-  const selectedSessions = sessions.filter((session) => session.date === selectedDate);
+  const selectedSessions = sessions.filter((session) => getSessionLogDateKey(session) === selectedDate);
   const sessionGroups = selectedSessions.reduce<
     Array<{
       date: string;
@@ -736,9 +787,13 @@ export function SessionLogPanel({
     }>
   >((groups, session) => {
     const minutes = Math.max(0, Math.round(session.hours * 60));
+    const sessionDateKey = getSessionLogDateKey(session);
+    if (!sessionDateKey) {
+      return groups;
+    }
     let group = groups[groups.length - 1];
-    if (!group || group.date !== session.date) {
-      group = { date: session.date, sessions: [], studyMinutes: 0, distractionMinutes: 0, totalMinutes: 0 };
+    if (!group || group.date !== sessionDateKey) {
+      group = { date: sessionDateKey, sessions: [], studyMinutes: 0, distractionMinutes: 0, totalMinutes: 0 };
       groups.push(group);
     }
     group.sessions.push(session);

@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { daysUntilDateKey, formatShortMinutes, formatTimerLabel } from "../../src/lib/datetime.ts";
+import {
+  combineLocalDateAndTimeToIso,
+  daysUntilDateKey,
+  formatShortMinutes,
+  formatTimerLabel,
+  getLocalDateKeyFromIso,
+} from "../../src/lib/datetime.ts";
 
 test("formatShortMinutes avoids the ugly 0m label", () => {
   assert.equal(formatShortMinutes(0), "<1m");
@@ -20,4 +26,15 @@ test("daysUntilDateKey counts local calendar days", () => {
   assert.equal(daysUntilDateKey("2026-05-16", "2026-05-16"), 0);
   assert.equal(daysUntilDateKey("2026-05-17", "2026-05-16"), 1);
   assert.equal(daysUntilDateKey("2026-05-15", "2026-05-16"), 0);
+});
+
+test("combineLocalDateAndTimeToIso builds a valid local timestamp", () => {
+  const iso = combineLocalDateAndTimeToIso("2026-05-21", "13:15");
+  assert.ok(iso);
+  assert.equal(getLocalDateKeyFromIso(iso ?? ""), "2026-05-21");
+});
+
+test("combineLocalDateAndTimeToIso rejects invalid clock values", () => {
+  assert.equal(combineLocalDateAndTimeToIso("2026-05-21", "24:00"), null);
+  assert.equal(combineLocalDateAndTimeToIso("2026-05-21", "9:15"), null);
 });

@@ -4,7 +4,11 @@ import test from "node:test";
 import {
   allocationByMethodDisplay,
   displayMethodLabel,
+  getSessionLogDateKey,
+  hasMeaningfulSessionLogStartTimestamp,
+  mergeSessionsByDate,
   splitAutoSessionMethodLabel,
+  totalsByDay,
 } from "../../src/lib/tf-session-adapters.ts";
 import type { TfSessionLog } from "../../src/types/models.ts";
 
@@ -79,4 +83,67 @@ test("allocationByMethodDisplay merges auto and manual rows under the same label
   assert.equal(allocation[1].method, "Anki");
   assert.equal(allocation[1].hours, 1.5);
   assert.equal(allocation[1].sessionCount, 2);
+});
+
+test("session log date bucketing uses the local start day for timed sessions", () => {
+  const localEveningSession: TfSessionLog = {
+    id: "late-night-auto",
+    date: "2026-05-21",
+    method: "UWorld [Auto]",
+    methodKey: "uworld-auto",
+    hours: 1,
+    startISO: "2026-05-21T00:48:00.000Z",
+    endISO: "2026-05-21T01:48:00.000Z",
+    notes: "",
+    isDistraction: false,
+    isLive: false,
+  };
+  const thursdaySession: TfSessionLog = {
+    id: "thursday-manual",
+    date: "2026-05-21",
+    method: "UWorld",
+    methodKey: "uworld",
+    hours: 0.25,
+    startISO: "2026-05-21T17:15:00.000Z",
+    endISO: "2026-05-21T17:30:00.000Z",
+    notes: "Exam review.",
+    isDistraction: false,
+    isLive: false,
+  };
+
+  assert.equal(hasMeaningfulSessionLogStartTimestamp(localEveningSession), true);
+  assert.equal(getSessionLogDateKey(localEveningSession), "2026-05-20");
+  assert.equal(getSessionLogDateKey(thursdaySession), "2026-05-21");
+
+  const grouped = mergeSessionsByDate([localEveningSession, thursdaySession]);
+  assert.deepEqual(
+    grouped.map((group) => ({ date: group.date, ids: group.sessions.map((session) => session.id) })),
+    [
+      { date: "2026-05-21", ids: ["thursday-manual"] },
+      { date: "2026-05-20", ids: ["late-night-auto"] },
+    ],
+  );
+
+  assert.deepEqual(totalsByDay([localEveningSession, thursdaySession]), {
+    "2026-05-20": 1,
+    "2026-05-21": 0.25,
+  });
+});
+
+test("legacy date-only manual rows fall back to the stored day", () => {
+  const legacyManualSession: TfSessionLog = {
+    id: "manual-legacy",
+    date: "2026-05-21",
+    method: "Manual Review",
+    methodKey: "manual-review",
+    hours: 1,
+    startISO: "2026-05-21T00:00:00.000Z",
+    endISO: "2026-05-21T00:00:00.000Z",
+    notes: "",
+    isDistraction: false,
+    isLive: false,
+  };
+
+  assert.equal(hasMeaningfulSessionLogStartTimestamp(legacyManualSession), false);
+  assert.equal(getSessionLogDateKey(legacyManualSession), "2026-05-21");
 });

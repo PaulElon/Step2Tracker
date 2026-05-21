@@ -582,6 +582,34 @@ test("maps a finalized distraction preview session to a distraction Session Log 
   });
 });
 
+test("maps a finalized preview session onto the local start day when UTC rolled over", () => {
+  const previewSession = {
+    previewSessionId: "website:apps.uworld.com:1779324480000",
+    startedAtMs: Date.parse("2026-05-21T00:48:00.000Z"),
+    endedAtMs: Date.parse("2026-05-21T01:48:00.000Z"),
+    durationMs: 60 * 60_000,
+    targetLabel: "UWorld",
+    sourceTargetStableId: "apps.uworld.com",
+    sourceSpanIds: ["span-uworld-late"],
+    sourceEventIds: ["event-uworld-late"],
+    matchedRuleName: "UWorld",
+    matchedRuleTarget: "https://apps.uworld.com",
+    browserTitle: "UWorld Step 2",
+    browserUrl: "https://apps.uworld.com/courseapp/step2",
+    classificationReason: 'matched website rule "UWorld" (https://apps.uworld.com) by host apps.uworld.com',
+    classification: "tracked",
+    finalizedBy: "awayGraceElapsed",
+    isDistraction: false,
+  } as TfAutotrackerV2FinalizedPreviewSession;
+
+  const sessionLog = mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
+    previewSession,
+    "tf-auto-v2-preview-write-local-date",
+  );
+
+  assert.equal(sessionLog.date, "2026-05-20");
+});
+
 test("maps a finalized Anki preview session to a concise Session Log payload", () => {
   const previewSession: TfAutotrackerV2FinalizedPreviewSession = {
     previewSessionId: "app:/Applications/Anki.app:1746457200000",

@@ -44,6 +44,26 @@ test("filters to the requested date only", () => {
   assert.equal(getTrackedStudyMinutesForDate(logs, "2026-05-16"), 60);
 });
 
+test("uses the local start date when a timed session rolled into the next UTC day", () => {
+  const logs = [
+    makeLog({
+      date: "2026-05-21",
+      hours: 1,
+      startISO: "2026-05-21T00:48:00.000Z",
+      endISO: "2026-05-21T01:48:00.000Z",
+    }),
+    makeLog({
+      date: "2026-05-21",
+      hours: 0.25,
+      startISO: "2026-05-21T17:15:00.000Z",
+      endISO: "2026-05-21T17:30:00.000Z",
+    }),
+  ];
+
+  assert.equal(getTrackedStudyMinutesForDate(logs, "2026-05-20"), 60);
+  assert.equal(getTrackedStudyMinutesForDate(logs, "2026-05-21"), 15);
+});
+
 test("returns 0 for empty log list", () => {
   assert.equal(getTrackedStudyMinutesForDate([], "2026-05-16"), 0);
 });

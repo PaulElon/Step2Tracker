@@ -1,3 +1,4 @@
+import { getSessionLogDateKey } from "./tf-session-adapters";
 import type { TfSessionLog } from "../types/models";
 
 export function getTrackedStudyMinutesForDate(
@@ -5,6 +6,6 @@ export function getTrackedStudyMinutesForDate(
   dateKey: string,
 ): number {
   return sessionLogs
-    .filter((log) => log.date === dateKey && !log.isDistraction)
+    .filter((log) => getSessionLogDateKey(log) === dateKey && !log.isDistraction)
     .reduce((total, log) => total + log.hours * 60, 0);
 }

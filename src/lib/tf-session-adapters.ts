@@ -1,3 +1,4 @@
+import { getLocalDateKeyFromIso } from "./datetime";
 import type { StudyBlock, TfSessionLog } from "../types/models";
 
 export function roundHours(value: number): number {
@@ -32,6 +33,53 @@ export function splitAutoSessionMethodLabel(method: string): { label: string; is
 
 export function displayMethodLabel(method: string): string {
   return splitAutoSessionMethodLabel(method).label;
+}
+
+const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
+
+function normalizeDateKey(value: string): string {
+  const trimmed = value.trim();
+  return DATE_KEY_PATTERN.test(trimmed) ? trimmed : "";
+}
+
+function parseTimestampMs(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const timestamp = Date.parse(trimmed);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+export function hasMeaningfulSessionLogStartTimestamp(
+  session: Pick<TfSessionLog, "startISO" | "endISO">,
+): boolean {
+  const startMs = parseTimestampMs(session.startISO);
+  if (startMs === null) {
+    return false;
+  }
+
+  const endMs = parseTimestampMs(session.endISO);
+  return endMs === null || endMs > startMs;
+}
+
+export function getSessionLogDateKey(
+  session: Pick<TfSessionLog, "date" | "startISO" | "endISO">,
+): string {
+  if (hasMeaningfulSessionLogStartTimestamp(session)) {
+    const startedDateKey = getLocalDateKeyFromIso(session.startISO);
+    if (startedDateKey) {
+      return startedDateKey;
+    }
+  }
+
+  const explicitDateKey = normalizeDateKey(session.date);
+  if (explicitDateKey) {
+    return explicitDateKey;
+  }
+
+  return getLocalDateKeyFromIso(session.startISO) ?? "";
 }
 
 export function allocationByMethodDisplay(
@@ -90,7 +138,11 @@ export function studyBlockToSession(block: StudyBlock): TfSessionLog {
 export function totalsByDay(sessions: TfSessionLog[]): Record<string, number> {
   const result: Record<string, number> = {};
   for (const s of sessions) {
-    result[s.date] = roundHours((result[s.date] ?? 0) + s.hours);
+    const dateKey = getSessionLogDateKey(s);
+    if (!dateKey) {
+      continue;
+    }
+    result[dateKey] = roundHours((result[dateKey] ?? 0) + s.hours);
   }
   return result;
 }
@@ -124,11 +176,15 @@ export function mergeSessionsByDate(
 ): Array<{ date: string; sessions: TfSessionLog[]; hours: number }> {
   const map = new Map<string, TfSessionLog[]>();
   for (const s of sessions) {
-    const group = map.get(s.date);
+    const dateKey = getSessionLogDateKey(s);
+    if (!dateKey) {
+      continue;
+    }
+    const group = map.get(dateKey);
     if (group) {
       group.push(s);
     } else {
-      map.set(s.date, [s]);
+      map.set(dateKey, [s]);
     }
   }
   return [...map.entries()]

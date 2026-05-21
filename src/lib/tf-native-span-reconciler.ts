@@ -1,3 +1,4 @@
+import { formatDateKey } from "./datetime";
 import { methodKeyFromLabel } from "./tf-session-adapters";
 import type { TfSessionLog } from "../types/models";
 
@@ -109,7 +110,7 @@ export function reconcileNativeSpansToSessions(
 
     newEntries.push({
       id,
-      date: startDate.toISOString().slice(0, 10),
+      date: formatDateKey(startDate),
       method,
       methodKey: methodKeyFromLabel(method),
       hours: toHours(endTs - startTs),

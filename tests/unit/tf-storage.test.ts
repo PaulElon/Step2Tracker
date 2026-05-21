@@ -404,6 +404,26 @@ test("native deletion suppression still prevents nat-* rows from being re-import
   assert.equal(reconciled.skipped, 1);
 });
 
+test("native span import stores the local start day instead of the UTC day", () => {
+  const reconciled = reconcileNativeSpansToSessions(
+    [
+      {
+        device_id: "device-2",
+        span_id: "span-2",
+        start_ts: Date.parse("2026-05-21T00:48:00.000Z"),
+        end_ts: Date.parse("2026-05-21T01:48:00.000Z"),
+        name: "Google Chrome",
+        title: "UWorld Step 2",
+        kind: "tracked",
+      },
+    ],
+    [],
+    getDeletedNativeIds(),
+  );
+
+  assert.equal(reconciled.newEntries[0]?.date, "2026-05-20");
+});
+
 test("native persistence api keeps tombstone eligibility metadata on save and load", async () => {
   const localStorage = installBrowserStorage();
   const nativeState: TfAppState = {
