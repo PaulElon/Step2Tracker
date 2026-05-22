@@ -24,6 +24,7 @@ import {
   upsertNativeWeakTopic,
 } from "../lib/native-persistence";
 import {
+  convertWebBackupToDesktopArtifact,
   createBootstrapState,
   getLegacyBrowserMigrationPayload,
   matchesBootstrapSeed,
@@ -414,11 +415,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     restoreTrashItem: (entityType, id) =>
       enqueueSnapshotOperation(() => restoreNativeTrashItem(entityType, id)),
     exportBackup: () => exportNativeBackupArtifact(),
-    previewBackupArtifact: (raw) => previewNativeBackupArtifact(raw),
+    previewBackupArtifact: (raw) =>
+      previewNativeBackupArtifact(convertWebBackupToDesktopArtifact(raw) ?? raw),
     restoreBackupArtifact: (raw, options) =>
-      enqueueSnapshotOperation(() => restoreNativeBackupArtifact(raw), {
-        alertOnError: options?.alertOnError ?? true,
-      }),
+      enqueueSnapshotOperation(
+        () => restoreNativeBackupArtifact(convertWebBackupToDesktopArtifact(raw) ?? raw),
+        {
+          alertOnError: options?.alertOnError ?? true,
+        },
+      ),
     restoreBackupSnapshot: (backupId, options) =>
       enqueueSnapshotOperation(() => restoreNativeSnapshot(backupId), {
         alertOnError: options?.alertOnError ?? true,

@@ -1503,6 +1503,449 @@ export function parseBackupPayload(raw: string) {
   return normalizeAppState(parsed.state);
 }
 
+export const WEB_BACKUP_APP_ID = "TimeFolio-Web";
+export const DESKTOP_BACKUP_APP_ID = "step2-command-center";
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) ? value : null;
+}
+
+function asString(value: unknown, fallback = ""): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || fallback;
+  }
+  return fallback;
+}
+
+function asNumber(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  return fallback;
+}
+
+function ensureIsoDateTime(value: unknown, fallback: string): string {
+  if (typeof value === "string" && value.trim()) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+  return fallback;
+}
+
+function ensureDate(value: unknown, fallback: string): string {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+  return fallback;
+}
+
+function ensureTime(value: unknown, fallback: string): string {
+  if (typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+    return value;
+  }
+  return fallback;
+}
+
+function splitWebDuration(totalMinutes: number) {
+  const safe = Math.max(0, Math.round(totalMinutes));
+  return {
+    durationHours: Math.floor(safe / 60),
+    durationMinutes: safe % 60,
+  };
+}
+
+function convertWebStudyBlock(raw: Record<string, unknown>, fallbackIso: string) {
+  const totalMinutes = (() => {
+    const direct = raw.durationMinutes;
+    if (typeof direct === "number" && Number.isFinite(direct)) {
+      return Math.max(0, Math.round(direct));
+    }
+    const hours = raw.durationHours;
+    if (typeof hours === "number" && Number.isFinite(hours)) {
+      return Math.max(0, Math.round(hours * 60));
+    }
+    return 0;
+  })();
+  const { durationHours, durationMinutes } = splitWebDuration(totalMinutes);
+  const completed =
+    raw.completed === true ||
+    asString(raw.status).toLowerCase() === "completed";
+  const status = completed ? "Completed" : asString(raw.status) || "Not Started";
+  const date = ensureDate(raw.date, getTodayKey());
+  return {
+    id: asString(raw.id, `imported-block-${fallbackIso}`),
+    date,
+    day: asString(raw.day, getDayName(date)),
+    durationHours,
+    durationMinutes,
+    completed,
+    order: asNumber(raw.order, 0),
+    startTime: typeof raw.startTime === "string" ? raw.startTime : "",
+    endTime: typeof raw.endTime === "string" ? raw.endTime : "",
+    isOvernight: raw.isOvernight === true,
+    category: asString(raw.category, "Review"),
+    task: asString(raw.task, "Untitled study task"),
+    status,
+    notes: typeof raw.notes === "string" ? raw.notes : "",
+    importSourceId:
+      typeof raw.importSourceId === "string" && raw.importSourceId.trim()
+        ? raw.importSourceId
+        : undefined,
+    reminderAt:
+      typeof raw.reminderAt === "string" && raw.reminderAt.trim() ? raw.reminderAt : undefined,
+    reminderSentAt:
+      typeof raw.reminderSentAt === "string" && raw.reminderSentAt.trim()
+        ? raw.reminderSentAt
+        : undefined,
+    createdAt: ensureIsoDateTime(raw.createdAt, fallbackIso),
+    updatedAt: ensureIsoDateTime(raw.updatedAt, fallbackIso),
+  };
+}
+
+function convertWebPracticeTest(raw: Record<string, unknown>, fallbackIso: string) {
+  const weakTopics = Array.isArray(raw.weakTopics)
+    ? raw.weakTopics.filter((entry): entry is string => typeof entry === "string")
+    : [];
+  const strongTopics = Array.isArray(raw.strongTopics)
+    ? raw.strongTopics.filter((entry): entry is string => typeof entry === "string")
+    : [];
+  return {
+    id: asString(raw.id, `imported-test-${fallbackIso}`),
+    date: ensureDate(raw.date, getTodayKey()),
+    source: asString(raw.source, "Other"),
+    form: asString(raw.form, ""),
+    questionCount: Math.max(1, Math.trunc(asNumber(raw.questionCount, 1))),
+    scorePercent: Math.min(100, Math.max(0, asNumber(raw.scorePercent, 0))),
+    weakTopics,
+    strongTopics,
+    reflections: asString(raw.reflections, ""),
+    actionPlan: asString(raw.actionPlan, ""),
+    minutesSpent: Math.max(0, Math.trunc(asNumber(raw.minutesSpent, 0))),
+    createdAt: ensureIsoDateTime(raw.createdAt, fallbackIso),
+    updatedAt: ensureIsoDateTime(raw.updatedAt, fallbackIso),
+  };
+}
+
+function convertWebWeakTopic(raw: Record<string, unknown>, fallbackIso: string) {
+  const priorityRaw = asString(raw.priority);
+  const priority =
+    priorityRaw === "High" || priorityRaw === "Medium" || priorityRaw === "Low"
+      ? priorityRaw
+      : "Medium";
+  const statusRaw = asString(raw.status);
+  const status =
+    statusRaw === "Active" || statusRaw === "Improving" || statusRaw === "Resolved"
+      ? statusRaw
+      : "Active";
+  const entryTypeRaw = asString(raw.entryType);
+  const entryType =
+    entryTypeRaw === "practice-test" ? "practice-test" : "manual";
+  return {
+    id: asString(raw.id, `imported-topic-${fallbackIso}`),
+    topic: asString(raw.topic, "Untitled weak topic"),
+    entryType,
+    priority,
+    status,
+    notes: typeof raw.notes === "string" ? raw.notes : "",
+    lastSeenAt: ensureDate(raw.lastSeenAt, getTodayKey()),
+    sourceLabel: asString(raw.sourceLabel, entryType === "practice-test" ? "Practice test" : "Manual"),
+    createdAt: ensureIsoDateTime(raw.createdAt, fallbackIso),
+    updatedAt: ensureIsoDateTime(raw.updatedAt, fallbackIso),
+  };
+}
+
+function convertWebErrorLogEntry(raw: Record<string, unknown>, fallbackIso: string) {
+  return {
+    id: asString(raw.id, `imported-error-${fallbackIso}`),
+    source: asString(raw.source, "Other"),
+    examBlock: asString(raw.examBlock, ""),
+    system: asString(raw.system, "Other"),
+    topic: asString(raw.topic, "Imported"),
+    errorType: asString(raw.errorType, "Knowledge Gap"),
+    missedPattern: asString(raw.missedPattern, "Imported"),
+    fix: asString(raw.fix, "Imported"),
+    whyPickedWrongAnswer: typeof raw.whyPickedWrongAnswer === "string" ? raw.whyPickedWrongAnswer : "",
+    whyCorrectAnswerIsCorrect:
+      typeof raw.whyCorrectAnswerIsCorrect === "string" ? raw.whyCorrectAnswerIsCorrect : "",
+    whyTemptingWrongAnswerIsWrong:
+      typeof raw.whyTemptingWrongAnswerIsWrong === "string" ? raw.whyTemptingWrongAnswerIsWrong : "",
+    decisionRule: typeof raw.decisionRule === "string" ? raw.decisionRule : "",
+    isRepeatMiss: raw.isRepeatMiss === true,
+    followUpAction: asString(raw.followUpAction, ""),
+    isGuessedCorrect: raw.isGuessedCorrect === true,
+    addToFinalSheet: raw.addToFinalSheet === true,
+    priority: (() => {
+      const value = asString(raw.priority).toLowerCase();
+      return value === "high" || value === "low" ? value : "medium";
+    })(),
+    entryDate: typeof raw.entryDate === "string" ? raw.entryDate : "",
+    createdAt: ensureIsoDateTime(raw.createdAt, fallbackIso),
+    updatedAt: ensureIsoDateTime(raw.updatedAt, fallbackIso),
+  };
+}
+
+function convertWebResourceLink(raw: Record<string, unknown>, index: number) {
+  const label = asString(raw.label);
+  const url = asString(raw.url);
+  if (!label || !url) {
+    return null;
+  }
+  const typeRaw = asString(raw.type).toLowerCase();
+  const kind = typeRaw === "app" ? "app" : "website";
+  return {
+    id: asString(raw.id, `imported-resource-${index + 1}`),
+    label,
+    url,
+    kind,
+  };
+}
+
+function convertWebCustomCategoryToString(raw: unknown): string | null {
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    return trimmed || null;
+  }
+  if (isRecord(raw)) {
+    const label = typeof raw.label === "string" ? raw.label.trim() : "";
+    return label || null;
+  }
+  return null;
+}
+
+function convertWebNotebookFolder(raw: Record<string, unknown>, fallbackIso: string) {
+  return {
+    id: asString(raw.id, `imported-folder-${fallbackIso}`),
+    name: asString(raw.name, "Imported Folder"),
+    parentFolderId:
+      typeof raw.parentFolderId === "string" && raw.parentFolderId.trim()
+        ? raw.parentFolderId
+        : undefined,
+    favorited: raw.favorited === true,
+    order: Math.trunc(asNumber(raw.order, 0)),
+    createdAt: ensureIsoDateTime(raw.createdAt, fallbackIso),
+    updatedAt: ensureIsoDateTime(raw.updatedAt, fallbackIso),
+  };
+}
+
+function convertWebNotebookPage(raw: Record<string, unknown>, fallbackIso: string) {
+  const kindRaw = typeof raw.kind === "string" ? raw.kind : undefined;
+  // Web "note" → desktop "tiptap" (encoded as kind absent on desktop).
+  // Web "pdf" pages have no pdfFilename in web payload; desktop requires it,
+  // so we safely demote them to tiptap pages to avoid corrupting the artifact.
+  const kind: string | undefined = kindRaw === "pdf" ? undefined : undefined;
+  return {
+    id: asString(raw.id, `imported-page-${fallbackIso}`),
+    title: asString(raw.title, "Untitled"),
+    contentHtml: typeof raw.contentHtml === "string" ? raw.contentHtml : "",
+    favorited: raw.favorited === true,
+    folderId:
+      typeof raw.folderId === "string" && raw.folderId.trim() ? raw.folderId : undefined,
+    order: Math.trunc(asNumber(raw.order, 0)),
+    createdAt: ensureIsoDateTime(raw.createdAt, fallbackIso),
+    updatedAt: ensureIsoDateTime(raw.updatedAt, fallbackIso),
+    ...(kind ? { kind } : {}),
+  };
+}
+
+function convertWebNotebookDocument(raw: Record<string, unknown>, fallbackIso: string) {
+  const pages = Array.isArray(raw.pages)
+    ? raw.pages.flatMap((page) =>
+        isRecord(page) ? [convertWebNotebookPage(page, fallbackIso)] : [],
+      )
+    : [];
+  return {
+    id: asString(raw.id, `imported-doc-${fallbackIso}`),
+    title: asString(raw.title, "Imported Document"),
+    folderId:
+      typeof raw.folderId === "string" && raw.folderId.trim() ? raw.folderId : undefined,
+    favorited: raw.favorited === true,
+    order: Math.trunc(asNumber(raw.order, 0)),
+    pages,
+    createdAt: ensureIsoDateTime(raw.createdAt, fallbackIso),
+    updatedAt: ensureIsoDateTime(raw.updatedAt, fallbackIso),
+  };
+}
+
+export function isWebBackupArtifact(parsed: unknown): boolean {
+  const wrapper = asRecord(parsed);
+  if (!wrapper) return false;
+  const metadata = asRecord(wrapper.metadata);
+  if (metadata && asString(metadata.app) === WEB_BACKUP_APP_ID) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Convert a TimeFolio-Web backup JSON string into a desktop BackupArtifact
+ * JSON string. Returns null when the input is not a recognized web backup,
+ * so the caller can fall back to the native parser unchanged.
+ */
+export function convertWebBackupToDesktopArtifact(raw: string): string | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!isWebBackupArtifact(parsed)) {
+    return null;
+  }
+
+  const wrapper = parsed as Record<string, unknown>;
+  const metadata = asRecord(wrapper.metadata) ?? {};
+  const webState = asRecord(wrapper.state) ?? {};
+  const webPrefs = asRecord(webState.preferences) ?? {};
+  const webNotebook = asRecord(webState.notebook) ?? {};
+  const fallbackIso = nowIso();
+  const today = getTodayKey();
+
+  const studyBlocks = Array.isArray(webState.studyBlocks)
+    ? webState.studyBlocks.flatMap((entry) =>
+        isRecord(entry) ? [convertWebStudyBlock(entry, fallbackIso)] : [],
+      )
+    : [];
+  const practiceTests = Array.isArray(webState.practiceTests)
+    ? webState.practiceTests.flatMap((entry) =>
+        isRecord(entry) ? [convertWebPracticeTest(entry, fallbackIso)] : [],
+      )
+    : [];
+  const weakTopicEntries = Array.isArray(webState.weakTopicEntries)
+    ? webState.weakTopicEntries.flatMap((entry) =>
+        isRecord(entry) ? [convertWebWeakTopic(entry, fallbackIso)] : [],
+      )
+    : [];
+  const errorLogEntries = Array.isArray(webState.errorLogEntries)
+    ? webState.errorLogEntries.flatMap((entry) =>
+        isRecord(entry) ? [convertWebErrorLogEntry(entry, fallbackIso)] : [],
+      )
+    : [];
+  const notebookFolders = Array.isArray(webNotebook.folders)
+    ? webNotebook.folders.flatMap((entry) =>
+        isRecord(entry) ? [convertWebNotebookFolder(entry, fallbackIso)] : [],
+      )
+    : [];
+  const notebookDocuments = Array.isArray(webNotebook.documents)
+    ? webNotebook.documents.flatMap((entry) =>
+        isRecord(entry) ? [convertWebNotebookDocument(entry, fallbackIso)] : [],
+      )
+    : [];
+
+  const themeIdRaw = asString(webPrefs.themeId, "dark");
+  const themeId = (THEME_VALUES as readonly string[]).includes(themeIdRaw)
+    ? themeIdRaw
+    : "dark";
+
+  const enhancedThemeIds = Array.isArray(webPrefs.enhancedThemeIds)
+    ? webPrefs.enhancedThemeIds.filter(
+        (id): id is string =>
+          typeof id === "string" && (THEME_VALUES as readonly string[]).includes(id),
+      )
+    : [];
+
+  const customCategories = Array.isArray(webPrefs.customCategories)
+    ? (webPrefs.customCategories
+        .map(convertWebCustomCategoryToString)
+        .filter((value): value is string => Boolean(value)))
+    : [];
+
+  const resourceLinks = Array.isArray(webPrefs.resourceLinks)
+    ? webPrefs.resourceLinks.flatMap((entry, index) => {
+        if (!isRecord(entry)) return [];
+        const converted = convertWebResourceLink(entry, index);
+        return converted ? [converted] : [];
+      })
+    : [];
+
+  const examTimers = Array.isArray(webPrefs.examTimers)
+    ? webPrefs.examTimers.flatMap((entry, index) => {
+        if (!isRecord(entry)) return [];
+        const label = asString(entry.label);
+        const examDate = asString(entry.examDate);
+        if (!label || !examDate) return [];
+        return [
+          {
+            id: asString(entry.id, `imported-exam-${index + 1}`),
+            label,
+            examDate,
+            examTime: ensureTime(entry.examTime, "23:59"),
+            displayMode: "days",
+          },
+        ];
+      })
+    : [];
+
+  const plannerFocusDate = ensureDate(webPrefs.plannerFocusDate, today);
+  const dailyGoalMinutes = Math.max(
+    0,
+    Math.trunc(asNumber(webPrefs.dailyGoalMinutes, DEFAULT_PREFERENCES.dailyGoalMinutes)),
+  );
+
+  const preferences = {
+    activeSection: "dashboard",
+    lastActiveDate: today,
+    themeId,
+    dailyGoalMinutes,
+    plannerFilters: {
+      search: "",
+      category: "All",
+      status: "All",
+      fromDate: "",
+      toDate: "",
+    },
+    plannerSort: { field: "date", direction: "asc" },
+    plannerMode: "week",
+    plannerFocusDate,
+    enhancedThemeIds,
+    customCategories,
+    resourceLinks,
+    examTimers,
+    notesHtml: "",
+    notebookFolders,
+    notebookPages: [],
+    notebookDocuments,
+    scoreTrendOptions: {
+      showConnectionLine: false,
+      showBestFitLine: true,
+      showBestFitRSquared: false,
+    },
+  };
+
+  const state = {
+    version: APP_STATE_VERSION,
+    studyBlocks,
+    practiceTests,
+    weakTopicEntries,
+    errorLogEntries,
+    preferences,
+  };
+
+  const artifact = {
+    app: DESKTOP_BACKUP_APP_ID,
+    formatVersion: 1,
+    schemaVersion:
+      typeof metadata.schemaVersion === "number" && Number.isFinite(metadata.schemaVersion)
+        ? Math.trunc(metadata.schemaVersion)
+        : 0,
+    appVersion: `${WEB_BACKUP_APP_ID}-import`,
+    exportedAt: ensureIsoDateTime(metadata.exportedAt, fallbackIso),
+    counts: {
+      studyBlocks: studyBlocks.length,
+      practiceTests: practiceTests.length,
+      weakTopicEntries: weakTopicEntries.length,
+      trashedStudyBlocks: 0,
+      trashedPracticeTests: 0,
+      trashedWeakTopicEntries: 0,
+    },
+    state,
+  };
+
+  return JSON.stringify(artifact);
+}
+
 export function mergeStudyBlocks(existingBlocks: StudyBlock[], incomingBlocks: StudyBlock[]) {
   const merged = new Map(existingBlocks.map((block) => [createStudyBlockIdentity(block), block]));
 
