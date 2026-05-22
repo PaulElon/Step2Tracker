@@ -111,6 +111,7 @@ function buildSessionTombstone(
 
 test("pushAllEntities sends recent upserts and delete tombstones and preserves the worker cursor", async () => {
   const state = createEmptyState();
+  state.preferences.updatedAt = "2026-05-17T09:30:00.000Z";
   state.studyBlocks = [
     {
       id: "study-old",
@@ -342,9 +343,9 @@ test("pushAllEntities sends recent upserts and delete tombstones and preserves t
           { id: "custom-category-notes", label: "Notes" },
         ],
         resourceLinks: [],
-        updatedAt: FIXED_PUSH_TIME,
+        updatedAt: "2026-05-17T09:30:00.000Z",
       },
-      clientUpdatedAt: FIXED_PUSH_TIME,
+      clientUpdatedAt: "2026-05-17T09:30:00.000Z",
     },
     {
       entityType: "practice_test",
@@ -370,7 +371,7 @@ test("pushAllEntities sends recent upserts and delete tombstones and preserves t
   ]);
 });
 
-test("pushAllEntities still pushes one preferences upsert when no other entity changed after the watermark", async () => {
+test("pushAllEntities falls back to the current sync time when preferences updatedAt is missing", async () => {
   const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     fetchCalls.push({ url: String(url), init });
@@ -1809,6 +1810,7 @@ test("mergeCloudPreferencesIntoDesktop applies safe fields and preserves desktop
   assert.deepEqual(merged.notebookFolders, baseline.notebookFolders);
   assert.deepEqual(merged.notebookDocuments, baseline.notebookDocuments);
   assert.deepEqual(merged.scoreTrendOptions, baseline.scoreTrendOptions);
+  assert.equal(merged.updatedAt, "2026-05-25T12:00:00.000Z");
 });
 
 test("mergeCloudPreferencesIntoDesktop leaves desktop defaults intact when cloud omits fields", () => {
@@ -1904,6 +1906,8 @@ test("mergeCloudPreferencesIntoDesktop drops invalid/web-only fields safely", ()
 
 test("pullFromCloud applies a preferences upsert and routes it through saveNativePreferences", async () => {
   const appliedPreferences: Preferences[] = [];
+  const state = createEmptyState();
+  state.preferences.updatedAt = "2026-05-21T10:00:00.000Z";
   globalThis.fetch = (async () =>
     new Response(
       JSON.stringify({
@@ -1937,6 +1941,7 @@ test("pullFromCloud applies a preferences upsert and routes it through saveNativ
     "token-x",
     "device-x",
     buildPullDependencies({
+      state,
       applyPreferences: async (preferences) => {
         appliedPreferences.push(preferences);
       },
@@ -1952,6 +1957,7 @@ test("pullFromCloud applies a preferences upsert and routes it through saveNativ
   assert.equal(next.resourceLinks.length, 1);
   assert.equal(next.resourceLinks[0].kind, "app");
   assert.equal(next.plannerFocusDate, "2026-05-25");
+  assert.equal(next.updatedAt, "2026-05-22T10:00:00.000Z");
   assert.deepEqual(result, {
     received: 1,
     applied: 1,
@@ -1959,6 +1965,53 @@ test("pullFromCloud applies a preferences upsert and routes it through saveNativ
     deleted: 0,
     skipped: 0,
     cursor: 33,
+  });
+});
+
+test("pullFromCloud skips a stale preferences upsert when local preferences updatedAt is newer or equal", async () => {
+  let applyCalled = false;
+  const state = createEmptyState();
+  state.preferences.updatedAt = "2026-05-22T10:00:00.000Z";
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        cursor: 34,
+        entries: [
+          {
+            entityType: "preferences",
+            entityId: "user-pref",
+            operation: "upsert",
+            clientUpdatedAt: "2026-05-22T10:00:00.000Z",
+            payload: {
+              dailyGoalMinutes: 300,
+              themeId: "light",
+              updatedAt: "2026-05-22T10:00:00.000Z",
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )) as typeof fetch;
+
+  const result = await pullFromCloud(
+    "token-x",
+    "device-x",
+    buildPullDependencies({
+      state,
+      applyPreferences: async () => {
+        applyCalled = true;
+      },
+    }),
+  );
+
+  assert.equal(applyCalled, false);
+  assert.deepEqual(result, {
+    received: 1,
+    applied: 0,
+    upserted: 0,
+    deleted: 0,
+    skipped: 1,
+    cursor: 34,
   });
 });
 

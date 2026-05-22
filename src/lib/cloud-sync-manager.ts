@@ -126,19 +126,30 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function getPreferencesUpdatedAt(preferences: Preferences): string | null {
+  return typeof preferences.updatedAt === "string" && preferences.updatedAt.trim()
+    ? preferences.updatedAt
+    : null;
+}
+
+function getCloudPreferencesUpdatedAt(
+  entryClientUpdatedAt: string,
+  payload: Record<string, unknown>,
+): string {
+  return typeof payload.updatedAt === "string" && payload.updatedAt.trim()
+    ? payload.updatedAt
+    : entryClientUpdatedAt;
+}
+
 // Cloud preferences carry only the subset of fields the web client owns.
 // Desktop-only state (planner filters/sort/mode, notesHtml, notebookFolders/
 // Pages/Documents, scoreTrendOptions, activeSection, lastActiveDate) must be
 // preserved across a pull — never overwritten by missing/null cloud values.
 // Web-only fields (remindersEnabled) and incompatible shapes are dropped.
-//
-// Conflict semantics: desktop's `Preferences` has no per-record updatedAt, so
-// cloud preferences always win for the fields they carry. This is acceptable
-// because the cloud is the source of truth for cross-device settings; the
-// local-only fields above are kept intact regardless.
 export function mergeCloudPreferencesIntoDesktop(
   current: Preferences,
   cloud: Record<string, unknown>,
+  updatedAt?: string,
 ): Preferences {
   const next: Preferences = { ...current };
 
@@ -218,10 +229,18 @@ export function mergeCloudPreferencesIntoDesktop(
     });
   }
 
+  const mergedUpdatedAt =
+    typeof updatedAt === "string" && updatedAt.trim()
+      ? updatedAt
+      : typeof cloud.updatedAt === "string" && cloud.updatedAt.trim()
+        ? cloud.updatedAt
+        : null;
+  if (mergedUpdatedAt) {
+    next.updatedAt = mergedUpdatedAt;
+  }
+
   // Intentionally ignored from cloud payload:
   //   activeSection     — per-device navigation state
-  //   updatedAt         — handled by the per-entry cursor; desktop has no
-  //                       persisted preferences updatedAt to compare against
   //   remindersEnabled  — no desktop equivalent (reminders are per-block)
   // Any other unknown fields are dropped silently.
 
@@ -523,10 +542,7 @@ export async function pushAllEntities(
     throw new Error("Cloud push dependencies are unavailable.");
   }
   const tfState = await loadTfState();
-  // Desktop preferences still do not expose their persisted updated_at through
-  // the JS/native seam, so push uses the current sync timestamp. This makes
-  // preferences push-time LWW until a real preferences updatedAt is surfaced.
-  const preferencesUpdatedAt = getNow();
+  const preferencesUpdatedAt = getPreferencesUpdatedAt(state.preferences) ?? getNow();
   const canonicalSessionLogs = buildCanonicalSessionLogExport(tfState.sessionLogs);
   const sessionLogDeleteTombstones = tfState.sessionLogTombstones.filter(
     (entry): entry is TfSessionLogTombstone =>
@@ -806,7 +822,17 @@ export async function pullFromCloud(
         continue;
       }
 
-      const merged = mergeCloudPreferencesIntoDesktop(currentPreferences, payload);
+      const cloudUpdatedAt = getCloudPreferencesUpdatedAt(entry.clientUpdatedAt, payload);
+      const localUpdatedAt = getPreferencesUpdatedAt(currentPreferences);
+      if (
+        localUpdatedAt &&
+        compareTimestamps(localUpdatedAt, cloudUpdatedAt) >= 0
+      ) {
+        skipped += 1;
+        continue;
+      }
+
+      const merged = mergeCloudPreferencesIntoDesktop(currentPreferences, payload, cloudUpdatedAt);
       await applyPreferences(merged);
       currentPreferences = merged;
       applied += 1;

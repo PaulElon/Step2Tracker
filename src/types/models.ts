@@ -264,6 +264,7 @@ export interface Preferences {
   notebookPages: NotebookPage[];
   notebookDocuments: NotebookDocument[];
   scoreTrendOptions: ScoreTrendOptions;
+  updatedAt?: string;
 }
 
 export type ErrorLogSource = "UWorld" | "TrueLearn" | "NBME" | "CMS Form" | "AMBOSS" | "COMSAE" | "Other";

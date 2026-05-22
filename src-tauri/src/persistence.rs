@@ -418,6 +418,8 @@ pub struct Preferences {
     pub notebook_documents: Vec<NotebookDocument>,
     #[serde(default = "default_score_trend_options")]
     pub score_trend_options: ScoreTrendOptions,
+    #[serde(default)]
+    pub updated_at: Option<String>,
 }
 
 fn default_score_trend_options() -> ScoreTrendOptions {
@@ -2310,7 +2312,8 @@ impl StorageService {
                   notebook_folders_json,
                   notebook_pages_json,
                   notebook_documents_json,
-                  score_trend_options_json
+                  score_trend_options_json,
+                  updated_at
                 FROM preferences
                 WHERE id = 1
                 ",
@@ -2395,6 +2398,7 @@ impl StorageService {
                         notebook_pages,
                         notebook_documents,
                         score_trend_options,
+                        updated_at: row.get::<_, Option<String>>(22)?,
                     })
                 },
             )
@@ -2696,14 +2700,19 @@ impl StorageService {
     ) -> StorageResult<()> {
         let mut effective = preferences.clone();
         materialize_notebook_documents_from_pages(&mut effective);
-        let enhanced_theme_ids_json = serde_json::to_string(&preferences.enhanced_theme_ids)?;
-        let custom_categories_json = serde_json::to_string(&preferences.custom_categories)?;
-        let resource_links_json = serde_json::to_string(&preferences.resource_links)?;
-        let exam_timers_json = serde_json::to_string(&preferences.exam_timers)?;
-        let notebook_folders_json = serde_json::to_string(&preferences.notebook_folders)?;
-        let notebook_pages_json = serde_json::to_string(&preferences.notebook_pages)?;
+        let enhanced_theme_ids_json = serde_json::to_string(&effective.enhanced_theme_ids)?;
+        let custom_categories_json = serde_json::to_string(&effective.custom_categories)?;
+        let resource_links_json = serde_json::to_string(&effective.resource_links)?;
+        let exam_timers_json = serde_json::to_string(&effective.exam_timers)?;
+        let notebook_folders_json = serde_json::to_string(&effective.notebook_folders)?;
+        let notebook_pages_json = serde_json::to_string(&effective.notebook_pages)?;
         let notebook_documents_json = serde_json::to_string(&effective.notebook_documents)?;
-        let score_trend_options_json = serde_json::to_string(&preferences.score_trend_options)?;
+        let score_trend_options_json = serde_json::to_string(&effective.score_trend_options)?;
+        let updated_at = effective
+            .updated_at
+            .clone()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(now_iso);
         transaction.execute(
             "
             INSERT INTO preferences (
@@ -2741,29 +2750,29 @@ impl StorageService {
               updated_at = excluded.updated_at
             ",
             params![
-                serialize_section_id(preferences.active_section),
-                preferences.last_active_date,
-                serialize_theme_id(preferences.theme_id),
-                preferences.daily_goal_minutes,
-                preferences.planner_filters.search,
-                preferences.planner_filters.category,
-                serialize_study_status_filter(preferences.planner_filters.status),
-                preferences.planner_filters.from_date,
-                preferences.planner_filters.to_date,
-                serialize_planner_sort_field(preferences.planner_sort.field),
-                serialize_sort_direction(preferences.planner_sort.direction),
-                serialize_planner_mode(preferences.planner_mode),
-                preferences.planner_focus_date,
+                serialize_section_id(effective.active_section),
+                effective.last_active_date,
+                serialize_theme_id(effective.theme_id),
+                effective.daily_goal_minutes,
+                effective.planner_filters.search,
+                effective.planner_filters.category,
+                serialize_study_status_filter(effective.planner_filters.status),
+                effective.planner_filters.from_date,
+                effective.planner_filters.to_date,
+                serialize_planner_sort_field(effective.planner_sort.field),
+                serialize_sort_direction(effective.planner_sort.direction),
+                serialize_planner_mode(effective.planner_mode),
+                effective.planner_focus_date,
                 enhanced_theme_ids_json,
                 custom_categories_json,
                 resource_links_json,
                 exam_timers_json,
-                preferences.notes_html,
+                effective.notes_html,
                 notebook_folders_json,
                 notebook_pages_json,
                 notebook_documents_json,
                 score_trend_options_json,
-                now_iso(),
+                updated_at,
             ],
         )?;
         Ok(())
@@ -3819,6 +3828,9 @@ impl StorageService {
             &preferences.planner_focus_date,
             "Preferences plannerFocusDate",
         )?;
+        if let Some(updated_at) = preferences.updated_at.as_deref() {
+            validate_date_time(updated_at, "Preferences updatedAt")?;
+        }
         if !preferences.planner_filters.from_date.is_empty() {
             validate_date(
                 &preferences.planner_filters.from_date,
@@ -4385,6 +4397,7 @@ fn default_preferences() -> Preferences {
         notebook_pages: Vec::new(),
         notebook_documents: Vec::new(),
         score_trend_options: default_score_trend_options(),
+        updated_at: None,
     }
 }
 
@@ -5221,6 +5234,23 @@ mod tests {
 
         // caller's prefs must not have been mutated
         assert!(prefs.notebook_documents.is_empty());
+    }
+
+    #[test]
+    fn save_preferences_preserves_explicit_updated_at_when_provided() {
+        let (_temp, service) = test_service();
+        service.load_snapshot().expect("bootstrap");
+
+        let mut prefs = default_preferences();
+        prefs.updated_at = Some("2026-04-02T03:04:05Z".into());
+
+        service.save_preferences(prefs).expect("save");
+
+        let snapshot = service.load_snapshot().expect("reload");
+        assert_eq!(
+            snapshot.state.preferences.updated_at.as_deref(),
+            Some("2026-04-02T03:04:05Z")
+        );
     }
 
     #[test]
