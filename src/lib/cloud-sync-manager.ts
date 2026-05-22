@@ -80,6 +80,7 @@ interface CloudPullDependencies {
 
 interface CloudPushDependencies {
   loadTfState?: () => Promise<TfAppState>;
+  getNow?: () => string;
 }
 
 type NativePersistenceModule = typeof import("./native-persistence");
@@ -231,6 +232,83 @@ async function loadDefaultPushDependencies(): Promise<Required<CloudPushDependen
   const native = await importNativePersistence();
   return {
     loadTfState: native.loadNativeTfState,
+    getNow: () => new Date().toISOString(),
+  };
+}
+
+function slugifyPreferenceLabel(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function buildPreferenceChildId(prefix: string, label: string, index: number): string {
+  const slug = slugifyPreferenceLabel(label);
+  return slug ? `${prefix}-${slug}` : `${prefix}-${index + 1}`;
+}
+
+export function buildCloudPreferencesPayload(
+  preferences: Preferences,
+  updatedAt: string,
+): Record<string, unknown> {
+  const plannerFocusDate = preferences.plannerFocusDate.trim();
+
+  return {
+    dailyGoalMinutes: preferences.dailyGoalMinutes,
+    themeId: preferences.themeId,
+    enhancedThemeIds: preferences.enhancedThemeIds.filter(
+      (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
+    ),
+    ...(plannerFocusDate ? { plannerFocusDate } : {}),
+    examTimers: preferences.examTimers.flatMap((timer) => {
+      const id = timer.id.trim();
+      const label = timer.label.trim();
+      const examDate = timer.examDate.trim();
+      if (!id || !label || !examDate) {
+        return [];
+      }
+      return [
+        {
+          id,
+          label,
+          examDate,
+          ...(typeof timer.examTime === "string" && timer.examTime.trim()
+            ? { examTime: timer.examTime.trim() }
+            : {}),
+        },
+      ];
+    }),
+    customCategories: preferences.customCategories.flatMap((label, index) => {
+      const trimmed = label.trim();
+      if (!trimmed) {
+        return [];
+      }
+      return [
+        {
+          id: buildPreferenceChildId("custom-category", trimmed, index),
+          label: trimmed,
+        },
+      ];
+    }),
+    resourceLinks: preferences.resourceLinks.flatMap((link) => {
+      const id = link.id.trim();
+      const label = link.label.trim();
+      const url = link.url.trim();
+      if (!id || !label || !url) {
+        return [];
+      }
+      return [
+        {
+          id,
+          label,
+          url,
+          type: link.kind === "app" ? "App" : "Website",
+        },
+      ];
+    }),
+    updatedAt,
   };
 }
 
@@ -436,10 +514,18 @@ export async function pushAllEntities(
   dependencies: CloudPushDependencies = {},
 ): Promise<{ pushed: number; cursor: number | null }> {
   const after = lastSyncedAt;
-  const { loadTfState } = dependencies.loadTfState
-    ? { loadTfState: dependencies.loadTfState }
-    : await loadDefaultPushDependencies();
+  const needsDefaults = !dependencies.loadTfState || !dependencies.getNow;
+  const defaults = needsDefaults ? await loadDefaultPushDependencies() : null;
+  const loadTfState = dependencies.loadTfState ?? defaults?.loadTfState;
+  const getNow = dependencies.getNow ?? defaults?.getNow;
+  if (!loadTfState || !getNow) {
+    throw new Error("Cloud push dependencies are unavailable.");
+  }
   const tfState = await loadTfState();
+  // Desktop preferences still do not expose their persisted updated_at through
+  // the JS/native seam, so push uses the current sync timestamp. This makes
+  // preferences push-time LWW until a real preferences updatedAt is surfaced.
+  const preferencesUpdatedAt = getNow();
   const canonicalSessionLogs = buildCanonicalSessionLogExport(tfState.sessionLogs);
   const sessionLogDeleteTombstones = tfState.sessionLogTombstones.filter(
     (entry): entry is TfSessionLogTombstone =>
@@ -484,6 +570,13 @@ export async function pushAllEntities(
         payload: entry as unknown as Record<string, unknown>,
         clientUpdatedAt: entry.updatedAt,
       })),
+    {
+      entityType: "preferences",
+      entityId: "preferences",
+      operation: "upsert" as const,
+      payload: buildCloudPreferencesPayload(state.preferences, preferencesUpdatedAt),
+      clientUpdatedAt: preferencesUpdatedAt,
+    },
     ...canonicalSessionLogs
       .filter((entry) => !after || entry.updatedAt >= after)
       .map((entry) => ({

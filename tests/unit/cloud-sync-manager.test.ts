@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildCloudPreferencesPayload,
   mergeCloudPreferencesIntoDesktop,
   pullFromCloud,
   pushAllEntities,
@@ -16,6 +17,7 @@ import type {
 } from "../../src/types/models.ts";
 
 const previousFetch = globalThis.fetch;
+const FIXED_PUSH_TIME = "2026-05-22T12:34:56.000Z";
 
 test.afterEach(() => {
   globalThis.fetch = previousFetch;
@@ -279,10 +281,11 @@ test("pushAllEntities sends recent upserts and delete tombstones and preserves t
     tombstones,
     {
       loadTfState: async () => createEmptyTfState(),
+      getNow: () => FIXED_PUSH_TIME,
     },
   );
 
-  assert.deepEqual(result, { pushed: 7, cursor: 77 });
+  assert.deepEqual(result, { pushed: 8, cursor: 77 });
   assert.equal(fetchCalls.length, 1);
   assert.equal(fetchCalls[0]?.url.endsWith("/sync/push"), true);
   assert.equal(fetchCalls[0]?.init?.method, "POST");
@@ -323,6 +326,27 @@ test("pushAllEntities sends recent upserts and delete tombstones and preserves t
       clientUpdatedAt: "2026-05-13T11:00:00.000Z",
     },
     {
+      entityType: "preferences",
+      entityId: "preferences",
+      operation: "upsert",
+      payload: {
+        dailyGoalMinutes: 480,
+        themeId: "dark",
+        enhancedThemeIds: [],
+        plannerFocusDate: "2026-05-19",
+        examTimers: [],
+        customCategories: [
+          { id: "custom-category-test", label: "Test" },
+          { id: "custom-category-review", label: "Review" },
+          { id: "custom-category-anki", label: "Anki" },
+          { id: "custom-category-notes", label: "Notes" },
+        ],
+        resourceLinks: [],
+        updatedAt: FIXED_PUSH_TIME,
+      },
+      clientUpdatedAt: FIXED_PUSH_TIME,
+    },
+    {
       entityType: "practice_test",
       entityId: "practice-deleted-new",
       operation: "delete",
@@ -346,11 +370,14 @@ test("pushAllEntities sends recent upserts and delete tombstones and preserves t
   ]);
 });
 
-test("pushAllEntities skips the network request when no entity changed after the watermark", async () => {
-  let fetchCalled = false;
-  globalThis.fetch = (async () => {
-    fetchCalled = true;
-    throw new Error("fetch should not run");
+test("pushAllEntities still pushes one preferences upsert when no other entity changed after the watermark", async () => {
+  const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    fetchCalls.push({ url: String(url), init });
+    return new Response(JSON.stringify({ cursor: 78 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   }) as typeof fetch;
 
   const result = await pushAllEntities(
@@ -367,11 +394,38 @@ test("pushAllEntities skips the network request when no entity changed after the
     ],
     {
       loadTfState: async () => createEmptyTfState(),
+      getNow: () => FIXED_PUSH_TIME,
     },
   );
 
-  assert.deepEqual(result, { pushed: 0, cursor: null });
-  assert.equal(fetchCalled, false);
+  assert.deepEqual(result, { pushed: 1, cursor: 78 });
+  assert.equal(fetchCalls.length, 1);
+  const body = JSON.parse(String(fetchCalls[0]?.init?.body)) as {
+    deviceId: string;
+    entities: Array<Record<string, unknown>>;
+  };
+  assert.equal(body.entities.length, 1);
+  assert.deepEqual(body.entities[0], {
+    entityType: "preferences",
+    entityId: "preferences",
+    operation: "upsert",
+    payload: {
+      dailyGoalMinutes: 480,
+      themeId: "dark",
+      enhancedThemeIds: [],
+      plannerFocusDate: "2026-05-19",
+      examTimers: [],
+      customCategories: [
+        { id: "custom-category-test", label: "Test" },
+        { id: "custom-category-review", label: "Review" },
+        { id: "custom-category-anki", label: "Anki" },
+        { id: "custom-category-notes", label: "Notes" },
+      ],
+      resourceLinks: [],
+      updatedAt: FIXED_PUSH_TIME,
+    },
+    clientUpdatedAt: FIXED_PUSH_TIME,
+  });
 });
 
 test("pushAllEntities adds canonical safe session_log upserts and skips unsafe or old rows", async () => {
@@ -425,10 +479,11 @@ test("pushAllEntities adds canonical safe session_log upserts and skips unsafe o
     [],
     {
       loadTfState: async () => tfState,
+      getNow: () => FIXED_PUSH_TIME,
     },
   );
 
-  assert.deepEqual(result, { pushed: 1, cursor: 91 });
+  assert.deepEqual(result, { pushed: 2, cursor: 91 });
   assert.equal(fetchCalls.length, 1);
 
   const body = JSON.parse(String(fetchCalls[0]?.init?.body)) as {
@@ -438,6 +493,27 @@ test("pushAllEntities adds canonical safe session_log upserts and skips unsafe o
 
   assert.equal(body.deviceId, "device-123");
   assert.deepEqual(body.entities, [
+    {
+      entityType: "preferences",
+      entityId: "preferences",
+      operation: "upsert",
+      payload: {
+        dailyGoalMinutes: 480,
+        themeId: "dark",
+        enhancedThemeIds: [],
+        plannerFocusDate: "2026-05-19",
+        examTimers: [],
+        customCategories: [
+          { id: "custom-category-test", label: "Test" },
+          { id: "custom-category-review", label: "Review" },
+          { id: "custom-category-anki", label: "Anki" },
+          { id: "custom-category-notes", label: "Notes" },
+        ],
+        resourceLinks: [],
+        updatedAt: FIXED_PUSH_TIME,
+      },
+      clientUpdatedAt: FIXED_PUSH_TIME,
+    },
     {
       entityType: "session_log",
       entityId: "manual-safe-new",
@@ -514,10 +590,11 @@ test("pushAllEntities pushes only eligible session_log deletes after the waterma
     [],
     {
       loadTfState: async () => tfState,
+      getNow: () => FIXED_PUSH_TIME,
     },
   );
 
-  assert.deepEqual(result, { pushed: 2, cursor: 92 });
+  assert.deepEqual(result, { pushed: 3, cursor: 92 });
   assert.equal(fetchCalls.length, 1);
 
   const body = JSON.parse(String(fetchCalls[0]?.init?.body)) as {
@@ -526,6 +603,27 @@ test("pushAllEntities pushes only eligible session_log deletes after the waterma
   };
 
   assert.deepEqual(body.entities, [
+    {
+      entityType: "preferences",
+      entityId: "preferences",
+      operation: "upsert",
+      payload: {
+        dailyGoalMinutes: 480,
+        themeId: "dark",
+        enhancedThemeIds: [],
+        plannerFocusDate: "2026-05-19",
+        examTimers: [],
+        customCategories: [
+          { id: "custom-category-test", label: "Test" },
+          { id: "custom-category-review", label: "Review" },
+          { id: "custom-category-anki", label: "Anki" },
+          { id: "custom-category-notes", label: "Notes" },
+        ],
+        resourceLinks: [],
+        updatedAt: FIXED_PUSH_TIME,
+      },
+      clientUpdatedAt: FIXED_PUSH_TIME,
+    },
     {
       entityType: "session_log",
       entityId: "session-safe-manual-new",
@@ -1537,6 +1635,99 @@ test("pullFromCloud session_log upsert re-derives date from local startAt (date 
 });
 
 // ─── preferences pull (desktop cloud-pull parity with web) ───────────────────
+
+test("buildCloudPreferencesPayload maps shared desktop fields and omits desktop-only state", () => {
+  const preferences = createEmptyState().preferences;
+  preferences.dailyGoalMinutes = 300;
+  preferences.themeId = "light";
+  preferences.enhancedThemeIds = ["light", "maggiepink"];
+  preferences.plannerFocusDate = "2026-06-01";
+  preferences.customCategories = ["Anki", "  Pathoma  ", ""];
+  preferences.resourceLinks = [
+    { id: "uw", label: "UWorld", url: "uworld://", kind: "app" },
+    { id: "anki", label: "Anki Hub", url: "https://anki.example.com", kind: "website" },
+    { id: "", label: "bad", url: "https://bad.example.com", kind: "website" },
+  ];
+  preferences.examTimers = [
+    {
+      id: "step2",
+      label: "Step 2 CK",
+      examDate: "2026-06-15",
+      examTime: "08:00",
+      displayMode: "weeks+days",
+      showHrMin: true,
+      color: "#abc",
+    },
+    {
+      id: "bad",
+      label: "",
+      examDate: "2026-06-20",
+    },
+  ];
+  preferences.activeSection = "settings";
+  preferences.plannerMode = "month";
+  preferences.notesHtml = "<p>Local only</p>";
+  preferences.notebookFolders = [
+    {
+      id: "folder-1",
+      name: "Desk",
+      order: 0,
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z",
+    },
+  ];
+  preferences.notebookDocuments = [
+    {
+      id: "doc-1",
+      title: "Notebook",
+      order: 0,
+      pages: [],
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z",
+    },
+  ];
+
+  const payload = buildCloudPreferencesPayload(preferences, FIXED_PUSH_TIME);
+
+  assert.deepEqual(payload, {
+    dailyGoalMinutes: 300,
+    themeId: "light",
+    enhancedThemeIds: ["light", "maggiepink"],
+    plannerFocusDate: "2026-06-01",
+    examTimers: [
+      {
+        id: "step2",
+        label: "Step 2 CK",
+        examDate: "2026-06-15",
+        examTime: "08:00",
+      },
+    ],
+    customCategories: [
+      { id: "custom-category-anki", label: "Anki" },
+      { id: "custom-category-pathoma", label: "Pathoma" },
+    ],
+    resourceLinks: [
+      { id: "uw", label: "UWorld", url: "uworld://", type: "App" },
+      {
+        id: "anki",
+        label: "Anki Hub",
+        url: "https://anki.example.com",
+        type: "Website",
+      },
+    ],
+    updatedAt: FIXED_PUSH_TIME,
+  });
+  assert.equal(Object.prototype.hasOwnProperty.call(payload, "activeSection"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload, "lastActiveDate"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload, "plannerFilters"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload, "plannerSort"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload, "plannerMode"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload, "notesHtml"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload, "notebookFolders"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload, "notebookPages"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload, "notebookDocuments"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload, "scoreTrendOptions"), false);
+});
 
 test("mergeCloudPreferencesIntoDesktop applies safe fields and preserves desktop-only state", () => {
   const baseline = createEmptyState().preferences;
