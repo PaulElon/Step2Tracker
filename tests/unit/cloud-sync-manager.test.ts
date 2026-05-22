@@ -933,6 +933,8 @@ test("pullFromCloud applies only newer deletes", async () => {
 test("pullFromCloud ignores unsupported entity types and still advances the cursor", async () => {
   const state = createEmptyState();
   const appliedWeakTopics: string[] = [];
+  const appliedPreferences: Preferences[] = [];
+  const appliedSessions: TfSessionLog[] = [];
   const deletes: Array<{ entityType: string; entityId: string; deletedAt: string }> = [];
   let storedCursor: number | null = null;
 
@@ -1011,6 +1013,7 @@ test("pullFromCloud ignores unsupported entity types and still advances the curs
       backups: [],
       trash: [],
     }),
+    loadTfState: async () => createEmptyTfState(),
     getDeleteTombstones: async () => [],
     applyStudyBlock: async () => {
       throw new Error("study block apply should not run");
@@ -1027,17 +1030,32 @@ test("pullFromCloud ignores unsupported entity types and still advances the curs
     applyDelete: async (entityType, entityId, deletedAt) => {
       deletes.push({ entityType, entityId, deletedAt });
     },
+    applySessionLog: async (session) => {
+      appliedSessions.push(session);
+    },
+    applySessionLogDelete: async () => {
+      throw new Error("session log delete apply should not run");
+    },
+    applyPreferences: async (preferences) => {
+      appliedPreferences.push(preferences);
+    },
   });
 
   assert.deepEqual(appliedWeakTopics, ["weak-1"]);
+  assert.equal(appliedPreferences.length, 1);
+  assert.equal(appliedPreferences[0].themeId, "light");
+  assert.equal(appliedPreferences[0].dailyGoalMinutes, 300);
+  assert.equal(appliedSessions.length, 1);
+  assert.equal(appliedSessions[0].id, "session-1");
+  assert.equal(appliedSessions[0].method, "Other");
   assert.deepEqual(deletes, []);
   assert.equal(storedCursor, 44);
   assert.deepEqual(result, {
     received: 4,
-    applied: 1,
-    upserted: 1,
+    applied: 3,
+    upserted: 3,
     deleted: 0,
-    skipped: 3,
+    skipped: 1,
     cursor: 44,
   });
 });
@@ -1066,6 +1084,7 @@ test("pullFromCloud coerces legacy string payloads, skips malformed rows, and st
   ];
 
   const appliedStudyBlocks: string[] = [];
+  const appliedPreferences: Preferences[] = [];
   const deletes: Array<{ entityType: string; entityId: string; deletedAt: string }> = [];
   let storedCursor: number | null = null;
 
@@ -1165,9 +1184,15 @@ test("pullFromCloud coerces legacy string payloads, skips malformed rows, and st
     applyDelete: async (entityType, entityId, deletedAt) => {
       deletes.push({ entityType, entityId, deletedAt });
     },
+    applyPreferences: async (preferences) => {
+      appliedPreferences.push(preferences);
+    },
   });
 
   assert.deepEqual(appliedStudyBlocks, ["Legacy cloud block"]);
+  assert.equal(appliedPreferences.length, 1);
+  assert.equal(appliedPreferences[0].themeId, "light");
+  assert.equal(appliedPreferences[0].dailyGoalMinutes, 300);
   assert.deepEqual(deletes, [
     {
       entityType: "study_block",
@@ -1178,10 +1203,10 @@ test("pullFromCloud coerces legacy string payloads, skips malformed rows, and st
   assert.equal(storedCursor, 46);
   assert.deepEqual(result, {
     received: 4,
-    applied: 2,
-    upserted: 1,
+    applied: 3,
+    upserted: 2,
     deleted: 1,
-    skipped: 2,
+    skipped: 1,
     cursor: 46,
   });
 });

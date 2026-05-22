@@ -388,6 +388,7 @@ function isSupportedCloudPullEntityType(entityType: string): entityType is Cloud
     entityType === "practice_test" ||
     entityType === "weak_topic_entry" ||
     entityType === "error_log_entry" ||
+    entityType === "preferences" ||
     entityType === "session_log"
   );
 }
