@@ -5,12 +5,19 @@ import type {
   PracticeTest,
   StudyBlock,
   TfAppState,
+  TfSessionLog,
   TfSessionLogTombstone,
   WeakTopicEntry,
 } from "../types/models";
 // @ts-expect-error TS5097: node --test needs the explicit .ts specifier in this runtime path.
 import { buildCanonicalSessionLogExport } from "./tf-session-log-canonical-export.ts";
+// @ts-expect-error TS5097: node --test needs the explicit .ts specifier in this runtime path.
+import { getLocalDateKeyFromIso } from "./datetime.ts";
+// @ts-expect-error TS5097: node --test needs the explicit .ts specifier in this runtime path.
+import { methodKeyFromLabel } from "./tf-session-adapters.ts";
 import type { CloudDeleteTombstone, CloudEntityType } from "./native-persistence";
+
+type CloudPullEntityType = CloudEntityType | "session_log";
 
 const AUTH_URL = "https://timefolio-auth-v2.paulfreedman3.workers.dev";
 const SYNC_URL = "https://timefolio-sync-v2.paulfreedman3.workers.dev";
@@ -44,6 +51,7 @@ interface CloudPullDependencies {
   getCursor?: () => Promise<number | null>;
   setCursor?: (value: number) => Promise<void>;
   loadSnapshot?: () => Promise<PersistenceSnapshot>;
+  loadTfState?: () => Promise<TfAppState>;
   getDeleteTombstones?: (after?: string | null) => Promise<CloudDeleteTombstone[]>;
   applyStudyBlock?: (block: StudyBlock) => Promise<void>;
   applyPracticeTest?: (test: PracticeTest) => Promise<void>;
@@ -54,18 +62,29 @@ interface CloudPullDependencies {
     entityId: string,
     deletedAt: string,
   ) => Promise<void>;
+  applySessionLog?: (session: TfSessionLog) => Promise<void>;
+  applySessionLogDelete?: (id: string, deletedAt: string) => Promise<void>;
 }
 
 interface CloudPushDependencies {
   loadTfState?: () => Promise<TfAppState>;
 }
 
+type NativePersistenceModule = typeof import("./native-persistence");
+
+async function importNativePersistence(): Promise<NativePersistenceModule> {
+  return (await import(
+    new URL("./native-persistence.ts", import.meta.url).href
+  )) as NativePersistenceModule;
+}
+
 async function loadDefaultPullDependencies() {
-  const native = await import(new URL("./native-persistence.ts", import.meta.url).href);
+  const native = await importNativePersistence();
   return {
     getCursor: native.getCloudPullCursor,
     setCursor: native.setCloudPullCursor,
     loadSnapshot: native.loadNativeSnapshot,
+    loadTfState: native.loadNativeTfState,
     getDeleteTombstones: async (after?: string | null) => {
       const [coreTombstones, errorLogTombstones] = await Promise.all([
         native.getCoreEntityDeleteTombstones(after),
@@ -78,11 +97,17 @@ async function loadDefaultPullDependencies() {
     applyWeakTopic: native.applyCloudWeakTopic,
     applyErrorLog: native.applyCloudErrorLogEntry,
     applyDelete: native.applyCloudDelete,
+    applySessionLog: async (session: TfSessionLog) => {
+      await native.applyCloudSessionLog(session);
+    },
+    applySessionLogDelete: async (id: string, deletedAt: string) => {
+      await native.applyCloudSessionLogDelete(id, deletedAt);
+    },
   };
 }
 
 async function loadDefaultPushDependencies(): Promise<Required<CloudPushDependencies>> {
-  const native = await import(new URL("./native-persistence.ts", import.meta.url).href);
+  const native = await importNativePersistence();
   return {
     loadTfState: native.loadNativeTfState,
   };
@@ -158,13 +183,75 @@ function coerceCloudPullPayload(payload: unknown): Record<string, unknown> | nul
   }
 }
 
-function isSupportedCloudPullEntityType(entityType: string): entityType is CloudEntityType {
+function isSupportedCloudPullEntityType(entityType: string): entityType is CloudPullEntityType {
   return (
     entityType === "study_block" ||
     entityType === "practice_test" ||
     entityType === "weak_topic_entry" ||
-    entityType === "error_log_entry"
+    entityType === "error_log_entry" ||
+    entityType === "session_log"
   );
+}
+
+function isCoreCloudPullEntityType(entityType: CloudPullEntityType): entityType is CloudEntityType {
+  return entityType !== "session_log";
+}
+
+function indexSessionLogTombstones(tombstones: TfSessionLogTombstone[]) {
+  return new Map(tombstones.map((entry) => [entry.id, entry.deletedAt]));
+}
+
+// Convert the canonical web/cloud session-log payload into the desktop's
+// TfSessionLog shape. Date bucketing is re-derived from the local-time start
+// timestamp when present, matching the post-05a0a49 desktop convention
+// (`getSessionLogDateKey`). The payload's `date` field is the fallback only
+// when no usable startAt was provided.
+export function canonicalSessionLogPayloadToTfSessionLog(
+  payload: Record<string, unknown>,
+): TfSessionLog | null {
+  const id = typeof payload.id === "string" ? payload.id.trim() : "";
+  if (!id) return null;
+
+  const titleRaw = typeof payload.title === "string" ? payload.title : "";
+  const title = titleRaw.trim();
+  const startAt = typeof payload.startAt === "string" ? payload.startAt : "";
+  const endAt = typeof payload.endAt === "string" ? payload.endAt : "";
+  const explicitDate = typeof payload.date === "string" ? payload.date.trim() : "";
+  const derivedDate = startAt ? getLocalDateKeyFromIso(startAt) : null;
+  const date = derivedDate ?? explicitDate;
+
+  const durationMinutes =
+    typeof payload.durationMinutes === "number" && Number.isFinite(payload.durationMinutes)
+      ? Math.max(0, payload.durationMinutes)
+      : 0;
+  const hours = durationMinutes / 60;
+
+  const notes = typeof payload.notes === "string" ? payload.notes : "";
+  const isDistraction =
+    typeof payload.isDistraction === "boolean" ? payload.isDistraction : false;
+  const updatedAt =
+    typeof payload.updatedAt === "string" && payload.updatedAt.trim()
+      ? payload.updatedAt
+      : "1970-01-01T00:00:00.000Z";
+
+  const explicitCategory =
+    typeof payload.category === "string" && payload.category.trim()
+      ? payload.category.trim()
+      : "";
+
+  return {
+    id,
+    date,
+    method: title || "Other",
+    methodKey: explicitCategory || methodKeyFromLabel(title || "Other"),
+    hours,
+    startISO: startAt,
+    endISO: endAt,
+    notes,
+    isDistraction,
+    isLive: false,
+    updatedAt,
+  };
 }
 
 function formatPullUrl(deviceId: string, since: number) {
@@ -327,33 +414,44 @@ export async function pullFromCloud(
     !dependencies.getCursor ||
     !dependencies.setCursor ||
     !dependencies.loadSnapshot ||
+    !dependencies.loadTfState ||
     !dependencies.getDeleteTombstones ||
     !dependencies.applyStudyBlock ||
     !dependencies.applyPracticeTest ||
     !dependencies.applyWeakTopic ||
     !dependencies.applyErrorLog ||
-    !dependencies.applyDelete;
+    !dependencies.applyDelete ||
+    !dependencies.applySessionLog ||
+    !dependencies.applySessionLogDelete;
   const defaults = needsDefaults ? await loadDefaultPullDependencies() : null;
   const fetchImpl = dependencies.fetchImpl ?? fetch;
   const getCursor = dependencies.getCursor ?? defaults?.getCursor;
   const saveCursor = dependencies.setCursor ?? defaults?.setCursor;
   const loadSnapshot = dependencies.loadSnapshot ?? defaults?.loadSnapshot;
+  const loadTfState: (() => Promise<TfAppState>) | undefined =
+    dependencies.loadTfState ?? defaults?.loadTfState;
   const getDeleteTombstones = dependencies.getDeleteTombstones ?? defaults?.getDeleteTombstones;
   const applyStudyBlock = dependencies.applyStudyBlock ?? defaults?.applyStudyBlock;
   const applyPracticeTest = dependencies.applyPracticeTest ?? defaults?.applyPracticeTest;
   const applyWeakTopic = dependencies.applyWeakTopic ?? defaults?.applyWeakTopic;
   const applyErrorLog = dependencies.applyErrorLog ?? defaults?.applyErrorLog;
   const applyDelete = dependencies.applyDelete ?? defaults?.applyDelete;
+  const applySessionLog = dependencies.applySessionLog ?? defaults?.applySessionLog;
+  const applySessionLogDelete =
+    dependencies.applySessionLogDelete ?? defaults?.applySessionLogDelete;
   if (
     !getCursor ||
     !saveCursor ||
     !loadSnapshot ||
+    !loadTfState ||
     !getDeleteTombstones ||
     !applyStudyBlock ||
     !applyPracticeTest ||
     !applyWeakTopic ||
     !applyErrorLog ||
-    !applyDelete
+    !applyDelete ||
+    !applySessionLog ||
+    !applySessionLogDelete
   ) {
     throw new Error("Cloud pull dependencies are unavailable.");
   }
@@ -377,6 +475,24 @@ export async function pullFromCloud(
   const entities = indexLocalEntities(snapshot.state);
   const localDeletes = indexDeleteTombstones(tombstones);
 
+  // TimeFolio session-log state is fetched lazily — only when the cloud pull
+  // actually contains a session_log entry. This avoids hitting the native
+  // tf_load_state command in flows that don't need it (and keeps existing
+  // pullFromCloud tests passing without having to stub the new dependencies).
+  let sessionLogs: Map<string, TfSessionLog> | null = null;
+  let sessionLogTombstones: Map<string, string> | null = null;
+  async function ensureSessionLogIndex(): Promise<{
+    sessionLogs: Map<string, TfSessionLog>;
+    sessionLogTombstones: Map<string, string>;
+  }> {
+    if (!sessionLogs || !sessionLogTombstones) {
+      const tfState = await loadTfState!();
+      sessionLogs = new Map(tfState.sessionLogs.map((entry) => [entry.id, entry]));
+      sessionLogTombstones = indexSessionLogTombstones(tfState.sessionLogTombstones);
+    }
+    return { sessionLogs, sessionLogTombstones };
+  }
+
   let applied = 0;
   let upserted = 0;
   let deleted = 0;
@@ -384,6 +500,74 @@ export async function pullFromCloud(
 
   for (const entry of data.entries) {
     if (!isSupportedCloudPullEntityType(entry.entityType)) {
+      skipped += 1;
+      continue;
+    }
+
+    if (entry.entityType === "session_log") {
+      const { sessionLogs: idx, sessionLogTombstones: tombIdx } = await ensureSessionLogIndex();
+      const activeSession = idx.get(entry.entityId);
+      const tombstoneDeletedAt = tombIdx.get(entry.entityId);
+
+      if (entry.operation === "upsert") {
+        const payload = coerceCloudPullPayload(entry.payload);
+        if (!payload) {
+          skipped += 1;
+          continue;
+        }
+        if (
+          tombstoneDeletedAt &&
+          compareTimestamps(tombstoneDeletedAt, entry.clientUpdatedAt) >= 0
+        ) {
+          skipped += 1;
+          continue;
+        }
+        if (
+          activeSession &&
+          compareTimestamps(activeSession.updatedAt ?? "1970-01-01T00:00:00.000Z", entry.clientUpdatedAt) >= 0
+        ) {
+          skipped += 1;
+          continue;
+        }
+
+        const session = canonicalSessionLogPayloadToTfSessionLog(payload);
+        if (!session) {
+          skipped += 1;
+          continue;
+        }
+
+        await applySessionLog(session);
+        idx.set(entry.entityId, session);
+        tombIdx.delete(entry.entityId);
+        applied += 1;
+        upserted += 1;
+        continue;
+      }
+
+      if (
+        tombstoneDeletedAt &&
+        compareTimestamps(tombstoneDeletedAt, entry.clientUpdatedAt) >= 0
+      ) {
+        skipped += 1;
+        continue;
+      }
+      if (
+        activeSession &&
+        compareTimestamps(activeSession.updatedAt ?? "1970-01-01T00:00:00.000Z", entry.clientUpdatedAt) >= 0
+      ) {
+        skipped += 1;
+        continue;
+      }
+
+      await applySessionLogDelete(entry.entityId, entry.clientUpdatedAt);
+      idx.delete(entry.entityId);
+      tombIdx.set(entry.entityId, entry.clientUpdatedAt);
+      applied += 1;
+      deleted += 1;
+      continue;
+    }
+
+    if (!isCoreCloudPullEntityType(entry.entityType)) {
       skipped += 1;
       continue;
     }

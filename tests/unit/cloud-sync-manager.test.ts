@@ -1270,3 +1270,257 @@ test("pullFromCloud skips stale upserts when a newer local tombstone exists", as
     cursor: 52,
   });
 });
+
+// ─── session_log pull (desktop cloud-pull parity with web) ───────────────────
+
+function buildPullDependencies(overrides: {
+  state?: AppState;
+  tfState?: TfAppState;
+  applySessionLog?: (session: TfSessionLog) => Promise<void>;
+  applySessionLogDelete?: (id: string, deletedAt: string) => Promise<void>;
+}) {
+  const state = overrides.state ?? createEmptyState();
+  const tfState = overrides.tfState ?? createEmptyTfState();
+  return {
+    getCursor: async () => null,
+    setCursor: async () => {},
+    loadSnapshot: async () => ({
+      state,
+      persistence: {
+        storagePath: "",
+        backupDirectory: "",
+        schemaVersion: 1,
+        appVersion: "test",
+        lastSavedAt: null,
+        recoveryMessage: null,
+        legacyMigrationCompletedAt: null,
+      },
+      backups: [],
+      trash: [],
+    }),
+    loadTfState: async () => tfState,
+    getDeleteTombstones: async () => [] as CloudDeleteTombstone[],
+    applyStudyBlock: async () => {
+      throw new Error("study block apply should not run");
+    },
+    applyPracticeTest: async () => {
+      throw new Error("practice test apply should not run");
+    },
+    applyWeakTopic: async () => {
+      throw new Error("weak topic apply should not run");
+    },
+    applyErrorLog: async () => {
+      throw new Error("error log apply should not run");
+    },
+    applyDelete: async () => {
+      throw new Error("delete apply should not run");
+    },
+    applySessionLog:
+      overrides.applySessionLog ??
+      (async () => {
+        throw new Error("session log apply should not run");
+      }),
+    applySessionLogDelete:
+      overrides.applySessionLogDelete ??
+      (async () => {
+        throw new Error("session log delete apply should not run");
+      }),
+  };
+}
+
+test("pullFromCloud applies a session_log upsert from a canonical web payload", async () => {
+  const appliedSessions: TfSessionLog[] = [];
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        cursor: 41,
+        entries: [
+          {
+            entityType: "session_log",
+            entityId: "web-session-1",
+            operation: "upsert",
+            clientUpdatedAt: "2026-05-20T18:00:00.000Z",
+            payload: {
+              schemaVersion: 1,
+              id: "web-session-1",
+              date: "2026-05-20",
+              title: "Pathoma Cardio",
+              category: "pathoma-cardio",
+              source: "Manual",
+              durationMinutes: 45,
+              startAt: "2026-05-20T17:00:00.000Z",
+              endAt: "2026-05-20T17:45:00.000Z",
+              notes: "Wrap up valve lectures.",
+              isDistraction: false,
+              updatedAt: "2026-05-20T18:00:00.000Z",
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )) as typeof fetch;
+
+  const result = await pullFromCloud(
+    "token-x",
+    "device-x",
+    buildPullDependencies({
+      applySessionLog: async (session) => {
+        appliedSessions.push(session);
+      },
+    }),
+  );
+
+  assert.equal(appliedSessions.length, 1);
+  assert.equal(appliedSessions[0].id, "web-session-1");
+  assert.equal(appliedSessions[0].method, "Pathoma Cardio");
+  assert.equal(appliedSessions[0].methodKey, "pathoma-cardio");
+  assert.equal(appliedSessions[0].hours, 0.75);
+  assert.equal(appliedSessions[0].startISO, "2026-05-20T17:00:00.000Z");
+  assert.equal(appliedSessions[0].endISO, "2026-05-20T17:45:00.000Z");
+  assert.equal(appliedSessions[0].notes, "Wrap up valve lectures.");
+  assert.equal(appliedSessions[0].isDistraction, false);
+  assert.equal(appliedSessions[0].isLive, false);
+  assert.equal(appliedSessions[0].updatedAt, "2026-05-20T18:00:00.000Z");
+  assert.deepEqual(result, {
+    received: 1,
+    applied: 1,
+    upserted: 1,
+    deleted: 0,
+    skipped: 0,
+    cursor: 41,
+  });
+});
+
+test("pullFromCloud applies a session_log delete and skips stale upserts", async () => {
+  const appliedDeletes: Array<{ id: string; deletedAt: string }> = [];
+  const appliedSessions: TfSessionLog[] = [];
+  const tfState = createEmptyTfState();
+  tfState.sessionLogs = [
+    buildSessionLog({ id: "web-session-old", updatedAt: "2026-05-19T10:00:00.000Z" }),
+  ];
+
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        cursor: 77,
+        entries: [
+          {
+            entityType: "session_log",
+            entityId: "web-session-old",
+            operation: "delete",
+            payload: null,
+            clientUpdatedAt: "2026-05-20T08:00:00.000Z",
+          },
+          {
+            entityType: "session_log",
+            entityId: "web-session-old",
+            operation: "upsert",
+            clientUpdatedAt: "2026-05-19T09:00:00.000Z",
+            payload: {
+              schemaVersion: 1,
+              id: "web-session-old",
+              date: "2026-05-19",
+              title: "Stale upsert",
+              category: "stale-upsert",
+              source: "Manual",
+              durationMinutes: 30,
+              startAt: "2026-05-19T08:00:00.000Z",
+              endAt: "2026-05-19T08:30:00.000Z",
+              notes: "",
+              isDistraction: false,
+              updatedAt: "2026-05-19T09:00:00.000Z",
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )) as typeof fetch;
+
+  const result = await pullFromCloud(
+    "token-x",
+    "device-x",
+    buildPullDependencies({
+      tfState,
+      applySessionLog: async (session) => {
+        appliedSessions.push(session);
+      },
+      applySessionLogDelete: async (id, deletedAt) => {
+        appliedDeletes.push({ id, deletedAt });
+      },
+    }),
+  );
+
+  assert.deepEqual(appliedDeletes, [
+    { id: "web-session-old", deletedAt: "2026-05-20T08:00:00.000Z" },
+  ]);
+  assert.equal(appliedSessions.length, 0);
+  assert.deepEqual(result, {
+    received: 2,
+    applied: 1,
+    upserted: 0,
+    deleted: 1,
+    skipped: 1,
+    cursor: 77,
+  });
+});
+
+test("pullFromCloud session_log upsert re-derives date from local startAt (date bucketing parity)", async () => {
+  // Wednesday May 20 2026 at 20:00 in America/New_York is
+  // Thursday May 21 2026 at 00:00 UTC. Desktop must bucket to Wednesday locally.
+  const previousTz = process.env.TZ;
+  process.env.TZ = "America/New_York";
+
+  const appliedSessions: TfSessionLog[] = [];
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        cursor: 9,
+        entries: [
+          {
+            entityType: "session_log",
+            entityId: "wed-evening",
+            operation: "upsert",
+            clientUpdatedAt: "2026-05-21T00:30:00.000Z",
+            // Payload date claims Thursday (UTC bucket); local bucket must be Wednesday.
+            payload: {
+              schemaVersion: 1,
+              id: "wed-evening",
+              date: "2026-05-21",
+              title: "Evening review",
+              category: "evening-review",
+              source: "Manual",
+              durationMinutes: 30,
+              startAt: "2026-05-21T00:00:00.000Z",
+              endAt: "2026-05-21T00:30:00.000Z",
+              notes: "",
+              isDistraction: false,
+              updatedAt: "2026-05-21T00:30:00.000Z",
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )) as typeof fetch;
+
+  try {
+    await pullFromCloud(
+      "token-x",
+      "device-x",
+      buildPullDependencies({
+        applySessionLog: async (session) => {
+          appliedSessions.push(session);
+        },
+      }),
+    );
+
+    assert.equal(appliedSessions.length, 1);
+    // The desktop's local bucket is Wednesday 8 PM, not the UTC date of Thursday.
+    assert.equal(appliedSessions[0].date, "2026-05-20");
+  } finally {
+    if (previousTz === undefined) {
+      delete process.env.TZ;
+    } else {
+      process.env.TZ = previousTz;
+    }
+  }
+});

@@ -12,6 +12,7 @@ import type {
   StudyBlock,
   StudyBlockInput,
   TfAppState,
+  TfSessionLog,
   TrashEntityType,
   WeakTopicEntry,
   WeakTopicInput,
@@ -240,4 +241,17 @@ export function applyCloudDelete(
   deletedAt: string,
 ): Promise<void> {
   return command<void>("apply_cloud_delete", { entityType, entityId, deletedAt });
+}
+
+// Session log lives in the TimeFolio JSON state file (not SQLite), so the
+// native command merges atomically inside the file load/save boundary.
+export function applyCloudSessionLog(session: TfSessionLog): Promise<TfAppState> {
+  return command<TfAppState>("tf_apply_cloud_session_log", { session });
+}
+
+export function applyCloudSessionLogDelete(
+  id: string,
+  deletedAt: string,
+): Promise<TfAppState> {
+  return command<TfAppState>("tf_apply_cloud_session_log_delete", { id, deletedAt });
 }

@@ -591,11 +591,8 @@ fn write_tf_state(path: &PathBuf, state: &TfAppState) -> Result<(), String> {
     fs::write(path, json).map_err(|error| format!("Unable to write TimeFolio state: {error}"))
 }
 
-#[tauri::command]
-pub fn tf_load_state(app: tauri::AppHandle) -> Result<TfAppState, String> {
-    let path = tf_state_path(&app)?;
-
-    let raw = match fs::read_to_string(&path) {
+fn read_tf_state_from_path(path: &PathBuf) -> Result<TfAppState, String> {
+    let raw = match fs::read_to_string(path) {
         Ok(contents) => contents,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Ok(TfAppState::default());
@@ -604,9 +601,14 @@ pub fn tf_load_state(app: tauri::AppHandle) -> Result<TfAppState, String> {
             return Err(format!("Unable to read TimeFolio state: {error}"));
         }
     };
-
     let value = serde_json::from_str::<Value>(&raw).unwrap_or(Value::Null);
     Ok(normalize_tf_app_state(value))
+}
+
+#[tauri::command]
+pub fn tf_load_state(app: tauri::AppHandle) -> Result<TfAppState, String> {
+    let path = tf_state_path(&app)?;
+    read_tf_state_from_path(&path)
 }
 
 #[tauri::command]
@@ -625,6 +627,105 @@ pub fn tf_reset_state(app: tauri::AppHandle) -> Result<TfAppState, String> {
     let empty = TfAppState::default();
     write_tf_state(&path, &empty)?;
     Ok(empty)
+}
+
+// Pure LWW merge helper for a single session_log upsert. Exposed for
+// testability — the Tauri command wraps this around file load/save so a
+// concurrent native mutation cannot race a parallel cloud apply.
+pub fn merge_cloud_session_log(state: &mut TfAppState, session: TfSessionLog) {
+    if let Some(tomb) = state
+        .session_log_tombstones
+        .iter()
+        .find(|entry| entry.id == session.id)
+    {
+        if tomb.deleted_at.as_str() >= session.updated_at.as_str() {
+            return;
+        }
+    }
+
+    if let Some(existing) = state
+        .session_logs
+        .iter_mut()
+        .find(|entry| entry.id == session.id)
+    {
+        if existing.updated_at.as_str() >= session.updated_at.as_str() {
+            return;
+        }
+        *existing = session.clone();
+    } else {
+        state.session_logs.push(session.clone());
+    }
+
+    // Upsert beat any older tombstone — clear it so future pulls cannot
+    // re-resurrect a delete that has already been superseded.
+    state
+        .session_log_tombstones
+        .retain(|entry| entry.id != session.id);
+}
+
+// Pure LWW merge helper for a single session_log delete. Persists a tombstone
+// with sync_eligible=false (so the existing push pipeline does not re-emit it)
+// and removes the local session if the local updated_at is older than the
+// incoming deleted_at.
+pub fn merge_cloud_session_log_delete(state: &mut TfAppState, id: &str, deleted_at: &str) {
+    if let Some(existing) = state
+        .session_log_tombstones
+        .iter_mut()
+        .find(|entry| entry.id == id)
+    {
+        if existing.deleted_at.as_str() >= deleted_at {
+            return;
+        }
+        existing.deleted_at = deleted_at.to_owned();
+        existing.schema_version = Some(1);
+        existing.sync_eligible = Some(false);
+        existing.sync_source = None;
+    } else {
+        state.session_log_tombstones.push(TfSessionLogTombstone {
+            id: id.to_owned(),
+            deleted_at: deleted_at.to_owned(),
+            schema_version: Some(1),
+            sync_eligible: Some(false),
+            sync_source: None,
+        });
+    }
+
+    state
+        .session_logs
+        .retain(|entry| entry.id != id || entry.updated_at.as_str() > deleted_at);
+}
+
+// Apply a single session_log upsert pulled from cloud. Performs LWW per entity:
+// - skips if a tombstone exists whose deleted_at is >= incoming updated_at
+// - skips if the local session's updated_at is >= incoming updated_at
+// - clears any stale tombstone for this id when the upsert wins
+//
+// This is a tombstone-and-LWW merge inside the file load/save boundary so a
+// concurrent native mutation (e.g. user-saved session) cannot lose data to
+// a parallel cloud apply.
+#[tauri::command]
+pub fn tf_apply_cloud_session_log(
+    app: tauri::AppHandle,
+    session: TfSessionLog,
+) -> Result<TfAppState, String> {
+    let path = tf_state_path(&app)?;
+    let mut state = read_tf_state_from_path(&path)?;
+    merge_cloud_session_log(&mut state, session);
+    write_tf_state(&path, &state)?;
+    Ok(state)
+}
+
+#[tauri::command]
+pub fn tf_apply_cloud_session_log_delete(
+    app: tauri::AppHandle,
+    id: String,
+    deleted_at: String,
+) -> Result<TfAppState, String> {
+    let path = tf_state_path(&app)?;
+    let mut state = read_tf_state_from_path(&path)?;
+    merge_cloud_session_log_delete(&mut state, &id, &deleted_at);
+    write_tf_state(&path, &state)?;
+    Ok(state)
 }
 
 #[cfg(test)]
@@ -713,5 +814,130 @@ mod tests {
         assert_eq!(serialized[0]["syncSource"], "manual");
         assert_eq!(serialized[1]["syncEligible"], false);
         assert!(serialized[2].get("syncEligible").is_none());
+    }
+
+    fn build_session(id: &str, updated_at: &str) -> TfSessionLog {
+        TfSessionLog {
+            id: id.to_owned(),
+            date: "2026-05-20".to_owned(),
+            method: "Pathoma".to_owned(),
+            method_key: "pathoma".to_owned(),
+            hours: 0.5,
+            start_iso: "2026-05-20T17:00:00.000Z".to_owned(),
+            end_iso: "2026-05-20T17:30:00.000Z".to_owned(),
+            notes: String::new(),
+            is_distraction: false,
+            is_live: false,
+            updated_at: updated_at.to_owned(),
+        }
+    }
+
+    #[test]
+    fn merge_cloud_session_log_inserts_new_session() {
+        let mut state = TfAppState::default();
+        merge_cloud_session_log(
+            &mut state,
+            build_session("web-1", "2026-05-20T18:00:00.000Z"),
+        );
+        assert_eq!(state.session_logs.len(), 1);
+        assert_eq!(state.session_logs[0].id, "web-1");
+        assert!(state.session_log_tombstones.is_empty());
+    }
+
+    #[test]
+    fn merge_cloud_session_log_keeps_newer_local_upsert() {
+        let mut state = TfAppState::default();
+        state
+            .session_logs
+            .push(build_session("web-1", "2026-05-20T19:00:00.000Z"));
+        merge_cloud_session_log(
+            &mut state,
+            build_session("web-1", "2026-05-20T18:00:00.000Z"),
+        );
+        assert_eq!(state.session_logs.len(), 1);
+        assert_eq!(state.session_logs[0].updated_at, "2026-05-20T19:00:00.000Z");
+    }
+
+    #[test]
+    fn merge_cloud_session_log_skips_when_tombstone_is_newer() {
+        let mut state = TfAppState::default();
+        state.session_log_tombstones.push(TfSessionLogTombstone {
+            id: "web-1".to_owned(),
+            deleted_at: "2026-05-20T20:00:00.000Z".to_owned(),
+            schema_version: Some(1),
+            sync_eligible: Some(false),
+            sync_source: None,
+        });
+        merge_cloud_session_log(
+            &mut state,
+            build_session("web-1", "2026-05-20T18:00:00.000Z"),
+        );
+        assert!(state.session_logs.is_empty());
+        assert_eq!(state.session_log_tombstones.len(), 1);
+    }
+
+    #[test]
+    fn merge_cloud_session_log_clears_older_tombstone_when_upsert_wins() {
+        let mut state = TfAppState::default();
+        state.session_log_tombstones.push(TfSessionLogTombstone {
+            id: "web-1".to_owned(),
+            deleted_at: "2026-05-20T17:00:00.000Z".to_owned(),
+            schema_version: Some(1),
+            sync_eligible: Some(false),
+            sync_source: None,
+        });
+        merge_cloud_session_log(
+            &mut state,
+            build_session("web-1", "2026-05-20T18:00:00.000Z"),
+        );
+        assert_eq!(state.session_logs.len(), 1);
+        assert!(state.session_log_tombstones.is_empty());
+    }
+
+    #[test]
+    fn merge_cloud_session_log_delete_writes_non_pushed_tombstone() {
+        let mut state = TfAppState::default();
+        state
+            .session_logs
+            .push(build_session("web-1", "2026-05-20T17:00:00.000Z"));
+        merge_cloud_session_log_delete(&mut state, "web-1", "2026-05-20T18:00:00.000Z");
+        assert!(state.session_logs.is_empty());
+        assert_eq!(state.session_log_tombstones.len(), 1);
+        let tomb = &state.session_log_tombstones[0];
+        assert_eq!(tomb.deleted_at, "2026-05-20T18:00:00.000Z");
+        // Tombstone came from cloud, so existing push pipeline must NOT re-emit it.
+        assert_eq!(tomb.sync_eligible, Some(false));
+        assert_eq!(tomb.sync_source, None);
+    }
+
+    #[test]
+    fn merge_cloud_session_log_delete_preserves_newer_local_upsert() {
+        let mut state = TfAppState::default();
+        state
+            .session_logs
+            .push(build_session("web-1", "2026-05-20T19:00:00.000Z"));
+        merge_cloud_session_log_delete(&mut state, "web-1", "2026-05-20T18:00:00.000Z");
+        // Local upsert is newer, so the session is retained — but a tombstone is
+        // still recorded so a stale repeat-delete from cloud cannot win later.
+        assert_eq!(state.session_logs.len(), 1);
+        assert_eq!(state.session_log_tombstones.len(), 1);
+    }
+
+    #[test]
+    fn merge_cloud_session_log_delete_idempotent_with_newer_tombstone() {
+        let mut state = TfAppState::default();
+        state.session_log_tombstones.push(TfSessionLogTombstone {
+            id: "web-1".to_owned(),
+            deleted_at: "2026-05-20T20:00:00.000Z".to_owned(),
+            schema_version: Some(1),
+            sync_eligible: Some(false),
+            sync_source: None,
+        });
+        merge_cloud_session_log_delete(&mut state, "web-1", "2026-05-20T18:00:00.000Z");
+        assert_eq!(state.session_log_tombstones.len(), 1);
+        assert_eq!(
+            state.session_log_tombstones[0].deleted_at,
+            "2026-05-20T20:00:00.000Z"
+        );
     }
 }

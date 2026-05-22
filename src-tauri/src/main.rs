@@ -959,6 +959,8 @@ fn main() {
             tf_persistence::tf_load_state,
             tf_persistence::tf_save_state,
             tf_persistence::tf_reset_state,
+            tf_persistence::tf_apply_cloud_session_log,
+            tf_persistence::tf_apply_cloud_session_log_delete,
             launch_path,
             open_notification_settings,
             export_notebook_page,
