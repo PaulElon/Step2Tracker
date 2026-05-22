@@ -97,7 +97,23 @@ The matching public key is embedded in:
 
 The repository includes .github/workflows/release.yml.
 
-Every push to main publishes a signed Apple Silicon macOS release and uploads the latest.json updater manifest that Tauri expects.
+**Every push to main must be followed by a signed Tauri release.** The workflow runs automatically on every main push and publishes a signed Apple Silicon macOS release, Windows installer, and latest.json updater manifest that Tauri expects.
+
+### Desktop Development Guardrail
+
+- Do not report desktop main work as complete until the release is published.
+- **Installed apps do not auto-update from `main` alone.** They only auto-update when a new release with a higher app version is published to GitHub Releases. A commit to main without a release means no change reaches installed users.
+- Monitor the GitHub Actions workflow after pushing to main. Confirm the `Release Desktop App` workflow succeeds and check GitHub Releases for the new `app-v*` tag and artifacts.
+- If you need to prevent automatic release (exceptional cases only), either pause the workflow before pushing or roll back the commit.
+- If the user explicitly says "no release," state that installed users will not receive the changes.
+
+### Release Workflow Details
+
+The workflow automatically:
+1. Computes a CI version from package.json/tauri.conf.json major.minor + GitHub run number as patch.
+2. Tags the commit as `app-vX.Y.Z` and stamps versions across package.json, src-tauri/tauri.conf.json, and src-tauri/Cargo.toml.
+3. Builds and publishes signed macOS (Apple Silicon) and Windows (NSIS) installers.
+4. Uploads latest.json for the Tauri updater and a direct-download DMG for manual install.
 
 Required GitHub repository secrets:
 

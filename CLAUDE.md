@@ -17,6 +17,15 @@
 - No claims of success without running `npm run typecheck`.
 - Do not push main if typecheck or lint fails.
 
+## Desktop Release Rule
+**Every desktop commit pushed to `main` must be followed by a signed Tauri release with a higher `app-v*` version.**
+
+- Do not report desktop main work as complete until the release tag is created and the GitHub Actions publish workflow succeeds.
+- **Installed desktop apps do not auto-update from `main` alone.** They only auto-update when a new release with a higher app version is published to GitHub Releases. A commit to main without a release means no change reaches installed users.
+- The .github/workflows/release.yml runs automatically on every main push and creates the signed release. Monitor the workflow to confirm successful completion (check GitHub Actions status and GitHub Releases page for the new app-v* tag).
+- If you need to prevent automatic release (exceptional cases only), pause the workflow or roll back the commit—never push work to main that you don't want released.
+- If the user explicitly says "no release," state that installed users will not receive the changes and mark the work as pending release.
+
 ## High-risk files / areas
 Always inspect exact live code before editing:
 - `src-tauri/src/persistence.rs` — SQLite schema, migration logic
