@@ -2,6 +2,9 @@ import type {
   AppState,
   ErrorLogEntry,
   ExamTimer,
+  NotebookDocument,
+  NotebookFolder,
+  NotebookPage,
   PersistenceSnapshot,
   PracticeTest,
   Preferences,
@@ -21,7 +24,15 @@ import { getLocalDateKeyFromIso } from "./datetime.ts";
 import { methodKeyFromLabel } from "./tf-session-adapters.ts";
 import type { CloudDeleteTombstone, CloudEntityType } from "./native-persistence";
 
-type CloudPullEntityType = CloudEntityType | "session_log" | "preferences";
+type CloudPullEntityType =
+  | CloudEntityType
+  | "session_log"
+  | "preferences"
+  | "notebook_folder"
+  | "notebook_document"
+  | "notebook_page";
+
+type NotebookCloudEntityType = "notebook_folder" | "notebook_document" | "notebook_page";
 
 const SUPPORTED_THEME_IDS: ReadonlySet<ThemeId> = new Set<ThemeId>([
   "dark",
@@ -408,12 +419,279 @@ function isSupportedCloudPullEntityType(entityType: string): entityType is Cloud
     entityType === "weak_topic_entry" ||
     entityType === "error_log_entry" ||
     entityType === "preferences" ||
-    entityType === "session_log"
+    entityType === "session_log" ||
+    entityType === "notebook_folder" ||
+    entityType === "notebook_document" ||
+    entityType === "notebook_page"
+  );
+}
+
+function isNotebookCloudEntityType(
+  entityType: CloudPullEntityType,
+): entityType is NotebookCloudEntityType {
+  return (
+    entityType === "notebook_folder" ||
+    entityType === "notebook_document" ||
+    entityType === "notebook_page"
   );
 }
 
 function isCoreCloudPullEntityType(entityType: CloudPullEntityType): entityType is CloudEntityType {
-  return entityType !== "session_log";
+  return (
+    entityType !== "session_log" &&
+    entityType !== "preferences" &&
+    entityType !== "notebook_folder" &&
+    entityType !== "notebook_document" &&
+    entityType !== "notebook_page"
+  );
+}
+
+// A notebook page is considered to hold PDF/binary state when it has a
+// non-tiptap kind or a stored PDF filename. We never push these to the cloud
+// (no binary asset sync in this slice), and we never let a cloud upsert/delete
+// destroy the local PDF metadata.
+function notebookPageHasPdfContent(page: NotebookPage): boolean {
+  return page.kind === "pdf" || typeof page.pdfFilename === "string";
+}
+
+function notebookDocumentHasPdfContent(doc: NotebookDocument): boolean {
+  return doc.pages.some(notebookPageHasPdfContent);
+}
+
+function getStringField(payload: Record<string, unknown>, key: string): string | undefined {
+  const value = payload[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function getNumberField(payload: Record<string, unknown>, key: string): number | undefined {
+  const value = payload[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function getBoolField(payload: Record<string, unknown>, key: string): boolean | undefined {
+  const value = payload[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function notebookFolderFromCloudPayload(
+  payload: Record<string, unknown>,
+  existing?: NotebookFolder,
+): NotebookFolder | null {
+  const id = (getStringField(payload, "id") ?? "").trim();
+  if (!id) return null;
+  return {
+    id,
+    name: getStringField(payload, "name") ?? existing?.name ?? "",
+    parentFolderId: getStringField(payload, "parentFolderId") ?? existing?.parentFolderId,
+    favorited: getBoolField(payload, "favorited") ?? existing?.favorited,
+    order: getNumberField(payload, "order") ?? existing?.order ?? 0,
+    createdAt: getStringField(payload, "createdAt") ?? existing?.createdAt ?? "",
+    updatedAt: getStringField(payload, "updatedAt") ?? existing?.updatedAt ?? "",
+  };
+}
+
+// Preserve every desktop-only PDF/rich field from the existing local record;
+// the cloud payload only carries the text-compatible fields web understands.
+function notebookPageFromCloudPayload(
+  payload: Record<string, unknown>,
+  existing?: NotebookPage,
+): NotebookPage | null {
+  const id = (getStringField(payload, "id") ?? "").trim();
+  if (!id) return null;
+  return {
+    id,
+    title: getStringField(payload, "title") ?? existing?.title ?? "",
+    contentHtml: getStringField(payload, "contentHtml") ?? existing?.contentHtml ?? "",
+    favorited: getBoolField(payload, "favorited") ?? existing?.favorited,
+    folderId: getStringField(payload, "folderId") ?? existing?.folderId,
+    order: getNumberField(payload, "order") ?? existing?.order ?? 0,
+    createdAt: getStringField(payload, "createdAt") ?? existing?.createdAt ?? "",
+    updatedAt: getStringField(payload, "updatedAt") ?? existing?.updatedAt ?? "",
+    kind: existing?.kind,
+    pdfFilename: existing?.pdfFilename,
+    pdfOriginalName: existing?.pdfOriginalName,
+    pdfPageCount: existing?.pdfPageCount,
+    pdfAnnotations: existing?.pdfAnnotations,
+    pdfViewMode: existing?.pdfViewMode,
+    pdfOutline: existing?.pdfOutline,
+  };
+}
+
+function notebookDocumentFromCloudPayload(
+  payload: Record<string, unknown>,
+  existing?: NotebookDocument,
+): NotebookDocument | null {
+  const id = (getStringField(payload, "id") ?? "").trim();
+  if (!id) return null;
+  return {
+    id,
+    title: getStringField(payload, "title") ?? existing?.title ?? "",
+    folderId: getStringField(payload, "folderId") ?? existing?.folderId,
+    favorited: getBoolField(payload, "favorited") ?? existing?.favorited,
+    order: getNumberField(payload, "order") ?? existing?.order ?? 0,
+    // Embedded pages are desktop-managed (may hold PDF state). The cloud
+    // payload does not represent them, so we always preserve the local list.
+    pages: existing?.pages ?? [],
+    createdAt: getStringField(payload, "createdAt") ?? existing?.createdAt ?? "",
+    updatedAt: getStringField(payload, "updatedAt") ?? existing?.updatedAt ?? "",
+  };
+}
+
+function buildCloudNotebookFolderPayload(folder: NotebookFolder): Record<string, unknown> {
+  return {
+    id: folder.id,
+    name: folder.name,
+    ...(folder.parentFolderId ? { parentFolderId: folder.parentFolderId } : {}),
+    ...(folder.favorited === true ? { favorited: true } : {}),
+    order: folder.order,
+    createdAt: folder.createdAt,
+    updatedAt: folder.updatedAt,
+  };
+}
+
+function buildCloudNotebookPagePayload(page: NotebookPage): Record<string, unknown> {
+  return {
+    id: page.id,
+    title: page.title,
+    contentHtml: page.contentHtml,
+    ...(page.folderId ? { folderId: page.folderId } : {}),
+    ...(page.favorited === true ? { favorited: true } : {}),
+    order: page.order,
+    createdAt: page.createdAt,
+    updatedAt: page.updatedAt,
+  };
+}
+
+function buildCloudNotebookDocumentPayload(doc: NotebookDocument): Record<string, unknown> {
+  return {
+    id: doc.id,
+    title: doc.title,
+    ...(doc.folderId ? { folderId: doc.folderId } : {}),
+    ...(doc.favorited === true ? { favorited: true } : {}),
+    order: doc.order,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  };
+}
+
+// Apply one cloud notebook pull entry to a working Preferences. Returns the
+// next Preferences (with the modified notebook array) and a status describing
+// whether the entry was applied or skipped. Notebook arrays live inside
+// Preferences on desktop, so callers persist the result via applyPreferences.
+//
+// Skip rules:
+//   - Missing/invalid payload.
+//   - Local record's updatedAt >= entry.clientUpdatedAt (LWW).
+//   - For upsert: an existing local notebook_page is PDF-kind — cloud has no
+//     PDF representation, so refuse to overwrite.
+//   - For delete: an existing local notebook_page is PDF-kind, or a
+//     notebook_document contains any PDF page — refuse to drop binary data.
+function applyCloudNotebookEntry(
+  current: Preferences,
+  entry: CloudPullEntry,
+  entityType: NotebookCloudEntityType,
+): { preferences: Preferences; applied: boolean; isDelete: boolean } {
+  const skip = { preferences: current, applied: false, isDelete: entry.operation === "delete" };
+
+  if (entityType === "notebook_folder") {
+    const folders = current.notebookFolders;
+    const existing = folders.find((f) => f.id === entry.entityId);
+    if (entry.operation === "delete") {
+      if (!existing) {
+        return skip;
+      }
+      if (existing.updatedAt && compareTimestamps(existing.updatedAt, entry.clientUpdatedAt) >= 0) {
+        return skip;
+      }
+      return {
+        preferences: { ...current, notebookFolders: folders.filter((f) => f.id !== entry.entityId) },
+        applied: true,
+        isDelete: true,
+      };
+    }
+    const payload = coerceCloudPullPayload(entry.payload);
+    if (!payload) return skip;
+    if (existing && existing.updatedAt && compareTimestamps(existing.updatedAt, entry.clientUpdatedAt) >= 0) {
+      return skip;
+    }
+    const next = notebookFolderFromCloudPayload(payload, existing);
+    if (!next) return skip;
+    const nextFolders = existing
+      ? folders.map((f) => (f.id === entry.entityId ? next : f))
+      : [...folders, next];
+    return {
+      preferences: { ...current, notebookFolders: nextFolders },
+      applied: true,
+      isDelete: false,
+    };
+  }
+
+  if (entityType === "notebook_document") {
+    const docs = current.notebookDocuments;
+    const existing = docs.find((d) => d.id === entry.entityId);
+    if (entry.operation === "delete") {
+      if (!existing) return skip;
+      if (existing.updatedAt && compareTimestamps(existing.updatedAt, entry.clientUpdatedAt) >= 0) {
+        return skip;
+      }
+      // Refuse to drop a document that locally holds PDF-bearing pages —
+      // cloud has no representation for them and a delete would destroy data.
+      if (notebookDocumentHasPdfContent(existing)) return skip;
+      return {
+        preferences: { ...current, notebookDocuments: docs.filter((d) => d.id !== entry.entityId) },
+        applied: true,
+        isDelete: true,
+      };
+    }
+    const payload = coerceCloudPullPayload(entry.payload);
+    if (!payload) return skip;
+    if (existing && existing.updatedAt && compareTimestamps(existing.updatedAt, entry.clientUpdatedAt) >= 0) {
+      return skip;
+    }
+    const next = notebookDocumentFromCloudPayload(payload, existing);
+    if (!next) return skip;
+    const nextDocs = existing
+      ? docs.map((d) => (d.id === entry.entityId ? next : d))
+      : [...docs, next];
+    return {
+      preferences: { ...current, notebookDocuments: nextDocs },
+      applied: true,
+      isDelete: false,
+    };
+  }
+
+  const pages = current.notebookPages;
+  const existing = pages.find((p) => p.id === entry.entityId);
+  if (entry.operation === "delete") {
+    if (!existing) return skip;
+    if (existing.updatedAt && compareTimestamps(existing.updatedAt, entry.clientUpdatedAt) >= 0) {
+      return skip;
+    }
+    // PDF page deletes are not safe — the PDF file on disk would orphan.
+    if (notebookPageHasPdfContent(existing)) return skip;
+    return {
+      preferences: { ...current, notebookPages: pages.filter((p) => p.id !== entry.entityId) },
+      applied: true,
+      isDelete: true,
+    };
+  }
+  const payload = coerceCloudPullPayload(entry.payload);
+  if (!payload) return skip;
+  // Never let a cloud upsert turn a local PDF page into a text page.
+  if (existing && notebookPageHasPdfContent(existing)) return skip;
+  if (existing && existing.updatedAt && compareTimestamps(existing.updatedAt, entry.clientUpdatedAt) >= 0) {
+    return skip;
+  }
+  const next = notebookPageFromCloudPayload(payload, existing);
+  if (!next) return skip;
+  const nextPages = existing
+    ? pages.map((p) => (p.id === entry.entityId ? next : p))
+    : [...pages, next];
+  return {
+    preferences: { ...current, notebookPages: nextPages },
+    applied: true,
+    isDelete: false,
+  };
 }
 
 function indexSessionLogTombstones(tombstones: TfSessionLogTombstone[]) {
@@ -594,6 +872,49 @@ export async function pushAllEntities(
       payload: buildCloudPreferencesPayload(state.preferences, preferencesUpdatedAt),
       clientUpdatedAt: preferencesUpdatedAt,
     },
+    ...state.preferences.notebookFolders
+      .filter((folder) => Boolean(folder.updatedAt) && (!after || folder.updatedAt >= after))
+      .map((folder) => ({
+        entityType: "notebook_folder",
+        entityId: folder.id,
+        operation: "upsert" as const,
+        payload: buildCloudNotebookFolderPayload(folder),
+        clientUpdatedAt: folder.updatedAt,
+      })),
+    // Notebook pages: only push text/tiptap pages. PDF pages carry binary
+    // metadata (filename, page count, annotations, outline) the web client
+    // can't represent — skip them entirely from this slice.
+    ...state.preferences.notebookPages
+      .filter(
+        (page) =>
+          !notebookPageHasPdfContent(page) &&
+          Boolean(page.updatedAt) &&
+          (!after || page.updatedAt >= after),
+      )
+      .map((page) => ({
+        entityType: "notebook_page",
+        entityId: page.id,
+        operation: "upsert" as const,
+        payload: buildCloudNotebookPagePayload(page),
+        clientUpdatedAt: page.updatedAt,
+      })),
+    // Notebook documents: skip any document whose embedded pages contain PDF
+    // data. We do not strip pages from the desktop record and we do not push
+    // partial PDF metadata to web.
+    ...state.preferences.notebookDocuments
+      .filter(
+        (doc) =>
+          !notebookDocumentHasPdfContent(doc) &&
+          Boolean(doc.updatedAt) &&
+          (!after || doc.updatedAt >= after),
+      )
+      .map((doc) => ({
+        entityType: "notebook_document",
+        entityId: doc.id,
+        operation: "upsert" as const,
+        payload: buildCloudNotebookDocumentPayload(doc),
+        clientUpdatedAt: doc.updatedAt,
+      })),
     ...canonicalSessionLogs
       .filter((entry) => !after || entry.updatedAt >= after)
       .map((entry) => ({
@@ -803,6 +1124,23 @@ export async function pullFromCloud(
       tombIdx.set(entry.entityId, entry.clientUpdatedAt);
       applied += 1;
       deleted += 1;
+      continue;
+    }
+
+    if (isNotebookCloudEntityType(entry.entityType)) {
+      const result = applyCloudNotebookEntry(currentPreferences, entry, entry.entityType);
+      if (!result.applied) {
+        skipped += 1;
+        continue;
+      }
+      await applyPreferences(result.preferences);
+      currentPreferences = result.preferences;
+      applied += 1;
+      if (result.isDelete) {
+        deleted += 1;
+      } else {
+        upserted += 1;
+      }
       continue;
     }
 

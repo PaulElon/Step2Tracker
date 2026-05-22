@@ -2054,3 +2054,452 @@ test("pullFromCloud ignores a preferences delete tombstone (no-op, counted as sk
     cursor: 33,
   });
 });
+
+test("pullFromCloud applies notebook folder/document/page upserts and persists merged preferences", async () => {
+  const state = createEmptyState();
+  state.preferences.notebookFolders = [
+    {
+      id: "folder-existing",
+      name: "Old name",
+      order: 0,
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z",
+    },
+  ];
+  state.preferences.notebookPages = [
+    {
+      id: "page-pdf",
+      title: "Local PDF",
+      contentHtml: "",
+      order: 0,
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z",
+      kind: "pdf",
+      pdfFilename: "local.pdf",
+    },
+  ];
+
+  const appliedPreferences: Preferences[] = [];
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        cursor: 101,
+        entries: [
+          {
+            entityType: "notebook_folder",
+            entityId: "folder-existing",
+            operation: "upsert",
+            clientUpdatedAt: "2026-05-20T08:00:00.000Z",
+            payload: {
+              id: "folder-existing",
+              name: "Renamed",
+              order: 2,
+              createdAt: "2026-05-01T00:00:00.000Z",
+              updatedAt: "2026-05-20T08:00:00.000Z",
+            },
+          },
+          {
+            entityType: "notebook_folder",
+            entityId: "folder-new",
+            operation: "upsert",
+            clientUpdatedAt: "2026-05-20T08:05:00.000Z",
+            payload: {
+              id: "folder-new",
+              name: "From cloud",
+              order: 5,
+              createdAt: "2026-05-20T08:05:00.000Z",
+              updatedAt: "2026-05-20T08:05:00.000Z",
+            },
+          },
+          {
+            entityType: "notebook_page",
+            entityId: "page-new",
+            operation: "upsert",
+            clientUpdatedAt: "2026-05-20T08:10:00.000Z",
+            payload: {
+              id: "page-new",
+              title: "Cloud note",
+              contentHtml: "<p>hi</p>",
+              folderId: "folder-new",
+              order: 1,
+              createdAt: "2026-05-20T08:10:00.000Z",
+              updatedAt: "2026-05-20T08:10:00.000Z",
+            },
+          },
+          {
+            entityType: "notebook_page",
+            entityId: "page-pdf",
+            operation: "upsert",
+            clientUpdatedAt: "2026-05-20T08:11:00.000Z",
+            payload: {
+              id: "page-pdf",
+              title: "Should not overwrite",
+              contentHtml: "<p>nope</p>",
+              order: 0,
+              createdAt: "2026-05-01T00:00:00.000Z",
+              updatedAt: "2026-05-20T08:11:00.000Z",
+            },
+          },
+          {
+            entityType: "notebook_document",
+            entityId: "doc-new",
+            operation: "upsert",
+            clientUpdatedAt: "2026-05-20T08:15:00.000Z",
+            payload: {
+              id: "doc-new",
+              title: "Renal notes",
+              folderId: "folder-new",
+              order: 0,
+              createdAt: "2026-05-20T08:15:00.000Z",
+              updatedAt: "2026-05-20T08:15:00.000Z",
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )) as typeof fetch;
+
+  const result = await pullFromCloud(
+    "token-x",
+    "device-x",
+    buildPullDependencies({
+      state,
+      applyPreferences: async (preferences) => {
+        appliedPreferences.push(preferences);
+      },
+    }),
+  );
+
+  assert.deepEqual(result, {
+    received: 5,
+    applied: 4,
+    upserted: 4,
+    deleted: 0,
+    skipped: 1,
+    cursor: 101,
+  });
+  const last = appliedPreferences[appliedPreferences.length - 1];
+  assert.ok(last, "expected at least one applyPreferences call");
+  assert.equal(last.notebookFolders.length, 2);
+  const renamed = last.notebookFolders.find((f: { id: string }) => f.id === "folder-existing");
+  assert.equal(renamed?.name, "Renamed");
+  assert.equal(renamed?.order, 2);
+  // PDF page must be preserved untouched.
+  assert.equal(last.notebookPages.length, 2);
+  const pdfPage = last.notebookPages.find((p: { id: string }) => p.id === "page-pdf");
+  assert.equal(pdfPage?.title, "Local PDF");
+  assert.equal(pdfPage?.kind, "pdf");
+  assert.equal(pdfPage?.pdfFilename, "local.pdf");
+  const newPage = last.notebookPages.find((p: { id: string }) => p.id === "page-new");
+  assert.equal(newPage?.title, "Cloud note");
+  assert.equal(newPage?.folderId, "folder-new");
+  assert.equal(last.notebookDocuments.length, 1);
+  assert.equal(last.notebookDocuments[0].id, "doc-new");
+});
+
+test("pullFromCloud refuses notebook deletes that would drop PDF-bearing local data", async () => {
+  const state = createEmptyState();
+  state.preferences.notebookPages = [
+    {
+      id: "page-pdf",
+      title: "Local PDF",
+      contentHtml: "",
+      order: 0,
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z",
+      kind: "pdf",
+      pdfFilename: "local.pdf",
+    },
+    {
+      id: "page-text",
+      title: "Local text",
+      contentHtml: "<p>x</p>",
+      order: 1,
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z",
+    },
+  ];
+  state.preferences.notebookDocuments = [
+    {
+      id: "doc-with-pdf",
+      title: "Mixed doc",
+      order: 0,
+      pages: [
+        {
+          id: "embedded-pdf",
+          title: "Embedded PDF",
+          contentHtml: "",
+          order: 0,
+          createdAt: "2026-05-01T00:00:00.000Z",
+          updatedAt: "2026-05-01T00:00:00.000Z",
+          kind: "pdf",
+          pdfFilename: "embedded.pdf",
+        },
+      ],
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z",
+    },
+  ];
+
+  const appliedPreferences: Preferences[] = [];
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        cursor: 102,
+        entries: [
+          {
+            entityType: "notebook_page",
+            entityId: "page-pdf",
+            operation: "delete",
+            payload: null,
+            clientUpdatedAt: "2026-05-20T08:00:00.000Z",
+          },
+          {
+            entityType: "notebook_page",
+            entityId: "page-text",
+            operation: "delete",
+            payload: null,
+            clientUpdatedAt: "2026-05-20T08:01:00.000Z",
+          },
+          {
+            entityType: "notebook_document",
+            entityId: "doc-with-pdf",
+            operation: "delete",
+            payload: null,
+            clientUpdatedAt: "2026-05-20T08:02:00.000Z",
+          },
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )) as typeof fetch;
+
+  const result = await pullFromCloud(
+    "token-x",
+    "device-x",
+    buildPullDependencies({
+      state,
+      applyPreferences: async (preferences) => {
+        appliedPreferences.push(preferences);
+      },
+    }),
+  );
+
+  assert.deepEqual(result, {
+    received: 3,
+    applied: 1,
+    upserted: 0,
+    deleted: 1,
+    skipped: 2,
+    cursor: 102,
+  });
+  const last = appliedPreferences[appliedPreferences.length - 1];
+  assert.ok(last, "expected applyPreferences to be called for the text delete");
+  // PDF page remains; text page is gone.
+  assert.equal(last.notebookPages.length, 1);
+  assert.equal(last.notebookPages[0].id, "page-pdf");
+  // Document with embedded PDF survives the cloud delete.
+  assert.equal(last.notebookDocuments.length, 1);
+  assert.equal(last.notebookDocuments[0].id, "doc-with-pdf");
+});
+
+test("pullFromCloud skips notebook upserts when the local record is newer (LWW)", async () => {
+  const state = createEmptyState();
+  state.preferences.notebookFolders = [
+    {
+      id: "folder-local-newer",
+      name: "Local wins",
+      order: 0,
+      createdAt: "2026-05-01T00:00:00.000Z",
+      updatedAt: "2026-05-20T12:00:00.000Z",
+    },
+  ];
+
+  let applyCalled = false;
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        cursor: 103,
+        entries: [
+          {
+            entityType: "notebook_folder",
+            entityId: "folder-local-newer",
+            operation: "upsert",
+            clientUpdatedAt: "2026-05-20T11:00:00.000Z",
+            payload: {
+              id: "folder-local-newer",
+              name: "Cloud loses",
+              order: 9,
+              createdAt: "2026-05-01T00:00:00.000Z",
+              updatedAt: "2026-05-20T11:00:00.000Z",
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )) as typeof fetch;
+
+  const result = await pullFromCloud(
+    "token-x",
+    "device-x",
+    buildPullDependencies({
+      state,
+      applyPreferences: async () => {
+        applyCalled = true;
+      },
+    }),
+  );
+
+  assert.equal(applyCalled, false);
+  assert.deepEqual(result, {
+    received: 1,
+    applied: 0,
+    upserted: 0,
+    deleted: 0,
+    skipped: 1,
+    cursor: 103,
+  });
+});
+
+test("pushAllEntities emits notebook folder/document/page upserts and skips PDF-bearing rows", async () => {
+  const state = createEmptyState();
+  state.preferences.updatedAt = "2026-05-09T00:00:00.000Z";
+  state.preferences.notebookFolders = [
+    {
+      id: "folder-new",
+      name: "Cardio",
+      order: 1,
+      createdAt: "2026-05-12T10:00:00.000Z",
+      updatedAt: "2026-05-12T10:00:00.000Z",
+    },
+    {
+      id: "folder-old",
+      name: "Stale",
+      order: 0,
+      createdAt: "2026-05-01T10:00:00.000Z",
+      updatedAt: "2026-05-05T10:00:00.000Z",
+    },
+  ];
+  state.preferences.notebookPages = [
+    {
+      id: "page-text-new",
+      title: "Note",
+      contentHtml: "<p>hi</p>",
+      folderId: "folder-new",
+      order: 0,
+      createdAt: "2026-05-12T10:00:00.000Z",
+      updatedAt: "2026-05-12T10:00:00.000Z",
+    },
+    {
+      id: "page-pdf-skip",
+      title: "PDF",
+      contentHtml: "",
+      order: 1,
+      createdAt: "2026-05-12T10:00:00.000Z",
+      updatedAt: "2026-05-12T10:00:00.000Z",
+      kind: "pdf",
+      pdfFilename: "x.pdf",
+    },
+  ];
+  state.preferences.notebookDocuments = [
+    {
+      id: "doc-text-new",
+      title: "Renal",
+      folderId: "folder-new",
+      order: 0,
+      pages: [],
+      createdAt: "2026-05-12T10:00:00.000Z",
+      updatedAt: "2026-05-12T10:00:00.000Z",
+    },
+    {
+      id: "doc-with-pdf-skip",
+      title: "Has PDF",
+      order: 1,
+      pages: [
+        {
+          id: "embedded-pdf",
+          title: "Embedded",
+          contentHtml: "",
+          order: 0,
+          createdAt: "2026-05-12T10:00:00.000Z",
+          updatedAt: "2026-05-12T10:00:00.000Z",
+          kind: "pdf",
+          pdfFilename: "y.pdf",
+        },
+      ],
+      createdAt: "2026-05-12T10:00:00.000Z",
+      updatedAt: "2026-05-12T10:00:00.000Z",
+    },
+  ];
+
+  const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    fetchCalls.push({ url: String(url), init });
+    return new Response(JSON.stringify({ cursor: 200 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  await pushAllEntities(
+    "token-123",
+    "device-123",
+    state,
+    "2026-05-10T00:00:00.000Z",
+    [],
+    {
+      loadTfState: async () => createEmptyTfState(),
+      getNow: () => FIXED_PUSH_TIME,
+    },
+  );
+
+  const body = JSON.parse(String(fetchCalls[0]?.init?.body)) as {
+    entities: Array<Record<string, unknown>>;
+  };
+  const notebookEntities = body.entities.filter((e) =>
+    String(e.entityType).startsWith("notebook_"),
+  );
+  assert.deepEqual(notebookEntities, [
+    {
+      entityType: "notebook_folder",
+      entityId: "folder-new",
+      operation: "upsert",
+      payload: {
+        id: "folder-new",
+        name: "Cardio",
+        order: 1,
+        createdAt: "2026-05-12T10:00:00.000Z",
+        updatedAt: "2026-05-12T10:00:00.000Z",
+      },
+      clientUpdatedAt: "2026-05-12T10:00:00.000Z",
+    },
+    {
+      entityType: "notebook_page",
+      entityId: "page-text-new",
+      operation: "upsert",
+      payload: {
+        id: "page-text-new",
+        title: "Note",
+        contentHtml: "<p>hi</p>",
+        folderId: "folder-new",
+        order: 0,
+        createdAt: "2026-05-12T10:00:00.000Z",
+        updatedAt: "2026-05-12T10:00:00.000Z",
+      },
+      clientUpdatedAt: "2026-05-12T10:00:00.000Z",
+    },
+    {
+      entityType: "notebook_document",
+      entityId: "doc-text-new",
+      operation: "upsert",
+      payload: {
+        id: "doc-text-new",
+        title: "Renal",
+        folderId: "folder-new",
+        order: 0,
+        createdAt: "2026-05-12T10:00:00.000Z",
+        updatedAt: "2026-05-12T10:00:00.000Z",
+      },
+      clientUpdatedAt: "2026-05-12T10:00:00.000Z",
+    },
+  ]);
+});
