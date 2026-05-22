@@ -41,6 +41,7 @@ const HighlightWithContrast = Highlight.extend({
 
 const TEXT_COLORS: ReadonlyArray<{ label: string; color: string | null }> = [
   { label: "Default", color: null },
+  { label: "Black", color: "#000000" },
   { label: "White", color: "#ffffff" },
   { label: "Gray", color: "#94a3b8" },
   { label: "Red", color: "#ef4444" },
@@ -324,6 +325,40 @@ function ColorGrid({ colors, activeColor, onSelect }: ColorGridProps) {
   );
 }
 
+// ─── Theme-adaptive color helpers ────────────────────────────────────────────
+
+const DARK_THEME_IDS = new Set(["dark", "paulblue"]);
+
+function isWhiteColor(c: string): boolean {
+  const n = c.toLowerCase().replace(/\s+/g, "");
+  return n === "white" || n === "#fff" || n === "#ffffff" || n === "rgb(255,255,255)";
+}
+
+function isBlackColor(c: string): boolean {
+  const n = c.toLowerCase().replace(/\s+/g, "");
+  return n === "black" || n === "#000" || n === "#000000" || n === "rgb(0,0,0)";
+}
+
+// Walks all [style] elements and swaps explicit black↔white colors to match isDark.
+// Only touches black and white; all other colors are left unchanged.
+function adaptBlackWhiteColorsInHtml(html: string, isDark: boolean): string {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  let changed = false;
+  for (const el of doc.body.querySelectorAll("[style]")) {
+    const htmlEl = el as HTMLElement;
+    const c = htmlEl.style.color;
+    if (!c) continue;
+    if (!isDark && isWhiteColor(c)) {
+      htmlEl.style.color = "#000000";
+      changed = true;
+    } else if (isDark && isBlackColor(c)) {
+      htmlEl.style.color = "#ffffff";
+      changed = true;
+    }
+  }
+  return changed ? doc.body.innerHTML : html;
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function TiptapEditor({
@@ -348,6 +383,15 @@ export function TiptapEditor({
   const fontSizeInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
+
+  // Always-current onChange ref so the MutationObserver callback doesn't go stale.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  // Track light/dark family so we only transform on family transitions.
+  const prevThemeFamilyRef = useRef<"dark" | "light">(
+    DARK_THEME_IDS.has(document.documentElement.dataset.theme ?? "dark") ? "dark" : "light",
+  );
 
   async function uploadImageToCurrentEditor(file: File) {
     setIsUploading(true);
@@ -652,7 +696,13 @@ export function TiptapEditor({
   );
 
   const editorProps = useMemo(
-    () => ({ attributes: { class: "notebook-tiptap-prosemirror" } }),
+    () => ({
+      attributes: { class: "notebook-tiptap-prosemirror" },
+      transformPastedHTML: (html: string) => {
+        const isDark = DARK_THEME_IDS.has(document.documentElement.dataset.theme ?? "dark");
+        return adaptBlackWhiteColorsInHtml(html, isDark);
+      },
+    }),
     [],
   );
 
@@ -704,6 +754,27 @@ export function TiptapEditor({
     }
     lastAppliedEditorKeyRef.current = normalizedEditorKey;
   }, [editor, normalizedEditorKey, value]);
+
+  // Adapt explicit black/white text when the light/dark theme family changes.
+  useEffect(() => {
+    if (!editor) return;
+    const observer = new MutationObserver(() => {
+      const themeId = document.documentElement.dataset.theme ?? "dark";
+      const isDark = DARK_THEME_IDS.has(themeId);
+      const newFamily: "dark" | "light" = isDark ? "dark" : "light";
+      if (newFamily === prevThemeFamilyRef.current) return;
+      prevThemeFamilyRef.current = newFamily;
+      const html = editor.getHTML();
+      const adapted = adaptBlackWhiteColorsInHtml(html, isDark);
+      if (adapted === html) return;
+      isApplyingExternalContentRef.current = true;
+      editor.commands.setContent(adapted, false as never);
+      isApplyingExternalContentRef.current = false;
+      onChangeRef.current(adapted);
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, [editor]);
 
   const applyFontSize = useCallback(
     (size: number) => {
