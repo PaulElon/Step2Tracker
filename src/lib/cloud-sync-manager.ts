@@ -1,9 +1,13 @@
 import type {
   AppState,
   ErrorLogEntry,
+  ExamTimer,
   PersistenceSnapshot,
   PracticeTest,
+  Preferences,
+  ResourceLink,
   StudyBlock,
+  ThemeId,
   TfAppState,
   TfSessionLog,
   TfSessionLogTombstone,
@@ -17,7 +21,14 @@ import { getLocalDateKeyFromIso } from "./datetime.ts";
 import { methodKeyFromLabel } from "./tf-session-adapters.ts";
 import type { CloudDeleteTombstone, CloudEntityType } from "./native-persistence";
 
-type CloudPullEntityType = CloudEntityType | "session_log";
+type CloudPullEntityType = CloudEntityType | "session_log" | "preferences";
+
+const SUPPORTED_THEME_IDS: ReadonlySet<ThemeId> = new Set<ThemeId>([
+  "dark",
+  "light",
+  "paulblue",
+  "maggiepink",
+]);
 
 const AUTH_URL = "https://timefolio-auth-v2.paulfreedman3.workers.dev";
 const SYNC_URL = "https://timefolio-sync-v2.paulfreedman3.workers.dev";
@@ -64,6 +75,7 @@ interface CloudPullDependencies {
   ) => Promise<void>;
   applySessionLog?: (session: TfSessionLog) => Promise<void>;
   applySessionLogDelete?: (id: string, deletedAt: string) => Promise<void>;
+  applyPreferences?: (preferences: Preferences) => Promise<void>;
 }
 
 interface CloudPushDependencies {
@@ -103,7 +115,116 @@ async function loadDefaultPullDependencies() {
     applySessionLogDelete: async (id: string, deletedAt: string) => {
       await native.applyCloudSessionLogDelete(id, deletedAt);
     },
+    applyPreferences: async (preferences: Preferences) => {
+      await native.saveNativePreferences(preferences);
+    },
   };
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+// Cloud preferences carry only the subset of fields the web client owns.
+// Desktop-only state (planner filters/sort/mode, notesHtml, notebookFolders/
+// Pages/Documents, scoreTrendOptions, activeSection, lastActiveDate) must be
+// preserved across a pull — never overwritten by missing/null cloud values.
+// Web-only fields (remindersEnabled) and incompatible shapes are dropped.
+//
+// Conflict semantics: desktop's `Preferences` has no per-record updatedAt, so
+// cloud preferences always win for the fields they carry. This is acceptable
+// because the cloud is the source of truth for cross-device settings; the
+// local-only fields above are kept intact regardless.
+export function mergeCloudPreferencesIntoDesktop(
+  current: Preferences,
+  cloud: Record<string, unknown>,
+): Preferences {
+  const next: Preferences = { ...current };
+
+  if (
+    typeof cloud.dailyGoalMinutes === "number" &&
+    Number.isFinite(cloud.dailyGoalMinutes) &&
+    cloud.dailyGoalMinutes > 0
+  ) {
+    next.dailyGoalMinutes = Math.round(cloud.dailyGoalMinutes);
+  }
+
+  if (typeof cloud.themeId === "string" && SUPPORTED_THEME_IDS.has(cloud.themeId as ThemeId)) {
+    next.themeId = cloud.themeId as ThemeId;
+  }
+
+  if (Array.isArray(cloud.enhancedThemeIds)) {
+    next.enhancedThemeIds = cloud.enhancedThemeIds.filter(
+      (entry): entry is string => typeof entry === "string" && entry.length > 0,
+    );
+  }
+
+  if (typeof cloud.plannerFocusDate === "string" && cloud.plannerFocusDate.trim()) {
+    next.plannerFocusDate = cloud.plannerFocusDate;
+  }
+
+  if (Array.isArray(cloud.examTimers)) {
+    const existingById = new Map(current.examTimers.map((timer) => [timer.id, timer]));
+    next.examTimers = cloud.examTimers.flatMap((raw): ExamTimer[] => {
+      if (!isObjectRecord(raw)) return [];
+      const id = typeof raw.id === "string" && raw.id.trim() ? raw.id : "";
+      const label = typeof raw.label === "string" ? raw.label : "";
+      const examDate = typeof raw.examDate === "string" ? raw.examDate : "";
+      if (!id || !label || !examDate) return [];
+      const previous = existingById.get(id);
+      // Preserve desktop-only optional fields (displayMode, showHrMin, color)
+      // when the cloud doesn't carry them.
+      return [
+        {
+          id,
+          label,
+          examDate,
+          examTime: typeof raw.examTime === "string" ? raw.examTime : previous?.examTime,
+          displayMode: previous?.displayMode,
+          showHrMin: previous?.showHrMin,
+          color: previous?.color,
+        },
+      ];
+    });
+  }
+
+  if (Array.isArray(cloud.customCategories)) {
+    next.customCategories = cloud.customCategories.flatMap((entry): string[] => {
+      if (typeof entry === "string") {
+        const trimmed = entry.trim();
+        return trimmed ? [trimmed] : [];
+      }
+      if (isObjectRecord(entry) && typeof entry.label === "string") {
+        const trimmed = entry.label.trim();
+        return trimmed ? [trimmed] : [];
+      }
+      return [];
+    });
+  }
+
+  if (Array.isArray(cloud.resourceLinks)) {
+    next.resourceLinks = cloud.resourceLinks.flatMap((raw): ResourceLink[] => {
+      if (!isObjectRecord(raw)) return [];
+      const id = typeof raw.id === "string" && raw.id.trim() ? raw.id : "";
+      const label = typeof raw.label === "string" ? raw.label.trim() : "";
+      const url = typeof raw.url === "string" ? raw.url.trim() : "";
+      if (!id || !label || !url) return [];
+      // Web encodes link kind as `type: "Website" | "App" | "Other"`; desktop
+      // accepts only `kind: "website" | "app"`. Map App→app; everything else
+      // (Website, Other, unknown) becomes a generic website entry.
+      const kind: ResourceLink["kind"] = raw.type === "App" ? "app" : "website";
+      return [{ id, label, url, kind }];
+    });
+  }
+
+  // Intentionally ignored from cloud payload:
+  //   activeSection     — per-device navigation state
+  //   updatedAt         — handled by the per-entry cursor; desktop has no
+  //                       persisted preferences updatedAt to compare against
+  //   remindersEnabled  — no desktop equivalent (reminders are per-block)
+  // Any other unknown fields are dropped silently.
+
+  return next;
 }
 
 async function loadDefaultPushDependencies(): Promise<Required<CloudPushDependencies>> {
@@ -422,7 +543,8 @@ export async function pullFromCloud(
     !dependencies.applyErrorLog ||
     !dependencies.applyDelete ||
     !dependencies.applySessionLog ||
-    !dependencies.applySessionLogDelete;
+    !dependencies.applySessionLogDelete ||
+    !dependencies.applyPreferences;
   const defaults = needsDefaults ? await loadDefaultPullDependencies() : null;
   const fetchImpl = dependencies.fetchImpl ?? fetch;
   const getCursor = dependencies.getCursor ?? defaults?.getCursor;
@@ -439,6 +561,7 @@ export async function pullFromCloud(
   const applySessionLog = dependencies.applySessionLog ?? defaults?.applySessionLog;
   const applySessionLogDelete =
     dependencies.applySessionLogDelete ?? defaults?.applySessionLogDelete;
+  const applyPreferences = dependencies.applyPreferences ?? defaults?.applyPreferences;
   if (
     !getCursor ||
     !saveCursor ||
@@ -451,7 +574,8 @@ export async function pullFromCloud(
     !applyErrorLog ||
     !applyDelete ||
     !applySessionLog ||
-    !applySessionLogDelete
+    !applySessionLogDelete ||
+    !applyPreferences
   ) {
     throw new Error("Cloud pull dependencies are unavailable.");
   }
@@ -479,6 +603,11 @@ export async function pullFromCloud(
   // actually contains a session_log entry. This avoids hitting the native
   // tf_load_state command in flows that don't need it (and keeps existing
   // pullFromCloud tests passing without having to stub the new dependencies).
+  // Preferences merges are serial within a single pull — successive cloud
+  // entries layer onto the result of the previous merge so the final write
+  // reflects every accepted field, not just the last entry's payload.
+  let currentPreferences: Preferences = snapshot.state.preferences;
+
   let sessionLogs: Map<string, TfSessionLog> | null = null;
   let sessionLogTombstones: Map<string, string> | null = null;
   async function ensureSessionLogIndex(): Promise<{
@@ -564,6 +693,30 @@ export async function pullFromCloud(
       tombIdx.set(entry.entityId, entry.clientUpdatedAt);
       applied += 1;
       deleted += 1;
+      continue;
+    }
+
+    if (entry.entityType === "preferences") {
+      // Cloud preferences delete is a no-op on desktop. Web does not currently
+      // emit one, and treating a tombstone as "wipe desktop settings" would
+      // destroy device-local state that has no cloud equivalent. Counted as
+      // skipped so the metric stays honest.
+      if (entry.operation === "delete") {
+        skipped += 1;
+        continue;
+      }
+
+      const payload = coerceCloudPullPayload(entry.payload);
+      if (!payload) {
+        skipped += 1;
+        continue;
+      }
+
+      const merged = mergeCloudPreferencesIntoDesktop(currentPreferences, payload);
+      await applyPreferences(merged);
+      currentPreferences = merged;
+      applied += 1;
+      upserted += 1;
       continue;
     }
 

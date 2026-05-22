@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { pullFromCloud, pushAllEntities } from "../../src/lib/cloud-sync-manager.ts";
+import {
+  mergeCloudPreferencesIntoDesktop,
+  pullFromCloud,
+  pushAllEntities,
+} from "../../src/lib/cloud-sync-manager.ts";
 import type { CloudDeleteTombstone } from "../../src/lib/native-persistence.ts";
 import type {
   AppState,
+  Preferences,
   TfAppState,
   TfSessionLog,
   TfSessionLogTombstone,
@@ -1278,6 +1283,7 @@ function buildPullDependencies(overrides: {
   tfState?: TfAppState;
   applySessionLog?: (session: TfSessionLog) => Promise<void>;
   applySessionLogDelete?: (id: string, deletedAt: string) => Promise<void>;
+  applyPreferences?: (preferences: Preferences) => Promise<void>;
 }) {
   const state = overrides.state ?? createEmptyState();
   const tfState = overrides.tfState ?? createEmptyTfState();
@@ -1324,6 +1330,11 @@ function buildPullDependencies(overrides: {
       overrides.applySessionLogDelete ??
       (async () => {
         throw new Error("session log delete apply should not run");
+      }),
+    applyPreferences:
+      overrides.applyPreferences ??
+      (async () => {
+        throw new Error("preferences apply should not run");
       }),
   };
 }
@@ -1523,4 +1534,254 @@ test("pullFromCloud session_log upsert re-derives date from local startAt (date 
       process.env.TZ = previousTz;
     }
   }
+});
+
+// ─── preferences pull (desktop cloud-pull parity with web) ───────────────────
+
+test("mergeCloudPreferencesIntoDesktop applies safe fields and preserves desktop-only state", () => {
+  const baseline = createEmptyState().preferences;
+  const merged = mergeCloudPreferencesIntoDesktop(baseline, {
+    dailyGoalMinutes: 420,
+    themeId: "paulblue",
+    enhancedThemeIds: ["paulblue", "dark"],
+    plannerFocusDate: "2026-05-25",
+    examTimers: [{ id: "step2", label: "Step 2 CK", examDate: "2026-06-15" }],
+    customCategories: [
+      { id: "cat-1", label: "Anki" },
+      "Lectures",
+      { id: "cat-blank", label: "   " },
+    ],
+    resourceLinks: [
+      { id: "uw", label: "UWorld", type: "App", url: "uworld://" },
+      { id: "web", label: "Anking Wiki", type: "Website", url: "https://example.com" },
+      { id: "other", label: "Misc", type: "Other", url: "https://other.example.com" },
+    ],
+    // Web-only / per-device / unsafe fields the desktop must ignore:
+    remindersEnabled: true,
+    activeSection: "today",
+    updatedAt: "2026-05-25T12:00:00.000Z",
+  });
+
+  assert.equal(merged.dailyGoalMinutes, 420);
+  assert.equal(merged.themeId, "paulblue");
+  assert.deepEqual(merged.enhancedThemeIds, ["paulblue", "dark"]);
+  assert.equal(merged.plannerFocusDate, "2026-05-25");
+  assert.deepEqual(merged.examTimers, [
+    {
+      id: "step2",
+      label: "Step 2 CK",
+      examDate: "2026-06-15",
+      examTime: undefined,
+      displayMode: undefined,
+      showHrMin: undefined,
+      color: undefined,
+    },
+  ]);
+  assert.deepEqual(merged.customCategories, ["Anki", "Lectures"]);
+  assert.deepEqual(merged.resourceLinks, [
+    { id: "uw", label: "UWorld", url: "uworld://", kind: "app" },
+    { id: "web", label: "Anking Wiki", url: "https://example.com", kind: "website" },
+    { id: "other", label: "Misc", url: "https://other.example.com", kind: "website" },
+  ]);
+
+  // Desktop-only fields are carried through unchanged from the baseline.
+  assert.equal(merged.activeSection, baseline.activeSection);
+  assert.deepEqual(merged.plannerFilters, baseline.plannerFilters);
+  assert.deepEqual(merged.plannerSort, baseline.plannerSort);
+  assert.equal(merged.plannerMode, baseline.plannerMode);
+  assert.equal(merged.notesHtml, baseline.notesHtml);
+  assert.deepEqual(merged.notebookFolders, baseline.notebookFolders);
+  assert.deepEqual(merged.notebookDocuments, baseline.notebookDocuments);
+  assert.deepEqual(merged.scoreTrendOptions, baseline.scoreTrendOptions);
+});
+
+test("mergeCloudPreferencesIntoDesktop leaves desktop defaults intact when cloud omits fields", () => {
+  const baseline = createEmptyState().preferences;
+  baseline.dailyGoalMinutes = 360;
+  baseline.themeId = "maggiepink";
+  baseline.enhancedThemeIds = ["maggiepink"];
+  baseline.customCategories = ["Anki", "Lectures"];
+  baseline.resourceLinks = [
+    { id: "old", label: "Old", url: "https://old.example.com", kind: "website" },
+  ];
+  baseline.examTimers = [
+    {
+      id: "step2",
+      label: "Step 2",
+      examDate: "2026-06-15",
+      displayMode: "weeks+days",
+      showHrMin: true,
+      color: "#ff0",
+    },
+  ];
+
+  // Cloud payload is intentionally empty — nothing should change.
+  const merged = mergeCloudPreferencesIntoDesktop(baseline, {});
+
+  assert.equal(merged.dailyGoalMinutes, 360);
+  assert.equal(merged.themeId, "maggiepink");
+  assert.deepEqual(merged.enhancedThemeIds, ["maggiepink"]);
+  assert.deepEqual(merged.customCategories, ["Anki", "Lectures"]);
+  assert.deepEqual(merged.resourceLinks, baseline.resourceLinks);
+  assert.deepEqual(merged.examTimers, baseline.examTimers);
+});
+
+test("mergeCloudPreferencesIntoDesktop preserves desktop-only exam timer fields on matching id", () => {
+  const baseline = createEmptyState().preferences;
+  baseline.examTimers = [
+    {
+      id: "step2",
+      label: "Step 2 (old label)",
+      examDate: "2026-06-15",
+      displayMode: "weeks+days",
+      showHrMin: true,
+      color: "#abc",
+    },
+  ];
+
+  const merged = mergeCloudPreferencesIntoDesktop(baseline, {
+    examTimers: [
+      // Web sends only the basic fields. Desktop's displayMode/showHrMin/color
+      // must survive the merge for the same id.
+      { id: "step2", label: "Step 2 CK", examDate: "2026-06-20" },
+    ],
+  });
+
+  assert.deepEqual(merged.examTimers, [
+    {
+      id: "step2",
+      label: "Step 2 CK",
+      examDate: "2026-06-20",
+      examTime: undefined,
+      displayMode: "weeks+days",
+      showHrMin: true,
+      color: "#abc",
+    },
+  ]);
+});
+
+test("mergeCloudPreferencesIntoDesktop drops invalid/web-only fields safely", () => {
+  const baseline = createEmptyState().preferences;
+  const before: Preferences = { ...baseline };
+
+  const merged = mergeCloudPreferencesIntoDesktop(baseline, {
+    dailyGoalMinutes: -50, // invalid → ignored
+    themeId: "neon-orange", // unsupported → ignored
+    enhancedThemeIds: "not-an-array", // wrong shape → ignored
+    plannerFocusDate: "   ", // blank → ignored
+    examTimers: [{ id: "", label: "no id", examDate: "2026-06-15" }], // empty id → dropped
+    resourceLinks: [{ id: "bad", url: "x" }], // missing label → dropped
+    customCategories: [{ no: "label" }, 42, true], // none have label/string → empty array
+    remindersEnabled: true,
+    activeSection: "today",
+  });
+
+  assert.equal(merged.dailyGoalMinutes, before.dailyGoalMinutes);
+  assert.equal(merged.themeId, before.themeId);
+  assert.deepEqual(merged.enhancedThemeIds, before.enhancedThemeIds);
+  assert.equal(merged.plannerFocusDate, before.plannerFocusDate);
+  assert.deepEqual(merged.examTimers, []);
+  assert.deepEqual(merged.resourceLinks, []);
+  assert.deepEqual(merged.customCategories, []);
+  assert.equal(merged.activeSection, before.activeSection);
+});
+
+test("pullFromCloud applies a preferences upsert and routes it through saveNativePreferences", async () => {
+  const appliedPreferences: Preferences[] = [];
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        cursor: 33,
+        entries: [
+          {
+            entityType: "preferences",
+            entityId: "user-pref",
+            operation: "upsert",
+            clientUpdatedAt: "2026-05-22T10:00:00.000Z",
+            payload: {
+              dailyGoalMinutes: 300,
+              themeId: "paulblue",
+              enhancedThemeIds: ["paulblue"],
+              remindersEnabled: true, // ignored on desktop
+              customCategories: [{ id: "cat-1", label: "Pathoma" }],
+              resourceLinks: [
+                { id: "uw", label: "UWorld", type: "App", url: "uworld://" },
+              ],
+              examTimers: [],
+              plannerFocusDate: "2026-05-25",
+              updatedAt: "2026-05-22T10:00:00.000Z",
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )) as typeof fetch;
+
+  const result = await pullFromCloud(
+    "token-x",
+    "device-x",
+    buildPullDependencies({
+      applyPreferences: async (preferences) => {
+        appliedPreferences.push(preferences);
+      },
+    }),
+  );
+
+  assert.equal(appliedPreferences.length, 1);
+  const next = appliedPreferences[0];
+  assert.equal(next.dailyGoalMinutes, 300);
+  assert.equal(next.themeId, "paulblue");
+  assert.deepEqual(next.enhancedThemeIds, ["paulblue"]);
+  assert.deepEqual(next.customCategories, ["Pathoma"]);
+  assert.equal(next.resourceLinks.length, 1);
+  assert.equal(next.resourceLinks[0].kind, "app");
+  assert.equal(next.plannerFocusDate, "2026-05-25");
+  assert.deepEqual(result, {
+    received: 1,
+    applied: 1,
+    upserted: 1,
+    deleted: 0,
+    skipped: 0,
+    cursor: 33,
+  });
+});
+
+test("pullFromCloud ignores a preferences delete tombstone (no-op, counted as skipped)", async () => {
+  let applyCalled = false;
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        cursor: 33,
+        entries: [
+          {
+            entityType: "preferences",
+            entityId: "user-pref",
+            operation: "delete",
+            payload: null,
+            clientUpdatedAt: "2026-05-22T10:00:00.000Z",
+          },
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )) as typeof fetch;
+
+  const result = await pullFromCloud(
+    "token-x",
+    "device-x",
+    buildPullDependencies({
+      applyPreferences: async () => {
+        applyCalled = true;
+      },
+    }),
+  );
+
+  assert.equal(applyCalled, false);
+  assert.deepEqual(result, {
+    received: 1,
+    applied: 0,
+    upserted: 0,
+    deleted: 0,
+    skipped: 1,
+    cursor: 33,
+  });
 });
