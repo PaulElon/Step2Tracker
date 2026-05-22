@@ -3,7 +3,10 @@ import test from "node:test";
 
 import {
   convertWebBackupToDesktopArtifact,
+  extractSessionLogsFromArtifact,
   isWebBackupArtifact,
+  MAX_BACKUP_SESSION_LOGS,
+  spliceSessionLogsIntoArtifact,
 } from "../../src/lib/storage.ts";
 
 const webBackupSample = {
@@ -288,4 +291,153 @@ test("convertWebBackupToDesktopArtifact safely degrades missing arrays", () => {
   assert.equal(parsed.state.errorLogEntries.length, 0);
   assert.equal(parsed.state.preferences.notebookFolders.length, 0);
   assert.equal(parsed.state.preferences.notebookDocuments.length, 0);
+});
+
+test("convertWebBackupToDesktopArtifact carries sessionLogs through in canonical shape", () => {
+  const webWithSessions = {
+    ...webBackupSample,
+    state: {
+      ...webBackupSample.state,
+      sessionLogs: [
+        {
+          id: "ws-1",
+          date: "2026-05-22",
+          title: "Anki",
+          category: "anki",
+          source: "Manual",
+          durationMinutes: 45,
+          startAt: "2026-05-22T08:00:00.000Z",
+          endAt: "2026-05-22T08:45:00.000Z",
+          notes: "morning reps",
+          isDistraction: false,
+          updatedAt: "2026-05-22T08:46:00.000Z",
+        },
+        {
+          // Imported via uppercase source; must be lowered.
+          id: "ws-2",
+          date: "2026-05-22",
+          title: "Practice Block",
+          category: "Test",
+          source: "Imported",
+          durationMinutes: 30,
+          startAt: "2026-05-22T10:00:00.000Z",
+          endAt: "2026-05-22T10:30:00.000Z",
+          notes: "",
+          isDistraction: false,
+          updatedAt: "2026-05-22T10:31:00.000Z",
+        },
+        {
+          // Malformed — missing id; must be skipped.
+          date: "2026-05-22",
+          title: "x",
+          startAt: "2026-05-22T10:00:00.000Z",
+          endAt: "2026-05-22T10:30:00.000Z",
+          source: "Manual",
+          durationMinutes: 10,
+        },
+      ],
+    },
+  };
+
+  const converted = convertWebBackupToDesktopArtifact(JSON.stringify(webWithSessions));
+  assert.ok(converted);
+  const parsed = JSON.parse(converted!) as {
+    sessionLogs: Array<{
+      schemaVersion: number;
+      id: string;
+      source: string;
+      title: string;
+      category: string;
+      durationMinutes: number;
+    }>;
+  };
+  assert.equal(parsed.sessionLogs.length, 2);
+  assert.equal(parsed.sessionLogs[0]?.schemaVersion, 1);
+  assert.equal(parsed.sessionLogs[0]?.source, "manual");
+  assert.equal(parsed.sessionLogs[1]?.source, "imported");
+  assert.equal(parsed.sessionLogs[1]?.id, "ws-2");
+});
+
+test("extractSessionLogsFromArtifact tolerates missing slot and bad payloads", () => {
+  // Missing slot: returns [].
+  assert.deepEqual(
+    extractSessionLogsFromArtifact(
+      JSON.stringify({ app: "step2-command-center", state: {} }),
+    ),
+    [],
+  );
+  // Invalid JSON: returns [].
+  assert.deepEqual(extractSessionLogsFromArtifact("{ not json"), []);
+  // Non-array slot: returns [].
+  assert.deepEqual(
+    extractSessionLogsFromArtifact(JSON.stringify({ sessionLogs: "nope" })),
+    [],
+  );
+  // Mixed valid/invalid: only valid kept.
+  const artifact = JSON.stringify({
+    app: "step2-command-center",
+    sessionLogs: [
+      {
+        id: "good-1",
+        date: "2026-05-22",
+        title: "Read",
+        category: "Notes",
+        source: "manual",
+        durationMinutes: 20,
+        startAt: "2026-05-22T11:00:00.000Z",
+        endAt: "2026-05-22T11:20:00.000Z",
+        notes: "",
+        isDistraction: false,
+        updatedAt: "2026-05-22T11:21:00.000Z",
+      },
+      { id: "" }, // bad
+      "not-an-object", // bad
+    ],
+  });
+  const extracted = extractSessionLogsFromArtifact(artifact);
+  assert.equal(extracted.length, 1);
+  assert.equal(extracted[0]?.id, "good-1");
+  assert.equal(extracted[0]?.source, "manual");
+});
+
+test("spliceSessionLogsIntoArtifact attaches canonical sessionLogs and respects cap", () => {
+  const raw = JSON.stringify({ app: "step2-command-center", state: {} });
+  const spliced = spliceSessionLogsIntoArtifact(raw, [
+    {
+      schemaVersion: 1,
+      id: "sx-1",
+      date: "2026-05-22",
+      title: "T",
+      category: "Notes",
+      source: "manual",
+      durationMinutes: 5,
+      startAt: "2026-05-22T01:00:00.000Z",
+      endAt: "2026-05-22T01:05:00.000Z",
+      notes: "",
+      isDistraction: false,
+      updatedAt: "2026-05-22T01:06:00.000Z",
+    },
+  ]);
+  const parsed = JSON.parse(spliced) as { sessionLogs: unknown[] };
+  assert.equal(parsed.sessionLogs.length, 1);
+  // Invalid input returns raw unchanged.
+  assert.equal(spliceSessionLogsIntoArtifact("{not json", []), "{not json");
+  // Cap kicks in.
+  const bulk = Array.from({ length: MAX_BACKUP_SESSION_LOGS + 5 }, (_, index) => ({
+    schemaVersion: 1 as const,
+    id: `b-${index}`,
+    date: "2026-05-22",
+    title: "T",
+    category: "Notes",
+    source: "manual" as const,
+    durationMinutes: 1,
+    startAt: "2026-05-22T01:00:00.000Z",
+    endAt: "2026-05-22T01:01:00.000Z",
+    notes: "",
+    isDistraction: false,
+    updatedAt: "2026-05-22T01:01:00.000Z",
+  }));
+  const splicedBulk = spliceSessionLogsIntoArtifact(raw, bulk);
+  const parsedBulk = JSON.parse(splicedBulk) as { sessionLogs: unknown[] };
+  assert.equal(parsedBulk.sessionLogs.length, MAX_BACKUP_SESSION_LOGS);
 });

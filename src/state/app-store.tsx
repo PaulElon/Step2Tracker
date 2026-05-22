@@ -4,10 +4,12 @@ import { createDemoAppState } from "../data/demo-data";
 import { getTodayKey } from "../lib/datetime";
 import { loadDemoMode, saveDemoMode } from "../lib/demo-state";
 import {
+  applyCloudSessionLog,
   duplicateNativeStudyBlock,
   exportNativeBackupArtifact,
   importNativeStudyBlocks,
   loadNativeSnapshot,
+  loadNativeTfState,
   migrateLegacyBrowserState,
   previewNativeBackupArtifact,
   restoreNativeBackupArtifact,
@@ -23,12 +25,16 @@ import {
   upsertNativeStudyBlock,
   upsertNativeWeakTopic,
 } from "../lib/native-persistence";
+import { buildCanonicalSessionLogExport } from "../lib/tf-session-log-canonical-export";
+import { canonicalSessionLogPayloadToTfSessionLog } from "../lib/cloud-sync-manager";
 import {
   convertWebBackupToDesktopArtifact,
   createBootstrapState,
+  extractSessionLogsFromArtifact,
   getLegacyBrowserMigrationPayload,
   matchesBootstrapSeed,
   normalizeAppState,
+  spliceSessionLogsIntoArtifact,
 } from "../lib/storage";
 import type {
   AppState,
@@ -47,6 +53,7 @@ import type {
   ResourceLink,
   SectionId,
   StudyBlockInput,
+  TfAppState,
   ThemeId,
   TrashEntityType,
   TrashItem,
@@ -414,12 +421,47 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     trashErrorLogEntry: (id) => enqueueSnapshotOperation(() => trashNativeErrorLogEntry(id)),
     restoreTrashItem: (entityType, id) =>
       enqueueSnapshotOperation(() => restoreNativeTrashItem(entityType, id)),
-    exportBackup: () => exportNativeBackupArtifact(),
+    exportBackup: async () => {
+      const raw = await exportNativeBackupArtifact();
+      // Session logs live in TfAppState (JSON file), not the SQLite-backed
+      // BackupArtifact. Splice the canonical export into the artifact JSON
+      // so cross-platform restores carry session history.
+      let tfState: TfAppState | null = null;
+      try {
+        tfState = await loadNativeTfState();
+      } catch {
+        tfState = null;
+      }
+      if (!tfState) return raw;
+      const sessionLogs = buildCanonicalSessionLogExport(tfState.sessionLogs);
+      return spliceSessionLogsIntoArtifact(raw, sessionLogs);
+    },
     previewBackupArtifact: (raw) =>
       previewNativeBackupArtifact(convertWebBackupToDesktopArtifact(raw) ?? raw),
     restoreBackupArtifact: (raw, options) =>
       enqueueSnapshotOperation(
-        () => restoreNativeBackupArtifact(convertWebBackupToDesktopArtifact(raw) ?? raw),
+        async () => {
+          const translated = convertWebBackupToDesktopArtifact(raw) ?? raw;
+          // Extract session logs BEFORE Rust restore — they live outside
+          // SQLite and need a separate TfAppState write after the native
+          // restore commits. Tombstones intentionally not carried in
+          // backups, so this is upsert-only.
+          const importedSessionLogs = extractSessionLogsFromArtifact(translated);
+          const result = await restoreNativeBackupArtifact(translated);
+          for (const canonical of importedSessionLogs) {
+            const session = canonicalSessionLogPayloadToTfSessionLog(
+              canonical as unknown as Record<string, unknown>,
+            );
+            if (!session) continue;
+            try {
+              await applyCloudSessionLog(session);
+            } catch {
+              // Skip individual malformed sessions; do not abort the full
+              // restore. The native restore has already succeeded.
+            }
+          }
+          return result;
+        },
         {
           alertOnError: options?.alertOnError ?? true,
         },

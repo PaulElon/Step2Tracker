@@ -1923,6 +1923,16 @@ export function convertWebBackupToDesktopArtifact(raw: string): string | null {
     preferences,
   };
 
+  const sessionLogs = Array.isArray(webState.sessionLogs)
+    ? webState.sessionLogs
+        .slice(0, MAX_BACKUP_SESSION_LOGS)
+        .flatMap((entry) => {
+          if (!isRecord(entry)) return [];
+          const canonical = webSessionLogToCanonical(entry, fallbackIso);
+          return canonical ? [canonical] : [];
+        })
+    : [];
+
   const artifact = {
     app: DESKTOP_BACKUP_APP_ID,
     formatVersion: 1,
@@ -1941,9 +1951,153 @@ export function convertWebBackupToDesktopArtifact(raw: string): string | null {
       trashedWeakTopicEntries: 0,
     },
     state,
+    sessionLogs,
   };
 
   return JSON.stringify(artifact);
+}
+
+/**
+ * Maximum number of session logs accepted from a single backup payload.
+ * Pathological large arrays are clipped to this cap to avoid runaway imports.
+ */
+export const MAX_BACKUP_SESSION_LOGS = 100_000;
+
+export interface CanonicalBackupSessionLog {
+  schemaVersion: 1;
+  id: string;
+  date: string;
+  title: string;
+  category: string;
+  source: "manual" | "imported";
+  durationMinutes: number;
+  startAt: string;
+  endAt: string;
+  notes: string;
+  isDistraction: boolean;
+  updatedAt: string;
+}
+
+function normalizeCanonicalSource(value: unknown): "manual" | "imported" {
+  if (typeof value !== "string") return "manual";
+  const lower = value.trim().toLowerCase();
+  return lower === "imported" ? "imported" : "manual";
+}
+
+function webSessionLogToCanonical(
+  raw: Record<string, unknown>,
+  fallbackIso: string,
+): CanonicalBackupSessionLog | null {
+  const id = asString(raw.id);
+  if (!id) return null;
+  const startAt = typeof raw.startAt === "string" ? raw.startAt : "";
+  const endAt = typeof raw.endAt === "string" ? raw.endAt : "";
+  const date = asString(raw.date) || (startAt ? startAt.slice(0, 10) : "");
+  if (!date) return null;
+  const title = asString(raw.title) || asString(raw.method);
+  if (!title) return null;
+  const category = asString(raw.category) || asString(raw.methodKey) || title;
+  const durationMinutes =
+    typeof raw.durationMinutes === "number" && Number.isFinite(raw.durationMinutes)
+      ? Math.max(0, Math.round(raw.durationMinutes))
+      : 0;
+  return {
+    schemaVersion: 1,
+    id,
+    date,
+    title,
+    category,
+    source: normalizeCanonicalSource(raw.source),
+    durationMinutes,
+    startAt,
+    endAt,
+    notes: typeof raw.notes === "string" ? raw.notes : "",
+    isDistraction: raw.isDistraction === true,
+    updatedAt: ensureIsoDateTime(raw.updatedAt, fallbackIso),
+  };
+}
+
+function canonicalEntryFromRecord(
+  raw: Record<string, unknown>,
+): CanonicalBackupSessionLog | null {
+  const id = asString(raw.id);
+  if (!id) return null;
+  const title = asString(raw.title);
+  if (!title) return null;
+  const startAt = typeof raw.startAt === "string" ? raw.startAt : "";
+  const endAt = typeof raw.endAt === "string" ? raw.endAt : "";
+  const date = asString(raw.date) || (startAt ? startAt.slice(0, 10) : "");
+  if (!date) return null;
+  const durationMinutes =
+    typeof raw.durationMinutes === "number" && Number.isFinite(raw.durationMinutes)
+      ? Math.max(0, Math.round(raw.durationMinutes))
+      : 0;
+  const updatedAt =
+    typeof raw.updatedAt === "string" && raw.updatedAt.trim()
+      ? raw.updatedAt
+      : startAt || endAt || `${date}T00:00:00.000Z`;
+  return {
+    schemaVersion: 1,
+    id,
+    date,
+    title,
+    category: asString(raw.category) || title,
+    source: normalizeCanonicalSource(raw.source),
+    durationMinutes,
+    startAt,
+    endAt,
+    notes: typeof raw.notes === "string" ? raw.notes : "",
+    isDistraction: raw.isDistraction === true,
+    updatedAt,
+  };
+}
+
+/**
+ * Parse the optional `sessionLogs` slot from a desktop BackupArtifact JSON
+ * string and return only the entries that look like canonical session logs.
+ * Returns [] when the slot is missing, empty, malformed, or the JSON itself
+ * is invalid — callers should treat this as "no session logs to import".
+ */
+export function extractSessionLogsFromArtifact(raw: string): CanonicalBackupSessionLog[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!isRecord(parsed)) return [];
+  const slot = parsed.sessionLogs;
+  if (!Array.isArray(slot)) return [];
+  const capped = slot.slice(0, MAX_BACKUP_SESSION_LOGS);
+  const out: CanonicalBackupSessionLog[] = [];
+  for (const entry of capped) {
+    if (!isRecord(entry)) continue;
+    const canonical = canonicalEntryFromRecord(entry);
+    if (canonical) out.push(canonical);
+  }
+  return out;
+}
+
+/**
+ * Insert a `sessionLogs` slot into a desktop BackupArtifact JSON string.
+ * When parsing fails or the input is not a JSON object, returns the input
+ * unchanged so the caller can pass it through to the native parser, which
+ * will surface a sensible error.
+ */
+export function spliceSessionLogsIntoArtifact(
+  raw: string,
+  sessionLogs: CanonicalBackupSessionLog[],
+): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+  if (!isRecord(parsed)) return raw;
+  const capped = sessionLogs.slice(0, MAX_BACKUP_SESSION_LOGS);
+  const next = { ...parsed, sessionLogs: capped };
+  return JSON.stringify(next);
 }
 
 export function mergeStudyBlocks(existingBlocks: StudyBlock[], incomingBlocks: StudyBlock[]) {
