@@ -97,9 +97,7 @@ interface CloudPushDependencies {
 type NativePersistenceModule = typeof import("./native-persistence");
 
 async function importNativePersistence(): Promise<NativePersistenceModule> {
-  return (await import(
-    new URL("./native-persistence.ts", import.meta.url).href
-  )) as NativePersistenceModule;
+  return import("./native-persistence");
 }
 
 async function loadDefaultPullDependencies() {
