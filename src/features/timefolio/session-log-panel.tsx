@@ -981,7 +981,7 @@ export function SessionLogPanel({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 p-4">
+    <div className="flex h-full min-h-0 flex-col gap-4 px-4 pt-4">
       {pageTitle ? (
         <div className="space-y-1 px-1">
           <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">{pageTitle}</h2>
@@ -1330,10 +1330,8 @@ export function SessionLogPanel({
               );
             })()
           ) : (
-            <div className="p-4">
-              <div className="rounded-[18px] border border-dashed border-[color:var(--panel-border)] bg-[color:var(--panel-support-bg)] p-4 text-slate-400 [color:var(--rich-text-muted,#94a3b8)]">
-                No sessions recorded for {formatLongDate(selectedDate)}.
-              </div>
+            <div className="p-5 text-sm text-slate-400">
+              No sessions recorded for {formatLongDate(selectedDate)}.
             </div>
           )}
         </div>

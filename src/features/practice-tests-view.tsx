@@ -767,7 +767,7 @@ export function PracticeTestsView() {
 
       <Panel title="History">
           {orderedTests.length ? (
-            <div className="max-h-[340px] overflow-y-auto scrollbar-subtle rounded-[24px] border border-white/10 bg-slate-950/35">
+            <div className="max-h-[calc(100vh-28rem)] overflow-y-auto scrollbar-subtle rounded-[24px] border border-white/10 bg-slate-950/35">
               <table className="w-full min-w-[960px] text-left">
                 <thead className="sticky top-0 border-b border-white/10 bg-[#081220]/95 text-xs uppercase tracking-[0.18em] text-slate-400">
                   <tr>

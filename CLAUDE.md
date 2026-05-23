@@ -36,6 +36,22 @@ Always inspect exact live code before editing:
 - `src/state/app-store.tsx` and `src/state/tf-store.tsx` — React state contexts
 - `src/lib/storage.ts` — AppState migration logic
 
+## Global UI layout containment rule (permanent)
+
+The left sidebar card establishes absolute vertical barriers for every page:
+- **Top y-limit** = top of sidebar card
+- **Bottom y-limit** = bottom of sidebar card
+
+**Rules:**
+- Main-page boxes/cards must never visually extend beyond these limits.
+- If a card's content would exceed the lower y-limit, the card must stop at that y-limit and its content must scroll internally inside the rounded card.
+- Separate boxes must expand/shrink independently. A tall box must never force a neighboring box to stretch vertically — use `items-start` on the grid row.
+- Cards in a bounded flex column must use `min-h-0` so they don't overflow their flex parent.
+- Use `overflow-hidden` on the card shell and `overflow-y-auto scrollbar-subtle` on the inner scroll area.
+- Never use a fixed `max-h-[Npx]` when a viewport-relative `max-h-[calc(100vh-Nrem)]` is appropriate.
+
+**Note:** The same rule applies to TimeFolio-Web (to be enforced separately).
+
 ## Auto-Tracker rule
 - Away grace period is exactly 60,000 ms. Do not change this without explicit instruction.
 - Session machine states: idle → focused → awayPending → recoverableOpen.

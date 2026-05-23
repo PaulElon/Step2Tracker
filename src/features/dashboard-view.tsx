@@ -598,8 +598,8 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
             )}
 
             {/* Today's Plan + Today Snapshot */}
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-              <section className={cn(todayPanelClassName, "flex h-full flex-col p-5")}>
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+              <section className={cn(todayPanelClassName, "flex max-h-[calc(100vh-20rem)] flex-col overflow-hidden p-5")}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-white">Today's Plan</h3>
@@ -619,7 +619,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                   </button>
                 </div>
 
-                <div className="mt-4 min-w-0 flex-1">
+                <div className="mt-4 min-h-0 min-w-0 flex-1 overflow-y-auto pr-0.5 scrollbar-subtle">
                   {todayTasks.length ? (
                     <div className="space-y-2.5 pr-0.5">
                       {todayTasks.map((task) => (
@@ -660,8 +660,8 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
               </section>
 
               {/* Today Snapshot + Timer box */}
-              <div className="flex h-full flex-col gap-4">
-                <section className={cn(todayPanelClassName, "flex flex-1 flex-col p-4")}>
+              <div className="flex flex-col gap-4">
+                <section className={cn(todayPanelClassName, "flex flex-col p-4")}>
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-base font-semibold text-white">Today Snapshot</h3>
                     <span className="text-xs text-slate-500">Goal {formatMinutes(todayGoalMinutes)}</span>
@@ -739,7 +739,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                   </div>
                 </section>
 
-                <section className={cn(todayPanelClassName, "flex h-full flex-col p-4")}>
+                <section className={cn(todayPanelClassName, "flex flex-col p-4")}>
                   <div className="flex items-center gap-2">
                     <Timer className="h-4 w-4 text-cyan-200" />
                     <h3 className="text-base font-semibold text-white">Time your study session</h3>
