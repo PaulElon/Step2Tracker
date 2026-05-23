@@ -14,6 +14,8 @@ import type {
   TfAppState,
   TfSessionLog,
   TfSessionLogTombstone,
+  TfTrackerPrefs,
+  TfTrackerRule,
   WeakTopicEntry,
 } from "../types/models";
 // @ts-expect-error TS5097: node --test needs the explicit .ts specifier in this runtime path.
@@ -87,6 +89,7 @@ interface CloudPullDependencies {
   applySessionLog?: (session: TfSessionLog) => Promise<void>;
   applySessionLogDelete?: (id: string, deletedAt: string) => Promise<void>;
   applyPreferences?: (preferences: Preferences) => Promise<void>;
+  applyTrackerPrefs?: (trackerPrefs: TfTrackerPrefs) => Promise<void>;
 }
 
 interface CloudPushDependencies {
@@ -127,6 +130,10 @@ async function loadDefaultPullDependencies() {
     },
     applyPreferences: async (preferences: Preferences) => {
       await native.saveNativePreferences(preferences);
+    },
+    applyTrackerPrefs: async (trackerPrefs: TfTrackerPrefs) => {
+      const tfState = await native.loadNativeTfState();
+      await native.saveNativeTfState({ ...tfState, trackerPrefs });
     },
   };
 }
@@ -277,9 +284,36 @@ function buildPreferenceChildId(prefix: string, label: string, index: number): s
   return slug ? `${prefix}-${slug}` : `${prefix}-${index + 1}`;
 }
 
+function parseTrackerRuleArray(raw: unknown): TfTrackerRule[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item): TfTrackerRule[] => {
+    if (!isObjectRecord(item)) return [];
+    const id = typeof item.id === "string" ? item.id.trim() : "";
+    const name = typeof item.name === "string" ? item.name : "";
+    const target = typeof item.target === "string" ? item.target : "";
+    const kind = item.kind === "app" || item.kind === "website" ? item.kind : null;
+    if (!id || !kind) return [];
+    return [{ id, name, target, kind }];
+  });
+}
+
+// Returns a validated TfTrackerPrefs if the cloud payload contains the
+// trackerPrefs key as an object; returns null if the key is absent or invalid.
+// Invalid individual rules are dropped; missing arrays default to [].
+function parseTrackerPrefs(value: unknown): TfTrackerPrefs | null {
+  if (!isObjectRecord(value)) return null;
+  return {
+    customAutoApps: parseTrackerRuleArray(value.customAutoApps),
+    customAutoWebsites: parseTrackerRuleArray(value.customAutoWebsites),
+    customDistractionApps: parseTrackerRuleArray(value.customDistractionApps),
+    customDistractionWebsites: parseTrackerRuleArray(value.customDistractionWebsites),
+  };
+}
+
 export function buildCloudPreferencesPayload(
   preferences: Preferences,
   updatedAt: string,
+  trackerPrefs?: TfTrackerPrefs,
 ): Record<string, unknown> {
   const plannerFocusDate = preferences.plannerFocusDate.trim();
 
@@ -336,6 +370,7 @@ export function buildCloudPreferencesPayload(
         },
       ];
     }),
+    ...(trackerPrefs !== undefined ? { trackerPrefs } : {}),
     updatedAt,
   };
 }
@@ -867,7 +902,7 @@ export async function pushAllEntities(
       entityType: "preferences",
       entityId: "preferences",
       operation: "upsert" as const,
-      payload: buildCloudPreferencesPayload(state.preferences, preferencesUpdatedAt),
+      payload: buildCloudPreferencesPayload(state.preferences, preferencesUpdatedAt, tfState.trackerPrefs),
       clientUpdatedAt: preferencesUpdatedAt,
     },
     ...state.preferences.notebookFolders
@@ -991,6 +1026,7 @@ export async function pullFromCloud(
   const applySessionLogDelete =
     dependencies.applySessionLogDelete ?? defaults?.applySessionLogDelete;
   const applyPreferences = dependencies.applyPreferences ?? defaults?.applyPreferences;
+  const applyTrackerPrefs = dependencies.applyTrackerPrefs ?? defaults?.applyTrackerPrefs;
   if (
     !getCursor ||
     !saveCursor ||
@@ -1171,6 +1207,17 @@ export async function pullFromCloud(
       const merged = mergeCloudPreferencesIntoDesktop(currentPreferences, payload, cloudUpdatedAt);
       await applyPreferences(merged);
       currentPreferences = merged;
+
+      // Apply trackerPrefs only if the cloud payload explicitly includes the
+      // key. Absent key = desktop rules untouched. Present key (even empty
+      // arrays) = intentional update from web, so apply it.
+      if (applyTrackerPrefs && isObjectRecord(payload.trackerPrefs)) {
+        const parsedTrackerPrefs = parseTrackerPrefs(payload.trackerPrefs);
+        if (parsedTrackerPrefs) {
+          await applyTrackerPrefs(parsedTrackerPrefs);
+        }
+      }
+
       applied += 1;
       upserted += 1;
       continue;
