@@ -1897,7 +1897,7 @@ export function NotebookView() {
   const isEditorFullscreen = isFullscreen && !isLibraryMode;
   const notebookRootClass = isEditorFullscreen
     ? "notebook-fullscreen-shell fixed inset-0 z-[80] flex flex-col gap-2 overflow-hidden px-3 pb-3 pt-2"
-    : "flex h-full flex-col gap-4 overflow-hidden pb-3 pt-1.5";
+    : "flex h-full flex-col gap-4 overflow-hidden pt-1.5";
 
   return (
     <>

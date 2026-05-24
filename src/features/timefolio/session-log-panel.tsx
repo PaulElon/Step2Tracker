@@ -981,7 +981,7 @@ export function SessionLogPanel({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 px-4 pt-4">
+    <div className="flex h-full min-h-0 flex-col gap-4">
       {pageTitle ? (
         <div className="space-y-1 px-1">
           <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">{pageTitle}</h2>

@@ -481,7 +481,7 @@ export function PracticeTestsView() {
   }, [showChartSettings]);
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full flex-col gap-4">
       <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Practice Tests</h2>
       <MetricStrip columns="md:grid-cols-2 xl:grid-cols-4">
         <MetricStripItem
@@ -765,9 +765,8 @@ export function PracticeTestsView() {
         </Panel>
       </div>
 
-      <Panel title="History">
-          {orderedTests.length ? (
-            <div className="max-h-[calc(100vh-28rem)] overflow-y-auto scrollbar-subtle rounded-[24px] border border-white/10 bg-slate-950/35">
+      {orderedTests.length ? (
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle rounded-[24px] border border-white/10 bg-slate-950/35">
               <table className="w-full min-w-[960px] text-left">
                 <thead className="sticky top-0 border-b border-white/10 bg-[#081220]/95 text-xs uppercase tracking-[0.18em] text-slate-400">
                   <tr>
@@ -824,7 +823,6 @@ export function PracticeTestsView() {
           ) : (
             <EmptyState title="History is empty" description="Logged tests will appear here." compact />
           )}
-      </Panel>
 
       {showEditor ? (
         <PracticeTestEditorSheet
