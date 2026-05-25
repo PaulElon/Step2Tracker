@@ -2640,3 +2640,121 @@ test("pushAllEntities emits notebook folder/document/page upserts and skips PDF-
     },
   ]);
 });
+
+// Regression: when syncAutoTrackerSessionLogs is first enabled, old auto-tracker
+// logs whose updatedAt predates lastSyncedAt were silently excluded by the
+// incremental filter. The fix resets lastSyncedAt to epoch before the next sync,
+// so after = "1970-01-01T00:00:00.000Z" and every eligible session log passes.
+test("pushAllEntities includes opted-in auto-tracker logs whose updatedAt predates the watermark when watermark is reset to epoch", async () => {
+  const state = createEmptyState();
+  state.preferences.syncAutoTrackerSessionLogs = true;
+
+  const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    fetchCalls.push({ url: String(url), init });
+    return new Response(JSON.stringify({ cursor: 99 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  const tfState = createEmptyTfState();
+  // Session ended May 5 — well before a hypothetical lastSyncedAt of May 10.
+  tfState.sessionLogs = [
+    buildSessionLog({
+      id: "auto-old-predates-watermark",
+      method: "Question Bank [Auto]",
+      notes: "",
+      updatedAt: "2026-05-05T12:00:00.000Z",
+      startISO: "2026-05-05T10:00:00.000Z",
+      endISO: "2026-05-05T12:00:00.000Z",
+      hours: 2,
+    }),
+    buildSessionLog({
+      id: "manual-old-predates-watermark",
+      method: "Manual Review",
+      notes: "",
+      updatedAt: "2026-05-05T09:00:00.000Z",
+      startISO: "2026-05-05T08:00:00.000Z",
+      endISO: "2026-05-05T09:00:00.000Z",
+      hours: 1,
+    }),
+  ];
+
+  // Simulate the epoch watermark that handleAutoTrackerSyncToggle writes when
+  // the user enables opt-in. With a normal watermark ("2026-05-10") both logs
+  // would be excluded; with epoch they both pass.
+  const result = await pushAllEntities(
+    "token-123",
+    "device-123",
+    state,
+    "1970-01-01T00:00:00.000Z",
+    [],
+    {
+      loadTfState: async () => tfState,
+      getNow: () => FIXED_PUSH_TIME,
+    },
+  );
+
+  // preferences + 2 session_log upserts
+  assert.deepEqual(result, { pushed: 3, cursor: 99 });
+
+  const body = JSON.parse(String(fetchCalls[0]?.init?.body)) as {
+    entities: Array<Record<string, unknown>>;
+  };
+  const sessionLogIds = body.entities
+    .filter((e) => e.entityType === "session_log")
+    .map((e) => e.entityId);
+  assert.deepEqual(sessionLogIds.sort(), [
+    "auto-old-predates-watermark",
+    "manual-old-predates-watermark",
+  ]);
+});
+
+test("pushAllEntities excludes opted-in auto-tracker logs when watermark is recent (normal incremental sync)", async () => {
+  const state = createEmptyState();
+  state.preferences.syncAutoTrackerSessionLogs = true;
+
+  const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    fetchCalls.push({ url: String(url), init });
+    return new Response(JSON.stringify({ cursor: 100 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  const tfState = createEmptyTfState();
+  tfState.sessionLogs = [
+    buildSessionLog({
+      id: "auto-old-before-watermark",
+      method: "Question Bank [Auto]",
+      notes: "",
+      updatedAt: "2026-05-05T12:00:00.000Z",
+      startISO: "2026-05-05T10:00:00.000Z",
+      endISO: "2026-05-05T12:00:00.000Z",
+      hours: 2,
+    }),
+  ];
+
+  // Normal incremental watermark: session is old, should be skipped (already pushed).
+  const result = await pushAllEntities(
+    "token-123",
+    "device-123",
+    state,
+    "2026-05-10T00:00:00.000Z",
+    [],
+    {
+      loadTfState: async () => tfState,
+      getNow: () => FIXED_PUSH_TIME,
+    },
+  );
+
+  // Only preferences pushed — the old auto log is excluded by the incremental filter.
+  assert.deepEqual(result, { pushed: 1, cursor: 100 });
+  const body = JSON.parse(String(fetchCalls[0]?.init?.body)) as {
+    entities: Array<Record<string, unknown>>;
+  };
+  const sessionLogEntities = body.entities.filter((e) => e.entityType === "session_log");
+  assert.equal(sessionLogEntities.length, 0);
+});

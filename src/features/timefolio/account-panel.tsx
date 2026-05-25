@@ -296,6 +296,13 @@ function CloudSyncSection() {
       if (!saved) {
         throw new Error("Unable to save the Auto-Tracker sync preference.");
       }
+      // Reset the sync watermark so the next push re-evaluates all session logs
+      // against the new opt-in setting. Without this, sessions whose updatedAt
+      // predates the last sync would be excluded by the incremental filter even
+      // though they are newly eligible.
+      if (enabled) {
+        await setLastSyncedAt("1970-01-01T00:00:00.000Z");
+      }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
