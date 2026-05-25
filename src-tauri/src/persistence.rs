@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 const APP_ID: &str = "step2-command-center";
 const APP_STATE_VERSION: u32 = 6;
-const DB_SCHEMA_VERSION: i32 = 12;
+const DB_SCHEMA_VERSION: i32 = 13;
 const LIVE_DB_FILE: &str = "command-center.sqlite3";
 const MAX_BACKUPS: usize = 20;
 const SAFE_CHECKPOINT_INTERVAL_HOURS: i64 = 6;
@@ -1414,6 +1414,9 @@ impl StorageService {
             self.ensure_preferences_columns(&transaction)?;
         }
         if current_version < 11 {
+            self.ensure_preferences_columns(&transaction)?;
+        }
+        if current_version < 13 {
             self.ensure_preferences_columns(&transaction)?;
         }
         transaction.pragma_update(None, "user_version", DB_SCHEMA_VERSION)?;
