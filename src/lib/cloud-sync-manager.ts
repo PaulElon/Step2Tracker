@@ -45,6 +45,7 @@ const SUPPORTED_THEME_IDS: ReadonlySet<ThemeId> = new Set<ThemeId>([
 
 const AUTH_URL = "https://timefolio-auth-v2.paulfreedman3.workers.dev";
 const SYNC_URL = "https://timefolio-sync-v2.paulfreedman3.workers.dev";
+const SESSION_LOG_BATCH_SIZE = 200;
 
 type CloudPullOperation = "upsert" | "delete";
 
@@ -979,17 +980,72 @@ export async function pushAllEntities(
   if (entities.length === 0) {
     return { pushed: 0, cursor: null };
   }
-  const res = await fetch(`${SYNC_URL}/sync/push`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ deviceId, entities }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: string }).error ?? `Sync push failed (${res.status})`);
+
+  // Separate session_log upserts so they can be batched independently.
+  // session_log deletes, preferences, and all other entity types stay in
+  // otherEntities and are sent together in one request (they are always small).
+  const sessionLogUpserts = entities.filter(
+    (e) => e.entityType === "session_log" && e.operation === "upsert",
+  );
+
+  if (sessionLogUpserts.length <= SESSION_LOG_BATCH_SIZE) {
+    // Small payload — single request, existing behavior unchanged.
+    const res = await fetch(`${SYNC_URL}/sync/push`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ deviceId, entities }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { error?: string }).error ?? `Sync push failed (${res.status})`);
+    }
+    const data = (await res.json()) as { cursor: number };
+    return { pushed: entities.length, cursor: data.cursor };
   }
-  const data = (await res.json()) as { cursor: number };
-  return { pushed: entities.length, cursor: data.cursor };
+
+  // Large session-log backfill: send non-session entities first, then session-log
+  // upserts in SESSION_LOG_BATCH_SIZE chunks. The caller (handleSync) advances
+  // lastSyncedAt only after this function returns — any batch failure leaves the
+  // epoch watermark intact so the next sync retries the full backfill safely.
+  const otherEntities = entities.filter(
+    (e) => !(e.entityType === "session_log" && e.operation === "upsert"),
+  );
+
+  let totalPushed = 0;
+  let lastCursor: number | null = null;
+
+  if (otherEntities.length > 0) {
+    const res = await fetch(`${SYNC_URL}/sync/push`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ deviceId, entities: otherEntities }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { error?: string }).error ?? `Sync push failed (${res.status})`);
+    }
+    const data = (await res.json()) as { cursor: number };
+    totalPushed += otherEntities.length;
+    lastCursor = data.cursor;
+  }
+
+  for (let i = 0; i < sessionLogUpserts.length; i += SESSION_LOG_BATCH_SIZE) {
+    const chunk = sessionLogUpserts.slice(i, i + SESSION_LOG_BATCH_SIZE);
+    const res = await fetch(`${SYNC_URL}/sync/push`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ deviceId, entities: chunk }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { error?: string }).error ?? `Sync push failed (${res.status})`);
+    }
+    const data = (await res.json()) as { cursor: number };
+    totalPushed += chunk.length;
+    lastCursor = data.cursor;
+  }
+
+  return { pushed: totalPushed, cursor: lastCursor };
 }
 
 export async function pullFromCloud(

@@ -2758,3 +2758,139 @@ test("pushAllEntities excludes opted-in auto-tracker logs when watermark is rece
   const sessionLogEntities = body.entities.filter((e) => e.entityType === "session_log");
   assert.equal(sessionLogEntities.length, 0);
 });
+
+// ─── session_log batching ────────────────────────────────────────────────────
+
+test("pushAllEntities splits session_log upserts into batches of 200 when count exceeds threshold", async () => {
+  const state = createEmptyState();
+  state.preferences.syncAutoTrackerSessionLogs = true;
+
+  // 250 auto-tracker logs: exceeds the 200-entry threshold, producing 3 batches:
+  //   batch 0 — preferences (non-session entities)
+  //   batch 1 — 200 session_log upserts
+  //   batch 2 — 50 session_log upserts (remainder)
+  const tfState = createEmptyTfState();
+  for (let i = 0; i < 250; i++) {
+    tfState.sessionLogs.push(
+      buildSessionLog({
+        id: `auto-session-${i}`,
+        method: "Question Bank [Auto]",
+        notes: "",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+        startISO: "2026-05-01T00:00:00.000Z",
+        endISO: "2026-05-01T01:00:00.000Z",
+        hours: 1,
+      }),
+    );
+  }
+
+  const fetchBodies: Array<Array<Record<string, unknown>>> = [];
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    const parsed = JSON.parse(String(init?.body)) as {
+      entities: Array<Record<string, unknown>>;
+    };
+    fetchBodies.push(parsed.entities);
+    return new Response(JSON.stringify({ cursor: fetchBodies.length * 10 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  const result = await pushAllEntities(
+    "token-123",
+    "device-123",
+    state,
+    "1970-01-01T00:00:00.000Z",
+    [],
+    {
+      loadTfState: async () => tfState,
+      getNow: () => FIXED_PUSH_TIME,
+    },
+  );
+
+  // 3 fetch calls; 1 pref + 250 logs = 251 pushed; cursor from the last batch.
+  assert.equal(fetchBodies.length, 3);
+  assert.equal(result.pushed, 251);
+  assert.equal(result.cursor, 30);
+
+  // No individual batch exceeds 200 session_log upserts.
+  for (const batchEntities of fetchBodies) {
+    const count = batchEntities.filter(
+      (e) => e.entityType === "session_log" && e.operation === "upsert",
+    ).length;
+    assert.ok(count <= 200, `batch has ${count} session_log upserts, expected <= 200`);
+  }
+
+  // Batch 0: preferences only — no session_log upserts.
+  assert.ok(fetchBodies[0]!.some((e) => e.entityType === "preferences"));
+  assert.equal(
+    fetchBodies[0]!.filter((e) => e.entityType === "session_log" && e.operation === "upsert")
+      .length,
+    0,
+  );
+
+  // Batch 1: exactly 200 session_log upserts.
+  assert.equal(
+    fetchBodies[1]!.filter((e) => e.entityType === "session_log" && e.operation === "upsert")
+      .length,
+    200,
+  );
+
+  // Batch 2: exactly 50 session_log upserts.
+  assert.equal(
+    fetchBodies[2]!.filter((e) => e.entityType === "session_log" && e.operation === "upsert")
+      .length,
+    50,
+  );
+});
+
+test("pushAllEntities throws when a later session_log batch fails, leaving lastSyncedAt unchanged", async () => {
+  // When pushAllEntities throws, the caller (handleSync in account-panel.tsx)
+  // never reaches setLastSyncedAt — the epoch watermark is preserved and the
+  // next sync retries the full backfill safely.
+  const state = createEmptyState();
+  state.preferences.syncAutoTrackerSessionLogs = true;
+
+  const tfState = createEmptyTfState();
+  for (let i = 0; i < 250; i++) {
+    tfState.sessionLogs.push(
+      buildSessionLog({
+        id: `auto-session-${i}`,
+        method: "Question Bank [Auto]",
+        notes: "",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+        startISO: "2026-05-01T00:00:00.000Z",
+        endISO: "2026-05-01T01:00:00.000Z",
+        hours: 1,
+      }),
+    );
+  }
+
+  let callCount = 0;
+  globalThis.fetch = (async () => {
+    callCount += 1;
+    // Batch 0 (non-session entities) succeeds; batch 1 (first session-log chunk) fails.
+    if (callCount === 2) {
+      return new Response(JSON.stringify({ error: "Load failed" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({ cursor: callCount * 10 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  await assert.rejects(
+    () =>
+      pushAllEntities("token-123", "device-123", state, "1970-01-01T00:00:00.000Z", [], {
+        loadTfState: async () => tfState,
+        getNow: () => FIXED_PUSH_TIME,
+      }),
+    /Load failed/,
+  );
+
+  // Exactly 2 calls: batch 0 (preferences) succeeded, batch 1 (session logs) failed.
+  assert.equal(callCount, 2);
+});
