@@ -7,6 +7,7 @@ import {
   type TfAutotrackerV2PreviewSpan,
 } from "../../src/lib/tf-autotracker-v2-preview-spans.js";
 import {
+  AUTO_TRACKER_V2_MINIMUM_SAVED_DURATION_MS,
   deriveAutoTrackerV2RecoveryHydration,
   mergeAutoTrackerV2DevRecoveryState,
   assessAutoTrackerV2RecoveredPreviewSession,
@@ -2261,4 +2262,231 @@ test("continuous write emits session names for success status", () => {
   });
 
   assert.deepEqual(selection.names, ["UWorld", "Anki"]);
+});
+
+// ─── Minimum saved duration threshold (1 second) ──────────────────────────
+
+test("AUTO_TRACKER_V2_MINIMUM_SAVED_DURATION_MS is 1000", () => {
+  assert.equal(AUTO_TRACKER_V2_MINIMUM_SAVED_DURATION_MS, 1_000);
+});
+
+test("stop-save does not save a focus span with duration 999ms", () => {
+  const previewSpans = [trackedUWorldSpan({ startedAtMs: 0, endedAtMs: 999, durationMs: 999 })];
+  const selection = selectAutoTrackerV2StopSaveRunSpans({
+    previewSpans,
+    nowMs: 1_000,
+    writtenPreviewSessionIds: [],
+  });
+  assert.equal(selection.reason, "noEligibleSession");
+  assert.equal(selection.previewSessions.length, 0);
+});
+
+test("stop-save saves a focus span with duration 1000ms", () => {
+  const previewSpans = [trackedUWorldSpan({ startedAtMs: 0, endedAtMs: 1_000, durationMs: 1_000 })];
+  const selection = selectAutoTrackerV2StopSaveRunSpans({
+    previewSpans,
+    nowMs: 2_000,
+    writtenPreviewSessionIds: [],
+  });
+  assert.equal(selection.reason, "eligible");
+  assert.equal(selection.previewSessions.length, 1);
+  assert.equal(selection.previewSessions[0]?.durationMs, 1_000);
+});
+
+test("stop-save does not save a distraction span with duration 999ms", () => {
+  const previewSpans = [
+    distractionRedditSpan({ startedAtMs: 0, endedAtMs: 999, durationMs: 999 }),
+  ];
+  const selection = selectAutoTrackerV2StopSaveRunSpans({
+    previewSpans,
+    nowMs: 1_000,
+    writtenPreviewSessionIds: [],
+  });
+  assert.equal(selection.reason, "noEligibleSession");
+  assert.equal(selection.previewSessions.length, 0);
+});
+
+test("stop-save saves a distraction span with duration 1000ms", () => {
+  const previewSpans = [
+    distractionRedditSpan({ startedAtMs: 0, endedAtMs: 1_000, durationMs: 1_000 }),
+  ];
+  const selection = selectAutoTrackerV2StopSaveRunSpans({
+    previewSpans,
+    nowMs: 2_000,
+    writtenPreviewSessionIds: [],
+  });
+  assert.equal(selection.reason, "eligible");
+  assert.equal(selection.previewSessions.length, 1);
+  assert.equal(selection.previewSessions[0]?.isDistraction, true);
+});
+
+test("continuous-write skips a finalized distraction span with duration 999ms", () => {
+  const base = {
+    previewSessionId: "website:reddit.com/r/medicine:0",
+    startedAtMs: 0,
+    endedAtMs: 999,
+    durationMs: 999,
+    targetLabel: "Reddit",
+    matchedRuleName: "Reddit",
+    matchedRuleTarget: "https://www.reddit.com",
+    sourceTargetStableId: "reddit.com/r/medicine",
+    sourceSpanIds: ["span-1"],
+    sourceEventIds: ["ev-1"],
+    browserUrl: "https://www.reddit.com/r/medicine",
+    classificationReason: "matched distraction rule",
+    classification: "distraction" as const,
+    finalizedBy: "manualStop" as const,
+    isDistraction: true,
+  };
+  const selection = selectAutoTrackerV2ContinuousWritePreviewSessions({
+    finalizedPreviewSessions: [base],
+    state: buildAutoTrackerV2ReducerPreview([]).state,
+    writtenPreviewSessionIds: [],
+  });
+  assert.equal(selection.previewSessions.length, 0);
+});
+
+test("mapAutoTrackerV2FinalizedPreviewSessionToSessionLog throws for durationMs < 1000", () => {
+  const previewSession: TfAutotrackerV2FinalizedPreviewSession = {
+    previewSessionId: "website:apps.uworld.com/courseapp:0",
+    startedAtMs: Date.parse("2025-05-05T14:00:00.000Z"),
+    endedAtMs: Date.parse("2025-05-05T14:00:00.000Z") + 999,
+    durationMs: 999,
+    targetLabel: "UWorld",
+    matchedRuleName: "UWorld",
+    matchedRuleTarget: "https://apps.uworld.com",
+    sourceTargetStableId: "apps.uworld.com/courseapp",
+    sourceSpanIds: ["span-1"],
+    sourceEventIds: ["ev-1"],
+    browserUrl: "https://apps.uworld.com/courseapp/step2",
+    classificationReason: "matched website rule",
+    classification: "tracked",
+    finalizedBy: "manualStop",
+    isDistraction: false,
+  };
+  assert.throws(
+    () => mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(previewSession, "test-id"),
+    /at least 1 second/u,
+  );
+});
+
+test("a 1-second UWorld focus session is saved with preserved timestamps", () => {
+  const startMs = Date.parse("2025-05-05T14:00:00.000Z");
+  const endMs = startMs + 1_000;
+  const previewSession: TfAutotrackerV2FinalizedPreviewSession = {
+    previewSessionId: "website:apps.uworld.com/courseapp:0",
+    startedAtMs: startMs,
+    endedAtMs: endMs,
+    durationMs: 1_000,
+    targetLabel: "UWorld",
+    matchedRuleName: "UWorld",
+    matchedRuleTarget: "https://apps.uworld.com",
+    sourceTargetStableId: "apps.uworld.com/courseapp",
+    sourceSpanIds: ["span-1"],
+    sourceEventIds: ["ev-1"],
+    browserUrl: "https://apps.uworld.com/courseapp/step2",
+    classificationReason: "matched website rule",
+    classification: "tracked",
+    finalizedBy: "manualStop",
+    isDistraction: false,
+  };
+  const sessionLog = mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(previewSession, "test-id");
+  assert.equal(sessionLog.isDistraction, false);
+  assert.equal(sessionLog.startISO, new Date(startMs).toISOString());
+  assert.equal(sessionLog.endISO, new Date(endMs).toISOString());
+  // hours rounds to 0.00 for 1 second; display falls back to "<1m" via timestamp check
+  assert.equal(sessionLog.hours, 0);
+});
+
+test("a 30-second ChatGPT distraction session is saved with correct timestamps for <1m display", () => {
+  const startMs = Date.parse("2025-05-05T14:00:00.000Z");
+  const endMs = startMs + 30_000;
+  const previewSession: TfAutotrackerV2FinalizedPreviewSession = {
+    previewSessionId: "app:/Applications/ChatGPT.app:0",
+    startedAtMs: startMs,
+    endedAtMs: endMs,
+    durationMs: 30_000,
+    targetLabel: "ChatGPT",
+    matchedRuleName: "ChatGPT",
+    matchedRuleTarget: "/Applications/ChatGPT.app",
+    sourceTargetStableId: "/Applications/ChatGPT.app",
+    sourceSpanIds: ["span-1"],
+    sourceEventIds: ["ev-1"],
+    classificationReason: "matched distraction app rule",
+    classification: "distraction",
+    finalizedBy: "manualStop",
+    isDistraction: true,
+  };
+  const sessionLog = mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(previewSession, "test-id");
+  assert.equal(sessionLog.isDistraction, true);
+  assert.equal(sessionLog.startISO, new Date(startMs).toISOString());
+  assert.equal(sessionLog.endISO, new Date(endMs).toISOString());
+  // endISO - startISO = 30s < 60s, so session-log-panel will display "<1m" (not "1m")
+  assert.ok(Date.parse(sessionLog.endISO) - Date.parse(sessionLog.startISO) < 60_000);
+});
+
+test("a 70-second Anki session is saved and displays as 1m (>= 1 minute)", () => {
+  const startMs = Date.parse("2025-05-05T14:00:00.000Z");
+  const endMs = startMs + 70_000;
+  const previewSession: TfAutotrackerV2FinalizedPreviewSession = {
+    previewSessionId: "app:/Applications/Anki.app:0",
+    startedAtMs: startMs,
+    endedAtMs: endMs,
+    durationMs: 70_000,
+    targetLabel: "Anki",
+    matchedRuleName: "Anki",
+    matchedRuleTarget: "/Applications/Anki.app",
+    sourceTargetStableId: "/Applications/Anki.app",
+    sourceSpanIds: ["span-1"],
+    sourceEventIds: ["ev-1"],
+    classificationReason: "matched app rule",
+    classification: "tracked",
+    finalizedBy: "awayGraceElapsed",
+    isDistraction: false,
+  };
+  const sessionLog = mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(previewSession, "test-id");
+  assert.equal(sessionLog.isDistraction, false);
+  assert.ok(Date.parse(sessionLog.endISO) - Date.parse(sessionLog.startISO) >= 60_000);
+  // hours > 0 so display shows actual minutes (not "<1m")
+  assert.ok(sessionLog.hours > 0);
+});
+
+test("stop-save saves a 1-second Goodnotes session from a real run", () => {
+  const previewSpans = buildAutoTrackerV2PreviewSpans(
+    [
+      makeEvent({
+        id: "ev-goodnotes",
+        kind: "targetFocused",
+        timestampMs: 0,
+        appName: "Goodnotes 6",
+        bundleId: "com.goodnotesapp.mac",
+        bundlePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+        executablePath: "/Applications/Goodnotes.app/Contents/MacOS/Goodnotes",
+      }),
+      makeEvent({
+        id: "ev-anki",
+        kind: "targetFocused",
+        timestampMs: 1_000,
+        appName: "Python",
+        bundleId: "net.ankiweb.dtop",
+        executablePath: "/Users/paul/Library/Application Support/AnkiProgramFiles/.venv/bin/python",
+        processIdentityName: "Anki",
+      }),
+    ],
+    PAUL_RUN_SETTINGS,
+  );
+  const selection = selectAutoTrackerV2StopSaveRunSpans({
+    previewSpans,
+    nowMs: 70_000,
+    writtenPreviewSessionIds: [],
+  });
+  assert.equal(selection.reason, "eligible");
+  // Goodnotes span: startedAtMs=0, endedAtMs=1000, durationMs=1000 — meets 1s threshold
+  const goodnotesSession = selection.previewSessions.find((s) => s.targetLabel === "Goodnotes");
+  assert.ok(goodnotesSession, "Goodnotes session should be saved");
+  assert.equal(goodnotesSession.durationMs, 1_000);
+  // Anki still-running span closed at nowMs=70000 — normal longer session also saved
+  const ankiSession = selection.previewSessions.find((s) => s.targetLabel === "Anki");
+  assert.ok(ankiSession, "Anki session should be saved");
+  assert.equal(ankiSession.durationMs, 69_000);
 });

@@ -111,6 +111,8 @@ export type AutoTrackerV2RecoveryHydration = {
   recoveryDiagnostics: AutoTrackerV2NativeRecoveryDiagnostics | null;
 };
 
+export const AUTO_TRACKER_V2_MINIMUM_SAVED_DURATION_MS = 1_000;
+
 export function shouldStartAutoTrackerV2StartupRecoveryHydration({
   hasAppliedHydration,
   nativeInspectorEnabled,
@@ -957,6 +959,10 @@ export function mapAutoTrackerV2FinalizedPreviewSessionToSessionLog(
     throw new RangeError("Preview session endedAtMs must be greater than startedAtMs.");
   }
 
+  if (previewSession.durationMs < AUTO_TRACKER_V2_MINIMUM_SAVED_DURATION_MS) {
+    throw new RangeError("Preview session duration must be at least 1 second.");
+  }
+
   if (previewSession.classification === "unclassified") {
     throw new RangeError("Unclassified preview sessions cannot be written.");
   }
@@ -998,6 +1004,10 @@ export function selectAutoTrackerV2ContinuousWritePreviewSessions({
 
   for (const previewSession of finalizedPreviewSessions) {
     if (previewSession.classification === "unclassified") {
+      continue;
+    }
+
+    if (previewSession.durationMs < AUTO_TRACKER_V2_MINIMUM_SAVED_DURATION_MS) {
       continue;
     }
 
@@ -1136,12 +1146,17 @@ function createStopSavePreviewSessionFromSpan(
     return null;
   }
 
+  const durationMs = Math.max(0, endedAtMs - span.startedAtMs);
+  if (durationMs < AUTO_TRACKER_V2_MINIMUM_SAVED_DURATION_MS) {
+    return null;
+  }
+
   const sourceTargetStableId = getPreviewSpanTargetStableId(span);
   return {
     previewSessionId: `${span.kind}:${sourceTargetStableId}:${span.startedAtMs}`,
     startedAtMs: span.startedAtMs,
     endedAtMs,
-    durationMs: Math.max(0, endedAtMs - span.startedAtMs),
+    durationMs,
     targetLabel: getPreviewSpanTargetLabel(span),
     matchedRuleName: span.matchedRuleName,
     matchedRuleTarget: span.matchedRuleTarget,
@@ -1670,7 +1685,7 @@ function isFinalizedPreviewSpan(span: TfAutotrackerV2PreviewSpan): boolean {
     Number.isFinite(span.startedAtMs) &&
     Number.isFinite(span.endedAtMs) &&
     Number.isFinite(span.durationMs) &&
-    (span.durationMs ?? 0) > 0 &&
+    (span.durationMs ?? 0) >= AUTO_TRACKER_V2_MINIMUM_SAVED_DURATION_MS &&
     (span.endedAtMs ?? 0) > span.startedAtMs
   );
 }

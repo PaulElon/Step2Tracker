@@ -179,7 +179,16 @@ function formatSessionEntryMeta(
   session: TfSessionLog,
   displayState: EntryMetaDisplayState,
 ): string {
-  const minutes = Math.max(0, Math.round(session.hours * 60));
+  const startMs = session.startISO ? Date.parse(session.startISO) : NaN;
+  const endMs = session.endISO ? Date.parse(session.endISO) : NaN;
+  const preciseMs =
+    Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs
+      ? endMs - startMs
+      : null;
+  const minutes =
+    preciseMs !== null && preciseMs < 60_000
+      ? 0
+      : Math.max(0, Math.round(session.hours * 60));
   const durationLabel = formatShortMinutes(minutes);
   const timeRangeLabel = formatSessionTimeRange(session);
 
