@@ -19,6 +19,7 @@ export interface CanonicalSessionLogEntry {
 
 export type CanonicalSessionLogClassificationReason =
   | "safeManual"
+  | "safeAutoTrackerOptIn"
   | "nativeSession"
   | "liveSession"
   | "autoDerivedMethod"
@@ -29,6 +30,10 @@ export interface CanonicalSessionLogClassification {
   reason: CanonicalSessionLogClassificationReason;
   exportable: boolean;
   entry: CanonicalSessionLogEntry | null;
+}
+
+export interface CanonicalSessionLogExportOptions {
+  includeAutoTrackerSessionLogs?: boolean;
 }
 
 const FALLBACK_UPDATED_AT = "1970-01-01T00:00:00.000Z";
@@ -79,19 +84,23 @@ function inferDurationMinutes(session: TfSessionLog): number {
 
 export function classifyTfSessionLogForCanonicalExport(
   session: TfSessionLog,
+  options: CanonicalSessionLogExportOptions = {},
 ): CanonicalSessionLogClassification {
   const method = session.method.trim();
-  const { label, isAuto } = splitAutoSessionMethodLabel(method);
   if (session.id.startsWith("nat-")) {
     return { reason: "nativeSession", exportable: false, entry: null };
   }
   if (session.isLive) {
     return { reason: "liveSession", exportable: false, entry: null };
   }
-  if (isAuto) {
+  if (!method || /^\[auto\]$/iu.test(method)) {
+    return { reason: "missingMethod", exportable: false, entry: null };
+  }
+  const { label, isAuto } = splitAutoSessionMethodLabel(method);
+  if (isAuto && !options.includeAutoTrackerSessionLogs) {
     return { reason: "autoDerivedMethod", exportable: false, entry: null };
   }
-  if (!label) {
+  if (!label || /^\[auto\]$/iu.test(label)) {
     return { reason: "missingMethod", exportable: false, entry: null };
   }
 
@@ -101,8 +110,9 @@ export function classifyTfSessionLogForCanonicalExport(
   }
 
   const title = label;
+  const source = isAuto ? "imported" : "manual";
   return {
-    reason: "safeManual",
+    reason: isAuto ? "safeAutoTrackerOptIn" : "safeManual",
     exportable: true,
     entry: {
       schemaVersion: 1,
@@ -110,7 +120,7 @@ export function classifyTfSessionLogForCanonicalExport(
       date: session.date,
       title,
       category: methodKeyFromLabel(title),
-      source: "manual",
+      source,
       durationMinutes: inferDurationMinutes(session),
       startAt: session.startISO,
       endAt: session.endISO,
@@ -123,8 +133,9 @@ export function classifyTfSessionLogForCanonicalExport(
 
 export function buildCanonicalSessionLogExport(
   sessions: TfSessionLog[],
+  options: CanonicalSessionLogExportOptions = {},
 ): CanonicalSessionLogEntry[] {
   return sessions
-    .map((session) => classifyTfSessionLogForCanonicalExport(session))
+    .map((session) => classifyTfSessionLogForCanonicalExport(session, options))
     .flatMap((classification) => (classification.exportable && classification.entry ? [classification.entry] : []));
 }

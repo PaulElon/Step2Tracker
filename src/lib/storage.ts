@@ -115,6 +115,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
     showBestFitLine: true,
     showBestFitRSquared: false,
   },
+  syncAutoTrackerSessionLogs: false,
 };
 
 function nowIso() {
@@ -1222,6 +1223,7 @@ function normalizePreferences(value: Partial<Preferences> | undefined) {
         value?.scoreTrendOptions?.showBestFitLine === false ? false : true,
       showBestFitRSquared: !!value?.scoreTrendOptions?.showBestFitRSquared,
     },
+    syncAutoTrackerSessionLogs: value?.syncAutoTrackerSessionLogs === true,
   } satisfies Preferences;
 }
 

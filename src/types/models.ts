@@ -264,6 +264,7 @@ export interface Preferences {
   notebookPages: NotebookPage[];
   notebookDocuments: NotebookDocument[];
   scoreTrendOptions: ScoreTrendOptions;
+  syncAutoTrackerSessionLogs?: boolean;
   updatedAt?: string;
 }
 

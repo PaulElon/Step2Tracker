@@ -163,7 +163,11 @@ function getOrCreateLocalDeviceId(): string {
 }
 
 function CloudSyncSection() {
-  const { reload } = useAppStore();
+  const {
+    reload,
+    state,
+    setSyncAutoTrackerSessionLogs,
+  } = useAppStore();
   const [phase, setPhase] = useState<CloudPhase>("loading");
   const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
   const [nativeDeviceId] = useState<string>(() => getOrCreateLocalDeviceId());
@@ -172,6 +176,8 @@ function CloudSyncSection() {
   const [password, setPassword] = useState("");
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSyncPreferenceSaving, setIsSyncPreferenceSaving] = useState(false);
+  const syncAutoTrackerSessionLogs = state.preferences.syncAutoTrackerSessionLogs === true;
 
   useEffect(() => {
     getDeviceMetadata()
@@ -281,6 +287,22 @@ function CloudSyncSection() {
     }
   }
 
+  async function handleAutoTrackerSyncToggle(enabled: boolean) {
+    setErrorMsg(null);
+    setStatusMsg(null);
+    setIsSyncPreferenceSaving(true);
+    try {
+      const saved = await setSyncAutoTrackerSessionLogs(enabled);
+      if (!saved) {
+        throw new Error("Unable to save the Auto-Tracker sync preference.");
+      }
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSyncPreferenceSaving(false);
+    }
+  }
+
   async function handleDisconnect() {
     await clearCloudLink();
     setToken(null);
@@ -316,6 +338,32 @@ function CloudSyncSection() {
 
   return (
     <SectionCard title="Cloud sync" description="Connect your cloud account to push local changes and pull remote updates.">
+      <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-slate-100">Sync Auto-Tracker session logs</p>
+            <p className="text-xs leading-5 text-slate-400">
+              When enabled, finalized Auto-Tracker focus and distraction session logs can sync to your web account.
+              App/site names and durations may be included. Off by default.
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-sm font-medium text-slate-200">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-500 bg-slate-900 text-cyan-500 focus:ring-cyan-500"
+              checked={syncAutoTrackerSessionLogs}
+              disabled={isSyncPreferenceSaving || phase === "syncing"}
+              onChange={(event) => {
+                void handleAutoTrackerSyncToggle(event.target.checked);
+              }}
+            />
+            <span>{syncAutoTrackerSessionLogs ? "On" : "Off"}</span>
+          </label>
+        </div>
+        <p className="mt-3 text-xs text-slate-500">
+          Manual session logs keep syncing either way. This setting changes future cloud exports only.
+        </p>
+      </div>
       {errorMsg && (
         <div className="mb-4">
           <StatusBanner tone="error" title="Error" message={errorMsg} />
@@ -340,7 +388,7 @@ function CloudSyncSection() {
           <div className="flex gap-2">
             <button
               type="button"
-              disabled={isBusy || !token}
+              disabled={isBusy || !token || isSyncPreferenceSaving}
               onClick={() => void handleSync()}
               className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
             >

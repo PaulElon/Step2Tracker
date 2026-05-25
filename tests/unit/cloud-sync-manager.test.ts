@@ -61,6 +61,7 @@ function createEmptyState(): AppState {
         showBestFitLine: true,
         showBestFitRSquared: false,
       },
+      syncAutoTrackerSessionLogs: false,
     },
   };
 }
@@ -343,6 +344,12 @@ test("pushAllEntities sends recent upserts and delete tombstones and preserves t
           { id: "custom-category-notes", label: "Notes" },
         ],
         resourceLinks: [],
+        trackerPrefs: {
+          customAutoApps: [],
+          customAutoWebsites: [],
+          customDistractionApps: [],
+          customDistractionWebsites: [],
+        },
         updatedAt: "2026-05-17T09:30:00.000Z",
       },
       clientUpdatedAt: "2026-05-17T09:30:00.000Z",
@@ -423,6 +430,12 @@ test("pushAllEntities falls back to the current sync time when preferences updat
         { id: "custom-category-notes", label: "Notes" },
       ],
       resourceLinks: [],
+      trackerPrefs: {
+        customAutoApps: [],
+        customAutoWebsites: [],
+        customDistractionApps: [],
+        customDistractionWebsites: [],
+      },
       updatedAt: FIXED_PUSH_TIME,
     },
     clientUpdatedAt: FIXED_PUSH_TIME,
@@ -511,6 +524,12 @@ test("pushAllEntities adds canonical safe session_log upserts and skips unsafe o
           { id: "custom-category-notes", label: "Notes" },
         ],
         resourceLinks: [],
+        trackerPrefs: {
+          customAutoApps: [],
+          customAutoWebsites: [],
+          customDistractionApps: [],
+          customDistractionWebsites: [],
+        },
         updatedAt: FIXED_PUSH_TIME,
       },
       clientUpdatedAt: FIXED_PUSH_TIME,
@@ -534,6 +553,118 @@ test("pushAllEntities adds canonical safe session_log upserts and skips unsafe o
         updatedAt: "2026-05-12T11:35:00.000Z",
       },
       clientUpdatedAt: "2026-05-12T11:35:00.000Z",
+    },
+  ]);
+});
+
+test("pushAllEntities includes opted-in auto-tracker session logs and preserves canonical payload shape", async () => {
+  const state = createEmptyState();
+  state.preferences.syncAutoTrackerSessionLogs = true;
+
+  const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    fetchCalls.push({ url: String(url), init });
+    return new Response(JSON.stringify({ cursor: 93 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  const tfState = createEmptyTfState();
+  tfState.sessionLogs = [
+    buildSessionLog({
+      id: "manual-safe-new",
+      method: "Manual Review",
+      notes: "Focused renal review.",
+      updatedAt: "2026-05-12T11:35:00.000Z",
+      startISO: "2026-05-12T10:00:00.000Z",
+      endISO: "2026-05-12T11:30:00.000Z",
+    }),
+    buildSessionLog({
+      id: "auto-focus-new",
+      method: "Question Bank [Auto]",
+      notes: "",
+      updatedAt: "2026-05-12T12:35:00.000Z",
+      startISO: "2026-05-12T11:45:00.000Z",
+      endISO: "2026-05-12T12:30:00.000Z",
+      hours: 0.75,
+    }),
+    buildSessionLog({
+      id: "auto-missing-method",
+      method: "",
+      notes: "",
+      updatedAt: "2026-05-12T12:40:00.000Z",
+    }),
+    buildSessionLog({
+      id: "auto-live",
+      method: "Slack [Auto]",
+      isLive: true,
+      notes: "",
+      updatedAt: "2026-05-12T12:45:00.000Z",
+    }),
+  ];
+
+  const result = await pushAllEntities(
+    "token-123",
+    "device-123",
+    state,
+    "2026-05-10T00:00:00.000Z",
+    [],
+    {
+      loadTfState: async () => tfState,
+      getNow: () => FIXED_PUSH_TIME,
+    },
+  );
+
+  assert.deepEqual(result, { pushed: 3, cursor: 93 });
+  assert.equal(fetchCalls.length, 1);
+
+  const body = JSON.parse(String(fetchCalls[0]?.init?.body)) as {
+    deviceId: string;
+    entities: Array<Record<string, unknown>>;
+  };
+
+  const sessionLogEntities = body.entities.filter((entry) => entry.entityType === "session_log");
+  assert.deepEqual(sessionLogEntities, [
+    {
+      entityType: "session_log",
+      entityId: "manual-safe-new",
+      operation: "upsert",
+      payload: {
+        schemaVersion: 1,
+        id: "manual-safe-new",
+        date: "2026-05-12",
+        title: "Manual Review",
+        category: "manual-review",
+        source: "manual",
+        durationMinutes: 90,
+        startAt: "2026-05-12T10:00:00.000Z",
+        endAt: "2026-05-12T11:30:00.000Z",
+        notes: "Focused renal review.",
+        isDistraction: false,
+        updatedAt: "2026-05-12T11:35:00.000Z",
+      },
+      clientUpdatedAt: "2026-05-12T11:35:00.000Z",
+    },
+    {
+      entityType: "session_log",
+      entityId: "auto-focus-new",
+      operation: "upsert",
+      payload: {
+        schemaVersion: 1,
+        id: "auto-focus-new",
+        date: "2026-05-12",
+        title: "Question Bank",
+        category: "question-bank",
+        source: "imported",
+        durationMinutes: 45,
+        startAt: "2026-05-12T11:45:00.000Z",
+        endAt: "2026-05-12T12:30:00.000Z",
+        notes: "",
+        isDistraction: false,
+        updatedAt: "2026-05-12T12:35:00.000Z",
+      },
+      clientUpdatedAt: "2026-05-12T12:35:00.000Z",
     },
   ]);
 });
@@ -621,6 +752,12 @@ test("pushAllEntities pushes only eligible session_log deletes after the waterma
           { id: "custom-category-notes", label: "Notes" },
         ],
         resourceLinks: [],
+        trackerPrefs: {
+          customAutoApps: [],
+          customAutoWebsites: [],
+          customDistractionApps: [],
+          customDistractionWebsites: [],
+        },
         updatedAt: FIXED_PUSH_TIME,
       },
       clientUpdatedAt: FIXED_PUSH_TIME,

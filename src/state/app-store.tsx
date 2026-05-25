@@ -81,6 +81,7 @@ interface AppStoreValue {
   setPlannerMode: (mode: PlannerMode) => Promise<boolean>;
   setPlannerFocusDate: (date: string) => Promise<boolean>;
   setDailyGoalMinutes: (dailyGoalMinutes: number) => Promise<boolean>;
+  setSyncAutoTrackerSessionLogs: (enabled: boolean) => Promise<boolean>;
   toggleThemeEnhanced: (themeId: ThemeId) => Promise<boolean>;
   setCustomCategories: (categories: string[]) => Promise<boolean>;
   setResourceLinks: (links: ResourceLink[]) => Promise<boolean>;
@@ -359,6 +360,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       savePreferences({
         ...stateRef.current.preferences,
         dailyGoalMinutes,
+      }),
+    setSyncAutoTrackerSessionLogs: (syncAutoTrackerSessionLogs) =>
+      savePreferences({
+        ...stateRef.current.preferences,
+        syncAutoTrackerSessionLogs,
       }),
     toggleThemeEnhanced: (themeId) => {
       const current = stateRef.current.preferences.enhancedThemeIds;

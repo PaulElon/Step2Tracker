@@ -69,6 +69,127 @@ test("canonical export excludes privacy-unsafe auto and native rows", () => {
   assert.equal(classifyTfSessionLogForCanonicalExport(sessions[2]).reason, "autoDerivedNotes");
 });
 
+test("canonical export opt-in includes finalized auto-tracker rows with canonical fields", () => {
+  const exported = buildCanonicalSessionLogExport(
+    [
+      buildSession({
+        id: "auto-focus-1",
+        method: "Question Bank [Auto]",
+        methodKey: "question-bank-auto",
+        notes: "",
+        isDistraction: false,
+        date: "2026-05-07",
+        startISO: "2026-05-07T08:15:00.000Z",
+        endISO: "2026-05-07T09:05:00.000Z",
+        hours: 0.83,
+        updatedAt: "2026-05-07T09:06:00.000Z",
+      }),
+      buildSession({
+        id: "auto-distraction-1",
+        method: "Instagram [Auto]",
+        notes: "",
+        isDistraction: true,
+        date: "2026-05-07",
+        startISO: "2026-05-07T11:00:00.000Z",
+        endISO: "2026-05-07T11:20:00.000Z",
+        hours: 0.33,
+        updatedAt: "2026-05-07T11:20:00.000Z",
+      }),
+    ],
+    { includeAutoTrackerSessionLogs: true },
+  );
+
+  assert.deepEqual(exported, [
+    {
+      schemaVersion: 1,
+      id: "auto-focus-1",
+      date: "2026-05-07",
+      title: "Question Bank",
+      category: "question-bank",
+      source: "imported",
+      durationMinutes: 50,
+      startAt: "2026-05-07T08:15:00.000Z",
+      endAt: "2026-05-07T09:05:00.000Z",
+      notes: "",
+      isDistraction: false,
+      updatedAt: "2026-05-07T09:06:00.000Z",
+    },
+    {
+      schemaVersion: 1,
+      id: "auto-distraction-1",
+      date: "2026-05-07",
+      title: "Instagram",
+      category: "instagram",
+      source: "imported",
+      durationMinutes: 20,
+      startAt: "2026-05-07T11:00:00.000Z",
+      endAt: "2026-05-07T11:20:00.000Z",
+      notes: "",
+      isDistraction: true,
+      updatedAt: "2026-05-07T11:20:00.000Z",
+    },
+  ]);
+
+  assert.equal(
+    classifyTfSessionLogForCanonicalExport(
+      buildSession({
+        id: "auto-focus-classified",
+        method: "Question Bank [Auto]",
+        notes: "",
+      }),
+      { includeAutoTrackerSessionLogs: true },
+    ).reason,
+    "safeAutoTrackerOptIn",
+  );
+});
+
+test("canonical export opt-in still excludes missing, live, native, and unsafe auto rows", () => {
+  const sessions: TfSessionLog[] = [
+    buildSession({
+      id: "nat-device-2-span-2",
+      method: "Question Bank [Auto]",
+      notes: "",
+    }),
+    buildSession({
+      id: "auto-live-1",
+      method: "Question Bank [Auto]",
+      isLive: true,
+      notes: "",
+    }),
+    buildSession({
+      id: "auto-missing-label",
+      method: "",
+      notes: "",
+    }),
+    buildSession({
+      id: "auto-unsafe-notes",
+      method: "Question Bank [Auto]",
+      notes: "browserUrl=https://apps.uworld.com browserTitle=UWorld",
+    }),
+  ];
+
+  assert.deepEqual(
+    buildCanonicalSessionLogExport(sessions, { includeAutoTrackerSessionLogs: true }),
+    [],
+  );
+  assert.equal(
+    classifyTfSessionLogForCanonicalExport(sessions[0], { includeAutoTrackerSessionLogs: true }).reason,
+    "nativeSession",
+  );
+  assert.equal(
+    classifyTfSessionLogForCanonicalExport(sessions[1], { includeAutoTrackerSessionLogs: true }).reason,
+    "liveSession",
+  );
+  assert.equal(
+    classifyTfSessionLogForCanonicalExport(sessions[2], { includeAutoTrackerSessionLogs: true }).reason,
+    "missingMethod",
+  );
+  assert.equal(
+    classifyTfSessionLogForCanonicalExport(sessions[3], { includeAutoTrackerSessionLogs: true }).reason,
+    "autoDerivedNotes",
+  );
+});
+
 test("canonical export never leaks raw native/browser identifiers", () => {
   const exported = buildCanonicalSessionLogExport([
     buildSession(),

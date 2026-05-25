@@ -854,7 +854,9 @@ export async function pushAllEntities(
   }
   const tfState = await loadTfState();
   const preferencesUpdatedAt = getPreferencesUpdatedAt(state.preferences) ?? getNow();
-  const canonicalSessionLogs = buildCanonicalSessionLogExport(tfState.sessionLogs);
+  const canonicalSessionLogs = buildCanonicalSessionLogExport(tfState.sessionLogs, {
+    includeAutoTrackerSessionLogs: state.preferences.syncAutoTrackerSessionLogs === true,
+  });
   const sessionLogDeleteTombstones = tfState.sessionLogTombstones.filter(
     (entry): entry is TfSessionLogTombstone =>
       entry.syncEligible === true &&

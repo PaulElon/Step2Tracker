@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 const APP_ID: &str = "step2-command-center";
 const APP_STATE_VERSION: u32 = 6;
-const DB_SCHEMA_VERSION: i32 = 11;
+const DB_SCHEMA_VERSION: i32 = 12;
 const LIVE_DB_FILE: &str = "command-center.sqlite3";
 const MAX_BACKUPS: usize = 20;
 const SAFE_CHECKPOINT_INTERVAL_HOURS: i64 = 6;
@@ -418,6 +418,8 @@ pub struct Preferences {
     pub notebook_documents: Vec<NotebookDocument>,
     #[serde(default = "default_score_trend_options")]
     pub score_trend_options: ScoreTrendOptions,
+    #[serde(default)]
+    pub sync_auto_tracker_session_logs: bool,
     #[serde(default)]
     pub updated_at: Option<String>,
 }
@@ -1462,6 +1464,7 @@ impl StorageService {
               notebook_pages_json TEXT NOT NULL DEFAULT '[]',
               notebook_documents_json TEXT NOT NULL DEFAULT '[]',
               score_trend_options_json TEXT NOT NULL DEFAULT '{\"showConnectionLine\":false,\"showBestFitLine\":true,\"showBestFitRSquared\":false}',
+              sync_auto_tracker_session_logs INTEGER NOT NULL DEFAULT 0,
               updated_at TEXT NOT NULL
             );
 
@@ -1692,6 +1695,12 @@ impl StorageService {
         if !columns.contains(&"score_trend_options_json".to_string()) {
             transaction.execute(
                 "ALTER TABLE preferences ADD COLUMN score_trend_options_json TEXT NOT NULL DEFAULT '{\"showConnectionLine\":false,\"showBestFitLine\":true,\"showBestFitRSquared\":false}'",
+                [],
+            )?;
+        }
+        if !columns.contains(&"sync_auto_tracker_session_logs".to_string()) {
+            transaction.execute(
+                "ALTER TABLE preferences ADD COLUMN sync_auto_tracker_session_logs INTEGER NOT NULL DEFAULT 0",
                 [],
             )?;
         }
@@ -2313,6 +2322,7 @@ impl StorageService {
                   notebook_pages_json,
                   notebook_documents_json,
                   score_trend_options_json,
+                  sync_auto_tracker_session_logs,
                   updated_at
                 FROM preferences
                 WHERE id = 1
@@ -2398,7 +2408,8 @@ impl StorageService {
                         notebook_pages,
                         notebook_documents,
                         score_trend_options,
-                        updated_at: row.get::<_, Option<String>>(22)?,
+                        sync_auto_tracker_session_logs: row.get::<_, bool>(22)?,
+                        updated_at: row.get::<_, Option<String>>(23)?,
                     })
                 },
             )
@@ -2721,9 +2732,9 @@ impl StorageService {
               planner_filter_from_date, planner_filter_to_date,
               planner_sort_field, planner_sort_direction, planner_mode,
               planner_focus_date, enhanced_theme_ids_json, custom_categories_json,
-              resource_links_json, exam_timers_json, notes_html, notebook_folders_json, notebook_pages_json, notebook_documents_json, score_trend_options_json, updated_at
+              resource_links_json, exam_timers_json, notes_html, notebook_folders_json, notebook_pages_json, notebook_documents_json, score_trend_options_json, sync_auto_tracker_session_logs, updated_at
             )
-            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
+            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
             ON CONFLICT(id) DO UPDATE SET
               active_section = excluded.active_section,
               last_active_date = excluded.last_active_date,
@@ -2747,6 +2758,7 @@ impl StorageService {
               notebook_pages_json = excluded.notebook_pages_json,
               notebook_documents_json = excluded.notebook_documents_json,
               score_trend_options_json = excluded.score_trend_options_json,
+              sync_auto_tracker_session_logs = excluded.sync_auto_tracker_session_logs,
               updated_at = excluded.updated_at
             ",
             params![
@@ -2772,6 +2784,7 @@ impl StorageService {
                 notebook_pages_json,
                 notebook_documents_json,
                 score_trend_options_json,
+                effective.sync_auto_tracker_session_logs,
                 updated_at,
             ],
         )?;
@@ -4397,6 +4410,7 @@ fn default_preferences() -> Preferences {
         notebook_pages: Vec::new(),
         notebook_documents: Vec::new(),
         score_trend_options: default_score_trend_options(),
+        sync_auto_tracker_session_logs: false,
         updated_at: None,
     }
 }
@@ -5251,6 +5265,46 @@ mod tests {
             snapshot.state.preferences.updated_at.as_deref(),
             Some("2026-04-02T03:04:05Z")
         );
+    }
+
+    #[test]
+    fn save_preferences_persists_sync_auto_tracker_session_logs_flag() {
+        let (_temp, service) = test_service();
+        service.load_snapshot().expect("bootstrap");
+
+        let mut prefs = default_preferences();
+        prefs.sync_auto_tracker_session_logs = true;
+
+        service.save_preferences(prefs).expect("save");
+
+        let snapshot = service.load_snapshot().expect("reload");
+        assert!(snapshot.state.preferences.sync_auto_tracker_session_logs);
+    }
+
+    #[test]
+    fn preferences_deserialize_defaults_sync_auto_tracker_session_logs_to_false() {
+        let parsed: Preferences = serde_json::from_value(serde_json::json!({
+            "activeSection": "dashboard",
+            "lastActiveDate": "2026-05-25",
+            "themeId": "dark",
+            "dailyGoalMinutes": 480,
+            "plannerFilters": {
+                "search": "",
+                "category": "All",
+                "status": "All",
+                "fromDate": "",
+                "toDate": ""
+            },
+            "plannerSort": {
+                "field": "date",
+                "direction": "asc"
+            },
+            "plannerMode": "week",
+            "plannerFocusDate": "2026-05-25"
+        }))
+        .expect("deserialize");
+
+        assert!(!parsed.sync_auto_tracker_session_logs);
     }
 
     #[test]
