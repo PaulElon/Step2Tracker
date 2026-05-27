@@ -12,6 +12,8 @@ import { listen } from "@tauri-apps/api/event";
 import { DemoBanner } from "./components/demo-banner";
 import { ModalShell } from "./components/modal-shell";
 import { TutorialOverlay } from "./components/tutorial-overlay";
+import { AutoTrackerOnboarding } from "./features/auto-tracker-onboarding";
+import { loadAutoTrackerOnboardingState } from "./lib/auto-tracker-onboarding";
 import { MobileNav, NavigationButton } from "./components/ui";
 import { getDesktopNavigationGroups, getMobileNavigationItems, resolveAppSection } from "./features/app-navigation";
 import { DashboardView } from "./features/dashboard-view";
@@ -54,6 +56,10 @@ import type {
   SectionId,
   TrashItem,
 } from "./types/models";
+
+const IS_TAURI_SHELL =
+  typeof window !== "undefined" &&
+  typeof (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== "undefined";
 
 const EMPTY_TUTORIAL_STATE: TutorialState = {
   active: false,
@@ -579,6 +585,12 @@ export default function App() {
   } = useAppStore();
   const restoreInputRef = useRef<HTMLInputElement | null>(null);
   const [showRecoveryCenter, setShowRecoveryCenter] = useState(false);
+  const [showAutoTrackerOnboarding, setShowAutoTrackerOnboarding] = useState(() => {
+    if (!IS_TAURI_SHELL) return false;
+    return !loadAutoTrackerOnboardingState().completed;
+  });
+  const showAutoTrackerOnboardingOverlay =
+    IS_TAURI_SHELL && showAutoTrackerOnboarding && !isDemoMode;
   const [portfolioOverviewActive, setPortfolioOverviewActive] = useState(false);
   const [pendingArtifactRaw, setPendingArtifactRaw] = useState<string | null>(null);
   const [pendingArtifactPreview, setPendingArtifactPreview] = useState<BackupArtifactPreview | null>(null);
@@ -1332,6 +1344,9 @@ export default function App() {
         />
       ) : null}
     </div>
+    {showAutoTrackerOnboardingOverlay ? (
+      <AutoTrackerOnboarding onComplete={() => setShowAutoTrackerOnboarding(false)} />
+    ) : null}
     </>
   );
 }

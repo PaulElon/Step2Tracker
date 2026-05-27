@@ -274,23 +274,55 @@ fn launch_path(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn open_notification_settings() -> Result<(), String> {
+    open_macos_pref_url(
+        "x-apple.systempreferences:com.apple.preference.notifications",
+        "Notification",
+    )
+}
+
+#[tauri::command]
+fn open_accessibility_settings() -> Result<(), String> {
+    open_macos_pref_url(
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+        "Accessibility",
+    )
+}
+
+#[tauri::command]
+fn open_full_disk_access_settings() -> Result<(), String> {
+    open_macos_pref_url(
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
+        "Full Disk Access",
+    )
+}
+
+#[tauri::command]
+fn open_login_items_settings() -> Result<(), String> {
+    open_macos_pref_url(
+        "x-apple.systempreferences:com.apple.LoginItems-Settings.extension",
+        "Login Items",
+    )
+}
+
+#[allow(unused_variables)]
+fn open_macos_pref_url(url: &str, label: &str) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         let status = Command::new("open")
-            .arg("x-apple.systempreferences:com.apple.preference.notifications")
+            .arg(url)
             .status()
-            .map_err(|error| format!("Unable to open Notification settings: {error}"))?;
+            .map_err(|error| format!("Unable to open {label} settings: {error}"))?;
 
         if status.success() {
             Ok(())
         } else {
-            Err("Unable to open Notification settings.".into())
+            Err(format!("Unable to open {label} settings."))
         }
     }
 
     #[cfg(not(target_os = "macos"))]
     {
-        Err("Notification settings shortcut is only available on macOS.".into())
+        Err(format!("{label} settings shortcut is only available on macOS."))
     }
 }
 
@@ -963,6 +995,9 @@ fn main() {
             tf_persistence::tf_apply_cloud_session_log_delete,
             launch_path,
             open_notification_settings,
+            open_accessibility_settings,
+            open_full_disk_access_settings,
+            open_login_items_settings,
             export_notebook_page,
             export_notebook_pdf,
             export_notebook_docx,
