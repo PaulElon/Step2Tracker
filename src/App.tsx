@@ -5,7 +5,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { startTransition, useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { JSX } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -594,7 +594,7 @@ export default function App() {
   });
   const showAutoTrackerOnboardingOverlay =
     IS_TAURI_SHELL && showAutoTrackerOnboarding && !isDemoMode;
-  const didEnterAutoTrackerOnboardingRef = useRef(false);
+  const lastAutoTrackerWindowModeRef = useRef<boolean | null>(null);
   const [portfolioOverviewActive, setPortfolioOverviewActive] = useState(false);
   const [pendingArtifactRaw, setPendingArtifactRaw] = useState<string | null>(null);
   const [pendingArtifactPreview, setPendingArtifactPreview] = useState<BackupArtifactPreview | null>(null);
@@ -651,21 +651,19 @@ export default function App() {
       ? `${daysBetween(dateRange.startDate, dateRange.endDate) + 1} days`
       : "Add or import tasks.";
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!IS_TAURI_SHELL || isDemoMode) {
       return;
     }
 
-    if (showAutoTrackerOnboardingOverlay) {
-      didEnterAutoTrackerOnboardingRef.current = true;
-      void invoke("set_auto_tracker_onboarding_window_mode", { active: true }).catch(() => undefined);
+    if (lastAutoTrackerWindowModeRef.current === showAutoTrackerOnboardingOverlay) {
       return;
     }
 
-    if (didEnterAutoTrackerOnboardingRef.current) {
-      didEnterAutoTrackerOnboardingRef.current = false;
-      void invoke("set_auto_tracker_onboarding_window_mode", { active: false }).catch(() => undefined);
-    }
+    lastAutoTrackerWindowModeRef.current = showAutoTrackerOnboardingOverlay;
+    void invoke("set_auto_tracker_onboarding_window_mode", {
+      active: showAutoTrackerOnboardingOverlay,
+    }).catch(() => undefined);
   }, [isDemoMode, showAutoTrackerOnboardingOverlay]);
 
   function resolveUpdateBannerVersion(result: UpdateBannerCheckResult): string | null {

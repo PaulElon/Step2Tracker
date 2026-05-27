@@ -1,7 +1,7 @@
 {
   "productName": "TimeFolio",
   "mainBinaryName": "TimeFolio",
-  "version": "0.0.233",
+  "version": "0.0.234",
   "identifier": "com.paul.step2ckcommandcenter",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -16,7 +16,7 @@
         "title": "TimeFolio",
         "width": 1440,
         "height": 960,
-        "maximized": true,
+        "maximized": false,
         "minWidth": 1100,
         "minHeight": 760,
         "resizable": true
@@ -33,6 +33,10 @@
       "dmg"
     ],
     "createUpdaterArtifacts": true,
+    "macOS": {
+      "bundleName": "TimeFolio",
+      "infoPlist": "Info.plist"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

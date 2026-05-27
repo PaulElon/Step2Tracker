@@ -2205,7 +2205,7 @@ export function TrackerSettingsPanel({
               <p className="text-sm font-semibold text-slate-100">Auto-Tracker permissions</p>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
                 Re-run the macOS setup checklist for notifications, Accessibility, Full Disk Access,
-                and background access.
+                and optional login startup.
               </p>
             </div>
           </div>

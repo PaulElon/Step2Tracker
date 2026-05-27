@@ -58,7 +58,7 @@ jobs:
       RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
       RELEASE_NAME: ${{ needs.prepare-release.outputs.release_name }}
       TAURI_TARGET: aarch64-apple-darwin
-      MAC_STABLE_ASSET: TimeFolio-Study-Tracker-macOS-Apple-Silicon.app.tar.gz
+      MAC_STABLE_ASSET: TimeFolio-macOS-Apple-Silicon.app.tar.gz
       MAC_DMG_ASSET: TimeFolio-macOS-Apple-Silicon.dmg
       VITE_FF_TIMEFOLIO: "true"
       VITE_FF_AUTOTRACKER_V2_USER_MODE: "true"
@@ -178,8 +178,8 @@ jobs:
     env:
       APP_VERSION: ${{ needs.prepare-release.outputs.app_version }}
       RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
-      WINDOWS_STABLE_ASSET: TimeFolio-Study-Tracker-Windows-x64-Setup.exe
-      WINDOWS_USER_ASSET: TimeFolio-Windows-x64-Setup.exe
+      WINDOWS_STABLE_ASSET: TimeFolio-Windows-x64-Setup.exe
+      WINDOWS_USER_ASSET: TimeFolio-Windows-Setup.exe
       VITE_FF_TIMEFOLIO: "true"
       VITE_FF_AUTOTRACKER_V2_USER_MODE: "true"
       VITE_FF_NOTEBOOK: "true"

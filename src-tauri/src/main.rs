@@ -7,6 +7,8 @@ mod tf_autotracker_v2_native;
 mod tf_persistence;
 mod updater;
 
+#[cfg(target_os = "macos")]
+use auto_launch::{AutoLaunch, AutoLaunchBuilder, MacOSLaunchMode};
 use std::ffi::c_void;
 use std::process::Command;
 use std::{fs, path::PathBuf};
@@ -352,14 +354,14 @@ fn set_auto_tracker_onboarding_window_mode(
         }
         window
             .set_min_size(Some(Size::Logical(LogicalSize {
-                width: 900.0,
-                height: 600.0,
+                width: 1180.0,
+                height: 760.0,
             })))
             .map_err(|error| error.to_string())?;
         window
             .set_size(Size::Logical(LogicalSize {
-                width: 1040.0,
-                height: 680.0,
+                width: 1180.0,
+                height: 760.0,
             }))
             .map_err(|error| error.to_string())?;
         window.center().map_err(|error| error.to_string())?;
@@ -381,6 +383,70 @@ fn set_auto_tracker_onboarding_window_mode(
     }
 
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn current_app_bundle_path() -> Result<PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|error| error.to_string())?;
+
+    for ancestor in exe.ancestors() {
+        if ancestor
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("app"))
+        {
+            return Ok(ancestor.to_path_buf());
+        }
+    }
+
+    Err("Start at Login is only available from an installed TimeFolio.app build.".to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn build_start_at_login_manager() -> Result<AutoLaunch, String> {
+    let app_bundle = current_app_bundle_path()?;
+    let app_bundle_path = app_bundle
+        .to_str()
+        .ok_or_else(|| "Unable to resolve the TimeFolio app bundle path.".to_string())?;
+
+    let mut builder = AutoLaunchBuilder::new();
+    builder
+        .set_app_name("TimeFolio")
+        .set_app_path(app_bundle_path)
+        .set_macos_launch_mode(MacOSLaunchMode::SMAppService)
+        .set_bundle_identifiers(&["com.paul.step2ckcommandcenter"]);
+
+    builder.build().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn get_start_at_login_status() -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        build_start_at_login_manager()?
+            .is_enabled()
+            .map_err(|error| error.to_string())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Start at Login is only supported on macOS.".to_string())
+    }
+}
+
+#[tauri::command]
+fn enable_start_at_login() -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let manager = build_start_at_login_manager()?;
+        manager.enable().map_err(|error| error.to_string())?;
+        manager.is_enabled().map_err(|error| error.to_string())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Start at Login is only supported on macOS.".to_string())
+    }
 }
 
 #[allow(unused_variables)]
@@ -1117,6 +1183,8 @@ fn main() {
             open_login_items_settings,
             get_accessibility_permission_status,
             request_accessibility_permission,
+            get_start_at_login_status,
+            enable_start_at_login,
             set_auto_tracker_onboarding_window_mode,
             export_notebook_page,
             export_notebook_pdf,

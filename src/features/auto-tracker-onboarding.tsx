@@ -9,7 +9,6 @@ import {
   HardDrive,
   Lock,
   Power,
-  ShieldCheck,
 } from "lucide-react";
 import {
   getNotificationPermissionStatus,
@@ -23,12 +22,13 @@ import {
   loadAutoTrackerOnboardingState,
   saveAutoTrackerOnboardingState,
 } from "../lib/auto-tracker-onboarding";
+import { cn } from "../lib/ui";
 
-const APP_DISPLAY_NAME = "TimeFolio";
-const APP_INSTALL_NAME = "TimeFolio Study Tracker";
-const APP_BUNDLE_ID = "com.paul.step2ckcommandcenter";
+const LEGACY_BUNDLE_ID = "com.paul.step2ckcommandcenter";
 
 type StepKind = "required" | "optional";
+type StepStatus = "verified" | "manual" | "needsSetup";
+type StepRequestMode = "notifications" | "accessibility" | "startAtLogin" | null;
 
 interface OnboardingStep {
   id: AutoTrackerOnboardingStepId;
@@ -39,9 +39,15 @@ interface OnboardingStep {
   help: string;
   icon: (props: { className?: string }) => JSX.Element;
   openSettingsCommand: string;
-  openButtonLabel: string;
+  requestMode: StepRequestMode;
   requestButtonLabel?: string;
-  canVerify: boolean;
+  supportsManualConfirmation: boolean;
+}
+
+interface PermissionSnapshot {
+  notificationPermission: NotificationPermission | "unsupported";
+  accessibilityTrusted: boolean | "unsupported";
+  startAtLoginEnabled: boolean | "unsupported";
 }
 
 const STEPS: OnboardingStep[] = [
@@ -51,16 +57,16 @@ const STEPS: OnboardingStep[] = [
     title: "Enable Notifications",
     body: "TimeFolio uses notifications for timer updates, reminders, and setup alerts.",
     instructions: [
-      "Click Request Notification Permission.",
+      "Click Request Access.",
       "Choose Allow in the macOS prompt.",
-      "If the prompt does not appear, open Notification Settings and enable the installed app.",
+      "If the prompt does not appear, open Settings and enable TimeFolio manually.",
     ],
-    help: `Enable ${APP_INSTALL_NAME} in /Applications. macOS may list it as ${APP_DISPLAY_NAME}.`,
+    help: "macOS can verify this permission automatically.",
     icon: (props) => <Bell {...props} />,
     openSettingsCommand: "open_notification_settings",
-    openButtonLabel: "Open Notification Settings",
-    requestButtonLabel: "Request Notification Permission",
-    canVerify: true,
+    requestMode: "notifications",
+    requestButtonLabel: "Request Access",
+    supportsManualConfirmation: false,
   },
   {
     id: "accessibility",
@@ -68,16 +74,16 @@ const STEPS: OnboardingStep[] = [
     title: "Grant Accessibility Access",
     body: "Accessibility lets TimeFolio identify the active app so study time can be tracked automatically.",
     instructions: [
-      "Click Request Accessibility Access.",
-      `Enable ${APP_INSTALL_NAME} in /Applications if macOS opens System Settings.`,
-      "Return here and click I enabled this if macOS does not report the change immediately.",
+      "Click Request Access.",
+      "If macOS opens System Settings, enable TimeFolio from /Applications.",
+      "Return here and click Check Again if the change does not appear immediately.",
     ],
-    help: `App identity: ${APP_DISPLAY_NAME} (${APP_BUNDLE_ID}). Duplicate entries can appear after reinstalling.`,
+    help: "macOS can verify Accessibility access automatically.",
     icon: (props) => <Accessibility {...props} />,
     openSettingsCommand: "open_accessibility_settings",
-    openButtonLabel: "Open Accessibility Settings",
-    requestButtonLabel: "Request Accessibility Access",
-    canVerify: true,
+    requestMode: "accessibility",
+    requestButtonLabel: "Request Access",
+    supportsManualConfirmation: false,
   },
   {
     id: "fullDisk",
@@ -85,52 +91,57 @@ const STEPS: OnboardingStep[] = [
     title: "Allow Full Disk Access",
     body: "Full Disk Access helps TimeFolio read app activity consistently across macOS privacy boundaries.",
     instructions: [
-      "Open Full Disk Access.",
-      `Enable ${APP_INSTALL_NAME} in /Applications.`,
-      "Restart TimeFolio if macOS asks or tracking still looks incomplete.",
+      "Click Open Settings.",
+      "Enable TimeFolio from /Applications in Full Disk Access.",
+      "Return here and confirm after macOS shows it as enabled.",
     ],
-    help: "TimeFolio cannot reliably verify Full Disk Access from this setup screen, so confirm it here after enabling it.",
+    help: "macOS requires Full Disk Access to be enabled manually. There is no direct native allow prompt for this permission.",
     icon: (props) => <HardDrive {...props} />,
     openSettingsCommand: "open_full_disk_access_settings",
-    openButtonLabel: "Open Full Disk Access",
-    canVerify: false,
-  },
-  {
-    id: "background",
-    kind: "required",
-    title: "Allow Background Access",
-    body: "Background access lets Auto-Tracker keep working while TimeFolio is not the frontmost window.",
-    instructions: [
-      "Open Login Items & Extensions.",
-      `Find ${APP_INSTALL_NAME} or ${APP_DISPLAY_NAME}.`,
-      "Allow it to run in the background, then confirm here.",
-    ],
-    help: "macOS does not expose a reliable current-app background access check to this app yet.",
-    icon: (props) => <ShieldCheck {...props} />,
-    openSettingsCommand: "open_login_items_settings",
-    openButtonLabel: "Open Login Items & Extensions",
-    canVerify: false,
+    requestMode: null,
+    supportsManualConfirmation: true,
   },
   {
     id: "startAtLogin",
     kind: "optional",
     title: "Start at Login",
-    body: "Optional, but recommended if you want Auto-Tracker ready every time you start your Mac.",
+    body: "Optional, but recommended if you want TimeFolio ready each time you sign in.",
     instructions: [
-      "Open Login Items & Extensions.",
-      `Add ${APP_INSTALL_NAME} under Open at Login.`,
-      "Confirm here if you enabled it.",
+      "Click Enable Start at Login.",
+      "If macOS opens Login Items, keep TimeFolio enabled there.",
+      "Use Check Again after returning if macOS approval finishes outside this window.",
     ],
-    help: "This is optional and does not block Done.",
+    help: "TimeFolio does not have a separate native background-access prompt. This optional step only manages login-item startup.",
     icon: (props) => <Power {...props} />,
     openSettingsCommand: "open_login_items_settings",
-    openButtonLabel: "Open Login Items & Extensions",
-    canVerify: false,
+    requestMode: "startAtLogin",
+    requestButtonLabel: "Enable Start at Login",
+    supportsManualConfirmation: false,
   },
 ];
 
 function stepIcon(step: OnboardingStep, className: string) {
   return step.icon({ className });
+}
+
+function getStepStatusCopy(status: StepStatus, step: OnboardingStep): string {
+  if (status === "verified") {
+    return step.kind === "optional" ? "Enabled" : "Verified";
+  }
+  if (status === "manual") {
+    return "Confirmed";
+  }
+  return step.kind === "optional" ? "Optional" : "Needs setup";
+}
+
+function getVerificationCopy(status: StepStatus, step: OnboardingStep): string {
+  if (status === "verified") {
+    return "Verified by macOS";
+  }
+  if (status === "manual") {
+    return "Marked enabled by you";
+  }
+  return step.kind === "optional" ? "Optional" : "Needs setup";
 }
 
 interface AutoTrackerOnboardingProps {
@@ -150,6 +161,9 @@ export function AutoTrackerOnboarding({
     NotificationPermission | "unsupported"
   >("unsupported");
   const [accessibilityTrusted, setAccessibilityTrusted] = useState<boolean | "unsupported">(
+    "unsupported",
+  );
+  const [startAtLoginEnabled, setStartAtLoginEnabled] = useState<boolean | "unsupported">(
     "unsupported",
   );
   const [isBusy, setIsBusy] = useState(false);
@@ -180,79 +194,162 @@ export function AutoTrackerOnboarding({
     });
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const permission = await getNotificationPermissionStatus();
-      if (cancelled) return;
-      setNotificationPermission(permission);
-      if (permission === "granted") {
-        confirmStep("notifications");
-      }
-    })();
-    return () => {
-      cancelled = true;
+  const readPermissionSnapshot = useCallback(async (): Promise<PermissionSnapshot> => {
+    const [nextNotificationPermission, nextAccessibilityTrusted, nextStartAtLoginEnabled] =
+      await Promise.all([
+        getNotificationPermissionStatus(),
+        (async () => {
+          try {
+            return await invoke<boolean>("get_accessibility_permission_status");
+          } catch {
+            return "unsupported" as const;
+          }
+        })(),
+        (async () => {
+          try {
+            return await invoke<boolean>("get_start_at_login_status");
+          } catch {
+            return "unsupported" as const;
+          }
+        })(),
+      ]);
+
+    return {
+      notificationPermission: nextNotificationPermission,
+      accessibilityTrusted: nextAccessibilityTrusted,
+      startAtLoginEnabled: nextStartAtLoginEnabled,
     };
-  }, [confirmStep]);
+  }, []);
+
+  const applyPermissionSnapshot = useCallback(
+    (snapshot: PermissionSnapshot) => {
+      setNotificationPermission(snapshot.notificationPermission);
+      setAccessibilityTrusted(snapshot.accessibilityTrusted);
+      setStartAtLoginEnabled(snapshot.startAtLoginEnabled);
+
+      if (snapshot.notificationPermission !== "granted") {
+        unconfirmStep("notifications");
+      }
+      if (snapshot.accessibilityTrusted !== true) {
+        unconfirmStep("accessibility");
+      }
+      if (snapshot.startAtLoginEnabled !== true) {
+        unconfirmStep("startAtLogin");
+      }
+    },
+    [unconfirmStep],
+  );
+
+  const refreshPermissionSnapshot = useCallback(async () => {
+    const snapshot = await readPermissionSnapshot();
+    applyPermissionSnapshot(snapshot);
+    return snapshot;
+  }, [applyPermissionSnapshot, readPermissionSnapshot]);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const trusted = await invoke<boolean>("get_accessibility_permission_status");
-        if (cancelled) return;
-        setAccessibilityTrusted(trusted);
-        if (trusted) {
-          confirmStep("accessibility");
-        }
-      } catch {
-        if (!cancelled) {
-          setAccessibilityTrusted("unsupported");
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
+    void refreshPermissionSnapshot();
+  }, [refreshPermissionSnapshot]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      void refreshPermissionSnapshot();
     };
-  }, [confirmStep]);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshPermissionSnapshot();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [refreshPermissionSnapshot]);
+
+  const getStepStatus = useCallback(
+    (id: AutoTrackerOnboardingStepId): StepStatus => {
+      if (id === "notifications" && notificationPermission === "granted") {
+        return "verified";
+      }
+      if (id === "accessibility" && accessibilityTrusted === true) {
+        return "verified";
+      }
+      if (id === "startAtLogin" && startAtLoginEnabled === true) {
+        return "verified";
+      }
+      if (state.confirmedSteps.includes(id)) {
+        return "manual";
+      }
+      return "needsSetup";
+    },
+    [accessibilityTrusted, notificationPermission, startAtLoginEnabled, state.confirmedSteps],
+  );
 
   const activeStep = useMemo(
     () => STEPS.find((step) => step.id === activeStepId) ?? STEPS[0],
     [activeStepId],
   );
 
-  const requiredComplete = hasCompletedRequiredSteps(state);
-  const activeConfirmed = state.confirmedSteps.includes(activeStep.id);
+  const completionState = useMemo(() => {
+    const nextConfirmedSteps = STEPS.filter((step) => getStepStatus(step.id) !== "needsSetup").map(
+      (step) => step.id,
+    );
+    return {
+      ...state,
+      confirmedSteps: nextConfirmedSteps,
+    };
+  }, [getStepStatus, state]);
+
+  const requiredComplete = hasCompletedRequiredSteps(completionState);
   const requiredRemaining = REQUIRED_ONBOARDING_STEPS.filter(
-    (id) => !state.confirmedSteps.includes(id),
+    (id) => getStepStatus(id) === "needsSetup",
   ).length;
+  const activeStepStatus = getStepStatus(activeStep.id);
+  const activeStepVerified = activeStepStatus === "verified";
+  const activeStepManual = activeStepStatus === "manual";
 
   const handleRequestPermission = useCallback(async () => {
+    if (!activeStep.requestMode) {
+      return;
+    }
+
     setSettingsError(null);
     setStatusMessage(null);
     setIsBusy(true);
     try {
-      if (activeStep.id === "notifications") {
-        const permission = await requestNotificationPermission();
-        setNotificationPermission(permission);
-        if (permission === "granted") {
-          confirmStep("notifications");
-          setStatusMessage("Notifications are enabled on this Mac.");
-        } else {
-          setStatusMessage("macOS did not grant notifications from the prompt. Open settings to enable them manually.");
-        }
+      if (activeStep.requestMode === "notifications") {
+        await requestNotificationPermission();
+        const snapshot = await refreshPermissionSnapshot();
+        setStatusMessage(
+          snapshot.notificationPermission === "granted"
+            ? "Notifications are enabled."
+            : "macOS did not grant notifications from the prompt. Open Settings to finish this manually.",
+        );
         return;
       }
 
-      if (activeStep.id === "accessibility") {
-        const trusted = await invoke<boolean>("request_accessibility_permission");
-        setAccessibilityTrusted(trusted);
-        if (trusted) {
-          confirmStep("accessibility");
-          setStatusMessage("Accessibility access is enabled on this Mac.");
-        } else {
-          setStatusMessage("If the native prompt did not appear, open Accessibility Settings and enable the installed app.");
-        }
+      if (activeStep.requestMode === "accessibility") {
+        await invoke<boolean>("request_accessibility_permission");
+        const snapshot = await refreshPermissionSnapshot();
+        setStatusMessage(
+          snapshot.accessibilityTrusted === true
+            ? "Accessibility access is enabled."
+            : "If macOS opened System Settings, enable TimeFolio there and then click Check Again.",
+        );
+        return;
+      }
+
+      if (activeStep.requestMode === "startAtLogin") {
+        await invoke<boolean>("enable_start_at_login");
+        const snapshot = await refreshPermissionSnapshot();
+        setStatusMessage(
+          snapshot.startAtLoginEnabled === true
+            ? "Start at Login is enabled for TimeFolio."
+            : "macOS did not report Start at Login as enabled yet. Open Settings and click Check Again after approving it.",
+        );
       }
     } catch (error) {
       setSettingsError(
@@ -263,7 +360,7 @@ export function AutoTrackerOnboarding({
     } finally {
       setIsBusy(false);
     }
-  }, [activeStep.id, confirmStep]);
+  }, [activeStep.requestMode, refreshPermissionSnapshot]);
 
   const handleOpenSettings = useCallback(async () => {
     setSettingsError(null);
@@ -271,6 +368,11 @@ export function AutoTrackerOnboarding({
     setIsBusy(true);
     try {
       await invoke(activeStep.openSettingsCommand);
+      if (activeStep.id === "fullDisk") {
+        setStatusMessage("System Settings is open. Enable TimeFolio there, then return and click I Enabled This.");
+      } else {
+        setStatusMessage("System Settings is open. Return here and click Check Again after making the change.");
+      }
     } catch (error) {
       setSettingsError(
         error instanceof Error
@@ -280,12 +382,50 @@ export function AutoTrackerOnboarding({
     } finally {
       setIsBusy(false);
     }
-  }, [activeStep.openSettingsCommand]);
+  }, [activeStep.id, activeStep.openSettingsCommand]);
+
+  const handleCheckAgain = useCallback(async () => {
+    setSettingsError(null);
+    setStatusMessage(null);
+    setIsBusy(true);
+    try {
+      const snapshot = await refreshPermissionSnapshot();
+      const verified =
+        activeStep.id === "notifications"
+          ? snapshot.notificationPermission === "granted"
+          : activeStep.id === "accessibility"
+            ? snapshot.accessibilityTrusted === true
+            : activeStep.id === "startAtLogin"
+              ? snapshot.startAtLoginEnabled === true
+              : false;
+
+      setStatusMessage(
+        verified
+          ? `${activeStep.title} is enabled.`
+          : `${activeStep.title} still needs setup.`,
+      );
+    } catch (error) {
+      setSettingsError(
+        error instanceof Error
+          ? error.message
+          : "Unable to check the current permission status.",
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }, [activeStep.id, activeStep.title, refreshPermissionSnapshot]);
+
+  const handleManualConfirmation = useCallback(() => {
+    setSettingsError(null);
+    setStatusMessage(null);
+    confirmStep(activeStep.id);
+    setStatusMessage("Marked enabled by you.");
+  }, [activeStep.id, confirmStep]);
 
   const handleFinish = useCallback(() => {
     if (!requiredComplete) return;
     const next: AutoTrackerOnboardingState = {
-      ...state,
+      ...completionState,
       completed: true,
       completedAt: new Date().toISOString(),
       deferredAt: null,
@@ -293,7 +433,7 @@ export function AutoTrackerOnboarding({
     saveAutoTrackerOnboardingState(next);
     setState(next);
     onComplete();
-  }, [onComplete, requiredComplete, state]);
+  }, [completionState, onComplete, requiredComplete]);
 
   const handleSkip = useCallback(() => {
     const next: AutoTrackerOnboardingState = {
@@ -306,17 +446,16 @@ export function AutoTrackerOnboarding({
     onSkip();
   }, [onSkip, state]);
 
-  const directRequestAvailable = activeStep.id === "notifications" || activeStep.id === "accessibility";
-  const verifiedStatus =
-    activeStep.id === "notifications"
-      ? notificationPermission === "granted"
-      : activeStep.id === "accessibility"
-        ? accessibilityTrusted === true
-        : false;
+  const showOpenSettingsAction = true;
+  const showCheckAgainAction =
+    activeStep.id === "notifications" ||
+    activeStep.id === "accessibility" ||
+    activeStep.id === "startAtLogin";
+  const showManualConfirmationAction = activeStep.supportsManualConfirmation;
 
   return (
     <div className="autotracker-onboarding fixed inset-0 z-[10000] flex bg-[#080b15] text-[#f8fafc]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(124,92,255,0.20),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(89,240,222,0.12),transparent_34%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(124,92,255,0.2),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(89,240,222,0.12),transparent_34%)]" />
 
       <div className="relative grid h-full w-full grid-cols-[320px_minmax(0,1fr)] overflow-hidden border border-white/10 bg-[#0d1220] shadow-[0_40px_110px_rgba(0,0,0,0.48)]">
         <aside className="flex min-h-0 flex-col gap-5 border-r border-white/10 bg-[#080c17]/95 p-6">
@@ -330,24 +469,20 @@ export function AutoTrackerOnboarding({
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8ff8ec]">
                 Auto-Tracker setup
               </p>
-              <h1 className="mt-2 text-[24px] font-semibold leading-tight text-[#ffffff]">
-                TimeFolio privacy permissions
+              <h1 className="mt-2 text-[24px] font-semibold leading-tight text-white">
+                Finish TimeFolio setup
               </h1>
               <p className="mt-2 text-[13px] leading-5 text-[#a7b3c7]">
-                Finish the required steps now, or set this up later from Settings.
+                Complete the required permissions now, or return later from Settings.
               </p>
             </div>
           </div>
 
           <nav className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1 scrollbar-subtle">
             {STEPS.map((step) => {
+              const stepStatus = getStepStatus(step.id);
               const isActive = step.id === activeStepId;
-              const isDone = state.confirmedSteps.includes(step.id);
-              const statusLabel = isDone
-                ? "Enabled"
-                : step.kind === "required"
-                  ? "Needs setup"
-                  : "Optional";
+              const isDone = stepStatus !== "needsSetup";
               return (
                 <button
                   key={step.id}
@@ -357,22 +492,22 @@ export function AutoTrackerOnboarding({
                     setSettingsError(null);
                     setStatusMessage(null);
                   }}
-                  className={[
+                  className={cn(
                     "group flex w-full items-center gap-3 rounded-[16px] border px-3 py-3 text-left transition",
                     isActive
                       ? "border-[#8b6cff]/45 bg-[#171d33]"
                       : "border-transparent bg-transparent hover:border-white/10 hover:bg-white/[0.05]",
-                  ].join(" ")}
+                  )}
                 >
                   <span
-                    className={[
+                    className={cn(
                       "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
                       isDone
                         ? "bg-[#22d3a6] text-[#04110e]"
                         : isActive
                           ? "bg-[#7c5cff] text-white"
                           : "bg-white/[0.08] text-[#cbd5e1]",
-                    ].join(" ")}
+                    )}
                   >
                     {isDone ? (
                       <Check className="h-4 w-4" strokeWidth={3} />
@@ -386,24 +521,28 @@ export function AutoTrackerOnboarding({
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-1.5">
                       <span
-                        className={[
+                        className={cn(
                           "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
                           step.kind === "required"
                             ? "bg-[#8b6cff]/18 text-[#c7b8ff]"
                             : "bg-white/[0.08] text-[#bac4d2]",
-                        ].join(" ")}
+                        )}
                       >
                         {step.kind}
                       </span>
                       <span
-                        className={[
+                        className={cn(
                           "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
-                          isDone
+                          stepStatus === "verified"
                             ? "bg-[#22d3a6]/16 text-[#75f0cc]"
-                            : "bg-[#f59e0b]/12 text-[#f8d48a]",
-                        ].join(" ")}
+                            : stepStatus === "manual"
+                              ? "bg-[#7dd3fc]/16 text-[#c6f1ff]"
+                              : step.kind === "optional"
+                                ? "bg-white/[0.08] text-[#bac4d2]"
+                                : "bg-[#f59e0b]/12 text-[#f8d48a]",
+                        )}
                       >
-                        {statusLabel}
+                        {getStepStatusCopy(stepStatus, step)}
                       </span>
                     </span>
                   </span>
@@ -419,20 +558,20 @@ export function AutoTrackerOnboarding({
               <span>Tracking data stays local by default. These permissions only affect this Mac.</span>
             </div>
             <p className="text-[11.5px] leading-5 text-[#8d99ad]">
-              If macOS shows duplicate TimeFolio entries, enable the installed app you just opened in /Applications. Old app copies can be removed later from Applications or Downloads.
+              If macOS shows duplicate TimeFolio entries, enable the TimeFolio app you just opened from /Applications. Old copies in Downloads can leave stale entries until removed.
             </p>
           </div>
         </aside>
 
         <section className="flex min-w-0 flex-col bg-[#101524]/95">
-          <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-10 py-8 scrollbar-subtle">
-            <div className="relative flex h-36 w-full max-w-[560px] items-center justify-center">
-              <div className="absolute inset-x-8 inset-y-4 rounded-full bg-[#6d5dfc]/10 blur-2xl" />
-              <div className="absolute h-28 w-28 rounded-full border border-white/10" />
-              <div className="absolute h-40 w-40 rounded-full border border-white/[0.05]" />
-              <div className="relative flex h-[88px] w-[88px] items-center justify-center rounded-[26px] bg-[linear-gradient(160deg,#8b6cff_0%,#6c4cf0_62%,#4f33c2_100%)] shadow-[0_24px_50px_rgba(76,46,200,0.45),inset_0_1px_0_rgba(255,255,255,0.25)]">
-                {stepIcon(activeStep, "h-11 w-11 text-white")}
-                {activeConfirmed ? (
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-10 py-6">
+            <div className="relative flex h-28 w-full max-w-[560px] items-center justify-center">
+              <div className="absolute inset-x-12 inset-y-4 rounded-full bg-[#6d5dfc]/10 blur-2xl" />
+              <div className="absolute h-24 w-24 rounded-full border border-white/10" />
+              <div className="absolute h-36 w-36 rounded-full border border-white/[0.05]" />
+              <div className="relative flex h-[84px] w-[84px] items-center justify-center rounded-[24px] bg-[linear-gradient(160deg,#8b6cff_0%,#6c4cf0_62%,#4f33c2_100%)] shadow-[0_24px_50px_rgba(76,46,200,0.45),inset_0_1px_0_rgba(255,255,255,0.25)]">
+                {stepIcon(activeStep, "h-10 w-10 text-white")}
+                {activeStepStatus !== "needsSetup" ? (
                   <span className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-[#22d3a6] text-[#04110e] shadow-[0_8px_18px_rgba(16,185,129,0.45)]">
                     <Check className="h-4 w-4" strokeWidth={3} />
                   </span>
@@ -440,19 +579,19 @@ export function AutoTrackerOnboarding({
               </div>
             </div>
 
-            <div className="mt-4 max-w-[600px] text-center">
+            <div className="mt-3 max-w-[620px] text-center">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8ff8ec]">
                 {activeStep.kind === "required" ? "Required" : "Optional"}
               </p>
-              <h2 className="mt-2 text-[28px] font-semibold leading-tight text-[#ffffff]">
+              <h2 className="mt-2 text-[28px] font-semibold leading-tight text-white">
                 {activeStep.title}
               </h2>
-              <p className="mx-auto mt-3 max-w-[500px] text-[14px] leading-6 text-[#b3bed0]">
+              <p className="mx-auto mt-3 max-w-[520px] text-[14px] leading-6 text-[#b3bed0]">
                 {activeStep.body}
               </p>
             </div>
 
-            <div className="mt-6 grid w-full max-w-[640px] gap-4">
+            <div className="mt-5 grid w-full max-w-[680px] gap-3">
               <div className="rounded-[18px] border border-white/10 bg-white/[0.045] px-5 py-4">
                 <ol className="space-y-3">
                   {activeStep.instructions.map((instruction, index) => (
@@ -468,25 +607,41 @@ export function AutoTrackerOnboarding({
 
               <div className="rounded-[16px] border border-[#8ff8ec]/15 bg-[#8ff8ec]/[0.07] px-4 py-3">
                 <p className="text-[12px] font-semibold text-[#dffef9]">
-                  Enable {APP_INSTALL_NAME} in /Applications.
+                  Enable TimeFolio in macOS Settings.
                 </p>
                 <p className="mt-1 text-[12px] leading-5 text-[#b7e7df]">
                   {activeStep.help}
                 </p>
+                <details className="mt-3 rounded-[12px] border border-white/10 bg-black/10 px-3 py-2 text-left">
+                  <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.14em] text-[#dffef9]">
+                    Need help finding the right entry?
+                  </summary>
+                  <div className="mt-2 space-y-2 text-[12px] leading-5 text-[#cfe6e2]">
+                    <p>
+                      Choose the TimeFolio app you just opened from /Applications. Older app copies can leave duplicate entries in Settings until they are removed.
+                    </p>
+                    <p className="text-[#9ed8cf]">
+                      Technical identifier: <span className="font-mono text-[11px]">{LEGACY_BUNDLE_ID}</span>
+                    </p>
+                  </div>
+                </details>
               </div>
 
-              {activeStep.canVerify ? (
-                <div className="rounded-[16px] border border-white/10 bg-[#070b14]/55 px-4 py-3">
-                  <p className="text-[12px] font-semibold text-[#f8fafc]">
-                    Verification
-                  </p>
-                  <p className="mt-1 text-[12px] leading-5 text-[#aeb9ca]">
-                    {verifiedStatus
-                      ? "TimeFolio verified this permission as enabled."
-                      : "TimeFolio has not verified this permission yet. You can request it, open settings, or explicitly confirm after enabling it."}
-                  </p>
-                </div>
-              ) : null}
+              <div className="rounded-[16px] border border-white/10 bg-[#070b14]/55 px-4 py-3">
+                <p className="text-[12px] font-semibold text-[#f8fafc]">Status</p>
+                <p className="mt-1 text-[12px] leading-5 text-[#aeb9ca]">
+                  {getVerificationCopy(activeStepStatus, activeStep)}
+                </p>
+                <p className="mt-2 text-[12px] leading-5 text-[#8fa0b8]">
+                  {activeStepVerified
+                    ? "TimeFolio checked the current macOS state for this step."
+                    : activeStepManual
+                      ? "This step is counted because you confirmed it manually."
+                      : activeStep.supportsManualConfirmation
+                        ? "TimeFolio cannot verify this permission directly, so this step finishes only after you confirm it."
+                        : "Use Request Access, Open Settings, or Check Again to finish this step."}
+                </p>
+              </div>
 
               {statusMessage ? (
                 <p className="text-[12px] leading-5 text-[#75f0cc]">{statusMessage}</p>
@@ -498,60 +653,71 @@ export function AutoTrackerOnboarding({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 bg-[#0b1020]/92 px-8 py-5">
-            <div className="text-[12px] leading-5 text-[#a2aec2]">
-              {requiredRemaining === 0
-                ? "All required steps are complete."
-                : `${requiredRemaining} required step${requiredRemaining === 1 ? "" : "s"} remaining`}
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2.5">
+          <div className="flex items-center justify-between gap-4 border-t border-white/10 bg-[#0b1020]/92 px-8 py-5">
+            <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
                 onClick={handleSkip}
-                className="rounded-[14px] border border-white/10 px-4 py-2.5 text-[13px] font-semibold text-[#cbd5e1] transition hover:border-white/20 hover:text-white"
+                className="inline-flex h-11 items-center justify-center rounded-[14px] px-3 text-[13px] font-semibold text-[#cbd5e1] transition hover:text-white"
               >
-                Set up later
+                Set Up Later
               </button>
-              {activeConfirmed ? (
+              <div className="text-[12px] leading-5 text-[#a2aec2]">
+                {requiredRemaining === 0
+                  ? "All required steps are complete."
+                  : `${requiredRemaining} required step${requiredRemaining === 1 ? "" : "s"} remaining`}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {showCheckAgainAction ? (
                 <button
                   type="button"
-                  onClick={() => unconfirmStep(activeStep.id)}
-                  className="rounded-[14px] border border-white/10 px-4 py-2.5 text-[13px] font-semibold text-[#cbd5e1] transition hover:border-white/20 hover:text-white"
+                  onClick={() => void handleCheckAgain()}
+                  disabled={isBusy}
+                  className="inline-flex h-11 min-w-[124px] items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.04] px-4 text-[13px] font-semibold text-[#d8e0eb] transition hover:border-white/20 hover:bg-white/[0.07] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Mark not enabled
+                  {isBusy ? "Checking..." : "Check Again"}
                 </button>
-              ) : (
+              ) : null}
+
+              {showOpenSettingsAction ? (
                 <button
                   type="button"
-                  onClick={() => confirmStep(activeStep.id)}
-                  className="rounded-[14px] border border-white/10 px-4 py-2.5 text-[13px] font-semibold text-[#cbd5e1] transition hover:border-white/20 hover:text-white"
+                  onClick={() => void handleOpenSettings()}
+                  disabled={isBusy}
+                  className="inline-flex h-11 min-w-[132px] items-center justify-center rounded-[14px] border border-[#8ff8ec]/20 bg-[#102538] px-4 text-[13px] font-semibold text-[#e6fffb] transition hover:bg-[#15324a] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  I enabled this
+                  {isBusy ? "Opening..." : "Open Settings"}
                 </button>
-              )}
-              {directRequestAvailable ? (
+              ) : null}
+
+              {showManualConfirmationAction ? (
+                <button
+                  type="button"
+                  onClick={handleManualConfirmation}
+                  className="inline-flex h-11 min-w-[132px] items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.04] px-4 text-[13px] font-semibold text-[#d8e0eb] transition hover:border-white/20 hover:bg-white/[0.07] hover:text-white"
+                >
+                  I Enabled This
+                </button>
+              ) : null}
+
+              {activeStep.requestMode ? (
                 <button
                   type="button"
                   onClick={() => void handleRequestPermission()}
                   disabled={isBusy}
-                  className="rounded-[14px] bg-[#7c5cff] px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_10px_24px_rgba(108,76,240,0.45)] transition hover:bg-[#8b6cff] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex h-11 min-w-[168px] items-center justify-center rounded-[14px] bg-[#7c5cff] px-4 text-[13px] font-semibold text-white shadow-[0_10px_24px_rgba(108,76,240,0.45)] transition hover:bg-[#8b6cff] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isBusy ? "Requesting..." : activeStep.requestButtonLabel}
+                  {isBusy ? "Working..." : activeStep.requestButtonLabel}
                 </button>
               ) : null}
-              <button
-                type="button"
-                onClick={() => void handleOpenSettings()}
-                disabled={isBusy}
-                className="rounded-[14px] border border-[#8ff8ec]/20 bg-[#102538] px-4 py-2.5 text-[13px] font-semibold text-[#e6fffb] transition hover:bg-[#15324a] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isBusy ? "Opening..." : activeStep.openButtonLabel}
-              </button>
+
               <button
                 type="button"
                 onClick={handleFinish}
                 disabled={!requiredComplete}
-                className="rounded-[14px] bg-[#22d3a6] px-5 py-2.5 text-[13px] font-semibold text-[#04110e] transition hover:bg-[#36e0b5] disabled:cursor-not-allowed disabled:bg-[#244055] disabled:text-[#8190a6]"
+                className="inline-flex h-11 min-w-[108px] items-center justify-center rounded-[14px] bg-[#22d3a6] px-5 text-[13px] font-semibold text-[#04110e] transition hover:bg-[#36e0b5] disabled:cursor-not-allowed disabled:bg-[#244055] disabled:text-[#8190a6]"
               >
                 Done
               </button>

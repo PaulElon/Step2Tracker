@@ -25,7 +25,6 @@ export const REQUIRED_ONBOARDING_STEPS: AutoTrackerOnboardingStepId[] = [
   "notifications",
   "accessibility",
   "fullDisk",
-  "background",
 ];
 
 export const OPTIONAL_ONBOARDING_STEPS: AutoTrackerOnboardingStepId[] = ["startAtLogin"];
