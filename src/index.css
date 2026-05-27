@@ -3771,3 +3771,13 @@ textarea.font-mono {
   background: rgba(255, 255, 255, 0.85);
   border-radius: 0.5rem;
 }
+
+.autotracker-onboarding,
+.autotracker-onboarding * {
+  color-scheme: dark;
+}
+
+.autotracker-onboarding .text-white,
+.autotracker-onboarding .hover\:text-white:hover {
+  color: #ffffff !important;
+}

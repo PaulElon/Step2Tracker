@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
-import { Check, Globe, Monitor, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, Globe, Monitor, Pencil, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import {
   probeNativeAutoTrackerBootstrap,
   type NativeAutoTrackerBootstrapProbe,
@@ -824,9 +824,11 @@ function TrackerGroupCard({
 export function TrackerSettingsPanel({
   embedded = false,
   themeId,
+  onOpenAutoTrackerSetup,
 }: {
   embedded?: boolean;
   themeId?: ThemeId;
+  onOpenAutoTrackerSetup?: () => void;
 }) {
   const store = useTimeFolioStore();
   const { state, isLoading, error } = store;
@@ -2192,6 +2194,30 @@ export function TrackerSettingsPanel({
           );
         })}
       </div>
+
+      {onOpenAutoTrackerSetup ? (
+        <section className="flex flex-col gap-3 rounded-2xl border border-violet-400/20 bg-violet-500/10 px-5 py-4 shadow-lg shadow-black/10 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-violet-300/25 bg-violet-400/15 text-violet-100">
+              <ShieldCheck className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-slate-100">Auto-Tracker permissions</p>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
+                Re-run the macOS setup checklist for notifications, Accessibility, Full Disk Access,
+                and background access.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenAutoTrackerSetup}
+            className={secondaryButtonClassName}
+          >
+            Run Auto-Tracker Setup
+          </button>
+        </section>
+      ) : null}
 
       {FF.autotrackerV2UserMode ? (
         <section className="flex flex-col gap-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-5 py-4 shadow-lg shadow-black/10">

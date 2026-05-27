@@ -13,7 +13,10 @@ import { DemoBanner } from "./components/demo-banner";
 import { ModalShell } from "./components/modal-shell";
 import { TutorialOverlay } from "./components/tutorial-overlay";
 import { AutoTrackerOnboarding } from "./features/auto-tracker-onboarding";
-import { loadAutoTrackerOnboardingState } from "./lib/auto-tracker-onboarding";
+import {
+  loadAutoTrackerOnboardingState,
+  shouldShowAutoTrackerOnboardingAtLaunch,
+} from "./lib/auto-tracker-onboarding";
 import { MobileNav, NavigationButton } from "./components/ui";
 import { getDesktopNavigationGroups, getMobileNavigationItems, resolveAppSection } from "./features/app-navigation";
 import { DashboardView } from "./features/dashboard-view";
@@ -587,10 +590,11 @@ export default function App() {
   const [showRecoveryCenter, setShowRecoveryCenter] = useState(false);
   const [showAutoTrackerOnboarding, setShowAutoTrackerOnboarding] = useState(() => {
     if (!IS_TAURI_SHELL) return false;
-    return !loadAutoTrackerOnboardingState().completed;
+    return shouldShowAutoTrackerOnboardingAtLaunch(loadAutoTrackerOnboardingState());
   });
   const showAutoTrackerOnboardingOverlay =
     IS_TAURI_SHELL && showAutoTrackerOnboarding && !isDemoMode;
+  const didEnterAutoTrackerOnboardingRef = useRef(false);
   const [portfolioOverviewActive, setPortfolioOverviewActive] = useState(false);
   const [pendingArtifactRaw, setPendingArtifactRaw] = useState<string | null>(null);
   const [pendingArtifactPreview, setPendingArtifactPreview] = useState<BackupArtifactPreview | null>(null);
@@ -646,6 +650,23 @@ export default function App() {
     dateRange.startDate && dateRange.endDate
       ? `${daysBetween(dateRange.startDate, dateRange.endDate) + 1} days`
       : "Add or import tasks.";
+
+  useEffect(() => {
+    if (!IS_TAURI_SHELL || isDemoMode) {
+      return;
+    }
+
+    if (showAutoTrackerOnboardingOverlay) {
+      didEnterAutoTrackerOnboardingRef.current = true;
+      void invoke("set_auto_tracker_onboarding_window_mode", { active: true }).catch(() => undefined);
+      return;
+    }
+
+    if (didEnterAutoTrackerOnboardingRef.current) {
+      didEnterAutoTrackerOnboardingRef.current = false;
+      void invoke("set_auto_tracker_onboarding_window_mode", { active: false }).catch(() => undefined);
+    }
+  }, [isDemoMode, showAutoTrackerOnboardingOverlay]);
 
   function resolveUpdateBannerVersion(result: UpdateBannerCheckResult): string | null {
     const latestVersion = result.latest_version?.trim();
@@ -1140,6 +1161,7 @@ export default function App() {
           onOpenRecoveryCenter={() => setShowRecoveryCenter(true)}
           onStartTutorial={handleStartTutorial}
           onResetTutorial={handleResetTutorial}
+          onOpenAutoTrackerSetup={() => setShowAutoTrackerOnboarding(true)}
           onSetCustomCategories={(categories) => {
             startTransition(() => {
               void setCustomCategories(categories);
@@ -1345,7 +1367,10 @@ export default function App() {
       ) : null}
     </div>
     {showAutoTrackerOnboardingOverlay ? (
-      <AutoTrackerOnboarding onComplete={() => setShowAutoTrackerOnboarding(false)} />
+      <AutoTrackerOnboarding
+        onComplete={() => setShowAutoTrackerOnboarding(false)}
+        onSkip={() => setShowAutoTrackerOnboarding(false)}
+      />
     ) : null}
     </>
   );

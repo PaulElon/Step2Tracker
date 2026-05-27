@@ -7,6 +7,7 @@ mod tf_autotracker_v2_native;
 mod tf_persistence;
 mod updater;
 
+use std::ffi::c_void;
 use std::process::Command;
 use std::{fs, path::PathBuf};
 
@@ -16,7 +17,7 @@ use persistence::{
     Preferences, StorageService, StudyBlock, StudyBlockInput, TrashEntityType, WeakTopicEntry,
     WeakTopicInput,
 };
-use tauri::Manager;
+use tauri::{LogicalSize, Manager, Size};
 use tauri_plugin_dialog::DialogExt;
 
 fn with_storage<F, T>(app: &tauri::AppHandle, operation: F) -> Result<T, String>
@@ -324,6 +325,122 @@ fn open_macos_pref_url(url: &str, label: &str) -> Result<(), String> {
     {
         Err(format!("{label} settings shortcut is only available on macOS."))
     }
+}
+
+#[tauri::command]
+fn get_accessibility_permission_status() -> bool {
+    macos_accessibility_trusted(false)
+}
+
+#[tauri::command]
+fn request_accessibility_permission() -> bool {
+    macos_accessibility_trusted(true)
+}
+
+#[tauri::command]
+fn set_auto_tracker_onboarding_window_mode(
+    app: tauri::AppHandle,
+    active: bool,
+) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Unable to find the main app window.".to_string())?;
+
+    if active {
+        if window.is_maximized().map_err(|error| error.to_string())? {
+            window.unmaximize().map_err(|error| error.to_string())?;
+        }
+        window
+            .set_min_size(Some(Size::Logical(LogicalSize {
+                width: 900.0,
+                height: 600.0,
+            })))
+            .map_err(|error| error.to_string())?;
+        window
+            .set_size(Size::Logical(LogicalSize {
+                width: 1040.0,
+                height: 680.0,
+            }))
+            .map_err(|error| error.to_string())?;
+        window.center().map_err(|error| error.to_string())?;
+    } else {
+        window
+            .set_min_size(Some(Size::Logical(LogicalSize {
+                width: 1100.0,
+                height: 760.0,
+            })))
+            .map_err(|error| error.to_string())?;
+        window
+            .set_size(Size::Logical(LogicalSize {
+                width: 1440.0,
+                height: 960.0,
+            }))
+            .map_err(|error| error.to_string())?;
+        window.center().map_err(|error| error.to_string())?;
+        window.maximize().map_err(|error| error.to_string())?;
+    }
+
+    Ok(())
+}
+
+#[allow(unused_variables)]
+fn macos_accessibility_trusted(prompt: bool) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        unsafe { macos_accessibility_trusted_impl(prompt) }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn macos_accessibility_trusted_impl(prompt: bool) -> bool {
+    #[link(name = "ApplicationServices", kind = "framework")]
+    extern "C" {
+        static kAXTrustedCheckOptionPrompt: *const c_void;
+        fn AXIsProcessTrusted() -> u8;
+        fn AXIsProcessTrustedWithOptions(options: *const c_void) -> u8;
+    }
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        static kCFBooleanTrue: *const c_void;
+        fn CFDictionaryCreate(
+            allocator: *const c_void,
+            keys: *const *const c_void,
+            values: *const *const c_void,
+            num_values: isize,
+            key_callbacks: *const c_void,
+            value_callbacks: *const c_void,
+        ) -> *const c_void;
+        fn CFRelease(cf: *const c_void);
+    }
+
+    if !prompt {
+        return AXIsProcessTrusted() != 0;
+    }
+
+    let key = kAXTrustedCheckOptionPrompt;
+    let value = kCFBooleanTrue;
+    let options = CFDictionaryCreate(
+        std::ptr::null(),
+        &key,
+        &value,
+        1,
+        std::ptr::null(),
+        std::ptr::null(),
+    );
+
+    if options.is_null() {
+        return AXIsProcessTrusted() != 0;
+    }
+
+    let trusted = AXIsProcessTrustedWithOptions(options) != 0;
+    CFRelease(options);
+    trusted
 }
 
 fn mime_for_ext(ext: &str) -> Option<&'static str> {
@@ -998,6 +1115,9 @@ fn main() {
             open_accessibility_settings,
             open_full_disk_access_settings,
             open_login_items_settings,
+            get_accessibility_permission_status,
+            request_accessibility_permission,
+            set_auto_tracker_onboarding_window_mode,
             export_notebook_page,
             export_notebook_pdf,
             export_notebook_docx,

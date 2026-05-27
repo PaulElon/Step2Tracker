@@ -24,6 +24,10 @@ import {
   saveAutoTrackerOnboardingState,
 } from "../lib/auto-tracker-onboarding";
 
+const APP_DISPLAY_NAME = "TimeFolio";
+const APP_INSTALL_NAME = "TimeFolio Study Tracker";
+const APP_BUNDLE_ID = "com.paul.step2ckcommandcenter";
+
 type StepKind = "required" | "optional";
 
 interface OnboardingStep {
@@ -32,9 +36,12 @@ interface OnboardingStep {
   title: string;
   body: string;
   instructions: string[];
+  help: string;
   icon: (props: { className?: string }) => JSX.Element;
   openSettingsCommand: string;
   openButtonLabel: string;
+  requestButtonLabel?: string;
+  canVerify: boolean;
 }
 
 const STEPS: OnboardingStep[] = [
@@ -44,13 +51,16 @@ const STEPS: OnboardingStep[] = [
     title: "Enable Notifications",
     body: "TimeFolio uses notifications for timer updates, reminders, and setup alerts.",
     instructions: [
-      "Click “Open Notification Settings”",
-      "Select TimeFolio",
-      "Turn on Allow Notifications",
+      "Click Request Notification Permission.",
+      "Choose Allow in the macOS prompt.",
+      "If the prompt does not appear, open Notification Settings and enable the installed app.",
     ],
+    help: `Enable ${APP_INSTALL_NAME} in /Applications. macOS may list it as ${APP_DISPLAY_NAME}.`,
     icon: (props) => <Bell {...props} />,
     openSettingsCommand: "open_notification_settings",
     openButtonLabel: "Open Notification Settings",
+    requestButtonLabel: "Request Notification Permission",
+    canVerify: true,
   },
   {
     id: "accessibility",
@@ -58,13 +68,16 @@ const STEPS: OnboardingStep[] = [
     title: "Grant Accessibility Access",
     body: "Accessibility lets TimeFolio identify the active app so study time can be tracked automatically.",
     instructions: [
-      "Click “Open Accessibility Settings”",
-      "Enable TimeFolio",
-      "Restart TimeFolio if macOS asks",
+      "Click Request Accessibility Access.",
+      `Enable ${APP_INSTALL_NAME} in /Applications if macOS opens System Settings.`,
+      "Return here and click I enabled this if macOS does not report the change immediately.",
     ],
+    help: `App identity: ${APP_DISPLAY_NAME} (${APP_BUNDLE_ID}). Duplicate entries can appear after reinstalling.`,
     icon: (props) => <Accessibility {...props} />,
     openSettingsCommand: "open_accessibility_settings",
     openButtonLabel: "Open Accessibility Settings",
+    requestButtonLabel: "Request Accessibility Access",
+    canVerify: true,
   },
   {
     id: "fullDisk",
@@ -72,13 +85,15 @@ const STEPS: OnboardingStep[] = [
     title: "Allow Full Disk Access",
     body: "Full Disk Access helps TimeFolio read app activity consistently across macOS privacy boundaries.",
     instructions: [
-      "Click “Open Full Disk Access”",
-      "Enable TimeFolio",
-      "Restart TimeFolio if prompted",
+      "Open Full Disk Access.",
+      `Enable ${APP_INSTALL_NAME} in /Applications.`,
+      "Restart TimeFolio if macOS asks or tracking still looks incomplete.",
     ],
+    help: "TimeFolio cannot reliably verify Full Disk Access from this setup screen, so confirm it here after enabling it.",
     icon: (props) => <HardDrive {...props} />,
     openSettingsCommand: "open_full_disk_access_settings",
     openButtonLabel: "Open Full Disk Access",
+    canVerify: false,
   },
   {
     id: "background",
@@ -86,13 +101,15 @@ const STEPS: OnboardingStep[] = [
     title: "Allow Background Access",
     body: "Background access lets Auto-Tracker keep working while TimeFolio is not the frontmost window.",
     instructions: [
-      "Open Login Items & Extensions",
-      "Find TimeFolio",
-      "Allow it to run in the background",
+      "Open Login Items & Extensions.",
+      `Find ${APP_INSTALL_NAME} or ${APP_DISPLAY_NAME}.`,
+      "Allow it to run in the background, then confirm here.",
     ],
+    help: "macOS does not expose a reliable current-app background access check to this app yet.",
     icon: (props) => <ShieldCheck {...props} />,
     openSettingsCommand: "open_login_items_settings",
     openButtonLabel: "Open Login Items & Extensions",
+    canVerify: false,
   },
   {
     id: "startAtLogin",
@@ -100,13 +117,15 @@ const STEPS: OnboardingStep[] = [
     title: "Start at Login",
     body: "Optional, but recommended if you want Auto-Tracker ready every time you start your Mac.",
     instructions: [
-      "Open Login Items & Extensions",
-      "Add TimeFolio under “Open at Login”",
-      "Confirm TimeFolio is listed",
+      "Open Login Items & Extensions.",
+      `Add ${APP_INSTALL_NAME} under Open at Login.`,
+      "Confirm here if you enabled it.",
     ],
+    help: "This is optional and does not block Done.",
     icon: (props) => <Power {...props} />,
     openSettingsCommand: "open_login_items_settings",
     openButtonLabel: "Open Login Items & Extensions",
+    canVerify: false,
   },
 ];
 
@@ -116,9 +135,13 @@ function stepIcon(step: OnboardingStep, className: string) {
 
 interface AutoTrackerOnboardingProps {
   onComplete: () => void;
+  onSkip: () => void;
 }
 
-export function AutoTrackerOnboarding({ onComplete }: AutoTrackerOnboardingProps): JSX.Element {
+export function AutoTrackerOnboarding({
+  onComplete,
+  onSkip,
+}: AutoTrackerOnboardingProps): JSX.Element {
   const [state, setState] = useState<AutoTrackerOnboardingState>(() =>
     loadAutoTrackerOnboardingState(),
   );
@@ -126,38 +149,12 @@ export function AutoTrackerOnboarding({ onComplete }: AutoTrackerOnboardingProps
   const [notificationPermission, setNotificationPermission] = useState<
     NotificationPermission | "unsupported"
   >("unsupported");
-  const [openingSettings, setOpeningSettings] = useState(false);
-  const [settingsError, setSettingsError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const permission = await getNotificationPermissionStatus();
-      if (cancelled) return;
-      setNotificationPermission(permission);
-      if (permission === "granted") {
-        setState((prev) => {
-          if (prev.confirmedSteps.includes("notifications")) return prev;
-          const next: AutoTrackerOnboardingState = {
-            ...prev,
-            confirmedSteps: [...prev.confirmedSteps, "notifications"],
-          };
-          saveAutoTrackerOnboardingState(next);
-          return next;
-        });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const activeStep = useMemo(
-    () => STEPS.find((step) => step.id === activeStepId) ?? STEPS[0],
-    [activeStepId],
+  const [accessibilityTrusted, setAccessibilityTrusted] = useState<boolean | "unsupported">(
+    "unsupported",
   );
-
-  const requiredComplete = hasCompletedRequiredSteps(state);
+  const [isBusy, setIsBusy] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const confirmStep = useCallback((id: AutoTrackerOnboardingStepId) => {
     setState((prev) => {
@@ -183,18 +180,96 @@ export function AutoTrackerOnboarding({ onComplete }: AutoTrackerOnboardingProps
     });
   }, []);
 
-  const handleOpenSettings = useCallback(async () => {
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const permission = await getNotificationPermissionStatus();
+      if (cancelled) return;
+      setNotificationPermission(permission);
+      if (permission === "granted") {
+        confirmStep("notifications");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [confirmStep]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const trusted = await invoke<boolean>("get_accessibility_permission_status");
+        if (cancelled) return;
+        setAccessibilityTrusted(trusted);
+        if (trusted) {
+          confirmStep("accessibility");
+        }
+      } catch {
+        if (!cancelled) {
+          setAccessibilityTrusted("unsupported");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [confirmStep]);
+
+  const activeStep = useMemo(
+    () => STEPS.find((step) => step.id === activeStepId) ?? STEPS[0],
+    [activeStepId],
+  );
+
+  const requiredComplete = hasCompletedRequiredSteps(state);
+  const activeConfirmed = state.confirmedSteps.includes(activeStep.id);
+  const requiredRemaining = REQUIRED_ONBOARDING_STEPS.filter(
+    (id) => !state.confirmedSteps.includes(id),
+  ).length;
+
+  const handleRequestPermission = useCallback(async () => {
     setSettingsError(null);
-    setOpeningSettings(true);
+    setStatusMessage(null);
+    setIsBusy(true);
     try {
       if (activeStep.id === "notifications") {
         const permission = await requestNotificationPermission();
         setNotificationPermission(permission);
         if (permission === "granted") {
           confirmStep("notifications");
-          return;
+          setStatusMessage("Notifications are enabled on this Mac.");
+        } else {
+          setStatusMessage("macOS did not grant notifications from the prompt. Open settings to enable them manually.");
+        }
+        return;
+      }
+
+      if (activeStep.id === "accessibility") {
+        const trusted = await invoke<boolean>("request_accessibility_permission");
+        setAccessibilityTrusted(trusted);
+        if (trusted) {
+          confirmStep("accessibility");
+          setStatusMessage("Accessibility access is enabled on this Mac.");
+        } else {
+          setStatusMessage("If the native prompt did not appear, open Accessibility Settings and enable the installed app.");
         }
       }
+    } catch (error) {
+      setSettingsError(
+        error instanceof Error
+          ? error.message
+          : "Unable to request this permission from here.",
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }, [activeStep.id, confirmStep]);
+
+  const handleOpenSettings = useCallback(async () => {
+    setSettingsError(null);
+    setStatusMessage(null);
+    setIsBusy(true);
+    try {
       await invoke(activeStep.openSettingsCommand);
     } catch (error) {
       setSettingsError(
@@ -203,9 +278,9 @@ export function AutoTrackerOnboarding({ onComplete }: AutoTrackerOnboardingProps
           : "Unable to open System Settings from here.",
       );
     } finally {
-      setOpeningSettings(false);
+      setIsBusy(false);
     }
-  }, [activeStep, confirmStep]);
+  }, [activeStep.openSettingsCommand]);
 
   const handleFinish = useCallback(() => {
     if (!requiredComplete) return;
@@ -213,30 +288,38 @@ export function AutoTrackerOnboarding({ onComplete }: AutoTrackerOnboardingProps
       ...state,
       completed: true,
       completedAt: new Date().toISOString(),
+      deferredAt: null,
     };
     saveAutoTrackerOnboardingState(next);
     setState(next);
     onComplete();
   }, [onComplete, requiredComplete, state]);
 
-  const activeIsNotifications = activeStep.id === "notifications";
-  const activeConfirmed = state.confirmedSteps.includes(activeStep.id);
-  const requiredRemaining = REQUIRED_ONBOARDING_STEPS.filter(
-    (id) => !state.confirmedSteps.includes(id),
-  ).length;
+  const handleSkip = useCallback(() => {
+    const next: AutoTrackerOnboardingState = {
+      ...state,
+      completed: false,
+      deferredAt: new Date().toISOString(),
+    };
+    saveAutoTrackerOnboardingState(next);
+    setState(next);
+    onSkip();
+  }, [onSkip, state]);
+
+  const directRequestAvailable = activeStep.id === "notifications" || activeStep.id === "accessibility";
+  const verifiedStatus =
+    activeStep.id === "notifications"
+      ? notificationPermission === "granted"
+      : activeStep.id === "accessibility"
+        ? accessibilityTrusted === true
+        : false;
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/85 backdrop-blur-2xl">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(139,92,246,0.18),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(89,240,222,0.10),transparent_30%)]" />
+    <div className="autotracker-onboarding fixed inset-0 z-[10000] flex bg-[#080b15] text-[#f8fafc]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(124,92,255,0.20),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(89,240,222,0.12),transparent_34%)]" />
 
-      <div
-        className="relative flex h-[min(720px,90vh)] w-[min(1080px,94vw)] overflow-hidden rounded-[28px] border border-white/10 shadow-[0_60px_120px_rgba(0,0,0,0.55)]"
-        style={{ background: "rgba(15,18,32,0.92)" }}
-      >
-        <aside
-          className="relative flex w-[360px] shrink-0 flex-col gap-6 border-r border-white/5 p-7"
-          style={{ background: "rgba(11,13,24,0.85)" }}
-        >
+      <div className="relative grid h-full w-full grid-cols-[320px_minmax(0,1fr)] overflow-hidden border border-white/10 bg-[#0d1220] shadow-[0_40px_110px_rgba(0,0,0,0.48)]">
+        <aside className="flex min-h-0 flex-col gap-5 border-r border-white/10 bg-[#080c17]/95 p-6">
           <div className="flex flex-col gap-3">
             <img
               src="/TimeFolioLogo.png"
@@ -244,191 +327,231 @@ export function AutoTrackerOnboarding({ onComplete }: AutoTrackerOnboardingProps
               className="h-12 w-12 rounded-[14px] bg-white object-contain shadow-[0_8px_20px_rgba(0,0,0,0.45)]"
             />
             <div>
-              <h1 className="text-[22px] font-semibold leading-tight text-white">
-                Welcome to TimeFolio
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8ff8ec]">
+                Auto-Tracker setup
+              </p>
+              <h1 className="mt-2 text-[24px] font-semibold leading-tight text-[#ffffff]">
+                TimeFolio privacy permissions
               </h1>
-              <p className="mt-1.5 text-[13px] leading-snug text-slate-400">
-                Finish these steps so Auto-Tracker can work reliably.
+              <p className="mt-2 text-[13px] leading-5 text-[#a7b3c7]">
+                Finish the required steps now, or set this up later from Settings.
               </p>
             </div>
           </div>
 
-          <nav className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pr-1 scrollbar-subtle">
+          <nav className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1 scrollbar-subtle">
             {STEPS.map((step) => {
               const isActive = step.id === activeStepId;
               const isDone = state.confirmedSteps.includes(step.id);
+              const statusLabel = isDone
+                ? "Enabled"
+                : step.kind === "required"
+                  ? "Needs setup"
+                  : "Optional";
               return (
                 <button
                   key={step.id}
                   type="button"
-                  onClick={() => setActiveStepId(step.id)}
+                  onClick={() => {
+                    setActiveStepId(step.id);
+                    setSettingsError(null);
+                    setStatusMessage(null);
+                  }}
                   className={[
-                    "group flex w-full items-center gap-3 rounded-[14px] border px-3 py-2.5 text-left transition",
+                    "group flex w-full items-center gap-3 rounded-[16px] border px-3 py-3 text-left transition",
                     isActive
-                      ? "border-white/10 bg-white/[0.06]"
-                      : "border-transparent hover:border-white/5 hover:bg-white/[0.03]",
+                      ? "border-[#8b6cff]/45 bg-[#171d33]"
+                      : "border-transparent bg-transparent hover:border-white/10 hover:bg-white/[0.05]",
                   ].join(" ")}
                 >
                   <span
                     className={[
-                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
                       isDone
-                        ? "bg-[#7c5cff] text-white"
-                        : "bg-white/[0.05] text-slate-300",
+                        ? "bg-[#22d3a6] text-[#04110e]"
+                        : isActive
+                          ? "bg-[#7c5cff] text-white"
+                          : "bg-white/[0.08] text-[#cbd5e1]",
                     ].join(" ")}
                   >
                     {isDone ? (
-                      <Check className="h-4 w-4" strokeWidth={2.8} />
+                      <Check className="h-4 w-4" strokeWidth={3} />
                     ) : (
                       stepIcon(step, "h-4 w-4")
                     )}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13.5px] font-semibold text-white">
+                    <span className="block truncate text-[13.5px] font-semibold text-[#f8fafc]">
                       {step.title}
                     </span>
-                    <span
-                      className={[
-                        "mt-0.5 block text-[11px] font-medium uppercase tracking-[0.14em]",
-                        step.kind === "required"
-                          ? "text-[#a48dff]"
-                          : "text-slate-500",
-                      ].join(" ")}
-                    >
-                      {isDone ? "Enabled" : step.kind === "required" ? "Required" : "Optional"}
+                    <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={[
+                          "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
+                          step.kind === "required"
+                            ? "bg-[#8b6cff]/18 text-[#c7b8ff]"
+                            : "bg-white/[0.08] text-[#bac4d2]",
+                        ].join(" ")}
+                      >
+                        {step.kind}
+                      </span>
+                      <span
+                        className={[
+                          "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
+                          isDone
+                            ? "bg-[#22d3a6]/16 text-[#75f0cc]"
+                            : "bg-[#f59e0b]/12 text-[#f8d48a]",
+                        ].join(" ")}
+                      >
+                        {statusLabel}
+                      </span>
                     </span>
                   </span>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
+                  <ChevronRight className="h-4 w-4 shrink-0 text-[#64748b]" />
                 </button>
               );
             })}
           </nav>
 
-          <div className="flex items-start gap-2 border-t border-white/5 pt-4 text-[11.5px] leading-snug text-slate-500">
-            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
-            <span>
-              Your privacy is the priority. TimeFolio keeps tracking data local by default.
-            </span>
+          <div className="space-y-3 border-t border-white/10 pt-4">
+            <div className="flex items-start gap-2 text-[11.5px] leading-5 text-[#9aa6bb]">
+              <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#8ff8ec]" />
+              <span>Tracking data stays local by default. These permissions only affect this Mac.</span>
+            </div>
+            <p className="text-[11.5px] leading-5 text-[#8d99ad]">
+              If macOS shows duplicate TimeFolio entries, enable the installed app you just opened in /Applications. Old app copies can be removed later from Applications or Downloads.
+            </p>
           </div>
         </aside>
 
-        <section className="relative flex min-w-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-1 flex-col items-center px-12 pt-12">
-            <div className="relative flex h-44 w-full items-center justify-center">
-              <div
-                className="absolute inset-x-12 inset-y-2 rounded-full"
-                style={{
-                  background:
-                    "radial-gradient(circle, rgba(124,92,255,0.18) 0%, rgba(124,92,255,0) 65%)",
-                }}
-              />
-              <div
-                className="absolute h-32 w-32 rounded-full border border-white/5"
-                style={{ boxShadow: "0 0 60px rgba(124,92,255,0.12) inset" }}
-              />
-              <div
-                className="absolute h-44 w-44 rounded-full border border-white/[0.04]"
-              />
-              <div
-                className="relative flex h-24 w-24 items-center justify-center rounded-[28px]"
-                style={{
-                  background:
-                    "linear-gradient(160deg, #8b6cff 0%, #6c4cf0 60%, #4f33c2 100%)",
-                  boxShadow:
-                    "0 24px 50px rgba(76,46,200,0.45), inset 0 1px 0 rgba(255,255,255,0.25)",
-                }}
-              >
-                {stepIcon(activeStep, "h-12 w-12 text-white")}
+        <section className="flex min-w-0 flex-col bg-[#101524]/95">
+          <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-10 py-8 scrollbar-subtle">
+            <div className="relative flex h-36 w-full max-w-[560px] items-center justify-center">
+              <div className="absolute inset-x-8 inset-y-4 rounded-full bg-[#6d5dfc]/10 blur-2xl" />
+              <div className="absolute h-28 w-28 rounded-full border border-white/10" />
+              <div className="absolute h-40 w-40 rounded-full border border-white/[0.05]" />
+              <div className="relative flex h-[88px] w-[88px] items-center justify-center rounded-[26px] bg-[linear-gradient(160deg,#8b6cff_0%,#6c4cf0_62%,#4f33c2_100%)] shadow-[0_24px_50px_rgba(76,46,200,0.45),inset_0_1px_0_rgba(255,255,255,0.25)]">
+                {stepIcon(activeStep, "h-11 w-11 text-white")}
                 {activeConfirmed ? (
-                  <span className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-400 text-slate-900 shadow-[0_8px_18px_rgba(16,185,129,0.45)]">
+                  <span className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-[#22d3a6] text-[#04110e] shadow-[0_8px_18px_rgba(16,185,129,0.45)]">
                     <Check className="h-4 w-4" strokeWidth={3} />
                   </span>
                 ) : null}
               </div>
             </div>
 
-            <div className="mt-8 text-center">
-              <h2 className="text-[26px] font-semibold leading-tight text-white">
+            <div className="mt-4 max-w-[600px] text-center">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8ff8ec]">
+                {activeStep.kind === "required" ? "Required" : "Optional"}
+              </p>
+              <h2 className="mt-2 text-[28px] font-semibold leading-tight text-[#ffffff]">
                 {activeStep.title}
               </h2>
-              <p className="mx-auto mt-3 max-w-[440px] text-[13.5px] leading-relaxed text-slate-400">
+              <p className="mx-auto mt-3 max-w-[500px] text-[14px] leading-6 text-[#b3bed0]">
                 {activeStep.body}
               </p>
             </div>
 
-            <div
-              className="mt-7 w-full max-w-[460px] rounded-[18px] border border-white/[0.06] px-5 py-4"
-              style={{ background: "rgba(255,255,255,0.025)" }}
-            >
-              <ol className="space-y-3">
-                {activeStep.instructions.map((instruction, index) => (
-                  <li key={instruction} className="flex items-center gap-3">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-[11px] font-semibold text-slate-300">
-                      {index + 1}
-                    </span>
-                    <span className="text-[13px] text-slate-300">{instruction}</span>
-                  </li>
-                ))}
-              </ol>
+            <div className="mt-6 grid w-full max-w-[640px] gap-4">
+              <div className="rounded-[18px] border border-white/10 bg-white/[0.045] px-5 py-4">
+                <ol className="space-y-3">
+                  {activeStep.instructions.map((instruction, index) => (
+                    <li key={instruction} className="flex items-start gap-3">
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#8b6cff]/18 text-[11px] font-semibold text-[#d5ccff]">
+                        {index + 1}
+                      </span>
+                      <span className="text-[13px] leading-5 text-[#d8e0eb]">{instruction}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              <div className="rounded-[16px] border border-[#8ff8ec]/15 bg-[#8ff8ec]/[0.07] px-4 py-3">
+                <p className="text-[12px] font-semibold text-[#dffef9]">
+                  Enable {APP_INSTALL_NAME} in /Applications.
+                </p>
+                <p className="mt-1 text-[12px] leading-5 text-[#b7e7df]">
+                  {activeStep.help}
+                </p>
+              </div>
+
+              {activeStep.canVerify ? (
+                <div className="rounded-[16px] border border-white/10 bg-[#070b14]/55 px-4 py-3">
+                  <p className="text-[12px] font-semibold text-[#f8fafc]">
+                    Verification
+                  </p>
+                  <p className="mt-1 text-[12px] leading-5 text-[#aeb9ca]">
+                    {verifiedStatus
+                      ? "TimeFolio verified this permission as enabled."
+                      : "TimeFolio has not verified this permission yet. You can request it, open settings, or explicitly confirm after enabling it."}
+                  </p>
+                </div>
+              ) : null}
+
+              {statusMessage ? (
+                <p className="text-[12px] leading-5 text-[#75f0cc]">{statusMessage}</p>
+              ) : null}
+
+              {settingsError ? (
+                <p className="text-[12px] leading-5 text-[#fca5a5]">{settingsError}</p>
+              ) : null}
             </div>
-
-            {activeIsNotifications && notificationPermission === "granted" ? (
-              <p className="mt-4 text-[12px] text-emerald-300">
-                Notifications are enabled on this Mac.
-              </p>
-            ) : null}
-
-            {settingsError ? (
-              <p className="mt-4 text-[12px] text-rose-300">{settingsError}</p>
-            ) : null}
           </div>
 
-          <div className="flex items-center justify-between gap-4 border-t border-white/5 px-12 py-6">
-            <div className="text-[12px] text-slate-500">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 bg-[#0b1020]/92 px-8 py-5">
+            <div className="text-[12px] leading-5 text-[#a2aec2]">
               {requiredRemaining === 0
-                ? "All required steps complete. You can finish setup."
+                ? "All required steps are complete."
                 : `${requiredRemaining} required step${requiredRemaining === 1 ? "" : "s"} remaining`}
             </div>
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={handleSkip}
+                className="rounded-[14px] border border-white/10 px-4 py-2.5 text-[13px] font-semibold text-[#cbd5e1] transition hover:border-white/20 hover:text-white"
+              >
+                Set up later
+              </button>
               {activeConfirmed ? (
                 <button
                   type="button"
                   onClick={() => unconfirmStep(activeStep.id)}
-                  className="rounded-[14px] border border-white/10 px-4 py-2.5 text-[13px] font-medium text-slate-300 transition hover:border-white/20 hover:text-white"
+                  className="rounded-[14px] border border-white/10 px-4 py-2.5 text-[13px] font-semibold text-[#cbd5e1] transition hover:border-white/20 hover:text-white"
                 >
-                  Mark as not enabled
+                  Mark not enabled
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => confirmStep(activeStep.id)}
-                  className="rounded-[14px] border border-white/10 px-4 py-2.5 text-[13px] font-medium text-slate-300 transition hover:border-white/20 hover:text-white"
+                  className="rounded-[14px] border border-white/10 px-4 py-2.5 text-[13px] font-semibold text-[#cbd5e1] transition hover:border-white/20 hover:text-white"
                 >
                   I enabled this
                 </button>
               )}
+              {directRequestAvailable ? (
+                <button
+                  type="button"
+                  onClick={() => void handleRequestPermission()}
+                  disabled={isBusy}
+                  className="rounded-[14px] bg-[#7c5cff] px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_10px_24px_rgba(108,76,240,0.45)] transition hover:bg-[#8b6cff] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isBusy ? "Requesting..." : activeStep.requestButtonLabel}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => void handleOpenSettings()}
-                disabled={openingSettings}
-                className="rounded-[14px] px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_10px_24px_rgba(108,76,240,0.45)] transition disabled:opacity-60"
-                style={{
-                  background: "linear-gradient(135deg, #8b6cff 0%, #6c4cf0 100%)",
-                }}
+                disabled={isBusy}
+                className="rounded-[14px] border border-[#8ff8ec]/20 bg-[#102538] px-4 py-2.5 text-[13px] font-semibold text-[#e6fffb] transition hover:bg-[#15324a] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {openingSettings ? "Opening…" : activeStep.openButtonLabel}
+                {isBusy ? "Opening..." : activeStep.openButtonLabel}
               </button>
               <button
                 type="button"
                 onClick={handleFinish}
                 disabled={!requiredComplete}
-                className="rounded-[14px] px-5 py-2.5 text-[13px] font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
-                style={{
-                  background: "linear-gradient(135deg, #59f0de 0%, #4dbcff 100%)",
-                  boxShadow: requiredComplete
-                    ? "0 10px 24px rgba(77,188,255,0.35)"
-                    : "none",
-                }}
+                className="rounded-[14px] bg-[#22d3a6] px-5 py-2.5 text-[13px] font-semibold text-[#04110e] transition hover:bg-[#36e0b5] disabled:cursor-not-allowed disabled:bg-[#244055] disabled:text-[#8190a6]"
               >
                 Done
               </button>

@@ -9,6 +9,7 @@ export interface AutoTrackerOnboardingState {
   completed: boolean;
   confirmedSteps: AutoTrackerOnboardingStepId[];
   completedAt: string | null;
+  deferredAt: string | null;
 }
 
 const STORAGE_KEY = "tf:autotracker-onboarding:v1";
@@ -17,6 +18,7 @@ const EMPTY: AutoTrackerOnboardingState = {
   completed: false,
   confirmedSteps: [],
   completedAt: null,
+  deferredAt: null,
 };
 
 export const REQUIRED_ONBOARDING_STEPS: AutoTrackerOnboardingStepId[] = [
@@ -47,6 +49,7 @@ export function loadAutoTrackerOnboardingState(): AutoTrackerOnboardingState {
       completed: Boolean(parsed.completed),
       confirmedSteps,
       completedAt: typeof parsed.completedAt === "string" ? parsed.completedAt : null,
+      deferredAt: typeof parsed.deferredAt === "string" ? parsed.deferredAt : null,
     };
   } catch {
     return { ...EMPTY };
@@ -69,4 +72,8 @@ export function resetAutoTrackerOnboardingState(): AutoTrackerOnboardingState {
 
 export function hasCompletedRequiredSteps(state: AutoTrackerOnboardingState): boolean {
   return REQUIRED_ONBOARDING_STEPS.every((id) => state.confirmedSteps.includes(id));
+}
+
+export function shouldShowAutoTrackerOnboardingAtLaunch(state: AutoTrackerOnboardingState): boolean {
+  return !state.completed && state.deferredAt === null;
 }

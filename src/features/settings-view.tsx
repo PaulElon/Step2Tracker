@@ -1058,6 +1058,7 @@ export function SettingsView({
   onOpenRecoveryCenter,
   onStartTutorial,
   onResetTutorial,
+  onOpenAutoTrackerSetup,
   onSetCustomCategories,
   onSetResourceLinks,
   studyStorageCounts,
@@ -1082,6 +1083,7 @@ export function SettingsView({
   onOpenRecoveryCenter: () => void;
   onStartTutorial: () => void;
   onResetTutorial: () => void;
+  onOpenAutoTrackerSetup: () => void;
   onSetCustomCategories: (categories: string[]) => void;
   onSetResourceLinks: (links: ResourceLink[]) => void;
   studyStorageCounts: {
@@ -1592,7 +1594,11 @@ export function SettingsView({
 
           {activeSection === "tracker" && FF.timefolio ? (
             <TimeFolioStoreProvider>
-              <TrackerSettingsPanel embedded themeId={themeId} />
+              <TrackerSettingsPanel
+                embedded
+                themeId={themeId}
+                onOpenAutoTrackerSetup={onOpenAutoTrackerSetup}
+              />
             </TimeFolioStoreProvider>
           ) : null}
 
