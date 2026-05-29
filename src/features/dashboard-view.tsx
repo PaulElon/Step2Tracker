@@ -6,23 +6,22 @@ import {
   CheckCircle2,
   Clock3,
   Flame,
-  Lightbulb,
   ListTodo,
+  NotebookPen,
   Play,
   Plus,
   Timer,
   TrendingUp,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getGoalAlerts,
-  getPracticeMetrics,
   getRemediationLinks,
   getStudyBlockMinutes,
   getTodayBlocks,
 } from "../lib/analytics";
-import { daysUntilDateKey, formatLongDate, formatMinutes, getTodayKey } from "../lib/datetime";
+import { formatLongDate, formatMinutes, getTodayKey } from "../lib/datetime";
 import { FF } from "../lib/feature-flags";
 import { launchResource } from "../lib/launcher";
 import { allocationByMethodDisplay } from "../lib/tf-session-adapters";
@@ -33,8 +32,22 @@ import { getTrackedStudyMinutesForDate } from "../lib/tf-session-metrics";
 import { StudyTaskCard } from "../components/study-task-card";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { TaskLaunchButton } from "../components/task-launch-button";
-import { CategoryBadge, EmptyState, FlatList, FlatListRow, SoftDivider } from "../components/ui";
-import type { ExamTimer, ResourceLink, SectionId, StudyBlock, TfSessionLog } from "../types/models";
+import { NotebookEditorAdapter } from "../components/notebook-editor-adapter";
+import { CategoryBadge, EmptyState, FlatList, FlatListRow } from "../components/ui";
+import type {
+  NotebookDocument,
+  NotebookPage,
+  ResourceLink,
+  SectionId,
+  StudyBlock,
+  TfSessionLog,
+  WeakTopicPriority,
+} from "../types/models";
+
+const TODAY_NOTES_DOC_ID = "system-today-notes-v1";
+const TODAY_NOTES_PAGE_ID = "system-today-notes-page-v1";
+
+const PRIORITY_RANK: Record<WeakTopicPriority, number> = { High: 0, Medium: 1, Low: 2 };
 
 const todayPanelClassName = "glass-panel min-w-0";
 
@@ -46,21 +59,6 @@ function getGreeting() {
   return "Good evening";
 }
 
-function getSoonestUpcomingTimer(timers: ExamTimer[]): ExamTimer | null {
-  const now = Date.now();
-  const upcoming = timers
-    .map((timer) => ({
-      timer,
-      time: new Date(`${timer.examDate}T${timer.examTime ?? "23:59"}`).getTime(),
-    }))
-    .filter((entry) => entry.time > now)
-    .sort((left, right) => left.time - right.time);
-  return upcoming[0]?.timer ?? null;
-}
-
-function daysUntilTimer(timer: ExamTimer): number {
-  return daysUntilDateKey(timer.examDate);
-}
 
 function ProgressRing({ percent, size = 132, stroke = 12 }: { percent: number; size?: number; stroke?: number }) {
   const radius = (size - stroke) / 2;
@@ -162,20 +160,6 @@ function getHeroSubtitle(task: { notes?: string | null; reminderAt?: string | nu
   return "Open the task and get the first block done.";
 }
 
-const FOCUS_TIPS = [
-  "Start with a 10-minute opening sprint. Momentum matters more than perfect conditions.",
-  "Reduce switching costs: finish one task before opening the next tab.",
-  "Capture distractions once, then return to the current block immediately.",
-  "A clean first step beats a complicated plan. Make the next action obvious.",
-];
-
-function getDailyFocusTip(seed: string) {
-  let hash = 0;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
-  }
-  return FOCUS_TIPS[hash % FOCUS_TIPS.length];
-}
 
 function SnapshotRow({
   icon: Icon,
@@ -321,13 +305,115 @@ function TodayTimeLogSummary({
 }
 
 export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void }) {
-  const { state, upsertStudyBlock, setDailyGoalMinutes, setActiveSection } = useAppStore();
+  const {
+    state,
+    persistenceStatus,
+    upsertStudyBlock,
+    setDailyGoalMinutes,
+    setActiveSection,
+    setNotebookDocuments,
+  } = useAppStore();
   const { state: tfState } = useTimeFolioStore();
   const [showTaskEditor, setShowTaskEditor] = useState(false);
   const [editingTask, setEditingTask] = useState<StudyBlock | null>(null);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalHoursValue, setGoalHoursValue] = useState("");
   const [goalMinsValue, setGoalMinsValue] = useState("");
+
+  // Today Notes — backed by the system notebook document
+  const [todayNotesHtml, setTodayNotesHtml] = useState("");
+  const [notesEditorKey, setNotesEditorKey] = useState("today-notes-v1-empty");
+  const notesInitializedRef = useRef(false);
+  const notesSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notebookDocumentsRef = useRef(state.preferences.notebookDocuments);
+
+  useEffect(() => {
+    notebookDocumentsRef.current = state.preferences.notebookDocuments;
+  }, [state.preferences.notebookDocuments]);
+
+  useEffect(() => {
+    if (persistenceStatus !== "ready") return;
+    if (notesInitializedRef.current) return;
+    notesInitializedRef.current = true;
+
+    const documents = notebookDocumentsRef.current;
+    const existing = documents.find((d) => d.id === TODAY_NOTES_DOC_ID);
+    if (existing) {
+      const html = existing.pages[0]?.contentHtml ?? "";
+      setTodayNotesHtml(html);
+      setNotesEditorKey("today-notes-v1-loaded");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const firstPage: NotebookPage = {
+      id: TODAY_NOTES_PAGE_ID,
+      title: "Today's Notes",
+      contentHtml: "",
+      order: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const newDoc: NotebookDocument = {
+      id: TODAY_NOTES_DOC_ID,
+      title: "Today's Notes",
+      systemKind: "today-notes",
+      order: 0,
+      pages: [firstPage],
+      createdAt: now,
+      updatedAt: now,
+    };
+    void setNotebookDocuments([...documents, newDoc]);
+    setNotesEditorKey("today-notes-v1-loaded");
+  }, [persistenceStatus, setNotebookDocuments]);
+
+  const handleNotesChange = useCallback(
+    (html: string) => {
+      setTodayNotesHtml(html);
+      if (notesSaveTimerRef.current) clearTimeout(notesSaveTimerRef.current);
+      notesSaveTimerRef.current = setTimeout(() => {
+        notesSaveTimerRef.current = null;
+        const docs = notebookDocumentsRef.current;
+        const now = new Date().toISOString();
+        const existingIdx = docs.findIndex((d) => d.id === TODAY_NOTES_DOC_ID);
+        let nextDocs: NotebookDocument[];
+        if (existingIdx >= 0) {
+          nextDocs = docs.map((d, i) =>
+            i === existingIdx
+              ? {
+                  ...d,
+                  pages: d.pages.map((p, pi) =>
+                    pi === 0 ? { ...p, contentHtml: html, updatedAt: now } : p,
+                  ),
+                  updatedAt: now,
+                }
+              : d,
+          );
+        } else {
+          const page: NotebookPage = {
+            id: TODAY_NOTES_PAGE_ID,
+            title: "Today's Notes",
+            contentHtml: html,
+            order: 0,
+            createdAt: now,
+            updatedAt: now,
+          };
+          const newDoc: NotebookDocument = {
+            id: TODAY_NOTES_DOC_ID,
+            title: "Today's Notes",
+            systemKind: "today-notes",
+            order: 0,
+            pages: [page],
+            createdAt: now,
+            updatedAt: now,
+          };
+          nextDocs = [...docs, newDoc];
+        }
+        void setNotebookDocuments(nextDocs);
+      }, 1000);
+    },
+    [setNotebookDocuments],
+  );
 
   const todayKey = getTodayKey();
   const trackedStudyMinutes = FF.timefolio
@@ -348,11 +434,20 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
   const nextOpenTaskId = nextTask?.id ?? "";
   const openCount = todayTasks.filter((task) => !task.completed).length;
   const completedCount = todayTasks.length - openCount;
-  const practiceMetrics = getPracticeMetrics(state.practiceTests);
   const remediationLinks = getRemediationLinks(state.practiceTests, state.studyBlocks);
-  const uncoveredTopicNames = [...new Set(remediationLinks.flatMap((l) => l.uncoveredTopics))];
-  const upcomingTimer = getSoonestUpcomingTimer(state.preferences.examTimers);
-  const countdownDays = upcomingTimer ? daysUntilTimer(upcomingTimer) : 0;
+  const uncoveredTopicNamesRaw = [...new Set(remediationLinks.flatMap((l) => l.uncoveredTopics))];
+  // Sort weak-topic pills: High → Medium → Low, then by manualOccurrenceCount desc, then lastSeenAt desc.
+  const sortedUncoveredTopicNames = [...uncoveredTopicNamesRaw].sort((a, b) => {
+    const ea = state.weakTopicEntries.find((e) => e.topic === a && e.status !== "Resolved");
+    const eb = state.weakTopicEntries.find((e) => e.topic === b && e.status !== "Resolved");
+    const ra = ea ? PRIORITY_RANK[ea.priority] : 1;
+    const rb = eb ? PRIORITY_RANK[eb.priority] : 1;
+    if (ra !== rb) return ra - rb;
+    const oa = ea?.manualOccurrenceCount ?? 0;
+    const ob = eb?.manualOccurrenceCount ?? 0;
+    if (ob !== oa) return ob - oa;
+    return (eb?.lastSeenAt ?? "").localeCompare(ea?.lastSeenAt ?? "");
+  });
   const greeting = getGreeting();
   const heroTile = nextTask ? categoryTileStyle(nextTask.category) : null;
   const heroNextTaskMinutes = nextTask ? getStudyBlockMinutes(nextTask) : 0;
@@ -599,7 +694,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
 
             {/* Today's Plan + Today Snapshot */}
             <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-              <section className={cn(todayPanelClassName, "flex max-h-[calc(100vh-20rem)] flex-col overflow-hidden p-5")}>
+              <section className={cn(todayPanelClassName, "flex min-h-[280px] max-h-[calc(100vh-20rem)] flex-col overflow-hidden p-5")}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-white">Today's Plan</h3>
@@ -621,8 +716,11 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
 
                 <div className="mt-4 min-h-0 min-w-0 flex-1 overflow-y-auto pr-0.5 scrollbar-subtle">
                   {todayTasks.length ? (
-                    <div className="space-y-2.5 pr-0.5">
-                      {todayTasks.map((task) => (
+                    <div className="space-y-2 pr-0.5">
+                      {[
+                        ...todayTasks.filter((t) => !t.completed),
+                        ...todayTasks.filter((t) => t.completed),
+                      ].map((task) => (
                         <StudyTaskCard
                           key={task.id}
                           block={task}
@@ -632,7 +730,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                           }}
                           actionSlot={
                             task.id === nextOpenTaskId && !task.completed ? (
-                              <span className="inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs text-cyan-100">
+                              <span className="inline-flex items-center rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-0.5 text-[11px] font-medium text-cyan-100">
                                 Up next
                               </span>
                             ) : null
@@ -761,7 +859,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
 
           {/* RIGHT RAIL */}
           <div className="flex min-w-0 flex-col gap-4">
-            {/* Needs Attention */}
+            {/* Needs Attention — compact, no footer metrics */}
             <section className={cn(todayPanelClassName, "p-4")}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -799,30 +897,32 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                       >
                         <p className="text-sm font-semibold text-white">{alert.title}</p>
                         {isWeakTopicAlert ? (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {uncoveredTopicNames.map((topic) => {
-                              const entry = state.weakTopicEntries.find(
-                                (e) => e.topic === topic && e.status !== "Resolved",
-                              );
-                              const priority = entry?.priority ?? "Medium";
-                              const pillClass =
-                                priority === "High"
-                                  ? "border-rose-300/30 bg-rose-300/15 text-rose-200"
-                                  : priority === "Low"
-                                    ? "border-slate-300/20 bg-slate-300/10 text-slate-300"
-                                    : "border-amber-300/30 bg-amber-300/15 text-amber-200";
-                              return (
-                                <span
-                                  key={topic}
-                                  className={cn(
-                                    "inline-flex items-center rounded-full border px-2 py-0.5 text-xs",
-                                    pillClass,
-                                  )}
-                                >
-                                  {topic}
-                                </span>
-                              );
-                            })}
+                          <div className="mt-2 max-h-[3.5rem] overflow-hidden">
+                            <div className="flex flex-wrap gap-1.5">
+                              {sortedUncoveredTopicNames.map((topic) => {
+                                const entry = state.weakTopicEntries.find(
+                                  (e) => e.topic === topic && e.status !== "Resolved",
+                                );
+                                const priority = entry?.priority ?? "Medium";
+                                const pillClass =
+                                  priority === "High"
+                                    ? "border-rose-300/30 bg-rose-300/15 text-rose-200"
+                                    : priority === "Low"
+                                      ? "border-slate-300/20 bg-slate-300/10 text-slate-300"
+                                      : "border-amber-300/30 bg-amber-300/15 text-amber-200";
+                                return (
+                                  <span
+                                    key={topic}
+                                    className={cn(
+                                      "inline-flex items-center rounded-full border px-2 py-0.5 text-xs",
+                                      pillClass,
+                                    )}
+                                  >
+                                    {topic}
+                                  </span>
+                                );
+                              })}
+                            </div>
                           </div>
                         ) : (
                           <p className="mt-1.5 text-xs leading-5 text-slate-300">{alert.body}</p>
@@ -835,72 +935,6 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                     Nothing flagged right now.
                   </p>
                 )}
-
-                {activeWeakTopics.length ? (
-                  <div className="border-t border-white/[0.06] pt-3">
-                    <p className="text-[11px] text-slate-500">
-                      {activeWeakTopics.length} active weak topic{activeWeakTopics.length === 1 ? "" : "s"}
-                    </p>
-                    {practiceMetrics.averageScore != null ? (
-                      <p className="mt-1 text-xs text-slate-400">
-                        Practice avg {practiceMetrics.averageScore.toFixed(1)}%
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            </section>
-
-            {/* Active Tracker */}
-            <section className={cn(todayPanelClassName, "p-4")}>
-              <div>
-                <div className="flex items-center gap-2">
-                  <Timer className="h-4 w-4 text-cyan-200" />
-                  <h3 className="text-base font-semibold text-white">Active Tracker</h3>
-                </div>
-
-                {upcomingTimer ? (
-                  <div className="mt-3 space-y-3">
-                    <div>
-                      <p className="text-sm font-semibold text-white">{upcomingTimer.label}</p>
-                      <p className="mt-0.5 text-xs text-slate-400">
-                        {countdownDays} day{countdownDays === 1 ? "" : "s"} until test
-                      </p>
-                    </div>
-                    <div className="border-t border-white/[0.06] pt-3">
-                      <p className="text-[11px] text-slate-500">Today</p>
-                      <p className="mt-1 text-sm text-slate-200">
-                        <span className="tabular-nums text-white">{formatMinutes(completedMinutes)}</span>
-                        <span className="text-slate-500"> done · {formatMinutes(plannedMinutes)} planned</span>
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-3 space-y-3">
-                    <p className="text-sm text-slate-400">
-                      No upcoming test set. Add a countdown from the sidebar to track an exam date.
-                    </p>
-                    <div className="border-t border-white/[0.06] pt-3">
-                      <p className="text-[11px] text-slate-500">Today</p>
-                      <p className="mt-1 text-sm text-slate-200">
-                        <span className="tabular-nums text-white">{formatMinutes(completedMinutes)}</span>
-                        <span className="text-slate-500"> done · {formatMinutes(plannedMinutes)} planned</span>
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <SoftDivider className="my-4" />
-
-              <div>
-                <div className="flex items-center gap-2">
-                  <Lightbulb
-                    className={themeAwareWarmAccent(themeId, "h-4 w-4 text-orange-300/80", "h-4 w-4 text-amber-300/80")}
-                  />
-                  <h3 className="text-base font-semibold text-white">Focus Tip</h3>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-slate-300">{getDailyFocusTip(todayKey)}</p>
               </div>
             </section>
 
@@ -931,9 +965,44 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                   </FlatListRow>
                 ))}
               </FlatList>
-              <p className="mt-3 text-xs text-slate-500">
-                These recommendations are based on your plan and recent activity.
-              </p>
+            </section>
+
+            {/* Today's Notes — notebook-backed sticky note, fills remaining rail space */}
+            <section className={cn(todayPanelClassName, "flex min-h-[280px] flex-1 flex-col p-4")}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <NotebookPen
+                    className={themeAwareWarmAccent(themeId, "h-4 w-4 text-orange-300/70", "h-4 w-4 text-amber-300/70")}
+                  />
+                  <h3 className="text-base font-semibold text-white">Today's Notes</h3>
+                </div>
+                {FF.notebook ? (
+                  <button
+                    type="button"
+                    className="text-xs text-slate-400 transition-colors hover:text-slate-200"
+                    onClick={() => {
+                      if (onOpenNotebook) {
+                        onOpenNotebook();
+                      } else {
+                        goToSection("notebook");
+                      }
+                    }}
+                  >
+                    Open full
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="mt-3 min-h-0 flex-1 overflow-hidden rounded-[14px]">
+                <NotebookEditorAdapter
+                  editorKey={notesEditorKey}
+                  value={todayNotesHtml}
+                  onChange={handleNotesChange}
+                  placeholder="Quick notes for today…"
+                  scrollable
+                  minLines={6}
+                />
+              </div>
             </section>
           </div>
         </div>

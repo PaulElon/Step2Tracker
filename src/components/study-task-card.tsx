@@ -1,10 +1,16 @@
 import { Bell, Clock3 } from "lucide-react";
 import type { ReactNode } from "react";
-import { formatDateTimeLabel, formatMinutes, formatShortDate } from "../lib/datetime";
+import { formatMinutes, formatShortDate } from "../lib/datetime";
 import { getStudyBlockMinutes } from "../lib/analytics";
 import { CategoryBadge } from "./ui";
 import { TaskLaunchButton } from "./task-launch-button";
 import type { StudyBlock } from "../types/models";
+
+function formatCompactReminder(value: string): string {
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return "";
+  return date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
 
 export function StudyTaskCard({
   block,
@@ -25,12 +31,12 @@ export function StudyTaskCard({
 
   return (
     <article
-      className={`rounded-[22px] border border-white/10 bg-slate-900/55 transition ${
-        compact ? "p-4" : "p-5"
-      } ${block.completed ? "opacity-60" : ""}`}
+      className={`rounded-[18px] border border-white/10 bg-slate-900/50 transition ${
+        compact ? "p-3" : "p-4"
+      } ${block.completed ? "opacity-55" : ""}`}
     >
-      <div className="flex items-center gap-4">
-        <label className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center">
+      <div className="flex items-start gap-3">
+        <label className="mt-0.5 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center">
           <input
             type="checkbox"
             checked={block.completed}
@@ -41,37 +47,41 @@ export function StudyTaskCard({
         </label>
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-start justify-between gap-2">
+            <h4
+              className={`text-sm font-semibold leading-snug text-white ${
+                block.completed ? "completed-task-title line-through decoration-white/30" : ""
+              }`}
+            >
+              {block.task}
+            </h4>
+            {actionSlot ? <div className="shrink-0">{actionSlot}</div> : null}
+          </div>
+
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
             <CategoryBadge category={block.category} />
-            {showDate ? (
-              <span className="inline-flex items-center rounded-full border border-white/10 px-2.5 py-1 text-xs text-slate-300">
-                {formatShortDate(block.date)}
+            <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+              <Clock3 className="h-3 w-3 shrink-0" />
+              {durationLabel}
+            </span>
+            {block.reminderAt ? (
+              <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                <Bell className="h-3 w-3 shrink-0 text-cyan-400/60" />
+                {formatCompactReminder(block.reminderAt)}
               </span>
             ) : null}
+            {showDate ? (
+              <span className="text-[11px] text-slate-500">{formatShortDate(block.date)}</span>
+            ) : null}
           </div>
-          <h4
-            className={`mt-1.5 text-base font-semibold text-white ${block.completed ? "line-through decoration-white/45" : ""}`}
-          >
-            {block.task}
-          </h4>
-          {showNotes && block.notes ? (
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">{block.notes}</p>
-          ) : null}
-        </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5 text-slate-300">
-          <span className="inline-flex items-center gap-1.5 text-xs">
-            <Clock3 className="h-3.5 w-3.5 text-slate-500" />
-            {durationLabel}
-          </span>
-          {block.reminderAt ? (
-            <span className="inline-flex items-center gap-1.5 text-xs">
-              <Bell className="h-3.5 w-3.5 text-cyan-300" />
-              {formatDateTimeLabel(block.reminderAt)}
-            </span>
+          {showNotes && block.notes ? (
+            <p className="mt-1.5 max-w-3xl text-xs leading-5 text-slate-400">{block.notes}</p>
           ) : null}
-          <TaskLaunchButton taskTitle={block.task} taskCategory={block.category} />
-          {actionSlot ? actionSlot : null}
+
+          <div className="mt-2">
+            <TaskLaunchButton taskTitle={block.task} taskCategory={block.category} />
+          </div>
         </div>
       </div>
     </article>

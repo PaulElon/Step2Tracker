@@ -982,6 +982,10 @@ export function NotebookView() {
 
   async function handleDeleteDocument(document: NotebookDocument) {
     closeTileActionMenu();
+    if (document.systemKind) {
+      setStatus({ kind: "error", message: `"${document.title}" is a system document and cannot be deleted.` });
+      return;
+    }
     if (!(await ensureLegacyDocumentsMaterialized())) {
       return;
     }
@@ -1774,16 +1778,18 @@ export function NotebookView() {
             >
               Clean Assets
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                closeEditorOverflowMenu();
-                void handleDeleteDocument(activeDocument);
-              }}
-              className="notebook-floating-menu__item notebook-floating-menu__item--danger"
-            >
-              Delete Document
-            </button>
+            {!activeDocument.systemKind ? (
+              <button
+                type="button"
+                onClick={() => {
+                  closeEditorOverflowMenu();
+                  void handleDeleteDocument(activeDocument);
+                }}
+                className="notebook-floating-menu__item notebook-floating-menu__item--danger"
+              >
+                Delete Document
+              </button>
+            ) : null}
           </div>,
           notebookFloatingMenuPortalTarget,
         )
@@ -1867,28 +1873,31 @@ export function NotebookView() {
             >
               Export
             </button>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                if (tileActionMenu.kind === "folder") {
-                  const folder = sortedFolders.find((entry) => entry.id === tileActionMenu.folderId);
-                  if (folder) {
-                    closeTileActionMenu();
-                    handleDeleteFolder(folder);
+            {!(tileActionMenu.kind === "document" &&
+              sortedDocuments.find((d) => d.id === tileActionMenu.documentId)?.systemKind) ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (tileActionMenu.kind === "folder") {
+                    const folder = sortedFolders.find((entry) => entry.id === tileActionMenu.folderId);
+                    if (folder) {
+                      closeTileActionMenu();
+                      handleDeleteFolder(folder);
+                    }
+                  } else {
+                    const document = sortedDocuments.find((entry) => entry.id === tileActionMenu.documentId);
+                    if (document) {
+                      closeTileActionMenu();
+                      void handleDeleteDocument(document);
+                    }
                   }
-                } else {
-                  const document = sortedDocuments.find((entry) => entry.id === tileActionMenu.documentId);
-                  if (document) {
-                    closeTileActionMenu();
-                    void handleDeleteDocument(document);
-                  }
-                }
-              }}
-              className="notebook-floating-menu__item notebook-floating-menu__item--danger"
-            >
-              Delete
-            </button>
+                }}
+                className="notebook-floating-menu__item notebook-floating-menu__item--danger"
+              >
+                Delete
+              </button>
+            ) : null}
           </div>,
           notebookFloatingMenuPortalTarget,
         )

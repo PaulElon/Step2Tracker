@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { AppWindowMac, ArrowUpRight } from "lucide-react";
 import { useAppStore } from "../state/app-store";
 import { launchResource } from "../lib/launcher";
 import type { ResourceLink } from "../types/models";
@@ -36,8 +35,6 @@ export function TaskLaunchButton({
     return null;
   }
 
-  const Icon = resource.kind === "app" ? AppWindowMac : ArrowUpRight;
-
   async function handleClick() {
     setError(null);
     try {
@@ -55,7 +52,6 @@ export function TaskLaunchButton({
         aria-label={`Open ${resource.label} for ${taskTitle}`}
         onClick={() => void handleClick()}
       >
-        <Icon className="h-3.5 w-3.5 shrink-0" />
         <span className="truncate">Open {resource.label}</span>
       </button>
       {error ? (

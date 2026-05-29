@@ -624,6 +624,12 @@ button {
   color: var(--rich-text);
 }
 
+/* Strikethrough on completed tasks — darker on light/coral for legibility */
+:root[data-theme="light"] .completed-task-title,
+:root[data-theme="maggiepink"] .completed-task-title {
+  text-decoration-color: rgba(15, 23, 42, 0.6);
+}
+
 :root[data-theme="light"] .secondary-button,
 :root[data-theme="maggiepink"] .secondary-button {
   color: var(--rich-text);

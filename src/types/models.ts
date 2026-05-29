@@ -238,6 +238,9 @@ export interface NotebookDocument {
   pages: NotebookPage[];
   createdAt: string;
   updatedAt: string;
+  /** Reserved for system-managed documents. Set to a stable kind string (e.g. "today-notes").
+   *  Documents with this field set cannot be deleted from the Notebook UI. */
+  systemKind?: string;
 }
 
 export interface ScoreTrendOptions {
