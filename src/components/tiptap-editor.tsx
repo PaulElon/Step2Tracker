@@ -368,6 +368,7 @@ export function TiptapEditor({
   className,
   minLines = 1,
   scrollable = false,
+  fillParent = false,
   editorKey,
 }: NotebookEditorProps) {
   const normalizedEditorKey = editorKey ?? "__default__";
@@ -881,7 +882,7 @@ export function TiptapEditor({
   const wrapperClassName = [
     "tiptap-editor w-full h-full min-h-0 flex flex-col rounded-xl border border-white/10 text-sm text-white focus-within:outline-none focus-within:ring-2 focus-within:ring-cyan-400/40",
     "tiptap-editor--pageless",
-    scrollable ? "overflow-y-auto scrollbar-subtle" : "",
+    (scrollable || fillParent) ? "overflow-y-auto scrollbar-subtle" : "",
     isDragOver ? "is-drag-over" : "",
     className ?? "",
   ]
@@ -1213,7 +1214,7 @@ export function TiptapEditor({
 
   if (!editor) {
     return (
-      <div className={wrapperClassName} style={{ minHeight, maxHeight: scrollable ? "180px" : undefined }} {...wrapperDropProps}>
+      <div className={wrapperClassName} style={{ minHeight, maxHeight: (scrollable && !fillParent) ? "180px" : undefined }} {...wrapperDropProps}>
         {toolbar}
         <div className="flex min-h-0 flex-1 items-center px-2 py-2 text-slate-500">{placeholder ?? "Loading editor..."}</div>
       </div>
@@ -1221,7 +1222,7 @@ export function TiptapEditor({
   }
 
   return (
-    <div className={wrapperClassName} style={{ minHeight, maxHeight: scrollable ? "180px" : undefined }} {...wrapperDropProps}>
+    <div className={wrapperClassName} style={{ minHeight, maxHeight: (scrollable && !fillParent) ? "180px" : undefined }} {...wrapperDropProps}>
       {toolbar}
       <input
         ref={fileInputRef}

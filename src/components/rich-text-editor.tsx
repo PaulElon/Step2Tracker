@@ -135,6 +135,7 @@ export function RichTextEditor({
   className,
   minLines = 1,
   scrollable = false,
+  fillParent = false,
 }: {
   value: string;
   onChange: (html: string) => void;
@@ -142,6 +143,7 @@ export function RichTextEditor({
   className?: string;
   minLines?: number;
   scrollable?: boolean;
+  fillParent?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const hasFocusRef = useRef(false);
@@ -236,7 +238,7 @@ export function RichTextEditor({
         hasFocusRef.current = false;
         flush();
       }}
-      style={{ minHeight, maxHeight: scrollable ? "180px" : undefined, overflowY: scrollable ? "auto" : undefined }}
+      style={{ minHeight, maxHeight: (scrollable && !fillParent) ? "180px" : undefined, overflowY: (scrollable || fillParent) ? "auto" : undefined }}
       className={`rich-text-editor w-full rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-400/40 [&:empty]:before:pointer-events-none [&:empty]:before:text-slate-500 [&:empty]:before:content-[attr(data-placeholder)] ${className ?? ""}`}
     />
   );

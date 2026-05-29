@@ -574,8 +574,8 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="min-h-0 flex-1 pr-1">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div className="flex min-h-0 flex-1 flex-col pr-1">
+        <div className="mb-5 flex shrink-0 flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white">Today</h2>
             <p className="mt-1 text-sm text-slate-400">{formatLongDate(todayKey)}</p>
@@ -588,12 +588,12 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
           </div>
         </div>
 
-        <div className="grid w-full gap-4 xl:grid-cols-[minmax(0,2.2fr)_minmax(280px,1fr)]">
+        <div className="grid min-h-0 w-full flex-1 gap-4 xl:grid-cols-[minmax(0,2.2fr)_minmax(280px,1fr)]">
           {/* MAIN COLUMN */}
-          <div className="flex min-w-0 flex-col gap-4">
+          <div className="flex min-h-0 min-w-0 flex-col gap-4">
             {/* HERO: Your Next Task */}
             {nextTask ? (
-              <section className={cn(todayPanelClassName, "p-5")}>
+              <section className={cn(todayPanelClassName, "shrink-0 p-5")}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <p className="text-[0.65rem] text-slate-500">Your next task</p>
@@ -658,7 +658,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                 </div>
               </section>
             ) : (
-              <section className={cn(todayPanelClassName, "p-5")}>
+              <section className={cn(todayPanelClassName, "shrink-0 p-5")}>
                 <p className="text-[0.65rem] text-slate-500">Your next task</p>
                 <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
                   <div>
@@ -693,8 +693,8 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
             )}
 
             {/* Today's Plan + Today Snapshot */}
-            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-              <section className={cn(todayPanelClassName, "flex min-h-[280px] max-h-[calc(100vh-20rem)] flex-col overflow-hidden p-5")}>
+            <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+              <section className={cn(todayPanelClassName, "flex min-h-0 flex-col overflow-hidden p-5")}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-white">Today's Plan</h3>
@@ -758,7 +758,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
               </section>
 
               {/* Today Snapshot + Timer box */}
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4 self-start">
                 <section className={cn(todayPanelClassName, "flex flex-col p-4")}>
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-base font-semibold text-white">Today Snapshot</h3>
@@ -858,9 +858,9 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
           </div>
 
           {/* RIGHT RAIL */}
-          <div className="flex min-w-0 flex-col gap-4">
+          <div className="flex min-h-0 min-w-0 flex-col gap-4">
             {/* Needs Attention — compact, no footer metrics */}
-            <section className={cn(todayPanelClassName, "p-4")}>
+            <section className={cn(todayPanelClassName, "shrink-0 p-4")}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <AlertCircle
@@ -939,7 +939,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
             </section>
 
             {/* Next Best Moves */}
-            <section className={cn(todayPanelClassName, "p-4")}>
+            <section className={cn(todayPanelClassName, "shrink-0 p-4")}>
               <div className="mb-3 flex items-center gap-2">
                 <Zap className="h-4 w-4 text-slate-500" />
                 <h3 className="text-base font-semibold text-white">Next Best Moves</h3>
@@ -968,7 +968,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
             </section>
 
             {/* Today's Notes — notebook-backed sticky note, fills remaining rail space */}
-            <section className={cn(todayPanelClassName, "flex min-h-[280px] flex-1 flex-col p-4")}>
+            <section className={cn(todayPanelClassName, "flex min-h-0 flex-1 flex-col p-4")}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <NotebookPen
@@ -999,8 +999,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                   value={todayNotesHtml}
                   onChange={handleNotesChange}
                   placeholder="Quick notes for today…"
-                  scrollable
-                  minLines={6}
+                  fillParent
                 />
               </div>
             </section>

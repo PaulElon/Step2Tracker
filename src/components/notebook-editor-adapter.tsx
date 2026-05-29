@@ -9,6 +9,8 @@ export interface NotebookEditorProps {
   className?: string;
   minLines?: number;
   scrollable?: boolean;
+  /** When true the editor fills 100% of its parent height and scrolls internally. Overrides the 180px scrollable cap. */
+  fillParent?: boolean;
   editorKey?: string;
 }
 

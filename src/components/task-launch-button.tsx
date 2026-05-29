@@ -23,9 +23,11 @@ function findMatchingResource(
 export function TaskLaunchButton({
   taskTitle,
   taskCategory,
+  variant = "default",
 }: {
   taskTitle: string;
   taskCategory: string;
+  variant?: "default" | "compact";
 }) {
   const { state } = useAppStore();
   const resource = findMatchingResource(taskTitle, taskCategory, state.preferences.resourceLinks);
@@ -44,11 +46,15 @@ export function TaskLaunchButton({
     }
   }
 
+  const buttonClassName = variant === "compact"
+    ? "inline-flex max-w-[130px] items-center overflow-hidden truncate rounded-full border border-white/[0.12] px-2 py-0.5 text-[11px] font-medium text-slate-400 transition hover:border-white/20 hover:text-slate-200"
+    : "launch-button";
+
   return (
     <div className="flex flex-col gap-1">
       <button
         type="button"
-        className="launch-button"
+        className={buttonClassName}
         aria-label={`Open ${resource.label} for ${taskTitle}`}
         onClick={() => void handleClick()}
       >

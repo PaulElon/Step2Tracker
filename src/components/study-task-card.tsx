@@ -36,7 +36,7 @@ export function StudyTaskCard({
       } ${block.completed ? "opacity-55" : ""}`}
     >
       <div className="flex items-start gap-3">
-        <label className="mt-0.5 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center">
+        <label className="mt-1 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center">
           <input
             type="checkbox"
             checked={block.completed}
@@ -49,13 +49,13 @@ export function StudyTaskCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <h4
-              className={`text-sm font-semibold leading-snug text-white ${
+              className={`text-[15px] font-semibold leading-snug text-white ${
                 block.completed ? "completed-task-title line-through decoration-white/30" : ""
               }`}
             >
               {block.task}
             </h4>
-            {actionSlot ? <div className="shrink-0">{actionSlot}</div> : null}
+            {actionSlot ? <div className="mt-0.5 shrink-0">{actionSlot}</div> : null}
           </div>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -73,15 +73,12 @@ export function StudyTaskCard({
             {showDate ? (
               <span className="text-[11px] text-slate-500">{formatShortDate(block.date)}</span>
             ) : null}
+            <TaskLaunchButton taskTitle={block.task} taskCategory={block.category} variant="compact" />
           </div>
 
           {showNotes && block.notes ? (
             <p className="mt-1.5 max-w-3xl text-xs leading-5 text-slate-400">{block.notes}</p>
           ) : null}
-
-          <div className="mt-2">
-            <TaskLaunchButton taskTitle={block.task} taskCategory={block.category} />
-          </div>
         </div>
       </div>
     </article>
