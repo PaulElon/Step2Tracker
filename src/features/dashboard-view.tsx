@@ -209,20 +209,20 @@ function TodayTimeLogSummary({
         </div>
 
         <div className="mt-auto pt-5">
-          <p className="text-[11px] text-slate-500">Allowed vs distractions</p>
+          <p className="text-[11px] text-slate-500">Focused vs distractions</p>
           <div className="mt-3">
-            <div className="flex h-2.5 overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="flex h-2 overflow-hidden rounded-full bg-white/[0.06]">
               <div
-                className="bg-cyan-300/70"
+                className="bar-focused bg-cyan-300/70"
                 style={{ width: "0%" }}
               />
               <div
-                className="bg-rose-300/70"
+                className="bar-distractions bg-rose-300/70"
                 style={{ width: "0%" }}
               />
             </div>
             <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-slate-500">
-              <span>Allowed 0m</span>
+              <span>Focused 0m</span>
               <span>Distractions 0m</span>
             </div>
           </div>
@@ -255,9 +255,9 @@ function TodayTimeLogSummary({
                   <span className="min-w-0 truncate text-slate-200">{row.method}</span>
                   <span className="tabular-nums text-slate-400">{formatMinutes(minutes)}</span>
                 </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
                   <div
-                    className="h-full rounded-full bg-cyan-300/70"
+                    className="bar-focused h-full rounded-full bg-cyan-300/70"
                     style={{ width: `${Math.max(percent, minutes > 0 ? 8 : 0)}%` }}
                   />
                 </div>
@@ -272,30 +272,30 @@ function TodayTimeLogSummary({
       </div>
 
       <div className="mt-auto pt-6">
-        <p className="text-[11px] text-slate-500">Allowed vs distractions</p>
+        <p className="text-[11px] text-slate-500">Focused vs distractions</p>
         <div className="mt-3">
-          <div className="flex h-3 overflow-hidden rounded-full bg-white/[0.06]">
+          <div className="flex h-2 overflow-hidden rounded-full bg-white/[0.06]">
             <div
-              className="bg-cyan-300/70"
+              className="bar-focused bg-cyan-300/70"
               style={{ width: `${allowedShare}%` }}
             />
             <div
-              className="bg-rose-300/70"
+              className="bar-distractions bg-rose-300/70"
               style={{ width: `${distractionShare}%` }}
             />
           </div>
           <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-slate-500">
-            <span>Allowed {formatMinutes(allowedMinutes)}</span>
+            <span>Focused {formatMinutes(allowedMinutes)}</span>
             <span>Distractions {formatMinutes(distractionMinutes)}</span>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2">
           <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-200/70">Allowed</p>
+            <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-300">Focused</p>
             <p className="mt-1 text-sm font-semibold text-white">{allowedShare.toFixed(0)}%</p>
           </div>
           <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-rose-200/70">Distractions</p>
+            <p className="text-[10px] uppercase tracking-[0.16em] text-rose-300">Distractions</p>
             <p className="mt-1 text-sm font-semibold text-white">{distractionShare.toFixed(0)}%</p>
           </div>
         </div>

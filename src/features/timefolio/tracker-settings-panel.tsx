@@ -87,7 +87,7 @@ const TRACKER_GROUPS: Array<{
 }> = [
   {
     key: "allowed",
-    title: "Allowed",
+    title: "Focused",
     description: "Resources TimeFolio should count as study/focus activity.",
     listKeys: {
       app: "customAutoApps",
@@ -2225,7 +2225,7 @@ export function TrackerSettingsPanel({
             Auto-Tracking setup
           </div>
           <p className="text-sm leading-6 text-cyan-50">
-            Add the apps and websites you want counted as study time in Allowed. Put distracting
+            Add the apps and websites you want counted as study time in Focused. Put distracting
             apps and sites in Distractions.
           </p>
           <p className="text-sm font-medium leading-6 text-cyan-50">

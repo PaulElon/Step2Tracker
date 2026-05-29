@@ -570,7 +570,7 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
                 </span>
               </div>
               <p className="mt-1 text-[11px] text-slate-400">
-                Allowed {autoTrackerControl.trackedRuleCount} · Distractions {autoTrackerControl.distractionRuleCount}
+                Focused {autoTrackerControl.trackedRuleCount} · Distractions {autoTrackerControl.distractionRuleCount}
               </p>
             </div>
             <button

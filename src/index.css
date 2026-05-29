@@ -715,6 +715,17 @@ button {
   color: #b45309 !important;
 }
 
+/* Focused/Distractions progress bar fills — visible on light backgrounds */
+:root[data-theme="light"] .bar-focused,
+:root[data-theme="maggiepink"] .bar-focused {
+  background-color: #0e7490 !important; /* cyan-700 — readable on white/pink */
+}
+
+:root[data-theme="light"] .bar-distractions,
+:root[data-theme="maggiepink"] .bar-distractions {
+  background-color: #be123c !important; /* rose-700 — readable on white/pink */
+}
+
 /* Rich text editor list styling */
 .rich-text-editor ul {
   list-style-type: disc;

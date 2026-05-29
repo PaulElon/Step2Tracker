@@ -35,8 +35,8 @@ export function StudyTaskCard({
         compact ? "p-3" : "p-4"
       } ${block.completed ? "opacity-55" : ""}`}
     >
-      <div className="flex items-start gap-3">
-        <label className="mt-1 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center">
+      <div className="flex items-center gap-3">
+        <label className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center">
           <input
             type="checkbox"
             checked={block.completed}
@@ -49,16 +49,16 @@ export function StudyTaskCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <h4
-              className={`text-[15px] font-semibold leading-snug text-white ${
+              className={`min-w-0 flex-1 truncate text-[17px] font-semibold leading-snug text-white ${
                 block.completed ? "completed-task-title line-through decoration-white/30" : ""
               }`}
             >
               {block.task}
             </h4>
-            {actionSlot ? <div className="mt-0.5 shrink-0">{actionSlot}</div> : null}
+            {actionSlot ? <div className="shrink-0">{actionSlot}</div> : null}
           </div>
 
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <CategoryBadge category={block.category} />
             <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
               <Clock3 className="h-3 w-3 shrink-0" />
@@ -66,7 +66,7 @@ export function StudyTaskCard({
             </span>
             {block.reminderAt ? (
               <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
-                <Bell className="h-3 w-3 shrink-0 text-cyan-400/60" />
+                <Bell className="h-3 w-3 shrink-0 text-cyan-300" />
                 {formatCompactReminder(block.reminderAt)}
               </span>
             ) : null}
@@ -77,7 +77,7 @@ export function StudyTaskCard({
           </div>
 
           {showNotes && block.notes ? (
-            <p className="mt-1.5 max-w-3xl text-xs leading-5 text-slate-400">{block.notes}</p>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">{block.notes}</p>
           ) : null}
         </div>
       </div>
