@@ -29,9 +29,15 @@ import {
   QuietPanel,
   SoftDivider,
 } from "../../components/ui";
-import { formatHoursValue, formatLongDate } from "../../lib/datetime";
+import { formatDateTimeLabel, formatHoursValue, formatLongDate } from "../../lib/datetime";
 import { cn } from "../../lib/ui";
 import { useAppStore } from "../../state/app-store";
+import { useTimeFolioStore } from "../../state/tf-store";
+import {
+  buildPortfolioUrgeSummary,
+  URGE_TRIGGER_LABELS,
+  type PortfolioUrgeSummary,
+} from "../../lib/portfolio-urge-awareness";
 import type { PracticeTest, WeakTopicPriority } from "../../types/models";
 import { OverviewActivityHeatmap } from "./overview-activity-heatmap";
 
@@ -99,6 +105,7 @@ function formatSignedPoints(delta: number) {
 
 export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
   const { state } = useAppStore();
+  const { state: tfState } = useTimeFolioStore();
   const { practiceTests, errorLogEntries, weakTopicEntries, studyBlocks } = state;
   const dailyGoalMinutes = state.preferences.dailyGoalMinutes;
 
@@ -198,6 +205,11 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
     };
   }, [categoryBreakdown, totalStudyMinutes]);
 
+  const urgeSummary = useMemo(
+    () => buildPortfolioUrgeSummary(tfState.urgeLogs ?? []),
+    [tfState.urgeLogs],
+  );
+
   const readinessValue = practiceMetrics.averageScore;
   const readinessMeta =
     readinessValue == null
@@ -274,6 +286,7 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
             trendImprovement={trendImprovement}
             topCategory={topCategory}
           />
+          <UrgeAwarenessPanel summary={urgeSummary} />
           <QuickActions onNavigate={onNavigate} />
           <RecommendedNextActions
             errorCount={errorLogEntries.length}
@@ -286,6 +299,14 @@ export function PortfolioOverview({ onNavigate }: PortfolioOverviewProps) {
       </div>
     </div>
   );
+}
+
+function formatUrgeAverage(value: number, totalCount: number) {
+  return totalCount ? value.toFixed(1) : "—";
+}
+
+function formatUrgeExampleTimestamp(value: string) {
+  return formatDateTimeLabel(value) || "Unknown time";
 }
 
 function SectionPanel({
@@ -574,6 +595,166 @@ function TrendSparkline({ trend }: { trend: TrendPoint[] }) {
         </span>
         <span>{lastLabel}</span>
       </div>
+    </div>
+  );
+}
+
+function UrgeAwarenessPanel({
+  summary,
+}: {
+  summary: PortfolioUrgeSummary;
+}) {
+  const hasData = summary.totalCount > 0;
+
+  return (
+    <QuietPanel className="flex min-h-0 max-h-[440px] flex-col overflow-hidden p-3.5">
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-cyan-200" />
+            <h3 className="text-[0.82rem] font-semibold text-white">Urge Awareness</h3>
+          </div>
+          <p className="mt-0.5 text-[11px] text-slate-400">
+            Read-only patterns from urges logged during focus sessions.
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
+          Read-only
+        </span>
+      </header>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <UrgeMetricTile
+          label="Total urges"
+          value={String(summary.totalCount)}
+          meta={summary.totalCount === 1 ? "1 entry" : `${summary.totalCount} entries`}
+        />
+        <UrgeMetricTile
+          label="Avg intensity"
+          value={formatUrgeAverage(summary.averageIntensity, summary.totalCount)}
+          meta={hasData ? "1 to 5 scale" : "No entries yet"}
+        />
+        <UrgeMetricTile
+          label="Top trigger"
+          value={summary.topTrigger ? URGE_TRIGGER_LABELS[summary.topTrigger] : "None"}
+          meta={hasData ? "Most frequent in this view" : "No pattern yet"}
+        />
+        <UrgeMetricTile
+          label="Sessions"
+          value={summary.sessionCount == null ? "—" : String(summary.sessionCount)}
+          meta={summary.sessionCount == null ? "No linked sessions" : "Sessions with urges"}
+        />
+      </div>
+
+      {!hasData ? (
+        <div className="mt-3 flex min-h-[220px] flex-1 flex-col items-center justify-center rounded-[18px] border border-dashed border-white/10 bg-white/[0.02] px-5 text-center">
+          <p className="text-sm font-medium text-slate-200">No urges logged in this period.</p>
+          <p className="mt-1 max-w-xs text-xs leading-5 text-slate-500">
+            Urges logged during focus sessions will appear here.
+          </p>
+        </div>
+      ) : (
+        <>
+          <SoftDivider className="my-3" />
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <div className="grid h-full min-h-0 gap-3 xl:grid-rows-[auto_minmax(0,1fr)]">
+              <section className="min-h-0">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    By trigger
+                  </p>
+                  <p className="text-[10px] text-slate-500">Count and average intensity</p>
+                </div>
+                <div className="mt-2 space-y-2">
+                  {summary.breakdown.map((entry) => (
+                    <div key={entry.trigger} className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="truncate text-[12px] font-medium text-slate-100">{entry.label}</p>
+                        <p className="shrink-0 text-[11px] tabular-nums text-slate-400">
+                          {entry.count} · {entry.averageIntensity.toFixed(1)}/5
+                        </p>
+                      </div>
+                      <div className="mt-1.5 h-[5px] overflow-hidden rounded-full bg-white/[0.05]">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-cyan-400/85 via-sky-400/80 to-indigo-400/75"
+                          style={{ width: `${Math.max(entry.sharePercent, 4)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="flex min-h-0 flex-col overflow-hidden rounded-[16px] border border-white/[0.06] bg-white/[0.02]">
+                <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-3 py-2.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Recent examples
+                  </p>
+                  <p className="text-[10px] text-slate-500">Newest first</p>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-3 pr-2 scrollbar-subtle">
+                  <div className="space-y-2">
+                    {summary.examples.map((urgeLog) => {
+                      const subject = urgeLog.subject?.trim();
+                      const note = urgeLog.note?.trim();
+                      return (
+                        <div
+                          key={urgeLog.id}
+                          className="rounded-[14px] border border-white/[0.05] bg-slate-950/30 px-3 py-2.5"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                <span className="text-[11px] font-medium text-slate-500">
+                                  {formatUrgeExampleTimestamp(urgeLog.timestamp)}
+                                </span>
+                                <span className="rounded-full border border-cyan-300/15 bg-cyan-300/10 px-2 py-0.5 text-[11px] text-cyan-100">
+                                  {URGE_TRIGGER_LABELS[urgeLog.trigger]}
+                                </span>
+                              </div>
+                              {subject ? (
+                                <p className="mt-1 truncate text-[12px] font-medium text-slate-200">
+                                  {subject}
+                                </p>
+                              ) : null}
+                              {note ? (
+                                <p className="mt-1 truncate text-[11px] text-slate-400">
+                                  {note}
+                                </p>
+                              ) : null}
+                            </div>
+                            <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-slate-300">
+                              {urgeLog.intensity}/5
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </>
+      )}
+    </QuietPanel>
+  );
+}
+
+function UrgeMetricTile({
+  label,
+  value,
+  meta,
+}: {
+  label: string;
+  value: string;
+  meta: string;
+}) {
+  return (
+    <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+      <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-white">{value}</p>
+      <p className="mt-1 text-[10px] text-slate-500">{meta}</p>
     </div>
   );
 }
