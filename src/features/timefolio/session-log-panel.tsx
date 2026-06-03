@@ -74,6 +74,58 @@ function createEmptyUrgeForm() {
 }
 
 type UrgeFormState = ReturnType<typeof createEmptyUrgeForm>;
+type UrgeLogContext = Partial<Pick<UrgeLog, "sessionId" | "subject" | "elapsedSeconds">>;
+
+export function resolveAttentionTimerMode({
+  currentMode,
+  autoTrackerAvailable,
+  manualNeedsAttention,
+  autoIsBlocking,
+  autoHasSaveableEntries,
+}: {
+  currentMode: TimerMode;
+  autoTrackerAvailable: boolean;
+  manualNeedsAttention: boolean;
+  autoIsBlocking: boolean;
+  autoHasSaveableEntries: boolean;
+}): TimerMode {
+  if (!autoTrackerAvailable) {
+    return "manual";
+  }
+  if (manualNeedsAttention) {
+    return "manual";
+  }
+  if (autoIsBlocking) {
+    return "auto";
+  }
+  if (currentMode === "auto" && autoHasSaveableEntries) {
+    return "auto";
+  }
+  return currentMode;
+}
+
+export function buildAutoTrackerUrgeContext(
+  autoTrackerControl: Pick<
+    AutoTrackerV2SessionControl,
+    "currentPreviewSpan" | "lastDetectedAppName" | "previewNowMs"
+  >,
+): UrgeLogContext {
+  const currentSpan = autoTrackerControl.currentPreviewSpan;
+  const subject =
+    currentSpan?.matchedRuleName?.trim() ||
+    currentSpan?.label?.trim() ||
+    autoTrackerControl.lastDetectedAppName?.trim() ||
+    "";
+  const elapsedSeconds =
+    currentSpan && autoTrackerControl.previewNowMs >= currentSpan.startedAtMs
+      ? Math.max(0, Math.round((autoTrackerControl.previewNowMs - currentSpan.startedAtMs) / 1000))
+      : null;
+
+  return {
+    ...(subject ? { subject } : {}),
+    ...(elapsedSeconds !== null ? { elapsedSeconds } : {}),
+  };
+}
 
 function toMethodKey(method: string): string {
   return method.trim().toLowerCase().replace(/\s+/g, "-");
@@ -303,6 +355,219 @@ function persistTimerMode(mode: TimerMode) {
   }
 }
 
+function buildUrgeLog({
+  form,
+  context,
+  now,
+}: {
+  form: UrgeFormState;
+  context: UrgeLogContext;
+  now: number;
+}): UrgeLog {
+  return {
+    id: `tf-urge-${now}-${Math.random().toString(16).slice(2, 8)}`,
+    timestamp: new Date(now).toISOString(),
+    trigger: form.trigger || "other",
+    intensity: form.intensity,
+    ...(context.sessionId ? { sessionId: context.sessionId } : {}),
+    ...(context.subject ? { subject: context.subject } : {}),
+    ...(typeof context.elapsedSeconds === "number" ? { elapsedSeconds: context.elapsedSeconds } : {}),
+    ...(form.note.trim() ? { note: form.note.trim() } : {}),
+  };
+}
+
+function UrgeLogButton({
+  onLogUrge,
+  getContext,
+  disabled = false,
+}: {
+  onLogUrge: (urgeLog: UrgeLog) => Promise<void>;
+  getContext: (now: number) => UrgeLogContext;
+  disabled?: boolean;
+}) {
+  const [showComposer, setShowComposer] = useState(false);
+  const [urgeForm, setUrgeForm] = useState<UrgeFormState>(createEmptyUrgeForm);
+  const [isLoggingUrge, setIsLoggingUrge] = useState(false);
+  const [urgeFeedback, setUrgeFeedback] = useState<FeedbackState | null>(null);
+
+  useEffect(() => {
+    if (!urgeFeedback) {
+      return;
+    }
+    const timeoutId = setTimeout(() => {
+      setUrgeFeedback(null);
+    }, urgeFeedback.kind === "success" ? 1800 : 2800);
+    return () => clearTimeout(timeoutId);
+  }, [urgeFeedback]);
+
+  useEffect(() => {
+    if (!disabled) {
+      return;
+    }
+    setShowComposer(false);
+    setUrgeForm(createEmptyUrgeForm());
+  }, [disabled]);
+
+  async function handleLogUrge() {
+    if (isLoggingUrge) {
+      return;
+    }
+    if (!urgeForm.trigger) {
+      setUrgeFeedback({ kind: "error", text: "Choose a trigger first." });
+      return;
+    }
+
+    setIsLoggingUrge(true);
+    try {
+      const now = Date.now();
+      await onLogUrge(buildUrgeLog({ form: urgeForm, context: getContext(now), now }));
+      setShowComposer(false);
+      setUrgeForm(createEmptyUrgeForm());
+      setUrgeFeedback({ kind: "success", text: "Urge logged." });
+    } catch (error) {
+      setUrgeFeedback({
+        kind: "error",
+        text: error instanceof Error ? error.message : "Unable to log urge right now.",
+      });
+    } finally {
+      setIsLoggingUrge(false);
+    }
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-white/[0.08] bg-white/[0.02] px-3 text-sm font-medium text-slate-300 transition hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
+        onClick={() => {
+          setShowComposer((current) => !current);
+          setUrgeFeedback(null);
+        }}
+        disabled={disabled || isLoggingUrge}
+        aria-expanded={showComposer}
+      >
+        Log urge
+      </button>
+      {showComposer ? (
+        <div className="absolute right-0 top-full z-20 mt-2 w-80 max-w-[calc(100vw-3rem)] rounded-[18px] border border-white/[0.08] bg-slate-950/96 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.42)] backdrop-blur">
+          <div className="flex flex-col gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                Trigger
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {URGE_TRIGGER_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
+                      urgeForm.trigger === option.value
+                        ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100"
+                        : "border-white/[0.08] bg-white/[0.03] text-slate-300 hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-white",
+                    )}
+                    onClick={() =>
+                      setUrgeForm((current) => ({ ...current, trigger: option.value }))
+                    }
+                    disabled={isLoggingUrge}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                Intensity
+              </p>
+              <div className="mt-2 inline-flex rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-1">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={cn(
+                      "h-8 w-8 rounded-[10px] text-xs font-semibold transition",
+                      urgeForm.intensity === value
+                        ? "bg-cyan-400/15 text-cyan-100"
+                        : "text-slate-300 hover:bg-white/[0.05] hover:text-white",
+                    )}
+                    onClick={() =>
+                      setUrgeForm((current) => ({
+                        ...current,
+                        intensity: value as UrgeLog["intensity"],
+                      }))
+                    }
+                    disabled={isLoggingUrge}
+                    aria-label={`Intensity ${value}`}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                Note
+              </label>
+              <input
+                className={fieldClassName}
+                type="text"
+                value={urgeForm.note}
+                onChange={(event) =>
+                  setUrgeForm((current) => ({ ...current, note: event.target.value }))
+                }
+                placeholder="Optional note"
+                maxLength={140}
+                disabled={isLoggingUrge}
+              />
+            </div>
+
+            {urgeFeedback ? (
+              <div
+                role="status"
+                aria-live="polite"
+                className={cn(
+                  "text-[11px]",
+                  urgeFeedback.kind === "success" ? "text-slate-400" : "text-rose-300",
+                )}
+              >
+                {urgeFeedback.text}
+              </div>
+            ) : null}
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className={secondaryButtonClassName}
+                onClick={() => {
+                  setShowComposer(false);
+                  setUrgeForm(createEmptyUrgeForm());
+                  setUrgeFeedback(null);
+                }}
+                disabled={isLoggingUrge}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={primaryButtonClassName}
+                onClick={() => {
+                  void handleLogUrge();
+                }}
+                disabled={isLoggingUrge}
+              >
+                {isLoggingUrge ? "Logging..." : "Log & keep focusing"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: ManualTimerProps) {
   const [status, setStatus] = useState<TimerStatus>("idle");
   const autoTrackerAvailable = FF.autotrackerV2UserMode && autoTrackerControl !== null;
@@ -314,10 +579,6 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
   const [isDistraction, setIsDistraction] = useState(false);
   const [displayMs, setDisplayMs] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
-  const [showUrgeComposer, setShowUrgeComposer] = useState(false);
-  const [urgeForm, setUrgeForm] = useState<UrgeFormState>(createEmptyUrgeForm);
-  const [isLoggingUrge, setIsLoggingUrge] = useState(false);
-  const [urgeFeedback, setUrgeFeedback] = useState<FeedbackState | null>(null);
 
   const activeSessionIdRef = useRef("");
   const startISORef = useRef<string>("");
@@ -326,15 +587,15 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
   const isAutoRunning = autoTrackerControl?.isRunning === true;
   const autoSaveableCount = autoTrackerControl?.stopSaveSelection.previewSessions.length ?? 0;
   const isAutoActionBusy = autoTrackerControl?.isActionBusy === true;
-  const autoNeedsAttention = isAutoRunning || autoSaveableCount > 0 || isAutoActionBusy;
+  const autoIsBlocking = isAutoRunning || isAutoActionBusy;
   const manualNeedsAttention = status !== "idle";
   const autoActionIsStopAndSave = isAutoRunning || autoSaveableCount > 0;
   const showSwitchToAuto =
     timerMode === "manual" &&
     status === "idle" &&
-    !autoNeedsAttention &&
+    !autoIsBlocking &&
     autoTrackerAvailable;
-  const showSwitchToManual = timerMode === "auto" && !autoNeedsAttention && autoTrackerAvailable;
+  const showSwitchToManual = timerMode === "auto" && !autoIsBlocking && autoTrackerAvailable;
   const timerLabel =
     timerMode === "auto"
       ? autoTrackerControl?.runningElapsedLabel ?? formatTimerLabel(0)
@@ -376,23 +637,17 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
   }
 
   useEffect(() => {
-    if (!autoTrackerAvailable) {
-      return;
+    const nextMode = resolveAttentionTimerMode({
+      currentMode: timerMode,
+      autoTrackerAvailable,
+      manualNeedsAttention,
+      autoIsBlocking,
+      autoHasSaveableEntries: autoSaveableCount > 0,
+    });
+    if (nextMode !== timerMode) {
+      applyTimerMode(nextMode);
     }
-    if (autoNeedsAttention) {
-      applyTimerMode("auto");
-      return;
-    }
-    if (manualNeedsAttention) {
-      applyTimerMode("manual");
-    }
-  }, [autoNeedsAttention, autoTrackerAvailable, manualNeedsAttention]);
-
-  useEffect(() => {
-    if (!autoTrackerAvailable && timerMode !== "manual") {
-      applyTimerMode("manual");
-    }
-  }, [autoTrackerAvailable, timerMode]);
+  }, [autoIsBlocking, autoSaveableCount, autoTrackerAvailable, manualNeedsAttention, timerMode]);
 
   useEffect(() => {
     if (status !== "running") return;
@@ -400,24 +655,6 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
       setDisplayMs(accumulatedRef.current + (Date.now() - lastResumeRef.current));
     }, 1000);
     return () => clearInterval(id);
-  }, [status]);
-
-  useEffect(() => {
-    if (!urgeFeedback) {
-      return;
-    }
-    const timeoutId = setTimeout(() => {
-      setUrgeFeedback(null);
-    }, urgeFeedback.kind === "success" ? 1800 : 2800);
-    return () => clearTimeout(timeoutId);
-  }, [urgeFeedback]);
-
-  useEffect(() => {
-    if (status === "running") {
-      return;
-    }
-    setShowUrgeComposer(false);
-    setUrgeForm(createEmptyUrgeForm());
   }, [status]);
 
   function getElapsedSeconds(nowMs: number) {
@@ -432,9 +669,6 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
     setNotes("");
     setIsDistraction(false);
     setDisplayMs(0);
-    setShowUrgeComposer(false);
-    setUrgeForm(createEmptyUrgeForm());
-    setUrgeFeedback(null);
     activeSessionIdRef.current = "";
     accumulatedRef.current = 0;
   }
@@ -486,41 +720,6 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
       onDismiss();
     } finally {
       setIsSaving(false);
-    }
-  }
-
-  async function handleLogUrge() {
-    if (isLoggingUrge) {
-      return;
-    }
-    if (!urgeForm.trigger) {
-      setUrgeFeedback({ kind: "error", text: "Choose a trigger first." });
-      return;
-    }
-
-    setIsLoggingUrge(true);
-    try {
-      const now = Date.now();
-      await onLogUrge({
-        id: `tf-urge-${now}-${Math.random().toString(16).slice(2, 8)}`,
-        timestamp: new Date(now).toISOString(),
-        trigger: urgeForm.trigger,
-        intensity: urgeForm.intensity,
-        ...(activeSessionIdRef.current ? { sessionId: activeSessionIdRef.current } : {}),
-        ...(method.trim() ? { subject: method.trim() } : {}),
-        elapsedSeconds: getElapsedSeconds(now),
-        ...(urgeForm.note.trim() ? { note: urgeForm.note.trim() } : {}),
-      });
-      setShowUrgeComposer(false);
-      setUrgeForm(createEmptyUrgeForm());
-      setUrgeFeedback({ kind: "success", text: "Urge logged." });
-    } catch (error) {
-      setUrgeFeedback({
-        kind: "error",
-        text: error instanceof Error ? error.message : "Unable to log urge right now.",
-      });
-    } finally {
-      setIsLoggingUrge(false);
     }
   }
 
@@ -647,123 +846,15 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
               </button>
             )}
             {status === "running" ? (
-              <div className="relative">
-                <button
-                  type="button"
-                  className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-white/[0.08] bg-white/[0.02] px-3 text-sm font-medium text-slate-300 transition hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-white"
-                  onClick={() => {
-                    setShowUrgeComposer((current) => !current);
-                    setUrgeFeedback(null);
-                  }}
-                  disabled={isSaving || isLoggingUrge}
-                  aria-expanded={showUrgeComposer}
-                >
-                  Log urge
-                </button>
-                {showUrgeComposer ? (
-                  <div className="absolute right-0 top-full z-20 mt-2 w-80 max-w-[calc(100vw-3rem)] rounded-[18px] border border-white/[0.08] bg-slate-950/96 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.42)] backdrop-blur">
-                    <div className="flex flex-col gap-3">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                          Trigger
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {URGE_TRIGGER_OPTIONS.map((option) => (
-                            <button
-                              key={option.value}
-                              type="button"
-                              className={cn(
-                                "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
-                                urgeForm.trigger === option.value
-                                  ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100"
-                                  : "border-white/[0.08] bg-white/[0.03] text-slate-300 hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-white",
-                              )}
-                              onClick={() =>
-                                setUrgeForm((current) => ({ ...current, trigger: option.value }))
-                              }
-                              disabled={isLoggingUrge}
-                            >
-                              {option.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                          Intensity
-                        </p>
-                        <div className="mt-2 inline-flex rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-1">
-                          {[1, 2, 3, 4, 5].map((value) => (
-                            <button
-                              key={value}
-                              type="button"
-                              className={cn(
-                                "h-8 w-8 rounded-[10px] text-xs font-semibold transition",
-                                urgeForm.intensity === value
-                                  ? "bg-cyan-400/15 text-cyan-100"
-                                  : "text-slate-300 hover:bg-white/[0.05] hover:text-white",
-                              )}
-                              onClick={() =>
-                                setUrgeForm((current) => ({
-                                  ...current,
-                                  intensity: value as UrgeLog["intensity"],
-                                }))
-                              }
-                              disabled={isLoggingUrge}
-                              aria-label={`Intensity ${value}`}
-                            >
-                              {value}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                          Note
-                        </label>
-                        <input
-                          className={fieldClassName}
-                          type="text"
-                          value={urgeForm.note}
-                          onChange={(event) =>
-                            setUrgeForm((current) => ({ ...current, note: event.target.value }))
-                          }
-                          placeholder="Optional note"
-                          maxLength={140}
-                          disabled={isLoggingUrge}
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          className={secondaryButtonClassName}
-                          onClick={() => {
-                            setShowUrgeComposer(false);
-                            setUrgeForm(createEmptyUrgeForm());
-                            setUrgeFeedback(null);
-                          }}
-                          disabled={isLoggingUrge}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          className={primaryButtonClassName}
-                          onClick={() => {
-                            void handleLogUrge();
-                          }}
-                          disabled={isLoggingUrge}
-                        >
-                          {isLoggingUrge ? "Logging..." : "Log & keep focusing"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
+              <UrgeLogButton
+                onLogUrge={onLogUrge}
+                disabled={isSaving}
+                getContext={(now) => ({
+                  ...(activeSessionIdRef.current ? { sessionId: activeSessionIdRef.current } : {}),
+                  ...(method.trim() ? { subject: method.trim() } : {}),
+                  elapsedSeconds: getElapsedSeconds(now),
+                })}
+              />
             ) : null}
             <button
               type="button"
@@ -778,18 +869,6 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
               Cancel
             </button>
           </div>
-          {urgeFeedback ? (
-            <div
-              role="status"
-              aria-live="polite"
-              className={cn(
-                "sm:col-span-2 lg:col-span-2",
-                urgeFeedback.kind === "success" ? "text-[11px] text-slate-400" : "text-[11px] text-rose-300",
-              )}
-            >
-              {urgeFeedback.text}
-            </div>
-          ) : null}
         </div>
       ) : null}
 
@@ -816,15 +895,24 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
                 Focused {autoTrackerControl.trackedRuleCount} · Distractions {autoTrackerControl.distractionRuleCount}
               </p>
             </div>
-            <button
-              type="button"
-              className={isAutoRunning ? secondaryButtonClassName : primaryButtonClassName}
-              disabled={autoTrackerControl.isActionBusy || disableAutoStart}
-              onClick={autoActionIsStopAndSave ? autoTrackerControl.onStopAndSave : autoTrackerControl.onStart}
-              title={disableAutoStart ? "Stop or cancel manual timer before starting Auto-Tracking." : undefined}
-            >
-              {autoActionLabel}
-            </button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {isAutoRunning ? (
+                <UrgeLogButton
+                  onLogUrge={onLogUrge}
+                  disabled={autoTrackerControl.isActionBusy}
+                  getContext={() => buildAutoTrackerUrgeContext(autoTrackerControl)}
+                />
+              ) : null}
+              <button
+                type="button"
+                className={isAutoRunning ? secondaryButtonClassName : primaryButtonClassName}
+                disabled={autoTrackerControl.isActionBusy || disableAutoStart}
+                onClick={autoActionIsStopAndSave ? autoTrackerControl.onStopAndSave : autoTrackerControl.onStart}
+                title={disableAutoStart ? "Stop or cancel manual timer before starting Auto-Tracking." : undefined}
+              >
+                {autoActionLabel}
+              </button>
+            </div>
           </div>
           {autoTrackerControl.message ? (
             <p
