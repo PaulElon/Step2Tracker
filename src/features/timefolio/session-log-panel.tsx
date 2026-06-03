@@ -1,4 +1,5 @@
-import { useState, useEffect, useId, useRef } from "react";
+import { createPortal } from "react-dom";
+import { useState, useEffect, useLayoutEffect, useId, useRef } from "react";
 import {
   Calendar,
   ChevronDown,
@@ -75,6 +76,49 @@ function createEmptyUrgeForm() {
 
 type UrgeFormState = ReturnType<typeof createEmptyUrgeForm>;
 type UrgeLogContext = Partial<Pick<UrgeLog, "sessionId" | "subject" | "elapsedSeconds">>;
+type UrgeComposerAnchorRect = {
+  bottom: number;
+  right: number;
+};
+type UrgeComposerPlacement = {
+  left: number;
+  top: number;
+  width: number;
+};
+
+const URGE_COMPOSER_GAP = 8;
+const URGE_COMPOSER_VIEWPORT_MARGIN = 8;
+const URGE_COMPOSER_MAX_WIDTH = 320;
+const URGE_COMPOSER_MIN_WIDTH = 240;
+
+const urgeButtonClassName = cn(
+  primaryButtonClassName,
+  "border-cyan-300/30 bg-cyan-400/10 text-cyan-100 hover:border-cyan-200/45 hover:bg-cyan-400/16 hover:text-white disabled:cursor-not-allowed disabled:opacity-55",
+);
+
+export function getUrgeComposerPlacement(
+  buttonRect: UrgeComposerAnchorRect,
+  viewportWidth: number,
+): UrgeComposerPlacement {
+  const width = Math.min(
+    URGE_COMPOSER_MAX_WIDTH,
+    Math.max(URGE_COMPOSER_MIN_WIDTH, viewportWidth - URGE_COMPOSER_VIEWPORT_MARGIN * 2),
+  );
+  const maxLeft = Math.max(
+    URGE_COMPOSER_VIEWPORT_MARGIN,
+    viewportWidth - width - URGE_COMPOSER_VIEWPORT_MARGIN,
+  );
+  const left = Math.min(
+    Math.max(buttonRect.right - width, URGE_COMPOSER_VIEWPORT_MARGIN),
+    maxLeft,
+  );
+
+  return {
+    top: buttonRect.bottom + URGE_COMPOSER_GAP,
+    left,
+    width,
+  };
+}
 
 export function resolveAttentionTimerMode({
   currentMode,
@@ -390,10 +434,12 @@ function UrgeLogButton({
   disabled?: boolean;
 }) {
   const composerId = useId();
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
   const [showComposer, setShowComposer] = useState(false);
   const [urgeForm, setUrgeForm] = useState<UrgeFormState>(createEmptyUrgeForm);
   const [isLoggingUrge, setIsLoggingUrge] = useState(false);
   const [urgeFeedback, setUrgeFeedback] = useState<FeedbackState | null>(null);
+  const [composerPlacement, setComposerPlacement] = useState<UrgeComposerPlacement | null>(null);
 
   useEffect(() => {
     if (!urgeFeedback) {
@@ -410,8 +456,33 @@ function UrgeLogButton({
       return;
     }
     setShowComposer(false);
+    setComposerPlacement(null);
     setUrgeForm(createEmptyUrgeForm());
   }, [disabled]);
+
+  useLayoutEffect(() => {
+    if (!showComposer) {
+      setComposerPlacement(null);
+      return;
+    }
+
+    const updateComposerPlacement = () => {
+      const button = buttonRef.current;
+      if (!button || typeof window === "undefined") {
+        return;
+      }
+      setComposerPlacement(getUrgeComposerPlacement(button.getBoundingClientRect(), window.innerWidth));
+    };
+
+    updateComposerPlacement();
+    window.addEventListener("resize", updateComposerPlacement);
+    window.addEventListener("scroll", updateComposerPlacement, true);
+
+    return () => {
+      window.removeEventListener("resize", updateComposerPlacement);
+      window.removeEventListener("scroll", updateComposerPlacement, true);
+    };
+  }, [showComposer]);
 
   async function handleLogUrge() {
     if (isLoggingUrge) {
@@ -440,10 +511,11 @@ function UrgeLogButton({
   }
 
   return (
-    <div className="relative z-20">
+    <>
       <button
+        ref={buttonRef}
         type="button"
-        className="inline-flex h-10 items-center justify-center rounded-[14px] border border-cyan-300/30 bg-cyan-400/10 px-3.5 text-sm font-medium text-cyan-100 transition hover:border-cyan-200/45 hover:bg-cyan-400/16 hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
+        className={urgeButtonClassName}
         onClick={() => {
           setShowComposer((current) => !current);
           setUrgeFeedback(null);
@@ -454,126 +526,136 @@ function UrgeLogButton({
       >
         Log urge
       </button>
-      {showComposer ? (
-        <div
-          id={composerId}
-          className="absolute bottom-full right-0 z-30 mb-2 w-80 max-w-[calc(100vw-3rem)] rounded-[18px] border border-white/[0.08] bg-slate-950/96 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.42)] backdrop-blur"
-        >
-          <div className="flex flex-col gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                Trigger
-              </p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {URGE_TRIGGER_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={cn(
-                      "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
-                      urgeForm.trigger === option.value
-                        ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100"
-                        : "border-white/[0.08] bg-white/[0.03] text-slate-300 hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-white",
-                    )}
-                    onClick={() =>
-                      setUrgeForm((current) => ({ ...current, trigger: option.value }))
+      {showComposer && composerPlacement && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              id={composerId}
+              className="z-[60] rounded-[18px] border border-white/[0.08] bg-slate-950/96 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.42)] backdrop-blur"
+              style={{
+                position: "fixed",
+                top: `${composerPlacement.top}px`,
+                left: `${composerPlacement.left}px`,
+                width: `${composerPlacement.width}px`,
+                maxHeight: `calc(100vh - ${composerPlacement.top}px - ${URGE_COMPOSER_VIEWPORT_MARGIN}px)`,
+              }}
+            >
+              <div className="flex max-h-full flex-col gap-3 overflow-y-auto">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                    Trigger
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {URGE_TRIGGER_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={cn(
+                          "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
+                          urgeForm.trigger === option.value
+                            ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100"
+                            : "border-white/[0.08] bg-white/[0.03] text-slate-300 hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-white",
+                        )}
+                        onClick={() =>
+                          setUrgeForm((current) => ({ ...current, trigger: option.value }))
+                        }
+                        disabled={isLoggingUrge}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                    Intensity
+                  </p>
+                  <div className="mt-2 inline-flex rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-1">
+                    {[1, 2, 3, 4, 5].map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={cn(
+                          "h-8 w-8 rounded-[10px] text-xs font-semibold transition",
+                          urgeForm.intensity === value
+                            ? "bg-cyan-400/15 text-cyan-100"
+                            : "text-slate-300 hover:bg-white/[0.05] hover:text-white",
+                        )}
+                        onClick={() =>
+                          setUrgeForm((current) => ({
+                            ...current,
+                            intensity: value as UrgeLog["intensity"],
+                          }))
+                        }
+                        disabled={isLoggingUrge}
+                        aria-label={`Intensity ${value}`}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                    Note
+                  </label>
+                  <input
+                    className={fieldClassName}
+                    type="text"
+                    value={urgeForm.note}
+                    onChange={(event) =>
+                      setUrgeForm((current) => ({ ...current, note: event.target.value }))
                     }
+                    placeholder="Optional note"
+                    maxLength={140}
+                    disabled={isLoggingUrge}
+                  />
+                </div>
+
+                {urgeFeedback ? (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className={cn(
+                      "text-[11px]",
+                      urgeFeedback.kind === "success" ? "text-slate-400" : "text-rose-300",
+                    )}
+                  >
+                    {urgeFeedback.text}
+                  </div>
+                ) : null}
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    className={secondaryButtonClassName}
+                    onClick={() => {
+                      setShowComposer(false);
+                      setUrgeForm(createEmptyUrgeForm());
+                      setUrgeFeedback(null);
+                    }}
                     disabled={isLoggingUrge}
                   >
-                    {option.label}
+                    Cancel
                   </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                Intensity
-              </p>
-              <div className="mt-2 inline-flex rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-1">
-                {[1, 2, 3, 4, 5].map((value) => (
                   <button
-                    key={value}
                     type="button"
-                    className={cn(
-                      "h-8 w-8 rounded-[10px] text-xs font-semibold transition",
-                      urgeForm.intensity === value
-                        ? "bg-cyan-400/15 text-cyan-100"
-                        : "text-slate-300 hover:bg-white/[0.05] hover:text-white",
-                    )}
-                    onClick={() =>
-                      setUrgeForm((current) => ({
-                        ...current,
-                        intensity: value as UrgeLog["intensity"],
-                      }))
-                    }
+                    className={primaryButtonClassName}
+                    onClick={() => {
+                      void handleLogUrge();
+                    }}
                     disabled={isLoggingUrge}
-                    aria-label={`Intensity ${value}`}
                   >
-                    {value}
+                    {isLoggingUrge ? "Logging..." : "Log & keep focusing"}
                   </button>
-                ))}
+                </div>
               </div>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                Note
-              </label>
-              <input
-                className={fieldClassName}
-                type="text"
-                value={urgeForm.note}
-                onChange={(event) =>
-                  setUrgeForm((current) => ({ ...current, note: event.target.value }))
-                }
-                placeholder="Optional note"
-                maxLength={140}
-                disabled={isLoggingUrge}
-              />
-            </div>
-
-            {urgeFeedback ? (
-              <div
-                role="status"
-                aria-live="polite"
-                className={cn(
-                  "text-[11px]",
-                  urgeFeedback.kind === "success" ? "text-slate-400" : "text-rose-300",
-                )}
-              >
-                {urgeFeedback.text}
-              </div>
-            ) : null}
-
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                className={secondaryButtonClassName}
-                onClick={() => {
-                  setShowComposer(false);
-                  setUrgeForm(createEmptyUrgeForm());
-                  setUrgeFeedback(null);
-                }}
-                disabled={isLoggingUrge}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className={primaryButtonClassName}
-                onClick={() => {
-                  void handleLogUrge();
-                }}
-                disabled={isLoggingUrge}
-              >
-                {isLoggingUrge ? "Logging..." : "Log & keep focusing"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 

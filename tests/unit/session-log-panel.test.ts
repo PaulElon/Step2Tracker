@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildAutoTrackerUrgeContext,
   getManualTimerMethodStartError,
+  getUrgeComposerPlacement,
   resolveAttentionTimerMode,
   resolvePersistedTimerMode,
 } from "../../src/features/timefolio/session-log-panel.tsx";
@@ -120,4 +121,15 @@ test("manual timer start requires a nonblank method title", () => {
   assert.equal(getManualTimerMethodStartError(""), "Method title required to start timer.");
   assert.equal(getManualTimerMethodStartError("   "), "Method title required to start timer.");
   assert.equal(getManualTimerMethodStartError("Active Recall"), null);
+});
+
+test("urge composer placement opens below the button and stays right-aligned when space allows", () => {
+  assert.deepEqual(
+    getUrgeComposerPlacement({ bottom: 208, right: 724 }, 1280),
+    {
+      top: 216,
+      left: 404,
+      width: 320,
+    },
+  );
 });
