@@ -21,7 +21,7 @@ import {
   getStudyBlockMinutes,
   getTodayBlocks,
 } from "../lib/analytics";
-import { formatLongDate, formatMinutes, getTodayKey } from "../lib/datetime";
+import { formatLongDate, formatMinutes, getLocalDateKeyFromIso, getTodayKey } from "../lib/datetime";
 import { FF } from "../lib/feature-flags";
 import { launchResource } from "../lib/launcher";
 import { allocationByMethodDisplay } from "../lib/tf-session-adapters";
@@ -41,6 +41,8 @@ import type {
   SectionId,
   StudyBlock,
   TfSessionLog,
+  UrgeLog,
+  UrgeTrigger,
   WeakTopicPriority,
 } from "../types/models";
 
@@ -48,6 +50,15 @@ const TODAY_NOTES_DOC_ID = "system-today-notes-v1";
 const TODAY_NOTES_PAGE_ID = "system-today-notes-page-v1";
 
 const PRIORITY_RANK: Record<WeakTopicPriority, number> = { High: 0, Medium: 1, Low: 2 };
+const URGE_TRIGGER_LABELS: Record<UrgeTrigger, string> = {
+  x_social: "X / social",
+  phone: "Phone",
+  gaming: "Gaming",
+  side_project: "Side project",
+  boredom: "Boredom",
+  fatigue: "Fatigue",
+  other: "Other",
+};
 
 const todayPanelClassName = "glass-panel min-w-0";
 
@@ -304,6 +315,133 @@ function TodayTimeLogSummary({
   );
 }
 
+function formatUrgeTimeLabel(timestamp: string) {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return "--:--";
+  }
+
+  return date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function getTopUrgeTrigger(urgeLogs: UrgeLog[]) {
+  if (urgeLogs.length === 0) {
+    return null;
+  }
+
+  const counts = new Map<UrgeTrigger, number>();
+  for (const urgeLog of urgeLogs) {
+    counts.set(urgeLog.trigger, (counts.get(urgeLog.trigger) ?? 0) + 1);
+  }
+
+  let topTrigger: UrgeTrigger | null = null;
+  let topCount = -1;
+  for (const urgeLog of urgeLogs) {
+    const count = counts.get(urgeLog.trigger) ?? 0;
+    if (count > topCount) {
+      topTrigger = urgeLog.trigger;
+      topCount = count;
+    }
+  }
+
+  return topTrigger;
+}
+
+function UrgeAwarenessCard({
+  urgeLogs,
+}: {
+  urgeLogs: UrgeLog[];
+}) {
+  const totalCount = urgeLogs.length;
+  const averageIntensity =
+    totalCount > 0
+      ? urgeLogs.reduce((sum, urgeLog) => sum + urgeLog.intensity, 0) / totalCount
+      : 0;
+  const topTrigger = getTopUrgeTrigger(urgeLogs);
+
+  return (
+    <section className={cn(todayPanelClassName, "flex min-h-0 flex-1 flex-col overflow-hidden p-4")}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-white">Urge Awareness</h3>
+          <p className="mt-0.5 text-xs text-slate-500">Today&apos;s readback, newest first</p>
+        </div>
+        <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[11px] text-slate-400">
+          Read-only
+        </span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+          <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Total</p>
+          <p className="mt-1 text-sm font-semibold text-white">{totalCount}</p>
+        </div>
+        <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+          <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Avg intensity</p>
+          <p className="mt-1 text-sm font-semibold text-white">{totalCount ? averageIntensity.toFixed(1) : "0.0"}</p>
+        </div>
+        <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+          <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Top trigger</p>
+          <p className="mt-1 truncate text-sm font-semibold text-white">
+            {topTrigger ? URGE_TRIGGER_LABELS[topTrigger] : "None"}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 min-h-0 flex-1 overflow-hidden rounded-[16px] border border-white/[0.06] bg-white/[0.02]">
+        {urgeLogs.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center px-5 text-center">
+            <p className="text-sm font-medium text-slate-300">No urges logged today.</p>
+            <p className="mt-1 max-w-xs text-xs leading-5 text-slate-500">
+              When you log one during a session, it will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="h-full min-h-0 overflow-y-auto p-3 pr-2 scrollbar-subtle">
+            <div className="space-y-2">
+              {urgeLogs.map((urgeLog) => {
+                const subject = urgeLog.subject?.trim();
+                const note = urgeLog.note?.trim();
+                return (
+                  <div
+                    key={urgeLog.id}
+                    className="rounded-[14px] border border-white/[0.05] bg-slate-950/30 px-3 py-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <span className="text-[11px] font-medium tabular-nums text-slate-500">
+                            {formatUrgeTimeLabel(urgeLog.timestamp)}
+                          </span>
+                          <span className="rounded-full border border-cyan-300/15 bg-cyan-300/10 px-2 py-0.5 text-[11px] text-cyan-100">
+                            {URGE_TRIGGER_LABELS[urgeLog.trigger]}
+                          </span>
+                          {subject ? (
+                            <span className="min-w-0 truncate text-xs text-slate-400">{subject}</span>
+                          ) : null}
+                        </div>
+                        {note ? (
+                          <p className="mt-1 truncate text-xs leading-5 text-slate-300">{note}</p>
+                        ) : null}
+                      </div>
+                      <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-slate-300">
+                        {urgeLog.intensity}/5
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void }) {
   const {
     state,
@@ -420,6 +558,9 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
     ? getTrackedStudyMinutesForDate(tfState.sessionLogs, todayKey)
     : 0;
   const todaySessionLogs = FF.timefolio ? tfState.sessionLogs.filter((log) => log.date === todayKey) : [];
+  const todayUrgeLogs = FF.timefolio
+    ? (tfState.urgeLogs ?? []).filter((log) => getLocalDateKeyFromIso(log.timestamp) === todayKey)
+    : [];
   const todayTasks = getTodayBlocks(state.studyBlocks, todayKey);
   const plannedMinutes = todayTasks.reduce((total, task) => total + getStudyBlockMinutes(task), 0);
   const completedMinutes = todayTasks
@@ -758,8 +899,8 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
               </section>
 
               {/* Today Snapshot + Timer box */}
-              <div className="flex flex-col gap-4 self-start">
-                <section className={cn(todayPanelClassName, "flex flex-col p-4")}>
+              <div className="flex min-h-0 min-w-0 flex-col gap-4">
+                <section className={cn(todayPanelClassName, "flex shrink-0 flex-col p-4")}>
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-base font-semibold text-white">Today Snapshot</h3>
                     <span className="text-xs text-slate-500">Goal {formatMinutes(todayGoalMinutes)}</span>
@@ -837,7 +978,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                   </div>
                 </section>
 
-                <section className={cn(todayPanelClassName, "flex flex-col p-4")}>
+                <section className={cn(todayPanelClassName, "flex shrink-0 flex-col p-4")}>
                   <div className="flex items-center gap-2">
                     <Timer className="h-4 w-4 text-cyan-200" />
                     <h3 className="text-base font-semibold text-white">Time your study session</h3>
@@ -853,6 +994,8 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
 
                   <TodayTimeLogSummary sessionLogs={todaySessionLogs} />
                 </section>
+
+                <UrgeAwarenessCard urgeLogs={todayUrgeLogs} />
               </div>
             </div>
           </div>
