@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useId, useRef } from "react";
 import {
   Calendar,
   ChevronDown,
@@ -169,6 +169,10 @@ function validateSessionForm(form: FormState): string | null {
   }
 
   return null;
+}
+
+export function getManualTimerMethodStartError(method: string): string | null {
+  return method.trim() ? null : "Method title required to start timer.";
 }
 
 function sessionToForm(s: TfSessionLog): FormState {
@@ -385,6 +389,7 @@ function UrgeLogButton({
   getContext: (now: number) => UrgeLogContext;
   disabled?: boolean;
 }) {
+  const composerId = useId();
   const [showComposer, setShowComposer] = useState(false);
   const [urgeForm, setUrgeForm] = useState<UrgeFormState>(createEmptyUrgeForm);
   const [isLoggingUrge, setIsLoggingUrge] = useState(false);
@@ -435,21 +440,25 @@ function UrgeLogButton({
   }
 
   return (
-    <div className="relative">
+    <div className="relative z-20">
       <button
         type="button"
-        className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-white/[0.08] bg-white/[0.02] px-3 text-sm font-medium text-slate-300 transition hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
+        className="inline-flex h-10 items-center justify-center rounded-[14px] border border-cyan-300/30 bg-cyan-400/10 px-3.5 text-sm font-medium text-cyan-100 transition hover:border-cyan-200/45 hover:bg-cyan-400/16 hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
         onClick={() => {
           setShowComposer((current) => !current);
           setUrgeFeedback(null);
         }}
         disabled={disabled || isLoggingUrge}
         aria-expanded={showComposer}
+        aria-controls={showComposer ? composerId : undefined}
       >
         Log urge
       </button>
       {showComposer ? (
-        <div className="absolute right-0 top-full z-20 mt-2 w-80 max-w-[calc(100vw-3rem)] rounded-[18px] border border-white/[0.08] bg-slate-950/96 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.42)] backdrop-blur">
+        <div
+          id={composerId}
+          className="absolute bottom-full right-0 z-30 mb-2 w-80 max-w-[calc(100vw-3rem)] rounded-[18px] border border-white/[0.08] bg-slate-950/96 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.42)] backdrop-blur"
+        >
           <div className="flex flex-col gap-3">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
@@ -574,7 +583,10 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
   const [timerMode, setTimerMode] = useState<TimerMode>(() =>
     readPersistedTimerMode(autoTrackerAvailable),
   );
+  const methodErrorId = useId();
+  const methodInputRef = useRef<HTMLInputElement | null>(null);
   const [method, setMethod] = useState("");
+  const [methodStartError, setMethodStartError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [isDistraction, setIsDistraction] = useState(false);
   const [displayMs, setDisplayMs] = useState(0);
@@ -632,6 +644,7 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
   const disableAutoStart = !isAutoRunning && status !== "idle";
 
   function applyTimerMode(mode: TimerMode) {
+    setMethodStartError(null);
     setTimerMode(mode);
     persistTimerMode(mode);
   }
@@ -666,6 +679,7 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
   function reset() {
     setStatus("idle");
     setMethod("");
+    setMethodStartError(null);
     setNotes("");
     setIsDistraction(false);
     setDisplayMs(0);
@@ -673,8 +687,21 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
     accumulatedRef.current = 0;
   }
 
+  function handleMethodChange(value: string) {
+    setMethod(value);
+    if (methodStartError && value.trim()) {
+      setMethodStartError(null);
+    }
+  }
+
   function handleStart() {
-    if (!method.trim()) return;
+    const nextMethodError = getManualTimerMethodStartError(method);
+    if (nextMethodError) {
+      setMethodStartError(nextMethodError);
+      methodInputRef.current?.focus();
+      return;
+    }
+    setMethodStartError(null);
     const now = Date.now();
     activeSessionIdRef.current = `tf-session-${now}`;
     startISORef.current = new Date(now).toISOString();
@@ -722,6 +749,8 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
       setIsSaving(false);
     }
   }
+
+  const methodInputInvalid = status === "idle" && Boolean(methodStartError);
 
   return (
     <section className="glass-panel relative overflow-hidden p-0">
@@ -777,13 +806,26 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
             <div className="flex flex-col gap-1">
               <label className="text-xs text-slate-400">Method *</label>
               <input
-                className={fieldClassName}
+                ref={methodInputRef}
+                className={cn(
+                  fieldClassName,
+                  methodInputInvalid
+                    ? "border-rose-500/30 bg-rose-500/10 text-rose-100 placeholder:text-rose-200/70 focus-visible:border-rose-400 focus-visible:bg-rose-500/[0.08] focus-visible:shadow-[0_0_0_2px_rgba(244,63,94,0.18)]"
+                    : undefined,
+                )}
                 type="text"
                 value={method}
-                onChange={(e) => setMethod(e.target.value)}
+                onChange={(e) => handleMethodChange(e.target.value)}
                 placeholder="e.g. Active Recall"
                 disabled={status !== "idle"}
+                aria-invalid={methodInputInvalid}
+                aria-describedby={methodInputInvalid ? methodErrorId : undefined}
               />
+              {methodInputInvalid ? (
+                <p id={methodErrorId} className="text-xs text-rose-300">
+                  {methodStartError}
+                </p>
+              ) : null}
             </div>
 
             <div className="flex flex-col gap-1">
@@ -814,7 +856,7 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
                 type="button"
                 className={primaryButtonClassName}
                 onClick={handleStart}
-                disabled={!method.trim() || isAutoRunning}
+                disabled={isAutoRunning}
               >
                 <Play className="h-4 w-4" />
                 Start
@@ -845,17 +887,6 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
                 {isSaving ? "Saving..." : "Stop & Save"}
               </button>
             )}
-            {status === "running" ? (
-              <UrgeLogButton
-                onLogUrge={onLogUrge}
-                disabled={isSaving}
-                getContext={(now) => ({
-                  ...(activeSessionIdRef.current ? { sessionId: activeSessionIdRef.current } : {}),
-                  ...(method.trim() ? { subject: method.trim() } : {}),
-                  elapsedSeconds: getElapsedSeconds(now),
-                })}
-              />
-            ) : null}
             <button
               type="button"
               className={secondaryButtonClassName}
@@ -868,6 +899,17 @@ function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: Manua
               <X className="h-4 w-4" />
               Cancel
             </button>
+            {status === "running" ? (
+              <UrgeLogButton
+                onLogUrge={onLogUrge}
+                disabled={isSaving}
+                getContext={(now) => ({
+                  ...(activeSessionIdRef.current ? { sessionId: activeSessionIdRef.current } : {}),
+                  ...(method.trim() ? { subject: method.trim() } : {}),
+                  elapsedSeconds: getElapsedSeconds(now),
+                })}
+              />
+            ) : null}
           </div>
         </div>
       ) : null}

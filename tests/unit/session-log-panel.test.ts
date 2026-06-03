@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildAutoTrackerUrgeContext,
+  getManualTimerMethodStartError,
   resolveAttentionTimerMode,
   resolvePersistedTimerMode,
 } from "../../src/features/timefolio/session-log-panel.tsx";
@@ -113,4 +114,10 @@ test("auto-tracker urge context uses real active span context without inventing 
     elapsedSeconds: 63,
   });
   assert.equal("sessionId" in context, false);
+});
+
+test("manual timer start requires a nonblank method title", () => {
+  assert.equal(getManualTimerMethodStartError(""), "Method title required to start timer.");
+  assert.equal(getManualTimerMethodStartError("   "), "Method title required to start timer.");
+  assert.equal(getManualTimerMethodStartError("Active Recall"), null);
 });
