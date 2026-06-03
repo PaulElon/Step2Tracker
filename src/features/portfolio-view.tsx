@@ -3,6 +3,7 @@ import { ErrorLogView } from "./error-log-view";
 import { PortfolioOverview, type PortfolioOverviewSectionTarget } from "./portfolio/portfolio-overview";
 import type { PortfolioSectionId } from "./portfolio-section";
 import { PracticeTestsView } from "./practice-tests-view";
+import { TimeFolioStoreProvider } from "../state/tf-store";
 import { TimeFolioAnalyticsView } from "./timefolio-analytics-view";
 import { TimeFolioHeatmapView } from "./timefolio-heatmap-view";
 import { WeakTopicsView } from "./weak-topics-view";
@@ -18,9 +19,11 @@ export function PortfolioView({
 }) {
   if (showOverview) {
     return (
-      <div className="h-full min-h-0">
-        <PortfolioOverview onNavigate={onSelectSection} />
-      </div>
+      <TimeFolioStoreProvider>
+        <div className="h-full min-h-0">
+          <PortfolioOverview onNavigate={onSelectSection} />
+        </div>
+      </TimeFolioStoreProvider>
     );
   }
 
