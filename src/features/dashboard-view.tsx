@@ -361,8 +361,8 @@ function UrgeAwarenessCard({
             </p>
           </div>
         ) : (
-          <div className="grid h-full min-h-0 gap-3 p-3 xl:grid-rows-[auto_minmax(0,1fr)]">
-            <section>
+          <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-3 scrollbar-subtle">
+            <section className="shrink-0">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                   By trigger
@@ -373,7 +373,7 @@ function UrgeAwarenessCard({
                 {urgeSummary.breakdown.slice(0, 3).map((entry) => (
                   <div
                     key={entry.trigger}
-                    className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"
+                    className="rounded-[14px] border border-violet-400/15 bg-violet-500/[0.04] px-3 py-2.5"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <p className="truncate text-[12px] font-medium text-slate-100">{entry.label}</p>
@@ -381,9 +381,9 @@ function UrgeAwarenessCard({
                         {entry.count} · {entry.averageIntensity.toFixed(1)}/5
                       </p>
                     </div>
-                    <div className="mt-1.5 h-[5px] overflow-hidden rounded-full bg-white/[0.05]">
+                    <div className="mt-1.5 h-[5px] overflow-hidden rounded-full bg-white/[0.07]">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-cyan-400/85 via-sky-400/80 to-indigo-400/75"
+                        className="h-full rounded-full bg-gradient-to-r from-violet-400 via-indigo-400 to-sky-400"
                         style={{ width: `${Math.max(entry.sharePercent, 6)}%` }}
                       />
                     </div>
@@ -392,21 +392,22 @@ function UrgeAwarenessCard({
               </div>
             </section>
 
-            <section className="flex min-h-0 flex-col overflow-hidden rounded-[16px] border border-white/[0.06] bg-white/[0.02]">
+            <section className="flex shrink-0 flex-col overflow-hidden rounded-[16px] border border-white/[0.06] bg-white/[0.02]">
               <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-3 py-2.5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                   Recent examples
                 </p>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-3 pr-2 scrollbar-subtle">
+              <div className="p-3 pr-2">
                 <div className="space-y-2">
                   {urgeSummary.examples.map((urgeLog) => {
                     const subject = urgeLog.subject?.trim();
                     const note = urgeLog.note?.trim();
+                    const isHighIntensity = urgeLog.intensity >= 4;
                     return (
                       <div
                         key={urgeLog.id}
-                        className="rounded-[14px] border border-white/[0.05] bg-slate-950/30 px-3 py-2.5"
+                        className="rounded-[14px] border border-violet-400/12 bg-violet-500/[0.035] px-3 py-2.5"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
@@ -414,7 +415,7 @@ function UrgeAwarenessCard({
                               <span className="text-[11px] font-medium tabular-nums text-slate-500">
                                 {formatUrgeTimeLabel(urgeLog.timestamp)}
                               </span>
-                              <span className="rounded-full border border-cyan-300/15 bg-cyan-300/10 px-2 py-0.5 text-[11px] text-cyan-100">
+                              <span className="rounded-full border border-violet-300/20 bg-violet-400/10 px-2 py-0.5 text-[11px] text-violet-100">
                                 {URGE_TRIGGER_LABELS[urgeLog.trigger]}
                               </span>
                               {subject ? (
@@ -425,7 +426,14 @@ function UrgeAwarenessCard({
                               <p className="mt-1 truncate text-xs leading-5 text-slate-300">{note}</p>
                             ) : null}
                           </div>
-                          <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-slate-300">
+                          <span
+                            className={cn(
+                              "shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium tabular-nums",
+                              isHighIntensity
+                                ? "border-amber-400/30 bg-amber-400/12 text-amber-200"
+                                : "border-violet-400/20 bg-violet-400/10 text-violet-100",
+                            )}
+                          >
                             {urgeLog.intensity}/5
                           </span>
                         </div>

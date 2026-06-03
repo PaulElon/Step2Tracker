@@ -1,9 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { EmptyState, Panel } from "../components/ui";
-import { formatMinutes } from "../lib/datetime";
+import { formatMinutes, getTodayKey, parseDateKey } from "../lib/datetime";
 import { allocationByMethodDisplay, totalsByDay } from "../lib/tf-session-adapters";
+import {
+  buildUrgeAnalytics,
+  URGE_TRIGGER_LABELS,
+  type UrgeWindow,
+} from "../lib/urge-analytics";
 import { TimeFolioStoreProvider, useTimeFolioStore } from "../state/tf-store";
-import type { TfSessionLog } from "../types/models";
+import type { TfSessionLog, UrgeLog } from "../types/models";
 
 type TrendPoint = {
   dateKey: string;
@@ -206,6 +211,278 @@ function TrendBar({
         {label.charAt(0)}
       </span>
     </div>
+  );
+}
+
+const URGE_WINDOW_OPTIONS: Array<{ value: UrgeWindow; label: string }> = [
+  { value: 14, label: "14 days" },
+  { value: 30, label: "30 days" },
+  { value: "all", label: "All time" },
+];
+
+const URGE_TREND_DAY_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+});
+
+function UrgeStatTile({ label, value, meta }: { label: string; value: string; meta?: string }) {
+  return (
+    <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+      <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">{label}</p>
+      <p className="mt-1 truncate text-[1.05rem] font-semibold tabular-nums text-white">{value}</p>
+      {meta ? <p className="mt-0.5 truncate text-[11px] text-slate-400">{meta}</p> : null}
+    </div>
+  );
+}
+
+function UrgeTrendBar({
+  count,
+  isPeak,
+  label,
+  maxCount,
+}: {
+  count: number;
+  isPeak: boolean;
+  label: string;
+  maxCount: number;
+}) {
+  const height = maxCount > 0 ? Math.max((count / maxCount) * 100, count > 0 ? 12 : 3) : 3;
+  const surface = isPeak
+    ? "bg-gradient-to-t from-violet-400 via-indigo-400 to-sky-400"
+    : "bg-gradient-to-t from-violet-400/60 via-indigo-400/55 to-sky-400/55";
+  return (
+    <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
+      <div className="flex h-24 w-full items-end justify-center" title={`${label}: ${count} urge${count === 1 ? "" : "s"}`}>
+        <div className={`w-full max-w-[18px] rounded-t-[5px] ${surface}`} style={{ height: `${height}%` }} />
+      </div>
+      <span className="text-[10px] tabular-nums text-slate-500">{count}</span>
+    </div>
+  );
+}
+
+function UrgeAnalyticsSection({ urgeLogs }: { urgeLogs: UrgeLog[] }) {
+  const [urgeWindow, setUrgeWindow] = useState<UrgeWindow>(14);
+  const todayKey = getTodayKey();
+  const analytics = useMemo(
+    () => buildUrgeAnalytics(urgeLogs, urgeWindow, todayKey),
+    [urgeLogs, urgeWindow, todayKey],
+  );
+
+  const windowLabel = urgeWindow === "all" ? "all-time" : `last ${urgeWindow} days`;
+  const trendPeak = analytics.dailyTrend.reduce((max, point) => Math.max(max, point.count), 0);
+  const triggerMax = analytics.triggerBreakdown.reduce((max, entry) => Math.max(max, entry.count), 0);
+  const visibleTriggers = analytics.triggerBreakdown.slice(0, 5);
+  const hiddenTriggerCount = analytics.triggerBreakdown.length - visibleTriggers.length;
+  const intensityMax = analytics.intensityDistribution.reduce((max, bucket) => Math.max(max, bucket.count), 0);
+  const timeMax = analytics.timeBuckets.reduce((max, bucket) => Math.max(max, bucket.count), 0);
+  const highIntensityCount =
+    analytics.intensityDistribution[3].count + analytics.intensityDistribution[4].count;
+
+  return (
+    <section className="glass-panel flex flex-col gap-3 p-4 xl:p-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-slate-500">Urge Analytics</p>
+          <p className="mt-0.5 text-[12px] text-slate-400">
+            Awareness patterns from urges logged during focus sessions · {windowLabel}
+          </p>
+        </div>
+        <div className="inline-flex shrink-0 rounded-full border border-white/10 bg-white/[0.03] p-0.5">
+          {URGE_WINDOW_OPTIONS.map((option) => {
+            const isActive = option.value === urgeWindow;
+            return (
+              <button
+                key={String(option.value)}
+                type="button"
+                onClick={() => setUrgeWindow(option.value)}
+                className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
+                  isActive
+                    ? "bg-gradient-to-r from-violet-500/30 to-sky-500/30 text-white"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {analytics.totalCount === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-[16px] border border-dashed border-white/[0.08] bg-white/[0.015] px-6 py-10 text-center">
+          <p className="text-sm font-medium text-slate-200">No urges logged in this period.</p>
+          <p className="mt-1 max-w-sm text-[12px] leading-5 text-slate-500">
+            Use Log urge during a focus session to start building awareness.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+            <UrgeStatTile label="Total urges" value={String(analytics.totalCount)} meta={windowLabel} />
+            <UrgeStatTile
+              label="Avg intensity"
+              value={`${analytics.averageIntensity.toFixed(1)}/5`}
+              meta={`Peak ${analytics.highestIntensity}/5`}
+            />
+            <UrgeStatTile
+              label="Highest"
+              value={`${analytics.highestIntensity}/5`}
+              meta={`${highIntensityCount} high (4–5)`}
+            />
+            <UrgeStatTile
+              label="Top trigger"
+              value={analytics.topTrigger ? URGE_TRIGGER_LABELS[analytics.topTrigger] : "—"}
+              meta={
+                analytics.triggerBreakdown[0]
+                  ? `${analytics.triggerBreakdown[0].count} time${analytics.triggerBreakdown[0].count === 1 ? "" : "s"}`
+                  : undefined
+              }
+            />
+            <UrgeStatTile
+              label="Urges / day"
+              value={analytics.urgesPerDay.toFixed(1)}
+              meta={`over ${analytics.windowDays} day${analytics.windowDays === 1 ? "" : "s"}`}
+            />
+          </div>
+
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+            <div className="rounded-[16px] border border-white/[0.06] bg-white/[0.02] p-3.5">
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">14-day urge trend</p>
+                <span className="text-[11px] tabular-nums text-slate-500">Peak {trendPeak}</span>
+              </div>
+              {trendPeak === 0 ? (
+                <div className="mt-3 flex h-24 items-center justify-center rounded-[12px] border border-dashed border-white/[0.08] text-[12px] text-slate-500">
+                  No urges in the last 14 days.
+                </div>
+              ) : (
+                <div className="mt-3 flex items-end gap-1.5">
+                  {analytics.dailyTrend.map((point) => (
+                    <UrgeTrendBar
+                      key={point.dateKey}
+                      count={point.count}
+                      isPeak={point.count === trendPeak && trendPeak > 0}
+                      label={URGE_TREND_DAY_FORMATTER.format(parseDateKey(point.dateKey))}
+                      maxCount={trendPeak}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-[16px] border border-white/[0.06] bg-white/[0.02] p-3.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Trigger breakdown</p>
+              <div className="mt-3 flex flex-col gap-2.5">
+                {visibleTriggers.map((entry) => (
+                  <div key={entry.trigger}>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="truncate text-[13px] text-slate-100">{entry.label}</span>
+                      <span className="shrink-0 text-[11px] tabular-nums text-slate-400">
+                        {entry.count} · avg {entry.averageIntensity.toFixed(1)}/5
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-[5px] overflow-hidden rounded-full bg-white/[0.07]">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-violet-400 via-indigo-400 to-sky-400"
+                        style={{ width: `${triggerMax > 0 ? Math.max((entry.count / triggerMax) * 100, 6) : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {hiddenTriggerCount > 0 ? (
+                <p className="mt-2.5 text-[11px] text-slate-500">
+                  + {hiddenTriggerCount} more trigger{hiddenTriggerCount === 1 ? "" : "s"}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid gap-3 xl:grid-cols-3">
+            <div className="rounded-[16px] border border-white/[0.06] bg-white/[0.02] p-3.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Intensity</p>
+                <span className="text-[11px] tabular-nums text-slate-500">{highIntensityCount} high (4–5)</span>
+              </div>
+              <div className="mt-3 flex flex-col gap-2">
+                {analytics.intensityDistribution.map((bucket) => (
+                  <div key={bucket.intensity} className="flex items-center gap-3">
+                    <span className="w-6 shrink-0 text-[11px] tabular-nums text-slate-500">{bucket.intensity}/5</span>
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.07]">
+                      <div
+                        className={`h-full rounded-full ${
+                          bucket.intensity >= 4
+                            ? "bg-gradient-to-r from-amber-400 to-orange-400"
+                            : "bg-gradient-to-r from-violet-400 to-sky-400"
+                        }`}
+                        style={{ width: `${intensityMax > 0 ? Math.max((bucket.count / intensityMax) * 100, bucket.count > 0 ? 6 : 0) : 0}%` }}
+                      />
+                    </div>
+                    <span className="w-5 shrink-0 text-right text-[11px] tabular-nums text-slate-400">{bucket.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-[16px] border border-white/[0.06] bg-white/[0.02] p-3.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Time of day</p>
+                <span className="truncate text-[11px] text-slate-400">
+                  {analytics.topTimeBucket ? `Peak ${analytics.topTimeBucket.label}` : "—"}
+                </span>
+              </div>
+              <div className="mt-3 flex flex-col gap-2">
+                {analytics.timeBuckets.map((bucket) => (
+                  <div key={bucket.bucket} className="flex items-center gap-3">
+                    <span className="w-16 shrink-0 text-[11px] text-slate-400">{bucket.label}</span>
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.07]">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-indigo-400"
+                        style={{ width: `${timeMax > 0 ? Math.max((bucket.count / timeMax) * 100, bucket.count > 0 ? 6 : 0) : 0}%` }}
+                      />
+                    </div>
+                    <span className="w-5 shrink-0 text-right text-[11px] tabular-nums text-slate-400">{bucket.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex max-h-60 flex-col rounded-[16px] border border-white/[0.06] bg-white/[0.02] p-3.5">
+              <p className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                {urgeWindow === "all" ? "Recent examples" : "Examples"}
+              </p>
+              <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 scrollbar-subtle">
+                {analytics.examples.map((entry) => {
+                  const note = entry.note?.trim();
+                  return (
+                    <div
+                      key={entry.id}
+                      className="rounded-[12px] border border-violet-400/12 bg-violet-500/[0.035] px-3 py-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="text-[11px] tabular-nums text-slate-500">
+                            {entry.dateKey ? URGE_TREND_DAY_FORMATTER.format(parseDateKey(entry.dateKey)) : "—"}
+                          </span>
+                          <span className="truncate text-[12px] text-slate-200">{URGE_TRIGGER_LABELS[entry.trigger]}</span>
+                        </div>
+                        <span
+                          className={`shrink-0 text-[11px] tabular-nums ${entry.intensity >= 4 ? "text-amber-200" : "text-violet-100"}`}
+                        >
+                          {entry.intensity}/5
+                        </span>
+                      </div>
+                      {note ? <p className="mt-0.5 truncate text-[11px] leading-4 text-slate-500">{note}</p> : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -453,6 +730,8 @@ function TimeFolioAnalyticsContent() {
           </div>
         </section>
       </div>
+
+      <UrgeAnalyticsSection urgeLogs={state.urgeLogs ?? []} />
     </div>
   );
 }

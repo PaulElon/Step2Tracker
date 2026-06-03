@@ -1033,6 +1033,43 @@ export function appendTfUrgeLog(state: TfAppState, urgeLog: UrgeLog): TfAppState
   });
 }
 
+export function updateTfUrgeLog(
+  state: TfAppState,
+  id: string,
+  patch: Partial<Pick<UrgeLog, "trigger" | "intensity" | "note">>,
+): TfAppState {
+  const index = state.urgeLogs.findIndex((urge) => urge.id === id);
+  if (index < 0) {
+    return normalizeTfAppState(state);
+  }
+
+  const existing = state.urgeLogs[index];
+  const merged: UrgeLog = {
+    ...existing,
+    ...(patch.trigger !== undefined ? { trigger: patch.trigger } : {}),
+    ...(patch.intensity !== undefined ? { intensity: patch.intensity } : {}),
+    note: patch.note !== undefined ? patch.note : existing.note,
+  };
+  const normalized = normalizeUrgeLog(merged);
+  if (!normalized) {
+    return normalizeTfAppState(state);
+  }
+
+  return normalizeTfAppState({
+    ...state,
+    urgeLogs: sortUrgeLogsNewestFirst(
+      state.urgeLogs.map((urge, i) => (i === index ? normalized : urge)),
+    ),
+  });
+}
+
+export function deleteTfUrgeLog(state: TfAppState, id: string): TfAppState {
+  return normalizeTfAppState({
+    ...state,
+    urgeLogs: state.urgeLogs.filter((urge) => urge.id !== id),
+  });
+}
+
 export function deleteTfSessionLog(state: TfAppState, id: string): TfAppState {
   const deletedAt = new Date().toISOString();
   const deletedSession = state.sessionLogs.find((session) => session.id === id);

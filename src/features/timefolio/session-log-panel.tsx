@@ -30,7 +30,13 @@ import {
   splitAutoSessionMethodLabel,
 } from "../../lib/tf-session-adapters";
 import type { TfSessionLog, UrgeLog, UrgeTrigger } from "../../types/models";
-import { buildUrgeDaySummary, URGE_TRIGGER_LABELS, type NormalizedUrge } from "../../lib/urge-analytics";
+import {
+  buildTriggerBreakdown,
+  buildUrgeDaySummary,
+  URGE_TRIGGER_LABELS,
+  type NormalizedUrge,
+  type UrgeTriggerBreakdownEntry,
+} from "../../lib/urge-analytics";
 import { QuietPanel } from "../../components/ui";
 import { useAutoTrackerV2SessionControl, type AutoTrackerV2SessionControl } from "./autotracker-v2-session-control";
 
@@ -1234,41 +1240,233 @@ function formatUrgeElapsed(seconds: number): string {
   return `${secs}s`;
 }
 
-function UrgeLogEntryRow({ entry }: { entry: NormalizedUrge }) {
+function UrgeEditForm({
+  entry,
+  onSave,
+  onCancel,
+}: {
+  entry: NormalizedUrge;
+  onSave: (patch: { trigger: UrgeTrigger; intensity: UrgeLog["intensity"]; note: string }) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [trigger, setTrigger] = useState<UrgeTrigger>(entry.trigger);
+  const [intensity, setIntensity] = useState<UrgeLog["intensity"]>(entry.intensity);
+  const [note, setNote] = useState(entry.note ?? "");
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
+
+  async function submit() {
+    if (isSaving) {
+      return;
+    }
+    setIsSaving(true);
+    setErrorText(null);
+    try {
+      await onSave({ trigger, intensity, note: note.trim() });
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : "Unable to save urge right now.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-[14px] border border-violet-400/20 bg-violet-500/[0.05] px-3 py-3">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Trigger</p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {URGE_TRIGGER_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={cn(
+              "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
+              trigger === option.value
+                ? "border-violet-300/40 bg-violet-400/15 text-violet-100"
+                : "border-white/[0.08] bg-white/[0.03] text-slate-300 hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-white",
+            )}
+            onClick={() => setTrigger(option.value)}
+            disabled={isSaving}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
+      <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Intensity</p>
+      <div className="mt-2 inline-flex rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-1">
+        {[1, 2, 3, 4, 5].map((value) => (
+          <button
+            key={value}
+            type="button"
+            className={cn(
+              "h-8 w-8 rounded-[10px] text-xs font-semibold transition",
+              intensity === value
+                ? "bg-violet-400/18 text-violet-100"
+                : "text-slate-300 hover:bg-white/[0.05] hover:text-white",
+            )}
+            onClick={() => setIntensity(value as UrgeLog["intensity"])}
+            disabled={isSaving}
+            aria-label={`Intensity ${value}`}
+          >
+            {value}
+          </button>
+        ))}
+      </div>
+
+      <label className="mt-3 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+        Note
+      </label>
+      <input
+        className={cn(fieldClassName, "mt-2")}
+        type="text"
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+        placeholder="Optional note"
+        maxLength={140}
+        disabled={isSaving}
+      />
+
+      {errorText ? <p className="mt-2 text-[11px] text-rose-300">{errorText}</p> : null}
+
+      <div className="mt-3 flex items-center justify-end gap-2">
+        <button
+          type="button"
+          className={secondaryButtonClassName}
+          onClick={onCancel}
+          disabled={isSaving}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={primaryButtonClassName}
+          onClick={() => {
+            void submit();
+          }}
+          disabled={isSaving}
+        >
+          {isSaving ? "Saving..." : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function UrgeLogEntryRow({
+  entry,
+  onEdit,
+  onDelete,
+}: {
+  entry: NormalizedUrge;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const subject = entry.subject?.trim();
   const note = entry.note?.trim();
   const elapsed =
     typeof entry.elapsedSeconds === "number" && Number.isFinite(entry.elapsedSeconds)
       ? formatUrgeElapsed(entry.elapsedSeconds)
       : null;
+  const isHighIntensity = entry.intensity >= 4;
 
   return (
-    <div className="rounded-[14px] border border-white/[0.05] bg-slate-950/30 px-3 py-2.5">
+    <div className="rounded-[14px] border border-violet-400/12 bg-violet-500/[0.035] px-3 py-2.5 transition-colors hover:bg-violet-500/[0.06]">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="text-[11px] font-medium tabular-nums text-slate-500">
-              {formatUrgeClockTime(entry.timestamp)}
-            </span>
-            <span className="rounded-full border border-cyan-300/15 bg-cyan-300/10 px-2 py-0.5 text-[11px] text-cyan-100">
-              {URGE_TRIGGER_LABELS[entry.trigger]}
-            </span>
-            {subject ? (
-              <span className="min-w-0 truncate text-xs text-slate-400">{subject}</span>
-            ) : null}
-            {elapsed ? (
-              <span className="text-[11px] tabular-nums text-slate-500">{elapsed} in</span>
+        <div className="flex min-w-0 flex-1 items-start gap-2.5">
+          <span
+            className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-violet-300 ring-4 ring-violet-500/[0.12]"
+            aria-hidden="true"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="text-[11px] font-medium tabular-nums text-slate-500">
+                {formatUrgeClockTime(entry.timestamp)}
+              </span>
+              <span className="rounded-full border border-violet-300/20 bg-violet-400/10 px-2 py-0.5 text-[11px] text-violet-100">
+                {URGE_TRIGGER_LABELS[entry.trigger]}
+              </span>
+              {subject ? (
+                <span className="min-w-0 truncate text-xs text-slate-400">{subject}</span>
+              ) : null}
+              {elapsed ? (
+                <span className="text-[11px] tabular-nums text-slate-500">{elapsed} in</span>
+              ) : null}
+            </div>
+            {note ? (
+              <p className="mt-1 truncate text-xs leading-5 text-slate-300">{note}</p>
             ) : null}
           </div>
-          {note ? (
-            <p className="mt-1 truncate text-xs leading-5 text-slate-300">{note}</p>
-          ) : null}
         </div>
-        <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-slate-300">
-          {entry.intensity}/5
-        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span
+            className={cn(
+              "rounded-full border px-2 py-0.5 text-[11px] font-medium tabular-nums",
+              isHighIntensity
+                ? "border-amber-400/30 bg-amber-400/12 text-amber-200"
+                : "border-violet-400/20 bg-violet-400/10 text-violet-100",
+            )}
+          >
+            {entry.intensity}/5
+          </span>
+          <button
+            type="button"
+            aria-label={`Edit ${URGE_TRIGGER_LABELS[entry.trigger]} urge`}
+            title="Edit urge"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.025] text-slate-400 transition hover:border-violet-300/30 hover:bg-violet-300/10 hover:text-violet-100 disabled:opacity-50"
+            onClick={onEdit}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label={`Delete ${URGE_TRIGGER_LABELS[entry.trigger]} urge`}
+            title="Delete urge"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-rose-400/25 bg-rose-500/[0.08] text-rose-200 transition hover:bg-rose-500/15 disabled:opacity-50"
+            onClick={onDelete}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </div>
+  );
+}
+
+function UrgeTriggerSummaryRow({
+  entry,
+  maxCount,
+  rank,
+}: {
+  entry: UrgeTriggerBreakdownEntry;
+  maxCount: number;
+  rank: number;
+}) {
+  const barWidth = maxCount > 0 ? Math.max((entry.count / maxCount) * 100, entry.count > 0 ? 8 : 0) : 0;
+
+  return (
+    <li className="grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-[12px] border border-violet-400/15 bg-violet-500/[0.04] px-3 py-2.5">
+      <span className="text-[11px] font-medium tabular-nums text-slate-500">{rank}</span>
+      <div className="min-w-0">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="truncate text-[13px] font-medium text-slate-100">{entry.label}</p>
+          <span className="shrink-0 text-[11px] tabular-nums text-slate-400">
+            {entry.sharePercent.toFixed(0)}%
+          </span>
+        </div>
+        <div className="mt-1.5 h-[5px] w-full overflow-hidden rounded-full bg-white/[0.07]">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-violet-400 via-indigo-400 to-sky-400"
+            style={{ width: `${barWidth}%` }}
+          />
+        </div>
+        <p className="mt-1 text-[10.5px] text-slate-500">
+          {entry.count} urge{entry.count === 1 ? "" : "s"} · avg {entry.averageIntensity.toFixed(1)}/5
+        </p>
+      </div>
+      <span className="self-center text-[12px] font-semibold tabular-nums text-slate-200">
+        {entry.count}
+      </span>
+    </li>
   );
 }
 
@@ -1279,6 +1477,8 @@ function UrgeLogCard({
   onSelectDate,
   isExpanded,
   onToggleExpanded,
+  onUpdateUrge,
+  onDeleteUrge,
 }: {
   urgeLogs: UrgeLog[];
   selectedDate: string;
@@ -1286,9 +1486,46 @@ function UrgeLogCard({
   onSelectDate: (dateKey: string) => void;
   isExpanded: boolean;
   onToggleExpanded: () => void;
+  onUpdateUrge: (
+    id: string,
+    patch: Partial<Pick<UrgeLog, "trigger" | "intensity" | "note">>,
+  ) => Promise<void>;
+  onDeleteUrge: (id: string) => Promise<void>;
 }) {
+  const [editingUrgeId, setEditingUrgeId] = useState<string | null>(null);
+  const [urgeNotice, setUrgeNotice] = useState<string | null>(null);
+
   const summary = buildUrgeDaySummary(urgeLogs, selectedDate);
   const hasUrges = summary.totalCount > 0;
+  const triggerBreakdown = buildTriggerBreakdown(summary.entries);
+  const maxTriggerCount = triggerBreakdown.reduce((max, entry) => Math.max(max, entry.count), 0);
+  const visibleTriggers = triggerBreakdown.slice(0, 6);
+  const hiddenTriggerCount = triggerBreakdown.length - visibleTriggers.length;
+
+  useEffect(() => {
+    if (!urgeNotice) {
+      return;
+    }
+    const timeoutId = setTimeout(() => setUrgeNotice(null), 2000);
+    return () => clearTimeout(timeoutId);
+  }, [urgeNotice]);
+
+  async function handleSaveEdit(
+    id: string,
+    patch: { trigger: UrgeTrigger; intensity: UrgeLog["intensity"]; note: string },
+  ) {
+    await onUpdateUrge(id, patch);
+    setEditingUrgeId(null);
+    setUrgeNotice("Urge updated.");
+  }
+
+  async function handleDelete(id: string) {
+    await onDeleteUrge(id);
+    if (editingUrgeId === id) {
+      setEditingUrgeId(null);
+    }
+    setUrgeNotice("Urge deleted.");
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[20px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] shadow-[0_18px_54px_var(--panel-shadow)]">
@@ -1302,7 +1539,7 @@ function UrgeLogCard({
               <span className="truncate text-sm font-medium text-white">
                 {formatLongDate(selectedDate)}
               </span>
-              <label className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-slate-400 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-cyan-100">
+              <label className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-slate-400 transition hover:border-violet-300/30 hover:bg-violet-300/10 hover:text-violet-100">
                 <Calendar className="h-3.5 w-3.5" />
                 <input
                   type="date"
@@ -1315,7 +1552,7 @@ function UrgeLogCard({
               {selectedDate !== todayKey ? (
                 <button
                   type="button"
-                  className="inline-flex h-7 items-center rounded-full border border-white/10 bg-white/[0.03] px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-200 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-cyan-100"
+                  className="inline-flex h-7 items-center rounded-full border border-white/10 bg-white/[0.03] px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-200 transition hover:border-violet-300/30 hover:bg-violet-300/10 hover:text-violet-100"
                   onClick={() => onSelectDate(todayKey)}
                 >
                   Today
@@ -1335,50 +1572,84 @@ function UrgeLogCard({
               onClick={onToggleExpanded}
               aria-expanded={isExpanded}
             >
-              <span className="flex items-center gap-2">
+              <div className="flex min-w-0 items-start gap-2">
                 {isExpanded ? (
-                  <ChevronDown className="h-4 w-4 text-slate-400" />
+                  <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
                 ) : (
-                  <ChevronRight className="h-4 w-4 text-slate-400" />
+                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
                 )}
-                <span className="text-sm font-medium text-white">
-                  {formatLongDate(selectedDate)}
-                </span>
-              </span>
-              <span className="text-[11px] tabular-nums text-slate-400">
-                {summary.totalCount} urge{summary.totalCount === 1 ? "" : "s"} · avg{" "}
-                {summary.averageIntensity.toFixed(1)}/5
-              </span>
-            </button>
-
-            <div className="grid gap-2 px-3.5 py-3">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
-                  <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Total</p>
-                  <p className="mt-1 text-sm font-semibold text-white">{summary.totalCount}</p>
-                </div>
-                <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
-                  <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Avg / Peak</p>
-                  <p className="mt-1 text-sm font-semibold text-white tabular-nums">
-                    {summary.averageIntensity.toFixed(1)} · {summary.highestIntensity}/5
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-semibold text-white">
+                    {formatLongDate(selectedDate)}
                   </p>
-                </div>
-                <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
-                  <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Top trigger</p>
-                  <p className="mt-1 truncate text-sm font-semibold text-white">
-                    {summary.topTrigger ? URGE_TRIGGER_LABELS[summary.topTrigger] : "None"}
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    {summary.totalCount} urge{summary.totalCount === 1 ? "" : "s"} · avg{" "}
+                    {summary.averageIntensity.toFixed(1)}/5 · peak {summary.highestIntensity}/5
                   </p>
                 </div>
               </div>
+              <span className="text-[11px] text-slate-500">
+                {isExpanded ? "Expanded" : "Collapsed"}
+              </span>
+            </button>
 
-              {isExpanded ? (
-                <div className="grid gap-2">
-                  {summary.entries.map((entry) => (
-                    <UrgeLogEntryRow key={entry.id} entry={entry} />
-                  ))}
+            {isExpanded ? (
+              <div className="grid gap-2 px-3.5 py-3">
+                {urgeNotice ? (
+                  <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-violet-200">
+                    {urgeNotice}
+                  </div>
+                ) : null}
+                {summary.entries.map((entry) =>
+                  editingUrgeId === entry.id ? (
+                    <UrgeEditForm
+                      key={entry.id}
+                      entry={entry}
+                      onSave={(patch) => handleSaveEdit(entry.id, patch)}
+                      onCancel={() => setEditingUrgeId(null)}
+                    />
+                  ) : (
+                    <UrgeLogEntryRow
+                      key={entry.id}
+                      entry={entry}
+                      onEdit={() => setEditingUrgeId(entry.id)}
+                      onDelete={() => {
+                        void handleDelete(entry.id);
+                      }}
+                    />
+                  ),
+                )}
+              </div>
+            ) : (
+              <div className="grid gap-2 px-3.5 py-3">
+                <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className="rounded-full border border-violet-400/25 bg-violet-500/10 px-2 py-0.5 text-violet-100">
+                    {summary.totalCount} urge{summary.totalCount === 1 ? "" : "s"}
+                  </span>
+                  <span className="rounded-full border border-blue-400/25 bg-blue-500/10 px-2 py-0.5 text-blue-100">
+                    avg {summary.averageIntensity.toFixed(1)}/5 · peak {summary.highestIntensity}/5
+                  </span>
+                  <span className="text-slate-500">
+                    Top {summary.topTrigger ? URGE_TRIGGER_LABELS[summary.topTrigger] : "None"}
+                  </span>
                 </div>
-              ) : null}
-            </div>
+                <ol className="grid gap-2">
+                  {visibleTriggers.map((entry, index) => (
+                    <UrgeTriggerSummaryRow
+                      key={entry.trigger}
+                      entry={entry}
+                      maxCount={maxTriggerCount}
+                      rank={index + 1}
+                    />
+                  ))}
+                </ol>
+                {hiddenTriggerCount > 0 ? (
+                  <p className="text-[11px] text-slate-500">
+                    + {hiddenTriggerCount} more trigger{hiddenTriggerCount === 1 ? "" : "s"}
+                  </p>
+                ) : null}
+              </div>
+            )}
           </section>
         ) : (
           <div className="flex h-full flex-col items-center justify-center px-5 py-8 text-center">
@@ -1995,6 +2266,8 @@ export function SessionLogPanel({
           onSelectDate={setSelectedDate}
           isExpanded={urgeLogExpanded}
           onToggleExpanded={() => setUrgeLogExpanded((current) => !current)}
+          onUpdateUrge={store.updateUrgeLog}
+          onDeleteUrge={store.deleteUrgeLog}
         />
       </div>
     </div>

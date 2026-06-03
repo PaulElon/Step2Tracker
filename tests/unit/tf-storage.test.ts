@@ -6,12 +6,14 @@ import {
   createTfPersistenceApi,
   createQueuedTfStateSaver,
   deleteTfSessionLog,
+  deleteTfUrgeLog,
   getEmptyTfAppState,
   loadTfState,
   normalizeTfAppState,
   saveTfState,
   TF_STORAGE_KEY,
   TF_SESSION_LOG_TOMBSTONE_SCHEMA_VERSION,
+  updateTfUrgeLog,
   upsertTfSessionLog,
 } from "../../src/lib/tf-storage.ts";
 import { addDeletedNativeId, getDeletedNativeIds } from "../../src/lib/tf-deleted-native-ids.ts";
@@ -232,6 +234,84 @@ test("urge logs stay separate from session rows and survive save/load with linka
   assert.deepEqual(loaded.urgeLogs.map((urge) => urge.id), ["urge-2", "urge-1"]);
   assert.equal(loaded.urgeLogs[1]?.trigger, "x_social");
   assert.equal(loaded.urgeLogs[1]?.note, "looked at notifications");
+});
+
+test("updateTfUrgeLog patches trigger/intensity/note while preserving linkage and other rows", () => {
+  const base = appendTfUrgeLog(
+    appendTfUrgeLog(
+      getEmptyTfAppState(),
+      buildUrgeLog("urge-keep", "2026-06-03T11:00:00.000Z", { trigger: "gaming", intensity: 2 }),
+    ),
+    buildUrgeLog("urge-edit", "2026-06-03T12:00:00.000Z", {
+      sessionId: "manual-9",
+      subject: "Anki",
+      elapsedSeconds: 120,
+      trigger: "phone",
+      intensity: 3,
+      note: "old note",
+    }),
+  );
+
+  const updated = updateTfUrgeLog(base, "urge-edit", {
+    trigger: "side_project",
+    intensity: 5,
+    note: "new note",
+  });
+
+  const edited = updated.urgeLogs.find((urge) => urge.id === "urge-edit");
+  assert.equal(edited?.trigger, "side_project");
+  assert.equal(edited?.intensity, 5);
+  assert.equal(edited?.note, "new note");
+  // Timestamp + linkage metadata must be preserved.
+  assert.equal(edited?.timestamp, "2026-06-03T12:00:00.000Z");
+  assert.equal(edited?.sessionId, "manual-9");
+  assert.equal(edited?.subject, "Anki");
+  assert.equal(edited?.elapsedSeconds, 120);
+  // Other rows untouched.
+  const kept = updated.urgeLogs.find((urge) => urge.id === "urge-keep");
+  assert.equal(kept?.trigger, "gaming");
+  assert.equal(kept?.intensity, 2);
+});
+
+test("updateTfUrgeLog clears the note when patched with an empty string", () => {
+  const base = appendTfUrgeLog(
+    getEmptyTfAppState(),
+    buildUrgeLog("urge-note", "2026-06-03T12:00:00.000Z", { note: "remove me" }),
+  );
+
+  const updated = updateTfUrgeLog(base, "urge-note", { note: "" });
+  const edited = updated.urgeLogs.find((urge) => urge.id === "urge-note");
+  assert.equal(edited?.note, undefined);
+});
+
+test("updateTfUrgeLog ignores unknown ids without mutating data", () => {
+  const base = appendTfUrgeLog(
+    getEmptyTfAppState(),
+    buildUrgeLog("urge-1", "2026-06-03T12:00:00.000Z", { intensity: 3 }),
+  );
+
+  const updated = updateTfUrgeLog(base, "missing", { intensity: 5 });
+  assert.deepEqual(updated.urgeLogs.map((urge) => urge.id), ["urge-1"]);
+  assert.equal(updated.urgeLogs[0]?.intensity, 3);
+});
+
+test("deleteTfUrgeLog removes only the targeted urge and leaves sessions intact", () => {
+  const base = appendTfUrgeLog(
+    appendTfUrgeLog(
+      {
+        ...getEmptyTfAppState(),
+        sessionLogs: [buildSession("manual-1", "Manual Review")],
+      },
+      buildUrgeLog("urge-1", "2026-06-03T11:00:00.000Z"),
+    ),
+    buildUrgeLog("urge-2", "2026-06-03T12:00:00.000Z"),
+  );
+
+  const deleted = deleteTfUrgeLog(base, "urge-1");
+  assert.deepEqual(deleted.urgeLogs.map((urge) => urge.id), ["urge-2"]);
+  assert.deepEqual(deleted.sessionLogs.map((session) => session.id), ["manual-1"]);
+  // Urge deletion does not create session tombstones.
+  assert.equal(deleted.sessionLogTombstones.length, 0);
 });
 
 test("delete session log stamps sync eligibility from the live row before removal", () => {
