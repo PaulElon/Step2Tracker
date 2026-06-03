@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { ReactNode } from "react";
 import { createDemoTfAppState } from "../data/demo-data";
 import {
+  appendTfUrgeLog,
   createQueuedTfStateSaver,
   deleteTfSessionLog,
   getEmptyTfAppState,
@@ -19,7 +20,7 @@ import {
   getDeletedNativeIds,
   removeDeletedNativeId,
 } from "../lib/tf-deleted-native-ids";
-import type { TfAppState, TfSessionLog } from "../types/models";
+import type { TfAppState, TfSessionLog, UrgeLog } from "../types/models";
 import { useAppStore } from "./app-store";
 
 interface TimeFolioStoreValue {
@@ -30,6 +31,7 @@ interface TimeFolioStoreValue {
   reset(): Promise<void>;
   saveState(nextState: TfAppState): Promise<void>;
   upsertSessionLog(session: TfSessionLog): Promise<void>;
+  addUrgeLog(urgeLog: UrgeLog): Promise<void>;
   deleteSessionLog(id: string): Promise<void>;
   importNativeSpans(
     spans: NativeTrackerSpanInput[]
@@ -157,6 +159,13 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
     [commitStateChange],
   );
 
+  const addUrgeLog = useCallback(
+    async (urgeLog: UrgeLog) => {
+      await commitStateChange((prev) => appendTfUrgeLog(prev, urgeLog));
+    },
+    [commitStateChange],
+  );
+
   const deleteSessionLog = useCallback(
     async (id: string) => {
       if (id.startsWith("nat-")) {
@@ -208,6 +217,7 @@ export function TimeFolioStoreProvider({ children }: { children: ReactNode }) {
     reset,
     saveState,
     upsertSessionLog,
+    addUrgeLog,
     deleteSessionLog,
     importNativeSpans,
   };

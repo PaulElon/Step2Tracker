@@ -1,6 +1,8 @@
 import type {
   TfAppState,
   TfSessionLog,
+  UrgeLog,
+  UrgeTrigger,
   TfSessionLogTombstone,
   TfSummaryPayload,
   TfTrackerPrefs,
@@ -86,6 +88,7 @@ export function getEmptyTfAppState(): TfAppState {
   return {
     tfVersion: TF_STATE_VERSION,
     sessionLogs: [],
+    urgeLogs: [],
     sessionLogTombstones: [],
     summaries: [],
     trackerPrefs: {
@@ -127,6 +130,11 @@ function safeNullableString(v: unknown): string | null {
 function safeNullableNumber(v: unknown): number | null {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+function safeNonNegativeInteger(v: unknown): number | null {
+  const n = typeof v === "string" ? Number(v.trim()) : Number(v);
+  return Number.isInteger(n) && n >= 0 ? n : null;
 }
 
 function safeTimestampString(v: unknown): string | null {
@@ -351,6 +359,65 @@ function normalizeSession(entry: unknown): TfSessionLog | null {
   return normalized;
 }
 
+function normalizeUrgeTrigger(value: unknown): UrgeTrigger {
+  switch (value) {
+    case "x_social":
+    case "phone":
+    case "gaming":
+    case "side_project":
+    case "boredom":
+    case "fatigue":
+    case "other":
+      return value;
+    default:
+      return "other";
+  }
+}
+
+function normalizeUrgeIntensity(value: unknown): UrgeLog["intensity"] {
+  const parsed = typeof value === "string" ? Number(value.trim()) : Number(value);
+  if (parsed === 1 || parsed === 2 || parsed === 3 || parsed === 4 || parsed === 5) {
+    return parsed;
+  }
+  return 3;
+}
+
+function normalizeUrgeLog(entry: unknown): UrgeLog | null {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const urge = entry as Record<string, unknown>;
+  const id = safeString(urge.id).trim();
+  if (!id) {
+    return null;
+  }
+
+  const timestamp =
+    safeTimestampString(urge.timestamp) ??
+    safeTimestampString(urge.createdAt) ??
+    new Date().toISOString();
+  const sessionId = safeString(urge.sessionId).trim();
+  const subject = safeString(urge.subject).trim();
+  const note = safeString(urge.note).trim();
+  const elapsedSeconds = safeNonNegativeInteger(urge.elapsedSeconds);
+
+  return {
+    id,
+    timestamp,
+    trigger: normalizeUrgeTrigger(urge.trigger),
+    intensity: normalizeUrgeIntensity(urge.intensity),
+    ...(sessionId ? { sessionId } : {}),
+    ...(subject ? { subject } : {}),
+    ...(elapsedSeconds !== null ? { elapsedSeconds } : {}),
+    ...(note ? { note } : {}),
+  };
+}
+
+function sortUrgeLogsNewestFirst(entries: UrgeLog[]): UrgeLog[] {
+  return [...entries].sort((left, right) => right.timestamp.localeCompare(left.timestamp));
+}
+
 function normalizeSessionLogTombstone(entry: unknown): TfSessionLogTombstone | null {
   if (!entry || typeof entry !== "object") {
     return null;
@@ -477,6 +544,11 @@ export function normalizeTfAppState(input: unknown): TfAppState {
     return {
       tfVersion: safeNumber(raw.tfVersion, TF_STATE_VERSION),
       sessionLogs,
+      urgeLogs: Array.isArray(raw.urgeLogs)
+        ? sortUrgeLogsNewestFirst(
+            raw.urgeLogs.map(normalizeUrgeLog).filter((entry): entry is UrgeLog => entry !== null),
+          )
+        : [],
       sessionLogTombstones: normalizeSessionLogTombstones(raw.sessionLogTombstones),
       summaries,
       trackerPrefs: normalizeTrackerPrefs(raw.trackerPrefs),
@@ -946,6 +1018,18 @@ export function upsertTfSessionLog(state: TfAppState, session: TfSessionLog): Tf
     sessionLogTombstones: state.sessionLogTombstones.filter(
       (tombstone) => tombstone.id !== normalizedSession.id,
     ),
+  });
+}
+
+export function appendTfUrgeLog(state: TfAppState, urgeLog: UrgeLog): TfAppState {
+  const normalizedUrgeLog = normalizeUrgeLog(urgeLog);
+  if (!normalizedUrgeLog) {
+    return normalizeTfAppState(state);
+  }
+
+  return normalizeTfAppState({
+    ...state,
+    urgeLogs: sortUrgeLogsNewestFirst([...state.urgeLogs, normalizedUrgeLog]),
   });
 }
 

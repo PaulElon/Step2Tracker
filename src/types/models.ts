@@ -429,6 +429,26 @@ export interface TfSessionLog {
   updatedAt?: string;
 }
 
+export type UrgeTrigger =
+  | "x_social"
+  | "phone"
+  | "gaming"
+  | "side_project"
+  | "boredom"
+  | "fatigue"
+  | "other";
+
+export interface UrgeLog {
+  id: string;
+  timestamp: string;
+  sessionId?: string;
+  subject?: string;
+  elapsedSeconds?: number;
+  trigger: UrgeTrigger;
+  intensity: 1 | 2 | 3 | 4 | 5;
+  note?: string;
+}
+
 export interface TfSessionLogTombstone {
   id: string;
   deletedAt: string;
@@ -573,6 +593,7 @@ export interface TfAutoTrackerV2DevPersistedState {
 export interface TfAppState {
   tfVersion: number;
   sessionLogs: TfSessionLog[];
+  urgeLogs: UrgeLog[];
   sessionLogTombstones: TfSessionLogTombstone[];
   summaries: TfSummaryPayload[];
   trackerPrefs: TfTrackerPrefs;

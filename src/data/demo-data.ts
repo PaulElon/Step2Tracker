@@ -989,6 +989,7 @@ export function createDemoTfAppState(): TfAppState {
   return {
     tfVersion: 1,
     sessionLogs,
+    urgeLogs: [],
     sessionLogTombstones: [],
     summaries: [],
     trackerPrefs: {
