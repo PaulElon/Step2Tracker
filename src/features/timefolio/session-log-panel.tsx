@@ -30,6 +30,7 @@ import {
   splitAutoSessionMethodLabel,
 } from "../../lib/tf-session-adapters";
 import type { TfSessionLog, UrgeLog, UrgeTrigger } from "../../types/models";
+import { buildUrgeDaySummary, URGE_TRIGGER_LABELS, type NormalizedUrge } from "../../lib/urge-analytics";
 import { QuietPanel } from "../../components/ui";
 import { useAutoTrackerV2SessionControl, type AutoTrackerV2SessionControl } from "./autotracker-v2-session-control";
 
@@ -1211,6 +1212,187 @@ function SessionForm({ initial, onSave, onCancel, isNew }: SessionFormProps) {
   );
 }
 
+function formatUrgeClockTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function formatUrgeElapsed(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${secs}s`;
+  }
+  return `${secs}s`;
+}
+
+function UrgeLogEntryRow({ entry }: { entry: NormalizedUrge }) {
+  const subject = entry.subject?.trim();
+  const note = entry.note?.trim();
+  const elapsed =
+    typeof entry.elapsedSeconds === "number" && Number.isFinite(entry.elapsedSeconds)
+      ? formatUrgeElapsed(entry.elapsedSeconds)
+      : null;
+
+  return (
+    <div className="rounded-[14px] border border-white/[0.05] bg-slate-950/30 px-3 py-2.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="text-[11px] font-medium tabular-nums text-slate-500">
+              {formatUrgeClockTime(entry.timestamp)}
+            </span>
+            <span className="rounded-full border border-cyan-300/15 bg-cyan-300/10 px-2 py-0.5 text-[11px] text-cyan-100">
+              {URGE_TRIGGER_LABELS[entry.trigger]}
+            </span>
+            {subject ? (
+              <span className="min-w-0 truncate text-xs text-slate-400">{subject}</span>
+            ) : null}
+            {elapsed ? (
+              <span className="text-[11px] tabular-nums text-slate-500">{elapsed} in</span>
+            ) : null}
+          </div>
+          {note ? (
+            <p className="mt-1 truncate text-xs leading-5 text-slate-300">{note}</p>
+          ) : null}
+        </div>
+        <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-slate-300">
+          {entry.intensity}/5
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function UrgeLogCard({
+  urgeLogs,
+  selectedDate,
+  todayKey,
+  onSelectDate,
+  isExpanded,
+  onToggleExpanded,
+}: {
+  urgeLogs: UrgeLog[];
+  selectedDate: string;
+  todayKey: string;
+  onSelectDate: (dateKey: string) => void;
+  isExpanded: boolean;
+  onToggleExpanded: () => void;
+}) {
+  const summary = buildUrgeDaySummary(urgeLogs, selectedDate);
+  const hasUrges = summary.totalCount > 0;
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[20px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] shadow-[0_18px_54px_var(--panel-shadow)]">
+      <div className="shrink-0 border-b border-white/[0.08] bg-white/[0.015] px-3.5 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Urge Log
+            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <span className="truncate text-sm font-medium text-white">
+                {formatLongDate(selectedDate)}
+              </span>
+              <label className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-slate-400 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-cyan-100">
+                <Calendar className="h-3.5 w-3.5" />
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(event) => onSelectDate(event.target.value || todayKey)}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  aria-label="Select urge log day"
+                />
+              </label>
+              {selectedDate !== todayKey ? (
+                <button
+                  type="button"
+                  className="inline-flex h-7 items-center rounded-full border border-white/10 bg-white/[0.03] px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-200 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-cyan-100"
+                  onClick={() => onSelectDate(todayKey)}
+                >
+                  Today
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-subtle">
+        {hasUrges ? (
+          <section>
+            <button
+              type="button"
+              className="flex w-full flex-wrap items-center justify-between gap-2 bg-white/[0.025] px-3.5 py-2 text-left transition hover:bg-white/[0.04]"
+              onClick={onToggleExpanded}
+              aria-expanded={isExpanded}
+            >
+              <span className="flex items-center gap-2">
+                {isExpanded ? (
+                  <ChevronDown className="h-4 w-4 text-slate-400" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-slate-400" />
+                )}
+                <span className="text-sm font-medium text-white">
+                  {formatLongDate(selectedDate)}
+                </span>
+              </span>
+              <span className="text-[11px] tabular-nums text-slate-400">
+                {summary.totalCount} urge{summary.totalCount === 1 ? "" : "s"} · avg{" "}
+                {summary.averageIntensity.toFixed(1)}/5
+              </span>
+            </button>
+
+            <div className="grid gap-2 px-3.5 py-3">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Total</p>
+                  <p className="mt-1 text-sm font-semibold text-white">{summary.totalCount}</p>
+                </div>
+                <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Avg / Peak</p>
+                  <p className="mt-1 text-sm font-semibold text-white tabular-nums">
+                    {summary.averageIntensity.toFixed(1)} · {summary.highestIntensity}/5
+                  </p>
+                </div>
+                <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Top trigger</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-white">
+                    {summary.topTrigger ? URGE_TRIGGER_LABELS[summary.topTrigger] : "None"}
+                  </p>
+                </div>
+              </div>
+
+              {isExpanded ? (
+                <div className="grid gap-2">
+                  {summary.entries.map((entry) => (
+                    <UrgeLogEntryRow key={entry.id} entry={entry} />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center px-5 py-8 text-center">
+            <p className="text-sm font-medium text-slate-300">No urges logged for this day.</p>
+            <p className="mt-1 max-w-xs text-xs leading-5 text-slate-500">
+              Urges logged during focus sessions will appear here.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function SessionLogPanel({
   pageTitle,
 }: {
@@ -1228,6 +1410,7 @@ export function SessionLogPanel({
     showDuration: true,
   });
   const [selectedDate, setSelectedDate] = useState(() => getTodayKey());
+  const [urgeLogExpanded, setUrgeLogExpanded] = useState(false);
   const [deleteNotice, setDeleteNotice] = useState<DeleteNoticeState | null>(null);
   const [deletedSession, setDeletedSession] = useState<TfSessionLog | null>(null);
   const [undoCountdown, setUndoCountdown] = useState<number | null>(null);
@@ -1479,7 +1662,8 @@ export function SessionLogPanel({
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] shadow-[0_18px_54px_var(--panel-shadow)]">
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[20px] border border-[color:var(--panel-border)] bg-[color:var(--panel-bg)] shadow-[0_18px_54px_var(--panel-shadow)]">
         <div className="shrink-0 border-b border-white/[0.08] bg-white/[0.015] px-3.5 py-3">
           {!selectedDayIsExpanded && deletedSession ? (
             <div className="mb-2 flex justify-center">
@@ -1802,6 +1986,16 @@ export function SessionLogPanel({
             </div>
           )}
         </div>
+      </div>
+
+        <UrgeLogCard
+          urgeLogs={state.urgeLogs ?? []}
+          selectedDate={selectedDate}
+          todayKey={todayKey}
+          onSelectDate={setSelectedDate}
+          isExpanded={urgeLogExpanded}
+          onToggleExpanded={() => setUrgeLogExpanded((current) => !current)}
+        />
       </div>
     </div>
   );

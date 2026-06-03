@@ -332,13 +332,7 @@ function UrgeAwarenessCard({
   return (
     <section className={cn(todayPanelClassName, "flex min-h-0 flex-1 flex-col overflow-hidden p-4")}>
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold text-white">Urge Awareness</h3>
-          <p className="mt-0.5 text-xs text-slate-500">Read-only patterns from today&apos;s urges</p>
-        </div>
-        <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[11px] text-slate-400">
-          Read-only
-        </span>
+        <h3 className="text-base font-semibold text-white">Urge Awareness</h3>
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-2">
@@ -403,7 +397,6 @@ function UrgeAwarenessCard({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                   Recent examples
                 </p>
-                <p className="text-[10px] text-slate-500">Newest first</p>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-3 pr-2 scrollbar-subtle">
                 <div className="space-y-2">
