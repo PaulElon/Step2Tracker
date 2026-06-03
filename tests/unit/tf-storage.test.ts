@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  appendTfUrgeLog,
   createTfPersistenceApi,
   createQueuedTfStateSaver,
   deleteTfSessionLog,
@@ -15,7 +16,7 @@ import {
 } from "../../src/lib/tf-storage.ts";
 import { addDeletedNativeId, getDeletedNativeIds } from "../../src/lib/tf-deleted-native-ids.ts";
 import { reconcileNativeSpansToSessions } from "../../src/lib/tf-native-span-reconciler.ts";
-import type { TfAppState, TfSessionLog } from "../../src/types/models.ts";
+import type { TfAppState, TfSessionLog, UrgeLog } from "../../src/types/models.ts";
 
 class MemoryStorage {
   #store = new Map<string, string>();
@@ -77,6 +78,16 @@ function buildSession(id: string, method: string): TfSessionLog {
     isDistraction: false,
     isLive: false,
     updatedAt: "2026-05-06T13:00:00.000Z",
+  };
+}
+
+function buildUrgeLog(id: string, timestamp: string, extras: Partial<UrgeLog> = {}): UrgeLog {
+  return {
+    id,
+    timestamp,
+    trigger: "phone",
+    intensity: 3,
+    ...extras,
   };
 }
 
@@ -183,6 +194,44 @@ test("delete session log survives a save/load round trip and preserves unrelated
   );
   assert.equal(loaded.sessionLogTombstones[0]?.syncEligible, false);
   assert.equal(loaded.sessionLogTombstones[0]?.syncSource, undefined);
+});
+
+test("urge logs stay separate from session rows and survive save/load with linkage metadata", async () => {
+  installBrowserStorage();
+
+  const next = appendTfUrgeLog(
+    appendTfUrgeLog(
+      {
+        ...getEmptyTfAppState(),
+        sessionLogs: [buildSession("manual-1", "Manual Review")],
+      },
+      buildUrgeLog("urge-1", "2026-06-03T12:00:00.000Z", {
+        sessionId: "manual-1",
+        subject: "Manual Review",
+        elapsedSeconds: 93,
+        trigger: "x_social",
+        note: "looked at notifications",
+      }),
+    ),
+    buildUrgeLog("urge-2", "2026-06-03T12:02:00.000Z", {
+      trigger: "fatigue",
+      intensity: 4,
+    }),
+  );
+
+  assert.deepEqual(next.sessionLogs.map((session) => session.id), ["manual-1"]);
+  assert.deepEqual(next.urgeLogs.map((urge) => urge.id), ["urge-2", "urge-1"]);
+  assert.equal(next.urgeLogs[1]?.sessionId, "manual-1");
+  assert.equal(next.urgeLogs[1]?.subject, "Manual Review");
+  assert.equal(next.urgeLogs[1]?.elapsedSeconds, 93);
+
+  await saveTfState(next);
+  const loaded = await loadTfState();
+
+  assert.deepEqual(loaded.sessionLogs.map((session) => session.id), ["manual-1"]);
+  assert.deepEqual(loaded.urgeLogs.map((urge) => urge.id), ["urge-2", "urge-1"]);
+  assert.equal(loaded.urgeLogs[1]?.trigger, "x_social");
+  assert.equal(loaded.urgeLogs[1]?.note, "looked at notifications");
 });
 
 test("delete session log stamps sync eligibility from the live row before removal", () => {

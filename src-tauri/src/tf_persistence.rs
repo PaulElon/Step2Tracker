@@ -13,6 +13,10 @@ fn default_session_updated_at() -> String {
     TF_FALLBACK_SESSION_UPDATED_AT.to_owned()
 }
 
+fn default_urge_timestamp() -> String {
+    TF_FALLBACK_SESSION_UPDATED_AT.to_owned()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TfSessionLog {
@@ -46,6 +50,52 @@ impl Default for TfSessionLog {
             is_distraction: false,
             is_live: false,
             updated_at: TF_FALLBACK_SESSION_UPDATED_AT.to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum UrgeTrigger {
+    XSocial,
+    Phone,
+    Gaming,
+    SideProject,
+    Boredom,
+    Fatigue,
+    #[default]
+    Other,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UrgeLog {
+    pub id: String,
+    #[serde(default = "default_urge_timestamp")]
+    pub timestamp: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub elapsed_seconds: Option<u32>,
+    pub trigger: UrgeTrigger,
+    pub intensity: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+impl Default for UrgeLog {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            timestamp: TF_FALLBACK_SESSION_UPDATED_AT.to_owned(),
+            session_id: None,
+            subject: None,
+            elapsed_seconds: None,
+            trigger: UrgeTrigger::Other,
+            intensity: 3,
+            note: None,
         }
     }
 }
@@ -191,6 +241,8 @@ pub struct TfAppState {
     pub tf_version: i64,
     pub session_logs: Vec<TfSessionLog>,
     #[serde(default)]
+    pub urge_logs: Vec<UrgeLog>,
+    #[serde(default)]
     pub session_log_tombstones: Vec<TfSessionLogTombstone>,
     pub summaries: Vec<TfSummaryPayload>,
     pub tracker_prefs: TfTrackerPrefs,
@@ -202,6 +254,7 @@ impl Default for TfAppState {
         Self {
             tf_version: TF_STATE_VERSION,
             session_logs: Vec::new(),
+            urge_logs: Vec::new(),
             session_log_tombstones: Vec::new(),
             summaries: Vec::new(),
             tracker_prefs: TfTrackerPrefs::default(),
@@ -428,6 +481,53 @@ fn normalize_session(value: &Value) -> Option<TfSessionLog> {
     })
 }
 
+fn normalize_urge_trigger(value: Option<&Value>) -> UrgeTrigger {
+    match value.and_then(Value::as_str) {
+        Some("x_social") => UrgeTrigger::XSocial,
+        Some("phone") => UrgeTrigger::Phone,
+        Some("gaming") => UrgeTrigger::Gaming,
+        Some("side_project") => UrgeTrigger::SideProject,
+        Some("boredom") => UrgeTrigger::Boredom,
+        Some("fatigue") => UrgeTrigger::Fatigue,
+        _ => UrgeTrigger::Other,
+    }
+}
+
+fn normalize_urge_intensity(value: Option<&Value>) -> u8 {
+    match value.and_then(Value::as_u64) {
+        Some(1) => 1,
+        Some(2) => 2,
+        Some(3) => 3,
+        Some(4) => 4,
+        Some(5) => 5,
+        _ => 3,
+    }
+}
+
+fn normalize_urge_log(value: &Value) -> Option<UrgeLog> {
+    let object = value.as_object()?;
+    let id = safe_string(object.get("id")).trim().to_owned();
+    if id.is_empty() {
+        return None;
+    }
+
+    Some(UrgeLog {
+        id,
+        timestamp: safe_nonempty_string(object.get("timestamp"))
+            .unwrap_or_else(|| TF_FALLBACK_SESSION_UPDATED_AT.to_owned()),
+        session_id: safe_nonempty_string(object.get("sessionId")),
+        subject: safe_nonempty_string(object.get("subject")),
+        elapsed_seconds: object
+            .get("elapsedSeconds")
+            .and_then(Value::as_u64)
+            .filter(|value| *value <= u64::from(u32::MAX))
+            .map(|value| value as u32),
+        trigger: normalize_urge_trigger(object.get("trigger")),
+        intensity: normalize_urge_intensity(object.get("intensity")),
+        note: safe_nonempty_string(object.get("note")),
+    })
+}
+
 fn normalize_session_log_tombstone(value: &Value) -> Option<TfSessionLogTombstone> {
     let object = value.as_object()?;
     let id = safe_string(object.get("id")).trim().to_owned();
@@ -558,6 +658,13 @@ fn normalize_tf_app_state(value: Value) -> TfAppState {
         .map(|entries| entries.iter().filter_map(normalize_session).collect())
         .unwrap_or_default();
 
+    let mut urge_logs: Vec<UrgeLog> = object
+        .get("urgeLogs")
+        .and_then(Value::as_array)
+        .map(|entries| entries.iter().filter_map(normalize_urge_log).collect())
+        .unwrap_or_default();
+    urge_logs.sort_by(|left, right| right.timestamp.cmp(&left.timestamp));
+
     let session_log_tombstones = object
         .get("sessionLogTombstones")
         .and_then(Value::as_array)
@@ -573,6 +680,7 @@ fn normalize_tf_app_state(value: Value) -> TfAppState {
     TfAppState {
         tf_version: safe_i64(object.get("tfVersion"), TF_STATE_VERSION),
         session_logs,
+        urge_logs,
         session_log_tombstones,
         summaries,
         tracker_prefs: normalize_tracker_prefs(object.get("trackerPrefs")),
@@ -764,6 +872,24 @@ mod tests {
         let normalized = normalize_tf_app_state(json!({
             "tfVersion": 1,
             "sessionLogs": [],
+            "urgeLogs": [
+                {
+                    "id": "urge-2",
+                    "timestamp": "2026-06-03T12:05:00.000Z",
+                    "trigger": "phone",
+                    "intensity": 4
+                },
+                {
+                    "id": "urge-1",
+                    "timestamp": "2026-06-03T12:00:00.000Z",
+                    "sessionId": "tf-session-1",
+                    "subject": "Pathoma",
+                    "elapsedSeconds": 75,
+                    "trigger": "x_social",
+                    "intensity": 3,
+                    "note": "tab drift"
+                }
+            ],
             "sessionLogTombstones": [
                 {
                     "id": "manual-1",
@@ -792,6 +918,12 @@ mod tests {
             },
             "account": null
         }));
+
+        assert_eq!(normalized.urge_logs.len(), 2);
+        assert_eq!(normalized.urge_logs[0].id, "urge-2");
+        assert_eq!(normalized.urge_logs[0].trigger, UrgeTrigger::Phone);
+        assert_eq!(normalized.urge_logs[1].session_id.as_deref(), Some("tf-session-1"));
+        assert_eq!(normalized.urge_logs[1].elapsed_seconds, Some(75));
 
         assert_eq!(normalized.session_log_tombstones.len(), 3);
         assert_eq!(normalized.session_log_tombstones[0].schema_version, Some(1));

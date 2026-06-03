@@ -28,7 +28,7 @@ import {
   hasMeaningfulSessionLogStartTimestamp,
   splitAutoSessionMethodLabel,
 } from "../../lib/tf-session-adapters";
-import type { TfSessionLog } from "../../types/models";
+import type { TfSessionLog, UrgeLog, UrgeTrigger } from "../../types/models";
 import { QuietPanel } from "../../components/ui";
 import { useAutoTrackerV2SessionControl, type AutoTrackerV2SessionControl } from "./autotracker-v2-session-control";
 
@@ -54,6 +54,26 @@ type FeedbackState = {
 type DeleteNoticeState = {
   token: number;
 };
+
+const URGE_TRIGGER_OPTIONS: Array<{ value: UrgeTrigger; label: string }> = [
+  { value: "x_social", label: "X / social" },
+  { value: "phone", label: "Phone" },
+  { value: "gaming", label: "Gaming" },
+  { value: "side_project", label: "Side project" },
+  { value: "boredom", label: "Boredom" },
+  { value: "fatigue", label: "Fatigue" },
+  { value: "other", label: "Other" },
+];
+
+function createEmptyUrgeForm() {
+  return {
+    trigger: "" as UrgeTrigger | "",
+    intensity: 3 as UrgeLog["intensity"],
+    note: "",
+  };
+}
+
+type UrgeFormState = ReturnType<typeof createEmptyUrgeForm>;
 
 function toMethodKey(method: string): string {
   return method.trim().toLowerCase().replace(/\s+/g, "-");
@@ -147,6 +167,7 @@ type DayMethodAllocationRow = {
 
 interface ManualTimerProps {
   onSave: (session: TfSessionLog) => Promise<void>;
+  onLogUrge: (urgeLog: UrgeLog) => Promise<void>;
   onDismiss: () => void;
   autoTrackerControl: AutoTrackerV2SessionControl | null;
 }
@@ -255,10 +276,20 @@ function buildDayMethodAllocationRows(sessions: TfSessionLog[]): DayMethodAlloca
 
 const TIMER_MODE_STORAGE_KEY = "tf-timer-mode";
 
-function readPersistedTimerMode(): TimerMode {
+export function resolvePersistedTimerMode(
+  rawMode: string | null | undefined,
+  autoTrackerAvailable: boolean,
+): TimerMode {
+  if (!autoTrackerAvailable) {
+    return "manual";
+  }
+  return rawMode === "auto" ? "auto" : "manual";
+}
+
+function readPersistedTimerMode(autoTrackerAvailable: boolean): TimerMode {
   try {
     const raw = localStorage.getItem(TIMER_MODE_STORAGE_KEY);
-    return raw === "auto" ? "auto" : "manual";
+    return resolvePersistedTimerMode(raw, autoTrackerAvailable);
   } catch {
     return "manual";
   }
@@ -272,15 +303,23 @@ function persistTimerMode(mode: TimerMode) {
   }
 }
 
-function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps) {
+function ManualTimer({ onSave, onLogUrge, onDismiss, autoTrackerControl }: ManualTimerProps) {
   const [status, setStatus] = useState<TimerStatus>("idle");
-  const [timerMode, setTimerMode] = useState<TimerMode>(readPersistedTimerMode);
+  const autoTrackerAvailable = FF.autotrackerV2UserMode && autoTrackerControl !== null;
+  const [timerMode, setTimerMode] = useState<TimerMode>(() =>
+    readPersistedTimerMode(autoTrackerAvailable),
+  );
   const [method, setMethod] = useState("");
   const [notes, setNotes] = useState("");
   const [isDistraction, setIsDistraction] = useState(false);
   const [displayMs, setDisplayMs] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [showUrgeComposer, setShowUrgeComposer] = useState(false);
+  const [urgeForm, setUrgeForm] = useState<UrgeFormState>(createEmptyUrgeForm);
+  const [isLoggingUrge, setIsLoggingUrge] = useState(false);
+  const [urgeFeedback, setUrgeFeedback] = useState<FeedbackState | null>(null);
 
+  const activeSessionIdRef = useRef("");
   const startISORef = useRef<string>("");
   const lastResumeRef = useRef<number>(0);
   const accumulatedRef = useRef<number>(0);
@@ -294,8 +333,8 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
     timerMode === "manual" &&
     status === "idle" &&
     !autoNeedsAttention &&
-    autoTrackerControl !== null;
-  const showSwitchToManual = timerMode === "auto" && !autoNeedsAttention && autoTrackerControl !== null;
+    autoTrackerAvailable;
+  const showSwitchToManual = timerMode === "auto" && !autoNeedsAttention && autoTrackerAvailable;
   const timerLabel =
     timerMode === "auto"
       ? autoTrackerControl?.runningElapsedLabel ?? formatTimerLabel(0)
@@ -337,6 +376,9 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
   }
 
   useEffect(() => {
+    if (!autoTrackerAvailable) {
+      return;
+    }
     if (autoNeedsAttention) {
       applyTimerMode("auto");
       return;
@@ -344,7 +386,13 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
     if (manualNeedsAttention) {
       applyTimerMode("manual");
     }
-  }, [autoNeedsAttention, manualNeedsAttention]);
+  }, [autoNeedsAttention, autoTrackerAvailable, manualNeedsAttention]);
+
+  useEffect(() => {
+    if (!autoTrackerAvailable && timerMode !== "manual") {
+      applyTimerMode("manual");
+    }
+  }, [autoTrackerAvailable, timerMode]);
 
   useEffect(() => {
     if (status !== "running") return;
@@ -354,18 +402,47 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
     return () => clearInterval(id);
   }, [status]);
 
+  useEffect(() => {
+    if (!urgeFeedback) {
+      return;
+    }
+    const timeoutId = setTimeout(() => {
+      setUrgeFeedback(null);
+    }, urgeFeedback.kind === "success" ? 1800 : 2800);
+    return () => clearTimeout(timeoutId);
+  }, [urgeFeedback]);
+
+  useEffect(() => {
+    if (status === "running") {
+      return;
+    }
+    setShowUrgeComposer(false);
+    setUrgeForm(createEmptyUrgeForm());
+  }, [status]);
+
+  function getElapsedSeconds(nowMs: number) {
+    const totalMs =
+      accumulatedRef.current + (status === "running" ? nowMs - lastResumeRef.current : 0);
+    return Math.max(0, Math.round(totalMs / 1000));
+  }
+
   function reset() {
     setStatus("idle");
     setMethod("");
     setNotes("");
     setIsDistraction(false);
     setDisplayMs(0);
+    setShowUrgeComposer(false);
+    setUrgeForm(createEmptyUrgeForm());
+    setUrgeFeedback(null);
+    activeSessionIdRef.current = "";
     accumulatedRef.current = 0;
   }
 
   function handleStart() {
     if (!method.trim()) return;
     const now = Date.now();
+    activeSessionIdRef.current = `tf-session-${now}`;
     startISORef.current = new Date(now).toISOString();
     lastResumeRef.current = now;
     accumulatedRef.current = 0;
@@ -393,7 +470,7 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
     const minutes = Math.max(1, Math.floor(totalMs / 60000));
     try {
       const session: TfSessionLog = {
-        id: `tf-session-${endMs}`,
+        id: activeSessionIdRef.current || `tf-session-${endMs}`,
         date: getLocalDateKeyFromIso(startISORef.current) ?? getTodayKey(),
         method: method.trim(),
         methodKey: toMethodKey(method),
@@ -409,6 +486,41 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
       onDismiss();
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleLogUrge() {
+    if (isLoggingUrge) {
+      return;
+    }
+    if (!urgeForm.trigger) {
+      setUrgeFeedback({ kind: "error", text: "Choose a trigger first." });
+      return;
+    }
+
+    setIsLoggingUrge(true);
+    try {
+      const now = Date.now();
+      await onLogUrge({
+        id: `tf-urge-${now}-${Math.random().toString(16).slice(2, 8)}`,
+        timestamp: new Date(now).toISOString(),
+        trigger: urgeForm.trigger,
+        intensity: urgeForm.intensity,
+        ...(activeSessionIdRef.current ? { sessionId: activeSessionIdRef.current } : {}),
+        ...(method.trim() ? { subject: method.trim() } : {}),
+        elapsedSeconds: getElapsedSeconds(now),
+        ...(urgeForm.note.trim() ? { note: urgeForm.note.trim() } : {}),
+      });
+      setShowUrgeComposer(false);
+      setUrgeForm(createEmptyUrgeForm());
+      setUrgeFeedback({ kind: "success", text: "Urge logged." });
+    } catch (error) {
+      setUrgeFeedback({
+        kind: "error",
+        text: error instanceof Error ? error.message : "Unable to log urge right now.",
+      });
+    } finally {
+      setIsLoggingUrge(false);
     }
   }
 
@@ -534,6 +646,125 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
                 {isSaving ? "Saving..." : "Stop & Save"}
               </button>
             )}
+            {status === "running" ? (
+              <div className="relative">
+                <button
+                  type="button"
+                  className="inline-flex h-10 items-center gap-2 rounded-[14px] border border-white/[0.08] bg-white/[0.02] px-3 text-sm font-medium text-slate-300 transition hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-white"
+                  onClick={() => {
+                    setShowUrgeComposer((current) => !current);
+                    setUrgeFeedback(null);
+                  }}
+                  disabled={isSaving || isLoggingUrge}
+                  aria-expanded={showUrgeComposer}
+                >
+                  Log urge
+                </button>
+                {showUrgeComposer ? (
+                  <div className="absolute right-0 top-full z-20 mt-2 w-80 max-w-[calc(100vw-3rem)] rounded-[18px] border border-white/[0.08] bg-slate-950/96 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.42)] backdrop-blur">
+                    <div className="flex flex-col gap-3">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                          Trigger
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {URGE_TRIGGER_OPTIONS.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              className={cn(
+                                "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
+                                urgeForm.trigger === option.value
+                                  ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100"
+                                  : "border-white/[0.08] bg-white/[0.03] text-slate-300 hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-white",
+                              )}
+                              onClick={() =>
+                                setUrgeForm((current) => ({ ...current, trigger: option.value }))
+                              }
+                              disabled={isLoggingUrge}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                          Intensity
+                        </p>
+                        <div className="mt-2 inline-flex rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-1">
+                          {[1, 2, 3, 4, 5].map((value) => (
+                            <button
+                              key={value}
+                              type="button"
+                              className={cn(
+                                "h-8 w-8 rounded-[10px] text-xs font-semibold transition",
+                                urgeForm.intensity === value
+                                  ? "bg-cyan-400/15 text-cyan-100"
+                                  : "text-slate-300 hover:bg-white/[0.05] hover:text-white",
+                              )}
+                              onClick={() =>
+                                setUrgeForm((current) => ({
+                                  ...current,
+                                  intensity: value as UrgeLog["intensity"],
+                                }))
+                              }
+                              disabled={isLoggingUrge}
+                              aria-label={`Intensity ${value}`}
+                            >
+                              {value}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                          Note
+                        </label>
+                        <input
+                          className={fieldClassName}
+                          type="text"
+                          value={urgeForm.note}
+                          onChange={(event) =>
+                            setUrgeForm((current) => ({ ...current, note: event.target.value }))
+                          }
+                          placeholder="Optional note"
+                          maxLength={140}
+                          disabled={isLoggingUrge}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          className={secondaryButtonClassName}
+                          onClick={() => {
+                            setShowUrgeComposer(false);
+                            setUrgeForm(createEmptyUrgeForm());
+                            setUrgeFeedback(null);
+                          }}
+                          disabled={isLoggingUrge}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className={primaryButtonClassName}
+                          onClick={() => {
+                            void handleLogUrge();
+                          }}
+                          disabled={isLoggingUrge}
+                        >
+                          {isLoggingUrge ? "Logging..." : "Log & keep focusing"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <button
               type="button"
               className={secondaryButtonClassName}
@@ -547,6 +778,18 @@ function ManualTimer({ onSave, onDismiss, autoTrackerControl }: ManualTimerProps
               Cancel
             </button>
           </div>
+          {urgeFeedback ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className={cn(
+                "sm:col-span-2 lg:col-span-2",
+                urgeFeedback.kind === "success" ? "text-[11px] text-slate-400" : "text-[11px] text-rose-300",
+              )}
+            >
+              {urgeFeedback.text}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -1001,6 +1244,9 @@ export function SessionLogPanel({
         <ManualTimer
           onSave={async (session) => {
             await persistSession(session, "Timer session saved.");
+          }}
+          onLogUrge={async (urgeLog) => {
+            await store.addUrgeLog(urgeLog);
           }}
           onDismiss={() => undefined}
           autoTrackerControl={FF.autotrackerV2UserMode ? autoTracker : null}
