@@ -24,6 +24,7 @@ import {
 import { formatLongDate, formatMinutes, getLocalDateKeyFromIso, getTodayKey } from "../lib/datetime";
 import { FF } from "../lib/feature-flags";
 import { launchResource } from "../lib/launcher";
+import { buildPortfolioUrgeSummary, URGE_TRIGGER_LABELS } from "../lib/portfolio-urge-awareness";
 import { allocationByMethodDisplay } from "../lib/tf-session-adapters";
 import { cn, primaryButtonClassName, secondaryButtonClassName, themeAwareWarmAccent } from "../lib/ui";
 import { useAppStore } from "../state/app-store";
@@ -42,7 +43,6 @@ import type {
   StudyBlock,
   TfSessionLog,
   UrgeLog,
-  UrgeTrigger,
   WeakTopicPriority,
 } from "../types/models";
 
@@ -50,15 +50,6 @@ const TODAY_NOTES_DOC_ID = "system-today-notes-v1";
 const TODAY_NOTES_PAGE_ID = "system-today-notes-page-v1";
 
 const PRIORITY_RANK: Record<WeakTopicPriority, number> = { High: 0, Medium: 1, Low: 2 };
-const URGE_TRIGGER_LABELS: Record<UrgeTrigger, string> = {
-  x_social: "X / social",
-  phone: "Phone",
-  gaming: "Gaming",
-  side_project: "Side project",
-  boredom: "Boredom",
-  fatigue: "Fatigue",
-  other: "Other",
-};
 
 const todayPanelClassName = "glass-panel min-w-0";
 
@@ -198,116 +189,117 @@ function TodayTimeLogSummary({
   sessionLogs: TfSessionLog[];
 }) {
   const focusLogs = sessionLogs.filter((log) => !log.isDistraction);
-  const allowedMinutes = focusLogs.reduce((total, log) => total + log.hours * 60, 0);
-  const distractionMinutes = sessionLogs
-    .filter((log) => log.isDistraction)
-    .reduce((total, log) => total + log.hours * 60, 0);
+  const distractionLogs = sessionLogs.filter((log) => log.isDistraction);
+  const allowedMinutes = focusLogs.reduce((total, log) => total + Math.round(log.hours * 60), 0);
+  const distractionMinutes = distractionLogs.reduce((total, log) => total + Math.round(log.hours * 60), 0);
   const totalMinutes = allowedMinutes + distractionMinutes;
-  const byMethod = allocationByMethodDisplay(focusLogs);
-  const rowCount = byMethod.length;
-  const visibleRows = byMethod.slice(0, 3);
-  const totalSessions = focusLogs.length;
+  const topFocusMethod = allocationByMethodDisplay(focusLogs)[0] ?? null;
+  const topDistractionMethod = allocationByMethodDisplay(distractionLogs)[0] ?? null;
   const allowedShare = totalMinutes > 0 ? (allowedMinutes / totalMinutes) * 100 : 0;
   const distractionShare = totalMinutes > 0 ? (distractionMinutes / totalMinutes) * 100 : 0;
 
-  if (totalSessions === 0) {
+  if (sessionLogs.length === 0) {
     return (
-      <div className="mt-3 flex flex-1 flex-col border-t border-white/[0.06] pt-3">
-        <div>
-          <p className="text-[11px] text-slate-500">Today’s time log</p>
-          <p className="mt-1 text-sm text-slate-300">No study sessions logged yet.</p>
-          <p className="mt-1 text-xs text-slate-500">Open the timer when you start a block.</p>
-        </div>
-
-        <div className="mt-auto pt-5">
-          <p className="text-[11px] text-slate-500">Focused vs distractions</p>
-          <div className="mt-3">
-            <div className="flex h-2 overflow-hidden rounded-full bg-white/[0.06]">
-              <div
-                className="bar-focused bg-cyan-300/70"
-                style={{ width: "0%" }}
-              />
-              <div
-                className="bar-distractions bg-rose-300/70"
-                style={{ width: "0%" }}
-              />
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-slate-500">
-              <span>Focused 0m</span>
-              <span>Distractions 0m</span>
-            </div>
+      <div className="mt-3 flex flex-col border-t border-white/[0.06] pt-3">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] text-slate-500">Today&apos;s Total</p>
+            <p className="mt-1 text-sm font-semibold text-white">0m</p>
+          </div>
+          <div className="min-w-0 text-center">
+            <p className="text-[11px] text-slate-500">Focused</p>
+            <p className="mt-1 text-sm font-semibold text-white">0%</p>
+          </div>
+          <div className="min-w-0 text-right">
+            <p className="text-[11px] text-slate-500">Distractions</p>
+            <p className="mt-1 text-sm font-semibold text-white">0%</p>
           </div>
         </div>
+        <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-white/[0.06]">
+          <div className="bar-focused bg-cyan-300/70" style={{ width: "0%" }} />
+          <div className="bar-distractions bg-rose-300/70" style={{ width: "0%" }} />
+        </div>
+        <div className="mt-3 space-y-2.5">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <span className="text-slate-500">Top focus</span>
+              <span className="min-w-0 flex-1 truncate text-right text-slate-300">No focused study yet</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <span className="text-slate-500">Top distraction</span>
+              <span className="min-w-0 flex-1 truncate text-right text-slate-300">No distractions logged</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]" />
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-slate-500">Open the timer when you start a block.</p>
       </div>
     );
   }
 
+  const topFocusMinutes = topFocusMethod ? Math.round(topFocusMethod.hours * 60) : 0;
+  const topDistractionMinutes = topDistractionMethod ? Math.round(topDistractionMethod.hours * 60) : 0;
+  const topFocusShare = allowedMinutes > 0 ? (topFocusMinutes / allowedMinutes) * 100 : 0;
+  const topDistractionShare = distractionMinutes > 0 ? (topDistractionMinutes / distractionMinutes) * 100 : 0;
+
   return (
-    <div className="mt-3 flex flex-1 flex-col border-t border-white/[0.06] pt-3">
-      <div>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] text-slate-500">Today’s time log</p>
-            <p className="mt-1 text-sm font-semibold text-white">{formatMinutes(allowedMinutes)}</p>
-          </div>
-          <div className="text-right text-[11px] text-slate-500">
-            <p>{totalSessions} session{totalSessions === 1 ? "" : "s"}</p>
-            {distractionMinutes > 0 ? <p>{formatMinutes(distractionMinutes)} distraction</p> : null}
-          </div>
+    <div className="mt-3 flex flex-col border-t border-white/[0.06] pt-3">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] text-slate-500">Today&apos;s Total</p>
+          <p className="mt-1 text-sm font-semibold text-white">{formatMinutes(totalMinutes)}</p>
         </div>
-
-        <div className="mt-3 space-y-2">
-          {visibleRows.map((row) => {
-            const minutes = Math.round(row.hours * 60);
-            const percent = allowedMinutes > 0 ? (minutes / allowedMinutes) * 100 : 0;
-            return (
-              <div key={row.methodKey} className="space-y-1">
-                <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="min-w-0 truncate text-slate-200">{row.method}</span>
-                  <span className="tabular-nums text-slate-400">{formatMinutes(minutes)}</span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
-                  <div
-                    className="bar-focused h-full rounded-full bg-cyan-300/70"
-                    style={{ width: `${Math.max(percent, minutes > 0 ? 8 : 0)}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
+        <div className="min-w-0 text-center">
+          <p className="text-[11px] text-slate-500">Focused</p>
+          <p className="mt-1 text-sm font-semibold text-white">{allowedShare.toFixed(0)}%</p>
         </div>
-
-        {rowCount > visibleRows.length ? (
-          <p className="mt-2 text-[11px] text-slate-500">+ {rowCount - visibleRows.length} more categories</p>
-        ) : null}
+        <div className="min-w-0 text-right">
+          <p className="text-[11px] text-slate-500">Distractions</p>
+          <p className="mt-1 text-sm font-semibold text-white">{distractionShare.toFixed(0)}%</p>
+        </div>
       </div>
 
-      <div className="mt-auto pt-6">
-        <p className="text-[11px] text-slate-500">Focused vs distractions</p>
-        <div className="mt-3">
-          <div className="flex h-2 overflow-hidden rounded-full bg-white/[0.06]">
-            <div
-              className="bar-focused bg-cyan-300/70"
-              style={{ width: `${allowedShare}%` }}
-            />
-            <div
-              className="bar-distractions bg-rose-300/70"
-              style={{ width: `${distractionShare}%` }}
-            />
+      <div className="mt-3">
+        <div className="flex h-2 overflow-hidden rounded-full bg-white/[0.06]">
+          <div className="bar-focused bg-cyan-300/70" style={{ width: `${allowedShare}%` }} />
+          <div className="bar-distractions bg-rose-300/70" style={{ width: `${distractionShare}%` }} />
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2.5">
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <span className="text-slate-500">Top focus</span>
+            <div className="min-w-0 flex flex-1 items-center justify-end gap-2">
+              <span className="truncate text-slate-200">{topFocusMethod?.method ?? "No focused study yet"}</span>
+              <span className="shrink-0 tabular-nums text-slate-400">{formatMinutes(topFocusMinutes)}</span>
+            </div>
           </div>
-          <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-slate-500">
-            <span>Focused {formatMinutes(allowedMinutes)}</span>
-            <span>Distractions {formatMinutes(distractionMinutes)}</span>
+          <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
+            <div
+              className="bar-focused h-full rounded-full bg-cyan-300/70"
+              style={{ width: `${Math.max(topFocusShare, topFocusMinutes > 0 ? 8 : 0)}%` }}
+            />
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-300">Focused</p>
-            <p className="mt-1 text-sm font-semibold text-white">{allowedShare.toFixed(0)}%</p>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <span className="text-slate-500">Top distraction</span>
+            <div className="min-w-0 flex flex-1 items-center justify-end gap-2">
+              <span className="truncate text-slate-200">
+                {topDistractionMethod?.method ?? "No distractions logged"}
+              </span>
+              <span className="shrink-0 tabular-nums text-slate-400">{formatMinutes(topDistractionMinutes)}</span>
+            </div>
           </div>
-          <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-rose-300">Distractions</p>
-            <p className="mt-1 text-sm font-semibold text-white">{distractionShare.toFixed(0)}%</p>
+          <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
+            <div
+              className="bar-distractions h-full rounded-full bg-rose-300/70"
+              style={{ width: `${Math.max(topDistractionShare, topDistractionMinutes > 0 ? 8 : 0)}%` }}
+            />
           </div>
         </div>
       </div>
@@ -327,47 +319,22 @@ function formatUrgeTimeLabel(timestamp: string) {
   });
 }
 
-function getTopUrgeTrigger(urgeLogs: UrgeLog[]) {
-  if (urgeLogs.length === 0) {
-    return null;
-  }
-
-  const counts = new Map<UrgeTrigger, number>();
-  for (const urgeLog of urgeLogs) {
-    counts.set(urgeLog.trigger, (counts.get(urgeLog.trigger) ?? 0) + 1);
-  }
-
-  let topTrigger: UrgeTrigger | null = null;
-  let topCount = -1;
-  for (const urgeLog of urgeLogs) {
-    const count = counts.get(urgeLog.trigger) ?? 0;
-    if (count > topCount) {
-      topTrigger = urgeLog.trigger;
-      topCount = count;
-    }
-  }
-
-  return topTrigger;
-}
-
 function UrgeAwarenessCard({
   urgeLogs,
 }: {
   urgeLogs: UrgeLog[];
 }) {
-  const totalCount = urgeLogs.length;
-  const averageIntensity =
-    totalCount > 0
-      ? urgeLogs.reduce((sum, urgeLog) => sum + urgeLog.intensity, 0) / totalCount
-      : 0;
-  const topTrigger = getTopUrgeTrigger(urgeLogs);
+  const urgeSummary = buildPortfolioUrgeSummary(urgeLogs);
+  const totalCount = urgeSummary.totalCount;
+  const averageIntensity = urgeSummary.averageIntensity;
+  const topTrigger = urgeSummary.topTrigger;
 
   return (
     <section className={cn(todayPanelClassName, "flex min-h-0 flex-1 flex-col overflow-hidden p-4")}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-white">Urge Awareness</h3>
-          <p className="mt-0.5 text-xs text-slate-500">Today&apos;s readback, newest first</p>
+          <p className="mt-0.5 text-xs text-slate-500">Read-only patterns from today&apos;s urges</p>
         </div>
         <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[11px] text-slate-400">
           Read-only
@@ -400,41 +367,81 @@ function UrgeAwarenessCard({
             </p>
           </div>
         ) : (
-          <div className="h-full min-h-0 overflow-y-auto p-3 pr-2 scrollbar-subtle">
-            <div className="space-y-2">
-              {urgeLogs.map((urgeLog) => {
-                const subject = urgeLog.subject?.trim();
-                const note = urgeLog.note?.trim();
-                return (
+          <div className="grid h-full min-h-0 gap-3 p-3 xl:grid-rows-[auto_minmax(0,1fr)]">
+            <section>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  By trigger
+                </p>
+                <p className="text-[10px] text-slate-500">Count and average intensity</p>
+              </div>
+              <div className="mt-2 space-y-2">
+                {urgeSummary.breakdown.slice(0, 3).map((entry) => (
                   <div
-                    key={urgeLog.id}
-                    className="rounded-[14px] border border-white/[0.05] bg-slate-950/30 px-3 py-2.5"
+                    key={entry.trigger}
+                    className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <span className="text-[11px] font-medium tabular-nums text-slate-500">
-                            {formatUrgeTimeLabel(urgeLog.timestamp)}
-                          </span>
-                          <span className="rounded-full border border-cyan-300/15 bg-cyan-300/10 px-2 py-0.5 text-[11px] text-cyan-100">
-                            {URGE_TRIGGER_LABELS[urgeLog.trigger]}
-                          </span>
-                          {subject ? (
-                            <span className="min-w-0 truncate text-xs text-slate-400">{subject}</span>
-                          ) : null}
-                        </div>
-                        {note ? (
-                          <p className="mt-1 truncate text-xs leading-5 text-slate-300">{note}</p>
-                        ) : null}
-                      </div>
-                      <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-slate-300">
-                        {urgeLog.intensity}/5
-                      </span>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="truncate text-[12px] font-medium text-slate-100">{entry.label}</p>
+                      <p className="shrink-0 text-[11px] tabular-nums text-slate-400">
+                        {entry.count} · {entry.averageIntensity.toFixed(1)}/5
+                      </p>
+                    </div>
+                    <div className="mt-1.5 h-[5px] overflow-hidden rounded-full bg-white/[0.05]">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-cyan-400/85 via-sky-400/80 to-indigo-400/75"
+                        style={{ width: `${Math.max(entry.sharePercent, 6)}%` }}
+                      />
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-[16px] border border-white/[0.06] bg-white/[0.02]">
+              <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-3 py-2.5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Recent examples
+                </p>
+                <p className="text-[10px] text-slate-500">Newest first</p>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto p-3 pr-2 scrollbar-subtle">
+                <div className="space-y-2">
+                  {urgeSummary.examples.map((urgeLog) => {
+                    const subject = urgeLog.subject?.trim();
+                    const note = urgeLog.note?.trim();
+                    return (
+                      <div
+                        key={urgeLog.id}
+                        className="rounded-[14px] border border-white/[0.05] bg-slate-950/30 px-3 py-2.5"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                              <span className="text-[11px] font-medium tabular-nums text-slate-500">
+                                {formatUrgeTimeLabel(urgeLog.timestamp)}
+                              </span>
+                              <span className="rounded-full border border-cyan-300/15 bg-cyan-300/10 px-2 py-0.5 text-[11px] text-cyan-100">
+                                {URGE_TRIGGER_LABELS[urgeLog.trigger]}
+                              </span>
+                              {subject ? (
+                                <span className="min-w-0 truncate text-xs text-slate-400">{subject}</span>
+                              ) : null}
+                            </div>
+                            {note ? (
+                              <p className="mt-1 truncate text-xs leading-5 text-slate-300">{note}</p>
+                            ) : null}
+                          </div>
+                          <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-slate-300">
+                            {urgeLog.intensity}/5
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
           </div>
         )}
       </div>
@@ -979,18 +986,19 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                 </section>
 
                 <section className={cn(todayPanelClassName, "flex shrink-0 flex-col p-4")}>
-                  <div className="flex items-center gap-2">
-                    <Timer className="h-4 w-4 text-cyan-200" />
-                    <h3 className="text-base font-semibold text-white">Time your study session</h3>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Timer className="h-4 w-4 text-cyan-200" />
+                      <h3 className="text-base font-semibold text-white">Time your study session</h3>
+                    </div>
+                    <button
+                      type="button"
+                      className="launch-button max-w-none shrink-0"
+                      onClick={() => goToSection("sessionLog")}
+                    >
+                      Open Timer
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="mt-3 inline-flex w-fit self-start items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-sm font-semibold tracking-tight text-slate-200 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-white"
-                    onClick={() => goToSection("sessionLog")}
-                  >
-                    <Timer className="h-3.5 w-3.5" />
-                    Open Timer
-                  </button>
 
                   <TodayTimeLogSummary sessionLogs={todaySessionLogs} />
                 </section>
