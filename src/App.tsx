@@ -26,6 +26,7 @@ import { PlannerView } from "./features/planner-view";
 import { PortfolioView } from "./features/portfolio-view";
 import { isPortfolioSection } from "./features/portfolio-section";
 import { SettingsView } from "./features/settings-view";
+import { PomodoroTimerProvider } from "./features/timefolio/pomodoro-timer-card";
 import { TimeFolioSessionLogView } from "./features/timefolio-session-log-view";
 import { getDateRange, sumStudyMinutes } from "./lib/analytics";
 import { daysBetween, daysUntilDateKey, formatHoursValue, formatLongDate, formatSavedAt } from "./lib/datetime";
@@ -439,7 +440,7 @@ function SidebarCountdown() {
   }
 
   return (
-    <>
+    <PomodoroTimerProvider>
       <div className="px-1">
         <p className="text-[0.62rem] uppercase tracking-[0.2em] text-slate-500">Countdown</p>
         {activeTimers.length === 0 ? (
@@ -559,7 +560,7 @@ function SidebarCountdown() {
           </div>
         </ModalShell>
       ) : null}
-    </>
+    </PomodoroTimerProvider>
   );
 }
 

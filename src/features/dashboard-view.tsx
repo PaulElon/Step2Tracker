@@ -990,12 +990,16 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                 </section>
 
                 <section className={cn(todayPanelClassName, "flex shrink-0 flex-col p-4")}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <Timer className="h-4 w-4 text-cyan-200" />
-                      <h3 className="text-base font-semibold text-white">Time your study session</h3>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Timer className="h-4 w-4 text-cyan-200" />
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Study timer</p>
+                      </div>
+                      <h3 className="mt-1 text-sm font-semibold text-white sm:text-base">Time your study session</h3>
+                      <p className="mt-1 text-xs text-slate-400">Jump into the full timer or keep a clean Pomodoro cadence.</p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
                       <button
                         type="button"
                         className="launch-button max-w-none shrink-0"
@@ -1005,11 +1009,12 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                       </button>
                       <button
                         type="button"
-                        className="inline-flex max-w-none items-center overflow-hidden rounded-full border border-white/[0.12] px-2.5 py-1 text-[11px] font-medium text-slate-300 transition hover:border-white/20 hover:text-slate-100"
+                        className="inline-flex max-w-none items-center gap-1.5 overflow-hidden rounded-full border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-slate-100"
                         onClick={() => setShowPomodoroModal(true)}
                         aria-haspopup="dialog"
                         aria-expanded={showPomodoroModal}
                       >
+                        <Timer className="h-3.5 w-3.5" />
                         Pomodoro
                       </button>
                     </div>
@@ -1217,7 +1222,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
           onClose={() => setShowPomodoroModal(false)}
           position="center"
           titleId="today-pomodoro-modal-title"
-          contentClassName="max-w-[760px] border-none bg-transparent p-0 shadow-none"
+          contentClassName="max-w-[860px] border-none bg-transparent p-0 shadow-none"
         >
           <h2 id="today-pomodoro-modal-title" className="sr-only">
             Pomodoro timer

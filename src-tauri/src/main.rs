@@ -11,6 +11,7 @@ mod updater;
 use auto_launch::{AutoLaunch, AutoLaunchBuilder, MacOSLaunchMode};
 use std::ffi::c_void;
 use std::process::Command;
+use std::sync::Mutex;
 use std::{fs, path::PathBuf};
 
 use persistence::{
@@ -19,8 +20,45 @@ use persistence::{
     Preferences, StorageService, StudyBlock, StudyBlockInput, TrashEntityType, WeakTopicEntry,
     WeakTopicInput,
 };
-use tauri::{LogicalSize, Manager, Size};
+use serde::Deserialize;
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::tray::TrayIconBuilder;
+use tauri::{Emitter, LogicalSize, Manager, Size};
 use tauri_plugin_dialog::DialogExt;
+
+const POMODORO_TRAY_ID: &str = "pomodoro-tray";
+const POMODORO_TRAY_STATUS_ITEM_ID: &str = "pomodoro-tray-status";
+const POMODORO_TRAY_ACTION_ITEM_ID: &str = "pomodoro-tray-action";
+const POMODORO_TRAY_RESET_ITEM_ID: &str = "pomodoro-tray-reset";
+const POMODORO_TRAY_OPEN_ITEM_ID: &str = "pomodoro-tray-open";
+
+struct PomodoroTrayHandles {
+    status_item: MenuItem<tauri::Wry>,
+    action_item: MenuItem<tauri::Wry>,
+    reset_item: MenuItem<tauri::Wry>,
+}
+
+struct PomodoroTrayState {
+    handles: Mutex<Option<PomodoroTrayHandles>>,
+}
+
+impl PomodoroTrayState {
+    fn new(handles: Option<PomodoroTrayHandles>) -> Self {
+        Self {
+            handles: Mutex::new(handles),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PomodoroTrayUpdate {
+    tray_title: String,
+    status_label: String,
+    action_label: String,
+    action_enabled: bool,
+    reset_enabled: bool,
+}
 
 fn with_storage<F, T>(app: &tauri::AppHandle, operation: F) -> Result<T, String>
 where
@@ -40,12 +78,18 @@ fn load_state(app: tauri::AppHandle) -> Result<ClientSnapshot, String> {
 }
 
 #[tauri::command]
-fn save_preferences(app: tauri::AppHandle, preferences: Preferences) -> Result<ClientSnapshot, String> {
+fn save_preferences(
+    app: tauri::AppHandle,
+    preferences: Preferences,
+) -> Result<ClientSnapshot, String> {
     with_storage(&app, |service| service.save_preferences(preferences))
 }
 
 #[tauri::command]
-fn upsert_study_block(app: tauri::AppHandle, block: StudyBlockInput) -> Result<ClientSnapshot, String> {
+fn upsert_study_block(
+    app: tauri::AppHandle,
+    block: StudyBlockInput,
+) -> Result<ClientSnapshot, String> {
     with_storage(&app, |service| service.upsert_study_block(block))
 }
 
@@ -55,7 +99,9 @@ fn duplicate_study_block(
     id: String,
     target_date: Option<String>,
 ) -> Result<ClientSnapshot, String> {
-    with_storage(&app, |service| service.duplicate_study_block(id, target_date))
+    with_storage(&app, |service| {
+        service.duplicate_study_block(id, target_date)
+    })
 }
 
 #[tauri::command]
@@ -86,7 +132,10 @@ fn trash_practice_test(app: tauri::AppHandle, id: String) -> Result<ClientSnapsh
 }
 
 #[tauri::command]
-fn upsert_weak_topic(app: tauri::AppHandle, entry: WeakTopicInput) -> Result<ClientSnapshot, String> {
+fn upsert_weak_topic(
+    app: tauri::AppHandle,
+    entry: WeakTopicInput,
+) -> Result<ClientSnapshot, String> {
     with_storage(&app, |service| service.upsert_weak_topic(entry))
 }
 
@@ -101,7 +150,9 @@ fn restore_trashed_item(
     entity_type: TrashEntityType,
     id: String,
 ) -> Result<ClientSnapshot, String> {
-    with_storage(&app, |service| service.restore_trashed_item(entity_type, id))
+    with_storage(&app, |service| {
+        service.restore_trashed_item(entity_type, id)
+    })
 }
 
 #[tauri::command]
@@ -110,17 +161,26 @@ fn export_backup_artifact(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn preview_backup_artifact(app: tauri::AppHandle, raw: String) -> Result<BackupArtifactPreview, String> {
+fn preview_backup_artifact(
+    app: tauri::AppHandle,
+    raw: String,
+) -> Result<BackupArtifactPreview, String> {
     with_storage(&app, |service| service.preview_backup_artifact(raw))
 }
 
 #[tauri::command]
-fn restore_from_backup_artifact(app: tauri::AppHandle, raw: String) -> Result<ClientSnapshot, String> {
+fn restore_from_backup_artifact(
+    app: tauri::AppHandle,
+    raw: String,
+) -> Result<ClientSnapshot, String> {
     with_storage(&app, |service| service.restore_from_backup_artifact(raw))
 }
 
 #[tauri::command]
-fn restore_from_snapshot(app: tauri::AppHandle, backup_id: String) -> Result<ClientSnapshot, String> {
+fn restore_from_snapshot(
+    app: tauri::AppHandle,
+    backup_id: String,
+) -> Result<ClientSnapshot, String> {
     with_storage(&app, |service| service.restore_from_snapshot(backup_id))
 }
 
@@ -130,11 +190,16 @@ fn migrate_legacy_browser_state(
     legacy_source_json: String,
     state: AppState,
 ) -> Result<ClientSnapshot, String> {
-    with_storage(&app, |service| service.migrate_legacy_browser_state(legacy_source_json, state))
+    with_storage(&app, |service| {
+        service.migrate_legacy_browser_state(legacy_source_json, state)
+    })
 }
 
 #[tauri::command]
-fn upsert_error_log_entry(app: tauri::AppHandle, entry: ErrorLogInput) -> Result<ClientSnapshot, String> {
+fn upsert_error_log_entry(
+    app: tauri::AppHandle,
+    entry: ErrorLogInput,
+) -> Result<ClientSnapshot, String> {
     with_storage(&app, |service| service.upsert_error_log_entry(entry))
 }
 
@@ -155,7 +220,9 @@ fn set_cloud_link(
     email: String,
     refresh_token: String,
 ) -> Result<(), String> {
-    with_storage(&app, |service| service.set_cloud_link(&cloud_user_id, &email, &refresh_token))
+    with_storage(&app, |service| {
+        service.set_cloud_link(&cloud_user_id, &email, &refresh_token)
+    })
 }
 
 #[tauri::command]
@@ -198,7 +265,9 @@ fn get_core_entity_delete_tombstones(
     app: tauri::AppHandle,
     after: Option<String>,
 ) -> Result<Vec<CloudDeleteTombstone>, String> {
-    with_storage(&app, |service| service.get_core_entity_delete_tombstones(after.as_deref()))
+    with_storage(&app, |service| {
+        service.get_core_entity_delete_tombstones(after.as_deref())
+    })
 }
 
 #[tauri::command]
@@ -206,7 +275,9 @@ fn get_error_log_delete_tombstones(
     app: tauri::AppHandle,
     after: Option<String>,
 ) -> Result<Vec<CloudDeleteTombstone>, String> {
-    with_storage(&app, |service| service.get_error_log_delete_tombstones(after.as_deref()))
+    with_storage(&app, |service| {
+        service.get_error_log_delete_tombstones(after.as_deref())
+    })
 }
 
 #[tauri::command]
@@ -236,7 +307,9 @@ fn apply_cloud_delete(
     entity_id: String,
     deleted_at: String,
 ) -> Result<(), String> {
-    with_storage(&app, |service| service.apply_cloud_delete(entity_type, &entity_id, &deleted_at))
+    with_storage(&app, |service| {
+        service.apply_cloud_delete(entity_type, &entity_id, &deleted_at)
+    })
 }
 
 #[tauri::command]
@@ -247,7 +320,8 @@ fn launch_path(path: String) -> Result<(), String> {
     }
 
     let expanded = if path.starts_with("~/") {
-        let home = std::env::var("HOME").map_err(|_| "HOME environment variable not set.".to_string())?;
+        let home =
+            std::env::var("HOME").map_err(|_| "HOME environment variable not set.".to_string())?;
         format!("{}{}", home, &path[1..])
     } else if path == "~" {
         std::env::var("HOME").map_err(|_| "HOME environment variable not set.".to_string())?
@@ -271,7 +345,10 @@ fn launch_path(path: String) -> Result<(), String> {
 
     #[cfg(not(target_os = "macos"))]
     {
-        Err(format!("Local app launching is not supported on this platform. Path: {}", expanded))
+        Err(format!(
+            "Local app launching is not supported on this platform. Path: {}",
+            expanded
+        ))
     }
 }
 
@@ -325,7 +402,9 @@ fn open_macos_pref_url(url: &str, label: &str) -> Result<(), String> {
 
     #[cfg(not(target_os = "macos"))]
     {
-        Err(format!("{label} settings shortcut is only available on macOS."))
+        Err(format!(
+            "{label} settings shortcut is only available on macOS."
+        ))
     }
 }
 
@@ -449,6 +528,141 @@ fn enable_start_at_login() -> Result<bool, String> {
     }
 }
 
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+fn build_pomodoro_tray(app: &tauri::AppHandle) -> Result<PomodoroTrayHandles, String> {
+    let status_item = MenuItem::with_id(
+        app,
+        POMODORO_TRAY_STATUS_ITEM_ID,
+        "Pomodoro idle",
+        false,
+        None::<&str>,
+    )
+    .map_err(|error| error.to_string())?;
+    let action_item = MenuItem::with_id(
+        app,
+        POMODORO_TRAY_ACTION_ITEM_ID,
+        "Start Pomodoro",
+        true,
+        None::<&str>,
+    )
+    .map_err(|error| error.to_string())?;
+    let reset_item = MenuItem::with_id(
+        app,
+        POMODORO_TRAY_RESET_ITEM_ID,
+        "Reset Pomodoro",
+        false,
+        None::<&str>,
+    )
+    .map_err(|error| error.to_string())?;
+    let open_item = MenuItem::with_id(
+        app,
+        POMODORO_TRAY_OPEN_ITEM_ID,
+        "Open TimeFolio",
+        true,
+        None::<&str>,
+    )
+    .map_err(|error| error.to_string())?;
+    let separator = PredefinedMenuItem::separator(app).map_err(|error| error.to_string())?;
+    let quit_item =
+        PredefinedMenuItem::quit(app, Some("Quit")).map_err(|error| error.to_string())?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &status_item,
+            &action_item,
+            &reset_item,
+            &separator,
+            &open_item,
+            &quit_item,
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+
+    let mut tray_builder = TrayIconBuilder::with_id(POMODORO_TRAY_ID)
+        .menu(&menu)
+        .tooltip("TimeFolio Pomodoro")
+        .title("Idle")
+        .show_menu_on_left_click(true)
+        .icon_as_template(true)
+        .on_menu_event(|app, event| {
+            let event_name = if event.id() == POMODORO_TRAY_ACTION_ITEM_ID {
+                Some("pomodoro-tray-start-pause")
+            } else if event.id() == POMODORO_TRAY_RESET_ITEM_ID {
+                Some("pomodoro-tray-reset")
+            } else if event.id() == POMODORO_TRAY_OPEN_ITEM_ID {
+                Some("pomodoro-tray-open-app")
+            } else {
+                None
+            };
+
+            if let Some(event_name) = event_name {
+                if event_name == "pomodoro-tray-open-app" {
+                    show_main_window(app);
+                }
+                let _ = app.emit(event_name, ());
+            }
+        });
+
+    if let Some(icon) = app.default_window_icon().cloned() {
+        tray_builder = tray_builder.icon(icon);
+    }
+
+    tray_builder.build(app).map_err(|error| error.to_string())?;
+
+    Ok(PomodoroTrayHandles {
+        status_item,
+        action_item,
+        reset_item,
+    })
+}
+
+#[tauri::command]
+fn sync_pomodoro_tray(
+    app: tauri::AppHandle,
+    state: tauri::State<PomodoroTrayState>,
+    update: PomodoroTrayUpdate,
+) -> Result<(), String> {
+    let handles = state
+        .handles
+        .lock()
+        .map_err(|_| "Unable to access Pomodoro tray state.".to_string())?;
+
+    let Some(handles) = handles.as_ref() else {
+        return Ok(());
+    };
+
+    handles
+        .status_item
+        .set_text(&update.status_label)
+        .map_err(|error| error.to_string())?;
+    handles
+        .action_item
+        .set_text(&update.action_label)
+        .map_err(|error| error.to_string())?;
+    handles
+        .action_item
+        .set_enabled(update.action_enabled)
+        .map_err(|error| error.to_string())?;
+    handles
+        .reset_item
+        .set_enabled(update.reset_enabled)
+        .map_err(|error| error.to_string())?;
+
+    if let Some(tray) = app.tray_by_id(POMODORO_TRAY_ID) {
+        let _ = tray.set_title(Some(&update.tray_title));
+        let _ = tray.set_tooltip(Some(format!("TimeFolio Pomodoro\n{}", update.status_label)));
+    }
+
+    Ok(())
+}
+
 #[allow(unused_variables)]
 fn macos_accessibility_trusted(prompt: bool) -> bool {
     #[cfg(target_os = "macos")]
@@ -526,10 +740,17 @@ struct NotebookImageData {
 }
 
 #[tauri::command]
-fn read_notebook_image_as_base64(app: tauri::AppHandle, filename: String) -> Result<NotebookImageData, String> {
+fn read_notebook_image_as_base64(
+    app: tauri::AppHandle,
+    filename: String,
+) -> Result<NotebookImageData, String> {
     use base64::Engine as _;
 
-    if filename.is_empty() || filename.contains('/') || filename.contains('\\') || filename.contains("..") {
+    if filename.is_empty()
+        || filename.contains('/')
+        || filename.contains('\\')
+        || filename.contains("..")
+    {
         return Err("Invalid filename.".to_string());
     }
 
@@ -543,8 +764,7 @@ fn read_notebook_image_as_base64(app: tauri::AppHandle, filename: String) -> Res
 
     let file_path = data_dir.join("notebook-assets").join(&filename);
 
-    let bytes = fs::read(&file_path)
-        .map_err(|e| format!("Unable to read image file: {e}"))?;
+    let bytes = fs::read(&file_path).map_err(|e| format!("Unable to read image file: {e}"))?;
 
     let data_b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
 
@@ -601,7 +821,11 @@ fn nbimg_protocol_handler(
 }
 
 #[tauri::command]
-fn save_notebook_image(app: tauri::AppHandle, data_b64: String, ext: String) -> Result<String, String> {
+fn save_notebook_image(
+    app: tauri::AppHandle,
+    data_b64: String,
+    ext: String,
+) -> Result<String, String> {
     use base64::Engine as _;
 
     let ext = ext.to_lowercase();
@@ -631,8 +855,7 @@ fn save_notebook_image(app: tauri::AppHandle, data_b64: String, ext: String) -> 
     let file_name = format!("{}.{}", uuid::Uuid::new_v4(), ext);
     let file_path = assets_dir.join(&file_name);
 
-    fs::write(&file_path, &bytes)
-        .map_err(|e| format!("Unable to write image file: {e}"))?;
+    fs::write(&file_path, &bytes).map_err(|e| format!("Unable to write image file: {e}"))?;
 
     Ok(format!("nbimg://localhost/{file_name}"))
 }
@@ -651,9 +874,12 @@ async fn export_notebook_page(
     };
 
     let (tx, mut rx) = tauri::async_runtime::channel(1);
-    app.dialog().file().set_file_name(file_name).save_file(move |file| {
-        let _ = tx.try_send(file);
-    });
+    app.dialog()
+        .file()
+        .set_file_name(file_name)
+        .save_file(move |file| {
+            let _ = tx.try_send(file);
+        });
 
     let selected_file = rx
         .recv()
@@ -665,7 +891,8 @@ async fn export_notebook_page(
         .into_path()
         .map_err(|error| format!("Unable to resolve selected export path: {error}"))?;
 
-    fs::write(&path, contents).map_err(|error| format!("Unable to write notebook export file: {error}"))?;
+    fs::write(&path, contents)
+        .map_err(|error| format!("Unable to write notebook export file: {error}"))?;
 
     Ok(path.to_string_lossy().to_string())
 }
@@ -684,10 +911,18 @@ async fn export_notebook_zip(
 
     const MAX_BYTES: usize = 512 * 1024 * 1024;
     if bytes.len() > MAX_BYTES {
-        return Err(format!("Zip export exceeds 512 MB limit ({} bytes)", bytes.len()));
+        return Err(format!(
+            "Zip export exceeds 512 MB limit ({} bytes)",
+            bytes.len()
+        ));
     }
     // ZIP magic: PK\x03\x04
-    if bytes.len() < 4 || bytes[0] != 0x50 || bytes[1] != 0x4b || bytes[2] != 0x03 || bytes[3] != 0x04 {
+    if bytes.len() < 4
+        || bytes[0] != 0x50
+        || bytes[1] != 0x4b
+        || bytes[2] != 0x03
+        || bytes[3] != 0x04
+    {
         return Err("Generated export is not a valid zip file.".to_string());
     }
 
@@ -702,9 +937,12 @@ async fn export_notebook_zip(
     }
 
     let (tx, mut rx) = tauri::async_runtime::channel(1);
-    app.dialog().file().set_file_name(file_name).save_file(move |file| {
-        let _ = tx.try_send(file);
-    });
+    app.dialog()
+        .file()
+        .set_file_name(file_name)
+        .save_file(move |file| {
+            let _ = tx.try_send(file);
+        });
 
     let selected_file = rx
         .recv()
@@ -743,7 +981,10 @@ async fn export_notebook_pdf(
 
     const MAX_BYTES: usize = 120 * 1024 * 1024;
     if bytes.len() > MAX_BYTES {
-        return Err(format!("PDF export exceeds 120 MB limit ({} bytes)", bytes.len()));
+        return Err(format!(
+            "PDF export exceeds 120 MB limit ({} bytes)",
+            bytes.len()
+        ));
     }
     if bytes.len() < 4 || &bytes[..4] != b"%PDF" {
         return Err("Generated export is not a valid PDF.".to_string());
@@ -760,9 +1001,12 @@ async fn export_notebook_pdf(
     }
 
     let (tx, mut rx) = tauri::async_runtime::channel(1);
-    app.dialog().file().set_file_name(file_name).save_file(move |file| {
-        let _ = tx.try_send(file);
-    });
+    app.dialog()
+        .file()
+        .set_file_name(file_name)
+        .save_file(move |file| {
+            let _ = tx.try_send(file);
+        });
 
     let selected_file = rx
         .recv()
@@ -782,7 +1026,8 @@ async fn export_notebook_pdf(
         path.set_extension("pdf");
     }
 
-    fs::write(&path, bytes).map_err(|error| format!("Unable to write notebook PDF export: {error}"))?;
+    fs::write(&path, bytes)
+        .map_err(|error| format!("Unable to write notebook PDF export: {error}"))?;
 
     Ok(path.to_string_lossy().to_string())
 }
@@ -801,9 +1046,17 @@ async fn export_notebook_docx(
 
     const MAX_BYTES: usize = 120 * 1024 * 1024;
     if bytes.len() > MAX_BYTES {
-        return Err(format!("DOCX export exceeds 120 MB limit ({} bytes)", bytes.len()));
+        return Err(format!(
+            "DOCX export exceeds 120 MB limit ({} bytes)",
+            bytes.len()
+        ));
     }
-    if bytes.len() < 4 || bytes[0] != 0x50 || bytes[1] != 0x4b || bytes[2] != 0x03 || bytes[3] != 0x04 {
+    if bytes.len() < 4
+        || bytes[0] != 0x50
+        || bytes[1] != 0x4b
+        || bytes[2] != 0x03
+        || bytes[3] != 0x04
+    {
         return Err("Generated export is not a valid DOCX file.".to_string());
     }
 
@@ -818,9 +1071,12 @@ async fn export_notebook_docx(
     }
 
     let (tx, mut rx) = tauri::async_runtime::channel(1);
-    app.dialog().file().set_file_name(file_name).save_file(move |file| {
-        let _ = tx.try_send(file);
-    });
+    app.dialog()
+        .file()
+        .set_file_name(file_name)
+        .save_file(move |file| {
+            let _ = tx.try_send(file);
+        });
 
     let selected_file = rx
         .recv()
@@ -840,13 +1096,18 @@ async fn export_notebook_docx(
         path.set_extension("docx");
     }
 
-    fs::write(&path, bytes).map_err(|error| format!("Unable to write notebook DOCX export: {error}"))?;
+    fs::write(&path, bytes)
+        .map_err(|error| format!("Unable to write notebook DOCX export: {error}"))?;
 
     Ok(path.to_string_lossy().to_string())
 }
 
 fn is_valid_pdf_filename(filename: &str) -> bool {
-    if filename.is_empty() || filename.contains('/') || filename.contains('\\') || filename.contains("..") {
+    if filename.is_empty()
+        || filename.contains('/')
+        || filename.contains('\\')
+        || filename.contains("..")
+    {
         return false;
     }
     let ext = filename.rsplit('.').next().unwrap_or("").to_lowercase();
@@ -881,8 +1142,7 @@ fn save_notebook_pdf(app: tauri::AppHandle, data_b64: String) -> Result<String, 
     let file_name = format!("{}.pdf", uuid::Uuid::new_v4());
     let file_path = assets_dir.join(&file_name);
 
-    fs::write(&file_path, &bytes)
-        .map_err(|e| format!("Unable to write PDF file: {e}"))?;
+    fs::write(&file_path, &bytes).map_err(|e| format!("Unable to write PDF file: {e}"))?;
 
     Ok(file_name)
 }
@@ -893,7 +1153,10 @@ struct NotebookPdfData {
 }
 
 #[tauri::command]
-fn read_notebook_pdf_as_base64(app: tauri::AppHandle, filename: String) -> Result<NotebookPdfData, String> {
+fn read_notebook_pdf_as_base64(
+    app: tauri::AppHandle,
+    filename: String,
+) -> Result<NotebookPdfData, String> {
     use base64::Engine as _;
 
     if !is_valid_pdf_filename(&filename) {
@@ -951,7 +1214,11 @@ fn nbpdf_protocol_handler(
 }
 
 fn is_valid_image_filename(filename: &str) -> bool {
-    if filename.is_empty() || filename.contains('/') || filename.contains('\\') || filename.contains("..") {
+    if filename.is_empty()
+        || filename.contains('/')
+        || filename.contains('\\')
+        || filename.contains("..")
+    {
         return false;
     }
     let ext = filename.rsplit('.').next().unwrap_or("").to_lowercase();
@@ -1114,13 +1381,23 @@ fn purge_orphaned_notebook_pdfs(
 
 fn main() {
     tauri::Builder::default()
-        .register_uri_scheme_protocol("nbimg", |ctx, request| nbimg_protocol_handler(ctx.app_handle(), request))
-        .register_uri_scheme_protocol("nbpdf", |ctx, request| nbpdf_protocol_handler(ctx.app_handle(), request))
+        .register_uri_scheme_protocol("nbimg", |ctx, request| {
+            nbimg_protocol_handler(ctx.app_handle(), request)
+        })
+        .register_uri_scheme_protocol("nbpdf", |ctx, request| {
+            nbpdf_protocol_handler(ctx.app_handle(), request)
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_updater::Builder::new().pubkey(updater::updater_pubkey()).build())
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                .pubkey(updater::updater_pubkey())
+                .build(),
+        )
         .setup(|app| {
+            let tray_handles = build_pomodoro_tray(&app.handle()).ok();
+            app.manage(PomodoroTrayState::new(tray_handles));
             updater::spawn_update_check(app.handle().clone());
             Ok(())
         })
@@ -1186,6 +1463,7 @@ fn main() {
             get_start_at_login_status,
             enable_start_at_login,
             set_auto_tracker_onboarding_window_mode,
+            sync_pomodoro_tray,
             export_notebook_page,
             export_notebook_pdf,
             export_notebook_docx,
