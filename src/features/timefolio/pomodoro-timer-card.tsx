@@ -1,6 +1,7 @@
 import {
   Bell,
   BellOff,
+  Check,
   ChevronDown,
   Coffee,
   Pause,
@@ -23,8 +24,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { getLocalDateKeyFromIso, getTodayKey } from "../../lib/datetime";
 import { requestNotificationPermission, sendNativeReminder } from "../../lib/reminders";
 import { cn, fieldClassName, primaryButtonClassName, secondaryButtonClassName } from "../../lib/ui";
+import { useTimeFolioStore } from "../../state/tf-store";
+import type { TfSessionLog } from "../../types/models";
 import {
   DEFAULT_CUSTOM_POMODORO_CONFIG,
   DEFAULT_POMODORO_PRESET_ID,
@@ -99,6 +103,14 @@ interface ResolvedPomodoroPreferences {
   soundSelections: Record<PomodoroSoundEvent, PomodoroSoundId>;
 }
 
+interface CompletedFocusSession {
+  completionId: string;
+  startISO: string;
+  endISO: string;
+  durationMs: number;
+  saved: boolean;
+}
+
 interface PomodoroTimerContextValue {
   presetId: PomodoroPresetId;
   customConfig: PomodoroConfig;
@@ -119,6 +131,8 @@ interface PomodoroTimerContextValue {
   nextPhaseLabel: string;
   phaseProgressLabel: string;
   routineLabel: string;
+  lastCompletedFocus: CompletedFocusSession | null;
+  markFocusSaved: (completionId: string) => void;
   handlePresetChange: (nextPresetId: PomodoroPresetId) => void;
   updateCustomConfig: (nextConfig: PomodoroConfig) => void;
   handleStart: () => void;
@@ -368,6 +382,7 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
   );
   const [displayRemainingMs, setDisplayRemainingMs] = useState(remainingMsWhenPaused);
   const [inlineAlert, setInlineAlert] = useState<string | null>(null);
+  const [lastCompletedFocus, setLastCompletedFocus] = useState<CompletedFocusSession | null>(null);
   const playSound = usePomodoroSoundboard();
   const completionGuardRef = useRef(false);
   const lastTrayPayloadRef = useRef("");
@@ -433,11 +448,21 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
 
   const completePhase = useCallback(
     (completedPhase: PomodoroPhase, completedRoundIndex: number) => {
+      if (completedPhase === "focus") {
+        const endMs = Date.now();
+        setLastCompletedFocus({
+          completionId: `pomo-focus-${endMs - durationMs}`,
+          startISO: new Date(endMs - durationMs).toISOString(),
+          endISO: new Date(endMs).toISOString(),
+          durationMs,
+          saved: false,
+        });
+      }
       triggerAlert(completedPhase);
       const next = advancePomodoroPhase(completedPhase, completedRoundIndex, activeConfig);
       moveToPhase(next.phase, next.roundIndex, true);
     },
-    [activeConfig, moveToPhase, triggerAlert],
+    [activeConfig, durationMs, moveToPhase, triggerAlert],
   );
 
   useEffect(() => {
@@ -473,9 +498,14 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
       setRemainingMsWhenPaused(nextDurationMs);
       setDisplayRemainingMs(nextDurationMs);
       setInlineAlert(null);
+      setLastCompletedFocus(null);
     },
     [customConfig, presetId],
   );
+
+  const markFocusSaved = useCallback((completionId: string) => {
+    setLastCompletedFocus((prev) => (prev?.completionId === completionId ? { ...prev, saved: true } : prev));
+  }, []);
 
   const handlePresetChange = useCallback(
     (nextPresetId: PomodoroPresetId) => {
@@ -659,6 +689,8 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
     nextPhaseLabel,
     phaseProgressLabel,
     routineLabel,
+    lastCompletedFocus,
+    markFocusSaved,
     handlePresetChange,
     updateCustomConfig,
     handleStart,
@@ -735,6 +767,8 @@ export function PomodoroTimerCard({ onClose }: { onClose?: () => void } = {}) {
     nextPhaseLabel,
     phaseProgressLabel,
     routineLabel,
+    lastCompletedFocus,
+    markFocusSaved,
     handlePresetChange,
     updateCustomConfig,
     handleStart,
@@ -747,7 +781,33 @@ export function PomodoroTimerCard({ onClose }: { onClose?: () => void } = {}) {
     setSoundSelection,
     previewSound,
   } = usePomodoroTimer();
+  const store = useTimeFolioStore();
   const [showSoundSettings, setShowSoundSettings] = useState(false);
+  const [isSavingFocus, setIsSavingFocus] = useState(false);
+
+  const handleSaveFocusSession = useCallback(async () => {
+    if (!lastCompletedFocus || lastCompletedFocus.saved || isSavingFocus) return;
+    setIsSavingFocus(true);
+    try {
+      const localDate = getLocalDateKeyFromIso(lastCompletedFocus.startISO) ?? getTodayKey();
+      const session: TfSessionLog = {
+        id: lastCompletedFocus.completionId,
+        date: localDate,
+        method: "Pomodoro focus session",
+        methodKey: "pomodoro-focus-session",
+        hours: lastCompletedFocus.durationMs / 3_600_000,
+        startISO: lastCompletedFocus.startISO,
+        endISO: lastCompletedFocus.endISO,
+        notes: "Pomodoro focus session",
+        isDistraction: false,
+        isLive: false,
+      };
+      await store.upsertSessionLog(session);
+      markFocusSaved(lastCompletedFocus.completionId);
+    } finally {
+      setIsSavingFocus(false);
+    }
+  }, [isSavingFocus, lastCompletedFocus, markFocusSaved, store]);
   const soundSummary = useMemo(() => {
     if (!soundEnabled) {
       return "Sound off";
@@ -909,7 +969,7 @@ export function PomodoroTimerCard({ onClose }: { onClose?: () => void } = {}) {
               onChange={(value) => updateCustomConfig({ ...customConfig, longBreakMinutes: value })}
             />
             <NumberField
-              label="Focus sessions before long break"
+              label="ROUNDS"
               value={customConfig.roundsBeforeLongBreak}
               min={1}
               max={12}
@@ -918,7 +978,7 @@ export function PomodoroTimerCard({ onClose }: { onClose?: () => void } = {}) {
             />
           </div>
           <p className="mt-2 text-[11px] text-slate-500">
-            Round = one focus session. 2 = focus → short → focus → long.
+            Round = one focus session, so... 2 Rounds = focus → short → focus → long (repeat).
           </p>
 
           <div className="muted-surface mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[16px] px-3 py-2.5">
@@ -1002,6 +1062,28 @@ export function PomodoroTimerCard({ onClose }: { onClose?: () => void } = {}) {
       {notificationError ? (
         <p className="mt-3 rounded-[12px] border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
           {notificationError}
+        </p>
+      ) : null}
+
+      {lastCompletedFocus && !lastCompletedFocus.saved ? (
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-[12px] border border-emerald-400/20 bg-emerald-400/[0.08] px-3 py-2.5">
+          <p className="text-xs text-emerald-200">Focus session complete</p>
+          <button
+            type="button"
+            className={`${secondaryButtonClassName} h-8 px-3 text-xs`}
+            onClick={() => {
+              void handleSaveFocusSession();
+            }}
+            disabled={isSavingFocus}
+          >
+            <Check className="h-3 w-3" />
+            {isSavingFocus ? "Saving…" : "Log focus session"}
+          </button>
+        </div>
+      ) : lastCompletedFocus?.saved ? (
+        <p className="mt-3 rounded-[12px] border border-emerald-400/20 bg-emerald-400/[0.08] px-3 py-2 text-xs text-emerald-200">
+          <Check className="mr-1 inline h-3 w-3" />
+          Saved to Session Log
         </p>
       ) : null}
 
