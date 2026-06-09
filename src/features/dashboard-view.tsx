@@ -30,6 +30,7 @@ import { cn, primaryButtonClassName, secondaryButtonClassName, themeAwareWarmAcc
 import { useAppStore } from "../state/app-store";
 import { useTimeFolioStore } from "../state/tf-store";
 import { getTrackedStudyMinutesForDate } from "../lib/tf-session-metrics";
+import { PomodoroTimerCard } from "./timefolio/pomodoro-timer-card";
 import { StudyTaskCard } from "../components/study-task-card";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { TaskLaunchButton } from "../components/task-launch-button";
@@ -1003,6 +1004,8 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
 
                   <TodayTimeLogSummary sessionLogs={todaySessionLogs} />
                 </section>
+
+                <PomodoroTimerCard />
 
                 <UrgeAwarenessCard urgeLogs={todayUrgeLogs} />
               </div>
