@@ -73,9 +73,9 @@ const DEFAULT_SOUND_SELECTIONS: Record<PomodoroSoundEvent, PomodoroSoundId> = {
 };
 
 const SOUND_EVENT_OPTIONS: Array<{ key: PomodoroSoundEvent; label: string }> = [
-  { key: "focusComplete", label: "Focus complete / start break" },
-  { key: "shortBreakComplete", label: "Short break complete / start focus" },
-  { key: "longBreakComplete", label: "Long break complete / start focus" },
+  { key: "focusComplete", label: "Focus complete" },
+  { key: "shortBreakComplete", label: "Short break complete" },
+  { key: "longBreakComplete", label: "Long break complete" },
 ];
 
 interface StoredPomodoroPreferences {
@@ -326,15 +326,18 @@ function NumberField({
   disabled: boolean;
 }) {
   return (
-    <label className="flex min-w-0 flex-col gap-1.5">
-      <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">{label}</span>
+    <label className="flex min-w-0 flex-col gap-1">
+      <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">{label}</span>
       <input
         type="number"
         inputMode="numeric"
         min={min}
         max={max}
         step="1"
-        className={cn(fieldClassName, "h-11 rounded-[16px] px-3 py-0 disabled:cursor-not-allowed disabled:opacity-60")}
+        className={cn(
+          fieldClassName,
+          "h-10 rounded-[14px] px-3 py-0 text-sm disabled:cursor-not-allowed disabled:opacity-60",
+        )}
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
@@ -742,33 +745,33 @@ export function PomodoroTimerCard({ onClose }: { onClose?: () => void } = {}) {
 
   return (
     <section
-      className="glass-panel relative min-w-0 shrink-0 overflow-hidden p-5 sm:p-6"
+      className="glass-panel relative min-w-0 shrink-0 overflow-hidden p-4 sm:p-5"
       aria-label="Pomodoro Timer"
       data-testid="pomodoro-timer-card"
     >
-      <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" aria-hidden="true" />
+      <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" aria-hidden="true" />
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-100 shadow-[0_18px_48px_rgba(34,211,238,0.12)]">
-            {phase === "focus" ? <Timer className="h-5 w-5" /> : <Coffee className="h-5 w-5" />}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-cyan-300/20 bg-cyan-300/10 text-cyan-100 shadow-[0_18px_48px_rgba(34,211,238,0.12)]">
+            {phase === "focus" ? <Timer className="h-4.5 w-4.5" /> : <Coffee className="h-4.5 w-4.5" />}
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-lg font-semibold text-white">Pomodoro timer</h3>
+              <h3 className="truncate text-base font-semibold text-white sm:text-lg">Pomodoro timer</h3>
               <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
                 {phaseLabel}
               </span>
             </div>
-            <p className="mt-1 text-sm text-slate-400">Stay in rhythm with a focused study block that matches your theme.</p>
-            <p className="mt-2 truncate text-xs uppercase tracking-[0.16em] text-slate-500">{routineLabel}</p>
+            <p className="mt-0.5 text-sm text-slate-400">Stay in rhythm with a focused study block that matches your theme.</p>
+            <p className="mt-1 truncate text-[11px] uppercase tracking-[0.14em] text-slate-500">{routineLabel}</p>
           </div>
         </div>
 
         <div className="flex shrink-0 items-start gap-2">
-          <div className="panel-subtle flex items-center gap-3 px-3 py-2">
+          <div className="panel-subtle flex items-center gap-2 px-2.5 py-2">
             <div className="hidden text-right sm:block">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Alerts</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Alerts</p>
               <p className="text-xs text-slate-400">Sound and desktop reminders</p>
             </div>
             <div className="flex items-center gap-2">
@@ -790,7 +793,7 @@ export function PomodoroTimerCard({ onClose }: { onClose?: () => void } = {}) {
               onClick={onClose}
               aria-label="Close pomodoro modal"
               title="Close pomodoro modal"
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-slate-900/60 text-slate-300 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-slate-900/60 text-slate-300 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
             >
               <X className="h-4 w-4" />
             </button>
@@ -798,13 +801,13 @@ export function PomodoroTimerCard({ onClose }: { onClose?: () => void } = {}) {
         </div>
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-2 rounded-[20px] border border-white/10 bg-white/[0.03] p-2">
+      <div className="mt-4 flex flex-wrap gap-2 rounded-[18px] border border-white/10 bg-white/[0.03] p-2">
         {PRESET_OPTIONS.map((option) => (
           <button
             key={option.id}
             type="button"
             className={cn(
-              "inline-flex min-w-0 items-center rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] transition",
+              "inline-flex min-w-0 items-center rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] transition",
               presetId === option.id
                 ? "border-cyan-300/35 bg-cyan-300/12 text-cyan-100 shadow-[0_12px_30px_rgba(34,211,238,0.12)]"
                 : "border-white/10 bg-transparent text-slate-400 hover:border-white/20 hover:bg-white/[0.05] hover:text-slate-200",
@@ -818,16 +821,16 @@ export function PomodoroTimerCard({ onClose }: { onClose?: () => void } = {}) {
         ))}
       </div>
 
-      <div className="panel-subtle mt-5 overflow-hidden px-5 py-6 text-center">
-        <div className="flex items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-200">
+      <div className="panel-subtle mt-4 overflow-hidden px-4 py-4 text-center">
+        <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-200">
           <span>{phaseLabel}</span>
           <span className="h-1 w-1 rounded-full bg-slate-600" />
           <span>{phaseProgressLabel}</span>
         </div>
-        <p className="mt-4 font-display text-[clamp(3.4rem,10vw,5rem)] font-semibold leading-none tracking-[-0.05em] tabular-nums text-white">
+        <p className="mt-2.5 font-display text-[clamp(2.85rem,8vw,4.25rem)] font-semibold leading-none tracking-[-0.05em] tabular-nums text-white">
           {formatPomodoroTime(displayRemainingMs)}
         </p>
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-xs text-slate-400">
+        <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2 text-[11px] text-slate-400">
           <span>Next: {nextPhaseLabel}</span>
           <span className="hidden h-1 w-1 rounded-full bg-slate-600 sm:block" />
           <span>{activeConfig.focusMinutes} min focus cadence</span>
@@ -835,23 +838,22 @@ export function PomodoroTimerCard({ onClose }: { onClose?: () => void } = {}) {
       </div>
 
       {presetId === "custom" ? (
-        <div className="quiet-panel mt-5 p-4 sm:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="quiet-panel mt-4 p-3.5 sm:p-4">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Custom routine</p>
-              <p className="mt-1 text-sm text-slate-400">Fine-tune your focus, short breaks, and long-break cadence.</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Custom routine</p>
             </div>
-            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">
-              Theme-safe
-            </span>
           </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
-              <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">Routine name</span>
+          <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+            <label className="flex min-w-0 flex-col gap-1 sm:col-span-2">
+              <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">Routine name</span>
               <input
                 type="text"
-                className={cn(fieldClassName, "h-11 rounded-[16px] px-3 py-0 disabled:cursor-not-allowed disabled:opacity-60")}
+                className={cn(
+                  fieldClassName,
+                  "h-10 rounded-[14px] px-3 py-0 text-sm disabled:cursor-not-allowed disabled:opacity-60",
+                )}
                 value={customConfig.name}
                 disabled={isRunning}
                 onChange={(event) => updateCustomConfig({ ...customConfig, name: event.target.value })}
@@ -890,16 +892,13 @@ export function PomodoroTimerCard({ onClose }: { onClose?: () => void } = {}) {
               onChange={(value) => updateCustomConfig({ ...customConfig, roundsBeforeLongBreak: value })}
             />
           </div>
-          <p className="mt-3 text-xs text-slate-400">
-            A round means one focus session. Example: 2 = focus - short break - focus - long break.
+          <p className="mt-2 text-[11px] text-slate-500">
+            Round = one focus session. 2 = focus → short → focus → long.
           </p>
 
-          <div className="muted-surface mt-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <div>
-              <p className="text-sm font-medium text-white">Long break enabled</p>
-              <p className="text-xs text-slate-400">Keeps longer resets in the rotation after your chosen round count.</p>
-            </div>
-            <label className="flex items-center gap-2 text-xs text-slate-300">
+          <div className="muted-surface mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[16px] px-3 py-2.5">
+            <p className="text-sm font-medium text-white">Long break enabled</p>
+            <label className="flex items-center gap-2 text-[11px] text-slate-300">
               <input
                 type="checkbox"
                 className="h-4 w-4 accent-cyan-300"
@@ -913,36 +912,19 @@ export function PomodoroTimerCard({ onClose }: { onClose?: () => void } = {}) {
         </div>
       ) : null}
 
-      <div className="quiet-panel mt-5 p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Sound settings</p>
-            <p className="mt-1 text-sm text-slate-400">Choose a sound for each phase transition and preview it before you start.</p>
-          </div>
-          <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">
-            Built-in audio
-          </span>
-        </div>
+      <div className="quiet-panel mt-4 p-3.5 sm:p-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Sound settings</p>
 
-        <div className="mt-4 space-y-3">
+        <div className="mt-3 space-y-2">
           {SOUND_EVENT_OPTIONS.map((option) => (
             <div
               key={option.key}
-              className="muted-surface flex flex-col gap-3 rounded-[18px] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+              className="muted-surface grid gap-2 rounded-[16px] px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(180px,220px)_auto] sm:items-center"
             >
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-white">{option.label}</p>
-                <p className="text-xs text-slate-400">
-                  {option.key === "focusComplete"
-                    ? "Plays when focus ends and break begins."
-                    : option.key === "shortBreakComplete"
-                      ? "Plays when a short break ends and focus resumes."
-                      : "Plays when a long break ends and focus resumes."}
-                </p>
-              </div>
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <p className="min-w-0 text-sm font-medium text-white">{option.label}</p>
+              <div className="flex min-w-0 items-center gap-2 sm:contents">
                 <select
-                  className={cn(fieldClassName, "h-11 min-w-[220px] rounded-[16px] px-3 py-0")}
+                  className={cn(fieldClassName, "h-10 min-w-0 rounded-[14px] px-3 py-0 text-sm")}
                   value={soundSelections[option.key]}
                   onChange={(event) => setSoundSelection(option.key, event.target.value as PomodoroSoundId)}
                 >
@@ -954,11 +936,11 @@ export function PomodoroTimerCard({ onClose }: { onClose?: () => void } = {}) {
                 </select>
                 <button
                   type="button"
-                  className={`${secondaryButtonClassName} h-11 px-4`}
+                  className={`${secondaryButtonClassName} h-10 px-3 text-xs`}
                   onClick={() => previewSound(soundSelections[option.key])}
                   disabled={soundSelections[option.key] === "none"}
                 >
-                  <Play className="h-3.5 w-3.5" />
+                  <Play className="h-3 w-3" />
                   Preview
                 </button>
               </div>
@@ -979,29 +961,29 @@ export function PomodoroTimerCard({ onClose }: { onClose?: () => void } = {}) {
         </p>
       ) : null}
 
-      <div className="mt-5 flex flex-wrap gap-2">
+      <div className="mt-4 flex flex-wrap gap-2">
         {isRunning ? (
-          <button type="button" className={`${secondaryButtonClassName} h-11 px-4`} onClick={handlePause}>
+          <button type="button" className={`${secondaryButtonClassName} h-10 px-4`} onClick={handlePause}>
             <Pause className="h-3.5 w-3.5" />
             Pause
           </button>
         ) : (
-          <button type="button" className={`${primaryButtonClassName} h-11 px-4`} onClick={handleStart} disabled={!canStart}>
+          <button type="button" className={`${primaryButtonClassName} h-10 px-4`} onClick={handleStart} disabled={!canStart}>
             <Play className="h-3.5 w-3.5" />
             {isStopped ? "Start" : "Resume"}
           </button>
         )}
-        <button type="button" className={`${secondaryButtonClassName} h-11 px-4`} onClick={handleReset}>
+        <button type="button" className={`${secondaryButtonClassName} h-10 px-4`} onClick={handleReset}>
           <RotateCcw className="h-3.5 w-3.5" />
           Reset
         </button>
         {phase === "focus" ? (
-          <button type="button" className={`${secondaryButtonClassName} h-11 px-4`} onClick={handleSkipToBreak}>
+          <button type="button" className={`${secondaryButtonClassName} h-10 px-4`} onClick={handleSkipToBreak}>
             <SkipForward className="h-3.5 w-3.5" />
             Skip to break
           </button>
         ) : (
-          <button type="button" className={`${secondaryButtonClassName} h-11 px-4`} onClick={handleSkipToFocus}>
+          <button type="button" className={`${secondaryButtonClassName} h-10 px-4`} onClick={handleSkipToFocus}>
             <SkipBack className="h-3.5 w-3.5" />
             Skip to focus
           </button>

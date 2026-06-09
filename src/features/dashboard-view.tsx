@@ -1222,7 +1222,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
           onClose={() => setShowPomodoroModal(false)}
           position="center"
           titleId="today-pomodoro-modal-title"
-          contentClassName="max-w-[860px] border-none bg-transparent p-0 shadow-none"
+          contentClassName="max-w-[920px] border-none bg-transparent p-0 shadow-none"
         >
           <h2 id="today-pomodoro-modal-title" className="sr-only">
             Pomodoro timer
