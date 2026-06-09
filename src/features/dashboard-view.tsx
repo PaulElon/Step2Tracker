@@ -1009,12 +1009,11 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                       </button>
                       <button
                         type="button"
-                        className="inline-flex max-w-none items-center gap-1.5 overflow-hidden rounded-full border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-slate-100"
+                        className="launch-button max-w-none shrink-0"
                         onClick={() => setShowPomodoroModal(true)}
                         aria-haspopup="dialog"
                         aria-expanded={showPomodoroModal}
                       >
-                        <Timer className="h-3.5 w-3.5" />
                         Pomodoro
                       </button>
                     </div>

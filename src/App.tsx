@@ -440,7 +440,7 @@ function SidebarCountdown() {
   }
 
   return (
-    <PomodoroTimerProvider>
+    <>
       <div className="px-1">
         <p className="text-[0.62rem] uppercase tracking-[0.2em] text-slate-500">Countdown</p>
         {activeTimers.length === 0 ? (
@@ -560,7 +560,7 @@ function SidebarCountdown() {
           </div>
         </ModalShell>
       ) : null}
-    </PomodoroTimerProvider>
+    </>
   );
 }
 
@@ -1190,7 +1190,8 @@ export default function App() {
   const bannerCount = (isDemoMode ? 1 : 0) + (updateAvailable ? 1 : 0);
 
   return (
-    <>
+    <PomodoroTimerProvider>
+      <>
       <DemoBanner />
       {updateAvailable ? (
         <div
@@ -1371,6 +1372,7 @@ export default function App() {
         onSkip={() => setShowAutoTrackerOnboarding(false)}
       />
     ) : null}
-    </>
+      </>
+    </PomodoroTimerProvider>
   );
 }
