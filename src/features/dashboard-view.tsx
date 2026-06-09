@@ -30,7 +30,7 @@ import { cn, primaryButtonClassName, secondaryButtonClassName, themeAwareWarmAcc
 import { useAppStore } from "../state/app-store";
 import { useTimeFolioStore } from "../state/tf-store";
 import { getTrackedStudyMinutesForDate } from "../lib/tf-session-metrics";
-import { PomodoroTimerCard } from "./timefolio/pomodoro-timer-card";
+import { PomodoroTimerCard, PomodoroTimerStatusBadge } from "./timefolio/pomodoro-timer-card";
 import { ModalShell } from "../components/modal-shell";
 import { StudyTaskCard } from "../components/study-task-card";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
@@ -1000,6 +1000,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                       <p className="mt-1 text-xs text-slate-400">Jump into the full timer or keep a clean Pomodoro cadence.</p>
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <PomodoroTimerStatusBadge />
                       <button
                         type="button"
                         className="launch-button max-w-none shrink-0"
@@ -1226,7 +1227,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
           <h2 id="today-pomodoro-modal-title" className="sr-only">
             Pomodoro timer
           </h2>
-          <PomodoroTimerCard />
+          <PomodoroTimerCard onClose={() => setShowPomodoroModal(false)} />
         </ModalShell>
       ) : null}
     </div>

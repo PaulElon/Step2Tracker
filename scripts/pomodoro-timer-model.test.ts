@@ -3,6 +3,7 @@ import {
   POMODORO_PRESETS,
   advancePomodoroPhase,
   formatPomodoroTime,
+  getPomodoroPhaseProgressLabel,
   validatePomodoroConfig,
 } from "../src/features/timefolio/pomodoro-timer-model.ts";
 
@@ -37,6 +38,56 @@ assert.deepEqual(
 assert.deepEqual(
   advancePomodoroPhase("shortBreak", 6, POMODORO_PRESETS.sprint),
   { phase: "focus", roundIndex: 7 },
+);
+
+assert.deepEqual(
+  advancePomodoroPhase("focus", 1, { ...POMODORO_PRESETS.classic, roundsBeforeLongBreak: 1, longBreakEnabled: true }),
+  { phase: "longBreak", roundIndex: 1 },
+);
+assert.deepEqual(
+  advancePomodoroPhase("longBreak", 1, { ...POMODORO_PRESETS.classic, roundsBeforeLongBreak: 1, longBreakEnabled: true }),
+  { phase: "focus", roundIndex: 1 },
+);
+assert.deepEqual(
+  advancePomodoroPhase("focus", 1, { ...POMODORO_PRESETS.classic, roundsBeforeLongBreak: 2, longBreakEnabled: true }),
+  { phase: "shortBreak", roundIndex: 1 },
+);
+assert.deepEqual(
+  advancePomodoroPhase("shortBreak", 1, { ...POMODORO_PRESETS.classic, roundsBeforeLongBreak: 2, longBreakEnabled: true }),
+  { phase: "focus", roundIndex: 2 },
+);
+assert.deepEqual(
+  advancePomodoroPhase("focus", 2, { ...POMODORO_PRESETS.classic, roundsBeforeLongBreak: 2, longBreakEnabled: true }),
+  { phase: "longBreak", roundIndex: 2 },
+);
+assert.deepEqual(
+  advancePomodoroPhase("focus", 1, { ...POMODORO_PRESETS.classic, roundsBeforeLongBreak: 3, longBreakEnabled: true }),
+  { phase: "shortBreak", roundIndex: 1 },
+);
+assert.deepEqual(
+  advancePomodoroPhase("shortBreak", 2, { ...POMODORO_PRESETS.classic, roundsBeforeLongBreak: 3, longBreakEnabled: true }),
+  { phase: "focus", roundIndex: 3 },
+);
+assert.deepEqual(
+  advancePomodoroPhase("focus", 3, { ...POMODORO_PRESETS.classic, roundsBeforeLongBreak: 3, longBreakEnabled: true }),
+  { phase: "longBreak", roundIndex: 3 },
+);
+assert.deepEqual(
+  advancePomodoroPhase("focus", 4, { ...POMODORO_PRESETS.classic, longBreakEnabled: false }),
+  { phase: "shortBreak", roundIndex: 4 },
+);
+
+assert.equal(
+  getPomodoroPhaseProgressLabel("focus", 1, { ...POMODORO_PRESETS.classic, roundsBeforeLongBreak: 3, longBreakEnabled: true }),
+  "Focus session 1 of 3",
+);
+assert.equal(
+  getPomodoroPhaseProgressLabel("shortBreak", 1, { ...POMODORO_PRESETS.classic, roundsBeforeLongBreak: 3, longBreakEnabled: true }),
+  "Break after focus 1 of 3",
+);
+assert.equal(
+  getPomodoroPhaseProgressLabel("longBreak", 3, { ...POMODORO_PRESETS.classic, roundsBeforeLongBreak: 3, longBreakEnabled: true }),
+  "Long break after 3 focus sessions",
 );
 
 assert.equal(formatPomodoroTime(50 * 60 * 1000), "50:00");

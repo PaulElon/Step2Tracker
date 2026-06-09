@@ -1,5 +1,6 @@
 export type PomodoroPhase = "focus" | "shortBreak" | "longBreak";
 export type PomodoroPresetId = "classic" | "deepWork" | "fiftyTwoSeventeen" | "sprint" | "custom";
+export type PomodoroSoundEvent = "focusComplete" | "shortBreakComplete" | "longBreakComplete";
 
 export interface PomodoroConfig {
   name: string;
@@ -104,7 +105,8 @@ export function advancePomodoroPhase(
   config: PomodoroConfig,
 ): { phase: PomodoroPhase; roundIndex: number } {
   if (phase === "focus") {
-    const shouldTakeLongBreak = config.longBreakEnabled && roundIndex >= config.roundsBeforeLongBreak;
+    const shouldTakeLongBreak =
+      config.longBreakEnabled && roundIndex % Math.max(1, config.roundsBeforeLongBreak) === 0;
     return { phase: shouldTakeLongBreak ? "longBreak" : "shortBreak", roundIndex };
   }
 
@@ -126,6 +128,12 @@ export function getPomodoroPhaseLabel(phase: PomodoroPhase) {
   return "Short Break";
 }
 
+export function getPomodoroSoundEvent(completedPhase: PomodoroPhase): PomodoroSoundEvent {
+  if (completedPhase === "focus") return "focusComplete";
+  if (completedPhase === "longBreak") return "longBreakComplete";
+  return "shortBreakComplete";
+}
+
 export function getPomodoroAlertCopy(completedPhase: PomodoroPhase) {
   if (completedPhase === "focus") {
     return {
@@ -137,7 +145,7 @@ export function getPomodoroAlertCopy(completedPhase: PomodoroPhase) {
   if (completedPhase === "longBreak") {
     return {
       title: "Long break complete",
-      body: "Start your next focus round.",
+      body: "Time to study.",
     };
   }
 
@@ -145,6 +153,24 @@ export function getPomodoroAlertCopy(completedPhase: PomodoroPhase) {
     title: "Break complete",
     body: "Time to study.",
   };
+}
+
+export function getPomodoroPhaseProgressLabel(phase: PomodoroPhase, roundIndex: number, config: PomodoroConfig) {
+  const sessionLabel = roundIndex === 1 ? "session" : "sessions";
+
+  if (phase === "focus") {
+    return config.longBreakEnabled
+      ? `Focus session ${roundIndex} of ${config.roundsBeforeLongBreak}`
+      : `Focus session ${roundIndex}`;
+  }
+
+  if (phase === "longBreak") {
+    return `Long break after ${roundIndex} focus ${sessionLabel}`;
+  }
+
+  return config.longBreakEnabled
+    ? `Break after focus ${roundIndex} of ${config.roundsBeforeLongBreak}`
+    : `Break after focus ${roundIndex}`;
 }
 
 export function formatPomodoroTime(milliseconds: number) {

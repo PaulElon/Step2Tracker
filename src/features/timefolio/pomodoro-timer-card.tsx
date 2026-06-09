@@ -10,6 +10,7 @@ import {
   Timer,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 import {
   createContext,
@@ -30,6 +31,7 @@ import {
   type PomodoroConfig,
   type PomodoroPhase,
   type PomodoroPresetId,
+  type PomodoroSoundEvent,
   advancePomodoroPhase,
   clampInteger,
   formatPomodoroTime,
@@ -37,6 +39,8 @@ import {
   getPomodoroAlertCopy,
   getPomodoroPhaseDurationMs,
   getPomodoroPhaseLabel,
+  getPomodoroPhaseProgressLabel,
+  getPomodoroSoundEvent,
   validatePomodoroConfig,
 } from "./pomodoro-timer-model";
 import { listenForPomodoroTrayEvent, syncPomodoroTray } from "./pomodoro-tray-bridge";
@@ -51,11 +55,35 @@ const PRESET_OPTIONS: Array<{ id: PomodoroPresetId; label: string }> = [
   { id: "custom", label: "Custom" },
 ];
 
+type PomodoroSoundId = "chime" | "bell" | "softBeep" | "doubleBeep" | "successTone" | "none";
+
+const SOUND_OPTIONS: Array<{ id: PomodoroSoundId; label: string }> = [
+  { id: "chime", label: "Chime" },
+  { id: "bell", label: "Bell" },
+  { id: "softBeep", label: "Soft beep" },
+  { id: "doubleBeep", label: "Double beep" },
+  { id: "successTone", label: "Success tone" },
+  { id: "none", label: "None" },
+];
+
+const DEFAULT_SOUND_SELECTIONS: Record<PomodoroSoundEvent, PomodoroSoundId> = {
+  focusComplete: "chime",
+  shortBreakComplete: "softBeep",
+  longBreakComplete: "successTone",
+};
+
+const SOUND_EVENT_OPTIONS: Array<{ key: PomodoroSoundEvent; label: string }> = [
+  { key: "focusComplete", label: "Focus complete / start break" },
+  { key: "shortBreakComplete", label: "Short break complete / start focus" },
+  { key: "longBreakComplete", label: "Long break complete / start focus" },
+];
+
 interface StoredPomodoroPreferences {
   presetId?: PomodoroPresetId;
   customConfig?: Partial<PomodoroConfig>;
   soundEnabled?: boolean;
   notificationsEnabled?: boolean;
+  soundSelections?: Partial<Record<PomodoroSoundEvent, PomodoroSoundId>>;
 }
 
 interface ResolvedPomodoroPreferences {
@@ -63,6 +91,7 @@ interface ResolvedPomodoroPreferences {
   customConfig: PomodoroConfig;
   soundEnabled: boolean;
   notificationsEnabled: boolean;
+  soundSelections: Record<PomodoroSoundEvent, PomodoroSoundId>;
 }
 
 interface PomodoroTimerContextValue {
@@ -70,6 +99,7 @@ interface PomodoroTimerContextValue {
   customConfig: PomodoroConfig;
   soundEnabled: boolean;
   notificationsEnabled: boolean;
+  soundSelections: Record<PomodoroSoundEvent, PomodoroSoundId>;
   notificationError: string | null;
   phase: PomodoroPhase;
   roundIndex: number;
@@ -82,8 +112,8 @@ interface PomodoroTimerContextValue {
   canStart: boolean;
   phaseLabel: string;
   nextPhaseLabel: string;
+  phaseProgressLabel: string;
   routineLabel: string;
-  maxRoundLabel: string;
   handlePresetChange: (nextPresetId: PomodoroPresetId) => void;
   updateCustomConfig: (nextConfig: PomodoroConfig) => void;
   handleStart: () => void;
@@ -93,6 +123,8 @@ interface PomodoroTimerContextValue {
   handleSkipToFocus: () => void;
   toggleNotifications: () => Promise<void>;
   toggleSound: () => void;
+  setSoundSelection: (event: PomodoroSoundEvent, soundId: PomodoroSoundId) => void;
+  previewSound: (soundId: PomodoroSoundId) => void;
 }
 
 declare global {
@@ -122,12 +154,31 @@ function sanitizeConfig(input: Partial<PomodoroConfig> | undefined, fallback: Po
   };
 }
 
+function sanitizeSoundSelections(
+  input: Partial<Record<PomodoroSoundEvent, PomodoroSoundId>> | undefined,
+): Record<PomodoroSoundEvent, PomodoroSoundId> {
+  const validSoundIds = new Set<PomodoroSoundId>(SOUND_OPTIONS.map((option) => option.id));
+
+  return {
+    focusComplete: validSoundIds.has(input?.focusComplete ?? "none")
+      ? (input?.focusComplete ?? DEFAULT_SOUND_SELECTIONS.focusComplete)
+      : DEFAULT_SOUND_SELECTIONS.focusComplete,
+    shortBreakComplete: validSoundIds.has(input?.shortBreakComplete ?? "none")
+      ? (input?.shortBreakComplete ?? DEFAULT_SOUND_SELECTIONS.shortBreakComplete)
+      : DEFAULT_SOUND_SELECTIONS.shortBreakComplete,
+    longBreakComplete: validSoundIds.has(input?.longBreakComplete ?? "none")
+      ? (input?.longBreakComplete ?? DEFAULT_SOUND_SELECTIONS.longBreakComplete)
+      : DEFAULT_SOUND_SELECTIONS.longBreakComplete,
+  };
+}
+
 function readStoredPreferences(): ResolvedPomodoroPreferences {
   const fallback: ResolvedPomodoroPreferences = {
     presetId: DEFAULT_POMODORO_PRESET_ID,
     customConfig: DEFAULT_CUSTOM_POMODORO_CONFIG,
     soundEnabled: true,
     notificationsEnabled: false,
+    soundSelections: DEFAULT_SOUND_SELECTIONS,
   };
 
   try {
@@ -146,6 +197,7 @@ function readStoredPreferences(): ResolvedPomodoroPreferences {
       customConfig: sanitizeConfig(parsed.customConfig, DEFAULT_CUSTOM_POMODORO_CONFIG),
       soundEnabled: typeof parsed.soundEnabled === "boolean" ? parsed.soundEnabled : true,
       notificationsEnabled: typeof parsed.notificationsEnabled === "boolean" ? parsed.notificationsEnabled : false,
+      soundSelections: sanitizeSoundSelections(parsed.soundSelections),
     };
   } catch {
     return fallback;
@@ -160,10 +212,14 @@ function persistPreferences(preferences: Required<StoredPomodoroPreferences>) {
   }
 }
 
-function usePomodoroChime() {
+function usePomodoroSoundboard() {
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  return useCallback(() => {
+  return useCallback((soundId: PomodoroSoundId) => {
+    if (soundId === "none") {
+      return;
+    }
+
     try {
       const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextCtor) {
@@ -172,20 +228,50 @@ function usePomodoroChime() {
 
       const context = audioContextRef.current ?? new AudioContextCtor();
       audioContextRef.current = context;
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
+      void context.resume().catch(() => undefined);
 
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(660, context.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(880, context.currentTime + 0.16);
-      gain.gain.setValueAtTime(0.001, context.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.18, context.currentTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.35);
+      const patterns: Record<
+        Exclude<PomodoroSoundId, "none">,
+        Array<{ frequency: number; gain: number; start: number; duration: number; type: OscillatorType }>
+      > = {
+        chime: [
+          { frequency: 660, gain: 0.14, start: 0, duration: 0.18, type: "sine" },
+          { frequency: 880, gain: 0.12, start: 0.17, duration: 0.22, type: "sine" },
+        ],
+        bell: [
+          { frequency: 740, gain: 0.16, start: 0, duration: 0.38, type: "triangle" },
+          { frequency: 1110, gain: 0.07, start: 0.02, duration: 0.3, type: "sine" },
+        ],
+        softBeep: [{ frequency: 540, gain: 0.12, start: 0, duration: 0.16, type: "sine" }],
+        doubleBeep: [
+          { frequency: 620, gain: 0.12, start: 0, duration: 0.12, type: "square" },
+          { frequency: 620, gain: 0.12, start: 0.18, duration: 0.12, type: "square" },
+        ],
+        successTone: [
+          { frequency: 520, gain: 0.12, start: 0, duration: 0.12, type: "triangle" },
+          { frequency: 660, gain: 0.12, start: 0.13, duration: 0.12, type: "triangle" },
+          { frequency: 880, gain: 0.12, start: 0.26, duration: 0.2, type: "triangle" },
+        ],
+      };
 
-      oscillator.connect(gain);
-      gain.connect(context.destination);
-      oscillator.start();
-      oscillator.stop(context.currentTime + 0.38);
+      const startAt = context.currentTime + 0.02;
+      for (const step of patterns[soundId]) {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        const toneStart = startAt + step.start;
+        const toneEnd = toneStart + step.duration;
+
+        oscillator.type = step.type;
+        oscillator.frequency.setValueAtTime(step.frequency, toneStart);
+        gain.gain.setValueAtTime(0.001, toneStart);
+        gain.gain.exponentialRampToValueAtTime(step.gain, toneStart + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, toneEnd);
+
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(toneStart);
+        oscillator.stop(toneEnd + 0.02);
+      }
     } catch {
       // Audio is a nice-to-have local alert.
     }
@@ -263,6 +349,7 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
   const [customConfig, setCustomConfig] = useState<PomodoroConfig>(initialPreferences.customConfig);
   const [soundEnabled, setSoundEnabled] = useState(initialPreferences.soundEnabled);
   const [notificationsEnabled, setNotificationsEnabled] = useState(initialPreferences.notificationsEnabled);
+  const [soundSelections, setSoundSelections] = useState(initialPreferences.soundSelections);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [phase, setPhase] = useState<PomodoroPhase>("focus");
   const [roundIndex, setRoundIndex] = useState(1);
@@ -273,7 +360,7 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
   );
   const [displayRemainingMs, setDisplayRemainingMs] = useState(remainingMsWhenPaused);
   const [inlineAlert, setInlineAlert] = useState<string | null>(null);
-  const playChime = usePomodoroChime();
+  const playSound = usePomodoroSoundboard();
   const completionGuardRef = useRef(false);
   const lastTrayPayloadRef = useRef("");
 
@@ -284,8 +371,8 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
   const canStart = !isRunning && !configError;
   const phaseLabel = getPomodoroPhaseLabel(phase);
   const nextPhaseLabel = getNextPomodoroPhaseLabel(phase, roundIndex, activeConfig);
+  const phaseProgressLabel = getPomodoroPhaseProgressLabel(phase, roundIndex, activeConfig);
   const routineLabel = activeConfig.name.trim() || "Custom routine";
-  const maxRoundLabel = activeConfig.longBreakEnabled ? ` of ${activeConfig.roundsBeforeLongBreak}` : "";
 
   useEffect(() => {
     completionGuardRef.current = false;
@@ -297,8 +384,9 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
       customConfig,
       soundEnabled,
       notificationsEnabled,
+      soundSelections,
     });
-  }, [customConfig, notificationsEnabled, presetId, soundEnabled]);
+  }, [customConfig, notificationsEnabled, presetId, soundEnabled, soundSelections]);
 
   const triggerAlert = useCallback(
     (completedPhase: PomodoroPhase) => {
@@ -309,7 +397,7 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
       window.setTimeout(() => setInlineAlert(null), 4200);
 
       if (soundEnabled) {
-        playChime();
+        playSound(soundSelections[getPomodoroSoundEvent(completedPhase)]);
       }
 
       if (notificationsEnabled) {
@@ -319,7 +407,7 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
         }
       }
     },
-    [notificationsEnabled, playChime, soundEnabled],
+    [notificationsEnabled, playSound, soundEnabled, soundSelections],
   );
 
   const moveToPhase = useCallback(
@@ -431,16 +519,14 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
   }, [resetTimer]);
 
   const handleSkipToBreak = useCallback(() => {
-    moveToPhase(
-      activeConfig.longBreakEnabled && roundIndex >= activeConfig.roundsBeforeLongBreak ? "longBreak" : "shortBreak",
-      roundIndex,
-      isRunning,
-    );
-  }, [activeConfig.longBreakEnabled, activeConfig.roundsBeforeLongBreak, isRunning, moveToPhase, roundIndex]);
+    const next = advancePomodoroPhase("focus", roundIndex, activeConfig);
+    moveToPhase(next.phase, next.roundIndex, isRunning);
+  }, [activeConfig, isRunning, moveToPhase, roundIndex]);
 
   const handleSkipToFocus = useCallback(() => {
-    moveToPhase("focus", phase === "longBreak" ? 1 : roundIndex + 1, isRunning);
-  }, [isRunning, moveToPhase, phase, roundIndex]);
+    const next = advancePomodoroPhase(phase, roundIndex, activeConfig);
+    moveToPhase(next.phase, next.roundIndex, isRunning);
+  }, [activeConfig, isRunning, moveToPhase, phase, roundIndex]);
 
   const toggleNotifications = useCallback(async () => {
     setNotificationError(null);
@@ -467,6 +553,20 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
   const toggleSound = useCallback(() => {
     setSoundEnabled((value) => !value);
   }, []);
+
+  const setSoundSelection = useCallback((event: PomodoroSoundEvent, soundId: PomodoroSoundId) => {
+    setSoundSelections((current) => ({
+      ...current,
+      [event]: soundId,
+    }));
+  }, []);
+
+  const previewSound = useCallback(
+    (soundId: PomodoroSoundId) => {
+      playSound(soundId);
+    },
+    [playSound],
+  );
 
   const handleStartPauseFromTray = useCallback(() => {
     if (isRunning) {
@@ -536,6 +636,7 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
     customConfig,
     soundEnabled,
     notificationsEnabled,
+    soundSelections,
     notificationError,
     phase,
     roundIndex,
@@ -548,8 +649,8 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
     canStart,
     phaseLabel,
     nextPhaseLabel,
+    phaseProgressLabel,
     routineLabel,
-    maxRoundLabel,
     handlePresetChange,
     updateCustomConfig,
     handleStart,
@@ -559,7 +660,17 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
     handleSkipToFocus,
     toggleNotifications,
     toggleSound,
+    setSoundSelection,
+    previewSound,
   };
+}
+
+function getCompactStatusLabel(phase: PomodoroPhase, isRunning: boolean) {
+  if (!isRunning) {
+    return "Paused";
+  }
+
+  return phase === "focus" ? "Focus" : "Break";
 }
 
 function usePomodoroTimer() {
@@ -575,15 +686,36 @@ export function PomodoroTimerProvider({ children }: { children: ReactNode }) {
   return <PomodoroTimerContext.Provider value={value}>{children}</PomodoroTimerContext.Provider>;
 }
 
-export function PomodoroTimerCard() {
+export function PomodoroTimerStatusBadge({ className }: { className?: string }) {
+  const { displayRemainingMs, isRunning, isStopped, phase } = usePomodoroTimer();
+
+  if (isStopped) {
+    return null;
+  }
+
+  return (
+    <span
+      className={cn(
+        "inline-flex min-w-0 items-center rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 text-[11px] font-semibold text-cyan-100 shadow-[0_12px_30px_rgba(34,211,238,0.08)]",
+        className,
+      )}
+    >
+      <span className="truncate">
+        {getCompactStatusLabel(phase, isRunning)} · {formatPomodoroTime(displayRemainingMs)}
+      </span>
+    </span>
+  );
+}
+
+export function PomodoroTimerCard({ onClose }: { onClose?: () => void } = {}) {
   const {
     presetId,
     customConfig,
     soundEnabled,
     notificationsEnabled,
+    soundSelections,
     notificationError,
     phase,
-    roundIndex,
     isRunning,
     displayRemainingMs,
     inlineAlert,
@@ -593,8 +725,8 @@ export function PomodoroTimerCard() {
     canStart,
     phaseLabel,
     nextPhaseLabel,
+    phaseProgressLabel,
     routineLabel,
-    maxRoundLabel,
     handlePresetChange,
     updateCustomConfig,
     handleStart,
@@ -604,6 +736,8 @@ export function PomodoroTimerCard() {
     handleSkipToFocus,
     toggleNotifications,
     toggleSound,
+    setSoundSelection,
+    previewSound,
   } = usePomodoroTimer();
 
   return (
@@ -631,23 +765,36 @@ export function PomodoroTimerCard() {
           </div>
         </div>
 
-        <div className="panel-subtle flex shrink-0 items-center gap-3 px-3 py-2">
-          <div className="hidden text-right sm:block">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Alerts</p>
-            <p className="text-xs text-slate-400">Sound and desktop reminders</p>
+        <div className="flex shrink-0 items-start gap-2">
+          <div className="panel-subtle flex items-center gap-3 px-3 py-2">
+            <div className="hidden text-right sm:block">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Alerts</p>
+              <p className="text-xs text-slate-400">Sound and desktop reminders</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <ToggleButton active={soundEnabled} icon={Volume2} offIcon={VolumeX} label="Sound" onClick={toggleSound} />
+              <ToggleButton
+                active={notificationsEnabled}
+                icon={Bell}
+                offIcon={BellOff}
+                label="Notifications"
+                onClick={() => {
+                  void toggleNotifications();
+                }}
+              />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <ToggleButton active={soundEnabled} icon={Volume2} offIcon={VolumeX} label="Sound" onClick={toggleSound} />
-            <ToggleButton
-              active={notificationsEnabled}
-              icon={Bell}
-              offIcon={BellOff}
-              label="Notifications"
-              onClick={() => {
-                void toggleNotifications();
-              }}
-            />
-          </div>
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close pomodoro modal"
+              title="Close pomodoro modal"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-slate-900/60 text-slate-300 transition-colors hover:border-white/20 hover:bg-white/[0.06] hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-400/40"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -675,10 +822,7 @@ export function PomodoroTimerCard() {
         <div className="flex items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-200">
           <span>{phaseLabel}</span>
           <span className="h-1 w-1 rounded-full bg-slate-600" />
-          <span>
-            Round {roundIndex}
-            {maxRoundLabel}
-          </span>
+          <span>{phaseProgressLabel}</span>
         </div>
         <p className="mt-4 font-display text-[clamp(3.4rem,10vw,5rem)] font-semibold leading-none tracking-[-0.05em] tabular-nums text-white">
           {formatPomodoroTime(displayRemainingMs)}
@@ -714,7 +858,7 @@ export function PomodoroTimerCard() {
               />
             </label>
             <NumberField
-              label="Focus"
+              label="Focus (min)"
               value={customConfig.focusMinutes}
               min={1}
               max={180}
@@ -722,7 +866,7 @@ export function PomodoroTimerCard() {
               onChange={(value) => updateCustomConfig({ ...customConfig, focusMinutes: value })}
             />
             <NumberField
-              label="Short break"
+              label="Short break (min)"
               value={customConfig.shortBreakMinutes}
               min={1}
               max={60}
@@ -730,7 +874,7 @@ export function PomodoroTimerCard() {
               onChange={(value) => updateCustomConfig({ ...customConfig, shortBreakMinutes: value })}
             />
             <NumberField
-              label="Long break"
+              label="Long break (min)"
               value={customConfig.longBreakMinutes}
               min={1}
               max={90}
@@ -738,7 +882,7 @@ export function PomodoroTimerCard() {
               onChange={(value) => updateCustomConfig({ ...customConfig, longBreakMinutes: value })}
             />
             <NumberField
-              label="Rounds"
+              label="Focus sessions before long break"
               value={customConfig.roundsBeforeLongBreak}
               min={1}
               max={12}
@@ -746,6 +890,9 @@ export function PomodoroTimerCard() {
               onChange={(value) => updateCustomConfig({ ...customConfig, roundsBeforeLongBreak: value })}
             />
           </div>
+          <p className="mt-3 text-xs text-slate-400">
+            A round means one focus session. Example: 2 = focus - short break - focus - long break.
+          </p>
 
           <div className="muted-surface mt-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
             <div>
@@ -765,6 +912,60 @@ export function PomodoroTimerCard() {
           </div>
         </div>
       ) : null}
+
+      <div className="quiet-panel mt-5 p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Sound settings</p>
+            <p className="mt-1 text-sm text-slate-400">Choose a sound for each phase transition and preview it before you start.</p>
+          </div>
+          <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">
+            Built-in audio
+          </span>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {SOUND_EVENT_OPTIONS.map((option) => (
+            <div
+              key={option.key}
+              className="muted-surface flex flex-col gap-3 rounded-[18px] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-white">{option.label}</p>
+                <p className="text-xs text-slate-400">
+                  {option.key === "focusComplete"
+                    ? "Plays when focus ends and break begins."
+                    : option.key === "shortBreakComplete"
+                      ? "Plays when a short break ends and focus resumes."
+                      : "Plays when a long break ends and focus resumes."}
+                </p>
+              </div>
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <select
+                  className={cn(fieldClassName, "h-11 min-w-[220px] rounded-[16px] px-3 py-0")}
+                  value={soundSelections[option.key]}
+                  onChange={(event) => setSoundSelection(option.key, event.target.value as PomodoroSoundId)}
+                >
+                  {SOUND_OPTIONS.map((soundOption) => (
+                    <option key={soundOption.id} value={soundOption.id}>
+                      {soundOption.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className={`${secondaryButtonClassName} h-11 px-4`}
+                  onClick={() => previewSound(soundSelections[option.key])}
+                  disabled={soundSelections[option.key] === "none"}
+                >
+                  <Play className="h-3.5 w-3.5" />
+                  Preview
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {configError ? <p className="mt-3 text-xs text-rose-200">{configError}</p> : null}
       {inlineAlert ? (
