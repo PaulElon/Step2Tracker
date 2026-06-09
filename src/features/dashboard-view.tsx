@@ -31,6 +31,7 @@ import { useAppStore } from "../state/app-store";
 import { useTimeFolioStore } from "../state/tf-store";
 import { getTrackedStudyMinutesForDate } from "../lib/tf-session-metrics";
 import { PomodoroTimerCard } from "./timefolio/pomodoro-timer-card";
+import { ModalShell } from "../components/modal-shell";
 import { StudyTaskCard } from "../components/study-task-card";
 import { StudyTaskEditorSheet } from "../components/study-task-editor";
 import { TaskLaunchButton } from "../components/task-launch-button";
@@ -464,6 +465,7 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
   const [showTaskEditor, setShowTaskEditor] = useState(false);
   const [editingTask, setEditingTask] = useState<StudyBlock | null>(null);
   const [editingGoal, setEditingGoal] = useState(false);
+  const [showPomodoroModal, setShowPomodoroModal] = useState(false);
   const [goalHoursValue, setGoalHoursValue] = useState("");
   const [goalMinsValue, setGoalMinsValue] = useState("");
 
@@ -993,19 +995,28 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
                       <Timer className="h-4 w-4 text-cyan-200" />
                       <h3 className="text-base font-semibold text-white">Time your study session</h3>
                     </div>
-                    <button
-                      type="button"
-                      className="launch-button max-w-none shrink-0"
-                      onClick={() => goToSection("sessionLog")}
-                    >
-                      Open Timer
-                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        className="launch-button max-w-none shrink-0"
+                        onClick={() => goToSection("sessionLog")}
+                      >
+                        Open Timer
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex max-w-none items-center overflow-hidden rounded-full border border-white/[0.12] px-2.5 py-1 text-[11px] font-medium text-slate-300 transition hover:border-white/20 hover:text-slate-100"
+                        onClick={() => setShowPomodoroModal(true)}
+                        aria-haspopup="dialog"
+                        aria-expanded={showPomodoroModal}
+                      >
+                        Pomodoro
+                      </button>
+                    </div>
                   </div>
 
                   <TodayTimeLogSummary sessionLogs={todaySessionLogs} />
                 </section>
-
-                <PomodoroTimerCard />
 
                 <UrgeAwarenessCard urgeLogs={todayUrgeLogs} />
               </div>
@@ -1200,6 +1211,19 @@ export function DashboardView({ onOpenNotebook }: { onOpenNotebook?: () => void 
             })();
           }}
         />
+      ) : null}
+      {showPomodoroModal ? (
+        <ModalShell
+          onClose={() => setShowPomodoroModal(false)}
+          position="center"
+          titleId="today-pomodoro-modal-title"
+          contentClassName="max-w-[760px] border-none bg-transparent p-0 shadow-none"
+        >
+          <h2 id="today-pomodoro-modal-title" className="sr-only">
+            Pomodoro timer
+          </h2>
+          <PomodoroTimerCard />
+        </ModalShell>
       ) : null}
     </div>
   );
