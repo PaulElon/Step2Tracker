@@ -12,6 +12,7 @@ use auto_launch::{AutoLaunch, AutoLaunchBuilder, MacOSLaunchMode};
 use std::ffi::c_void;
 use std::process::Command;
 use std::sync::Mutex;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{fs, path::PathBuf};
 
 use persistence::{
@@ -39,25 +40,224 @@ struct PomodoroTrayHandles {
 }
 
 struct PomodoroTrayState {
-    handles: Mutex<Option<PomodoroTrayHandles>>,
+    runtime: Mutex<PomodoroTrayRuntime>,
+}
+
+struct PomodoroTrayRuntime {
+    handles: Option<PomodoroTrayHandles>,
+    snapshot: PomodoroTrayUpdate,
+    last_rendered: Option<PomodoroTrayView>,
 }
 
 impl PomodoroTrayState {
     fn new(handles: Option<PomodoroTrayHandles>) -> Self {
         Self {
-            handles: Mutex::new(handles),
+            runtime: Mutex::new(PomodoroTrayRuntime {
+                handles,
+                snapshot: PomodoroTrayUpdate::default(),
+                last_rendered: None,
+            }),
         }
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+enum PomodoroTrayPhase {
+    Focus,
+    ShortBreak,
+    LongBreak,
+}
+
+#[derive(Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+enum PomodoroTrayStatus {
+    Idle,
+    Running,
+    Paused,
+}
+
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PomodoroTrayUpdate {
+    phase: PomodoroTrayPhase,
+    status: PomodoroTrayStatus,
+    duration_ms: u64,
+    phase_ends_at_ms: Option<u64>,
+    remaining_ms_when_paused: Option<u64>,
+    routine_label: String,
+    action_enabled: bool,
+    reset_enabled: bool,
+}
+
+impl Default for PomodoroTrayUpdate {
+    fn default() -> Self {
+        Self {
+            phase: PomodoroTrayPhase::Focus,
+            status: PomodoroTrayStatus::Idle,
+            duration_ms: 0,
+            phase_ends_at_ms: None,
+            remaining_ms_when_paused: None,
+            routine_label: "Pomodoro".to_string(),
+            action_enabled: true,
+            reset_enabled: false,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct PomodoroTrayView {
     tray_title: String,
     status_label: String,
     action_label: String,
     action_enabled: bool,
     reset_enabled: bool,
+}
+
+fn current_time_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_else(|_| Duration::from_millis(0))
+        .as_millis() as u64
+}
+
+fn format_pomodoro_tray_time(milliseconds: u64) -> String {
+    let total_seconds = (milliseconds.saturating_add(999)) / 1000;
+    let minutes = total_seconds / 60;
+    let seconds = total_seconds % 60;
+    format!("{:02}:{:02}", minutes, seconds)
+}
+
+fn get_compact_phase_label(phase: &PomodoroTrayPhase) -> &'static str {
+    match phase {
+        PomodoroTrayPhase::Focus => "Focus",
+        PomodoroTrayPhase::ShortBreak | PomodoroTrayPhase::LongBreak => "Break",
+    }
+}
+
+fn get_detailed_phase_label(phase: &PomodoroTrayPhase) -> &'static str {
+    match phase {
+        PomodoroTrayPhase::Focus => "Focus",
+        PomodoroTrayPhase::ShortBreak => "Short Break",
+        PomodoroTrayPhase::LongBreak => "Long Break",
+    }
+}
+
+fn get_running_remaining_ms(snapshot: &PomodoroTrayUpdate, now_ms: u64) -> u64 {
+    snapshot
+        .phase_ends_at_ms
+        .map(|phase_ends_at_ms| phase_ends_at_ms.saturating_sub(now_ms))
+        .unwrap_or(snapshot.duration_ms)
+}
+
+fn build_pomodoro_tray_view(snapshot: &PomodoroTrayUpdate, now_ms: u64) -> PomodoroTrayView {
+    match snapshot.status {
+        PomodoroTrayStatus::Idle => PomodoroTrayView {
+            tray_title: "Idle".to_string(),
+            status_label: format!("Pomodoro idle · {}", snapshot.routine_label),
+            action_label: "Start Pomodoro".to_string(),
+            action_enabled: snapshot.action_enabled,
+            reset_enabled: snapshot.reset_enabled,
+        },
+        PomodoroTrayStatus::Paused => {
+            let remaining_ms = snapshot
+                .remaining_ms_when_paused
+                .unwrap_or(snapshot.duration_ms);
+            let remaining_label = format_pomodoro_tray_time(remaining_ms);
+            PomodoroTrayView {
+                tray_title: format!("Paused {}", remaining_label),
+                status_label: format!(
+                    "Paused · {} · {}",
+                    get_detailed_phase_label(&snapshot.phase),
+                    remaining_label
+                ),
+                action_label: "Resume Pomodoro".to_string(),
+                action_enabled: snapshot.action_enabled,
+                reset_enabled: snapshot.reset_enabled,
+            }
+        }
+        PomodoroTrayStatus::Running => {
+            let remaining_ms = get_running_remaining_ms(snapshot, now_ms);
+            let remaining_label = format_pomodoro_tray_time(remaining_ms);
+            PomodoroTrayView {
+                tray_title: format!(
+                    "{} {}",
+                    get_compact_phase_label(&snapshot.phase),
+                    remaining_label
+                ),
+                status_label: format!(
+                    "{} · {} remaining",
+                    get_detailed_phase_label(&snapshot.phase),
+                    remaining_label
+                ),
+                action_label: "Pause Pomodoro".to_string(),
+                action_enabled: snapshot.action_enabled,
+                reset_enabled: snapshot.reset_enabled,
+            }
+        }
+    }
+}
+
+fn apply_pomodoro_tray_view(
+    app: &tauri::AppHandle,
+    handles: &PomodoroTrayHandles,
+    view: &PomodoroTrayView,
+) -> Result<(), String> {
+    handles
+        .status_item
+        .set_text(&view.status_label)
+        .map_err(|error| error.to_string())?;
+    handles
+        .action_item
+        .set_text(&view.action_label)
+        .map_err(|error| error.to_string())?;
+    handles
+        .action_item
+        .set_enabled(view.action_enabled)
+        .map_err(|error| error.to_string())?;
+    handles
+        .reset_item
+        .set_enabled(view.reset_enabled)
+        .map_err(|error| error.to_string())?;
+
+    if let Some(tray) = app.tray_by_id(POMODORO_TRAY_ID) {
+        let _ = tray.set_title(Some(&view.tray_title));
+        let _ = tray.set_tooltip(Some(format!(
+            "TimeFolio Pomodoro\n{}",
+            view.status_label
+        )));
+    }
+
+    Ok(())
+}
+
+fn refresh_pomodoro_tray(app: &tauri::AppHandle, state: &PomodoroTrayState) -> Result<(), String> {
+    let mut runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| "Unable to access Pomodoro tray state.".to_string())?;
+    let Some(handles) = runtime.handles.as_ref() else {
+        return Ok(());
+    };
+
+    let next_view = build_pomodoro_tray_view(&runtime.snapshot, current_time_ms());
+    if runtime.last_rendered.as_ref() == Some(&next_view) {
+        return Ok(());
+    }
+
+    apply_pomodoro_tray_view(app, handles, &next_view)?;
+    runtime.last_rendered = Some(next_view);
+    Ok(())
+}
+
+fn spawn_pomodoro_tray_refresh_loop(app: tauri::AppHandle) {
+    let _ = std::thread::Builder::new()
+        .name("pomodoro-tray-refresh".to_string())
+        .spawn(move || loop {
+            let state = app.state::<PomodoroTrayState>();
+            let _ = refresh_pomodoro_tray(&app, &state);
+            std::thread::sleep(Duration::from_secs(1));
+        });
 }
 
 fn with_storage<F, T>(app: &tauri::AppHandle, operation: F) -> Result<T, String>
@@ -629,38 +829,14 @@ fn sync_pomodoro_tray(
     state: tauri::State<PomodoroTrayState>,
     update: PomodoroTrayUpdate,
 ) -> Result<(), String> {
-    let handles = state
-        .handles
+    let mut runtime = state
+        .runtime
         .lock()
         .map_err(|_| "Unable to access Pomodoro tray state.".to_string())?;
+    runtime.snapshot = update;
+    drop(runtime);
 
-    let Some(handles) = handles.as_ref() else {
-        return Ok(());
-    };
-
-    handles
-        .status_item
-        .set_text(&update.status_label)
-        .map_err(|error| error.to_string())?;
-    handles
-        .action_item
-        .set_text(&update.action_label)
-        .map_err(|error| error.to_string())?;
-    handles
-        .action_item
-        .set_enabled(update.action_enabled)
-        .map_err(|error| error.to_string())?;
-    handles
-        .reset_item
-        .set_enabled(update.reset_enabled)
-        .map_err(|error| error.to_string())?;
-
-    if let Some(tray) = app.tray_by_id(POMODORO_TRAY_ID) {
-        let _ = tray.set_title(Some(&update.tray_title));
-        let _ = tray.set_tooltip(Some(format!("TimeFolio Pomodoro\n{}", update.status_label)));
-    }
-
-    Ok(())
+    refresh_pomodoro_tray(&app, &state)
 }
 
 #[allow(unused_variables)]
@@ -1398,6 +1574,7 @@ fn main() {
         .setup(|app| {
             let tray_handles = build_pomodoro_tray(&app.handle()).ok();
             app.manage(PomodoroTrayState::new(tray_handles));
+            spawn_pomodoro_tray_refresh_loop(app.handle().clone());
             updater::spawn_update_check(app.handle().clone());
             Ok(())
         })

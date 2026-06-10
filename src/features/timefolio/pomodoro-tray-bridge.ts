@@ -5,10 +5,16 @@ const IS_TAURI_SHELL =
   typeof window !== "undefined" &&
   typeof (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== "undefined";
 
+export type PomodoroTrayPhase = "focus" | "shortBreak" | "longBreak";
+export type PomodoroTrayStatus = "idle" | "running" | "paused";
+
 export interface PomodoroTraySyncPayload {
-  trayTitle: string;
-  statusLabel: string;
-  actionLabel: string;
+  phase: PomodoroTrayPhase;
+  status: PomodoroTrayStatus;
+  durationMs: number;
+  phaseEndsAtMs: number | null;
+  remainingMsWhenPaused: number | null;
+  routineLabel: string;
   actionEnabled: boolean;
   resetEnabled: boolean;
 }

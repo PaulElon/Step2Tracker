@@ -48,7 +48,11 @@ import {
   getPomodoroSoundEvent,
   validatePomodoroConfig,
 } from "./pomodoro-timer-model";
-import { listenForPomodoroTrayEvent, syncPomodoroTray } from "./pomodoro-tray-bridge";
+import {
+  listenForPomodoroTrayEvent,
+  syncPomodoroTray,
+  type PomodoroTraySyncPayload,
+} from "./pomodoro-tray-bridge";
 
 const STORAGE_KEY = "tf-pomodoro-preferences-v1";
 
@@ -616,18 +620,14 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
   }, [handlePause, handleStart, isRunning]);
 
   useEffect(() => {
-    const trayTitle =
-      isStopped ? "Idle" : `${phase === "focus" ? "🍅" : "☕"} ${formatPomodoroTime(displayRemainingMs)}`;
-    const statusLabel = isStopped
-      ? `Pomodoro idle · ${routineLabel}`
-      : !isRunning
-        ? `Paused · ${phaseLabel} · ${formatPomodoroTime(displayRemainingMs)}`
-        : `${phaseLabel} · ${formatPomodoroTime(displayRemainingMs)} remaining`;
-    const actionLabel = isRunning ? "Pause Pomodoro" : isStopped ? "Start Pomodoro" : "Resume Pomodoro";
-    const payload = {
-      trayTitle,
-      statusLabel,
-      actionLabel,
+    const status: PomodoroTraySyncPayload["status"] = isStopped ? "idle" : isRunning ? "running" : "paused";
+    const payload: PomodoroTraySyncPayload = {
+      phase,
+      status,
+      durationMs,
+      phaseEndsAtMs: isRunning && phaseStartedAt !== null ? phaseStartedAt + durationMs : null,
+      remainingMsWhenPaused: isStopped ? null : isRunning ? null : remainingMsWhenPaused,
+      routineLabel,
       actionEnabled: !configError,
       resetEnabled: !isStopped,
     };
@@ -639,7 +639,7 @@ function usePomodoroTimerController(): PomodoroTimerContextValue {
 
     lastTrayPayloadRef.current = signature;
     void syncPomodoroTray(payload);
-  }, [configError, displayRemainingMs, isRunning, isStopped, phase, phaseLabel, routineLabel]);
+  }, [configError, durationMs, isRunning, isStopped, phase, phaseStartedAt, remainingMsWhenPaused, routineLabel]);
 
   useEffect(() => {
     let cancelled = false;
